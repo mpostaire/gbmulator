@@ -6,7 +6,7 @@
 #include "cpu.h"
 
 byte_t cartridge[8000000];
-byte_t mem[0xFFFF + 1];
+byte_t mem[0x10000];
 
 // TODO: handle fopen fail
 static void load_bios(void) {

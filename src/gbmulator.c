@@ -8,28 +8,6 @@
 #include "ppu.h"
 #include "timer.h"
 
-// TODO graphical debugger at bottom of screen (showing registers, current instruction, pause button and next instruction button, ...)
-
-// byte_t COLORS[] = {
-//     0xFF, 0xFF, 0xFF,
-//     0xCC, 0xCC, 0xCC,
-//     0x77, 0x77, 0x77,
-//     0x00, 0x00, 0x00
-// };
-// unsigned char framebuffer[160 * 144 * 3];   //  3 bytes per pixel, RGB24
-// unsigned char framebufferA[160 * 144 * 4];  //  4 bytes per pixel, RGBA24
-static void render_screen(SDL_Renderer *renderer) {
-    // word_t tilemap = (((mem_read(0xff40) >> 3) & 1) == 1) ? 0x9c00 : 0x9800;
-    // word_t tiledata = (((mem_read(0xff40) >> 4) & 1) == 1) ? 0x8000 : 0x8800;
-
-    // //  get real color from palette
-    // colorfrompal = (p >> (2 * colorval)) & 3;
-    // bgmapA[(row * 256 * 4) + (j * 4)] = COLORS[colorfrompal * 3];
-    // bgmapA[(row * 256 * 4) + (j * 4) + 1] = COLORS[colorfrompal * 3 + 1];
-    // bgmapA[(row * 256 * 4) + (j * 4) + 2] = COLORS[colorfrompal * 3 + 2];
-    // bgmapA[(row * 256 * 4) + (j * 4) + 3] = 0xFF;
-}
-
 static void handle_input(SDL_KeyboardEvent *key) {
     if (key->type == SDL_KEYUP) {
         // printf("Key release: ");
@@ -126,7 +104,7 @@ int main(int argc, char **argv) {
 
     SDL_Window *window = SDL_CreateWindow("gbmulator", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 160, 144, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    SDL_Texture* texture;
+    SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, 160, 144);
 
     SDL_bool is_running = SDL_TRUE;
     const Uint32 fps = 60;
@@ -161,14 +139,17 @@ int main(int argc, char **argv) {
             ppu_step(cycles);
             cycles_count += cycles;
 
-            // TODO this is supposed to print test roms debug messages
-            if (mem[0xFF02] == 0x81) {
-                printf("%c", mem[0xFF01]);
-                mem[0xFF02] = 0x00;
-            }
+            // // TODO this is supposed to print test roms debug messages
+            // if (mem[0xFF02] == 0x81) {
+            //     printf("%c", mem[0xFF01]);
+            //     mem[0xFF02] = 0x00;
+            // }
         }
 
-        render_screen(renderer);
+        // TODO render once per vblank (if we render more it's either useless because the same or when a frame is not yet finished)
+        SDL_UpdateTexture(texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
+        SDL_RenderCopy(renderer, texture, NULL, NULL);
+	    SDL_RenderPresent(renderer);
 
         frame_time = SDL_GetTicks() - frame_time;
         if (frame_time < frame_delay) {
