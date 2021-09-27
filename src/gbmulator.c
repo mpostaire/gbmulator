@@ -35,36 +35,36 @@ static void handle_input(SDL_KeyboardEvent *key) {
         // printf("Key release: ");
         switch (key->keysym.sym) {
         case SDLK_RIGHT:
-            SET_BIT(mem[JOYP], 4); // select direction buttons
-            SET_BIT(mem[JOYP], 0); // right
+            SET_BIT(mem[P1], 4); // select direction buttons
+            SET_BIT(mem[P1], 0); // right
             break;
         case SDLK_LEFT:
-            SET_BIT(mem[JOYP], 4); // select direction buttons
-            SET_BIT(mem[JOYP], 1); // left
+            SET_BIT(mem[P1], 4); // select direction buttons
+            SET_BIT(mem[P1], 1); // left
             break;
         case SDLK_DOWN:
-            SET_BIT(mem[JOYP], 4); // select direction buttons
-            SET_BIT(mem[JOYP], 3); // down
+            SET_BIT(mem[P1], 4); // select direction buttons
+            SET_BIT(mem[P1], 3); // down
             break;
         case SDLK_UP:
-            SET_BIT(mem[JOYP], 4); // select direction buttons
-            SET_BIT(mem[JOYP], 2); // up
+            SET_BIT(mem[P1], 4); // select direction buttons
+            SET_BIT(mem[P1], 2); // up
             break;
         case SDLK_a:
-            SET_BIT(mem[JOYP], 5); // select action buttons
-            SET_BIT(mem[JOYP], 0); // a
+            SET_BIT(mem[P1], 5); // select action buttons
+            SET_BIT(mem[P1], 0); // a
             break;
         case SDLK_b:
-            SET_BIT(mem[JOYP], 5); // select action buttons
-            SET_BIT(mem[JOYP], 1); // b
+            SET_BIT(mem[P1], 5); // select action buttons
+            SET_BIT(mem[P1], 1); // b
             break;
         case SDLK_RETURN:
-            SET_BIT(mem[JOYP], 5); // select action buttons
-            SET_BIT(mem[JOYP], 3); // start
+            SET_BIT(mem[P1], 5); // select action buttons
+            SET_BIT(mem[P1], 3); // start
             break;
         case SDLK_SPACE:
-            SET_BIT(mem[JOYP], 5); // select action buttons
-            SET_BIT(mem[JOYP], 2); // select
+            SET_BIT(mem[P1], 5); // select action buttons
+            SET_BIT(mem[P1], 2); // select
             break;
         case SDLK_n:
             cpu_step();
@@ -74,43 +74,43 @@ static void handle_input(SDL_KeyboardEvent *key) {
         // printf("Key press: ");
         switch (key->keysym.sym) {
         case SDLK_RIGHT:
-            RESET_BIT(mem[JOYP], 4); // select direction buttons
-            RESET_BIT(mem[JOYP], 0); // right
+            RESET_BIT(mem[P1], 4); // select direction buttons
+            RESET_BIT(mem[P1], 0); // right
             cpu_request_interrupt(JOYPAD);
             break;
         case SDLK_LEFT:
-            RESET_BIT(mem[JOYP], 4); // select direction buttons
-            RESET_BIT(mem[JOYP], 1); // left
+            RESET_BIT(mem[P1], 4); // select direction buttons
+            RESET_BIT(mem[P1], 1); // left
             cpu_request_interrupt(JOYPAD);
             break;
         case SDLK_DOWN:
-            RESET_BIT(mem[JOYP], 4); // select direction buttons
-            RESET_BIT(mem[JOYP], 3); // down
+            RESET_BIT(mem[P1], 4); // select direction buttons
+            RESET_BIT(mem[P1], 3); // down
             cpu_request_interrupt(JOYPAD);
             break;
         case SDLK_UP:
-            RESET_BIT(mem[JOYP], 4); // select direction buttons
-            RESET_BIT(mem[JOYP], 2); // up
+            RESET_BIT(mem[P1], 4); // select direction buttons
+            RESET_BIT(mem[P1], 2); // up
             cpu_request_interrupt(JOYPAD);
             break;
         case SDLK_a:
-            RESET_BIT(mem[JOYP], 5); // select action buttons
-            RESET_BIT(mem[JOYP], 0); // a
+            RESET_BIT(mem[P1], 5); // select action buttons
+            RESET_BIT(mem[P1], 0); // a
             cpu_request_interrupt(JOYPAD);
             break;
         case SDLK_b:
-            RESET_BIT(mem[JOYP], 5); // select action buttons
-            RESET_BIT(mem[JOYP], 1); // b
+            RESET_BIT(mem[P1], 5); // select action buttons
+            RESET_BIT(mem[P1], 1); // b
             cpu_request_interrupt(JOYPAD);
             break;
         case SDLK_RETURN:
-            RESET_BIT(mem[JOYP], 5); // select action buttons
-            RESET_BIT(mem[JOYP], 3); // start
+            RESET_BIT(mem[P1], 5); // select action buttons
+            RESET_BIT(mem[P1], 3); // start
             cpu_request_interrupt(JOYPAD);
             break;
         case SDLK_SPACE:
-            RESET_BIT(mem[JOYP], 5); // select action buttons
-            RESET_BIT(mem[JOYP], 2); // select
+            RESET_BIT(mem[P1], 5); // select action buttons
+            RESET_BIT(mem[P1], 2); // select
             cpu_request_interrupt(JOYPAD);
             break;
         }
