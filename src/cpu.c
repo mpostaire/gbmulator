@@ -589,7 +589,7 @@ static word_t rl(word_t reg) {
 
 // TODO half carry (FLAG_H) may be implemented wrong (maybe all flags here are wrong)
 void cp(byte_t reg) {
-    registers.a == reg ? SET_FLAG(FLAG_N) : RESET_FLAG(FLAG_Z);
+    registers.a == reg ? SET_FLAG(FLAG_Z) : RESET_FLAG(FLAG_Z);
     reg > registers.a ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
     (reg & 0x0f) > (registers.a & 0x0f) ? SET_FLAG(FLAG_H) : RESET_FLAG(FLAG_H);
     SET_FLAG(FLAG_N);
