@@ -33,7 +33,7 @@ void timer_step(int cycles) {
                 // TODO If a TMA write is executed on the same cycle as the content of TMA is transferred to TIMA due to a timer overflow,
                 //      the old value is transferred to TIMA.
                 mem[TIMA] = mem[TMA];
-                cpu_request_interrupt(TIMER);
+                cpu_request_interrupt(IRQ_TIMER);
             } else {
                 mem[TIMA]++;
             }

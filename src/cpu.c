@@ -1281,24 +1281,24 @@ static int cpu_handle_interrupts() {
         ime = 0;
         push(registers.pc);
 
-        if (CHECK_BIT(iflag, VBLANK)) {
-            RESET_BIT(iflag, VBLANK);
+        if (CHECK_BIT(iflag, IRQ_VBLANK)) {
+            RESET_BIT(iflag, IRQ_VBLANK);
             registers.pc = 0x0040;
             puts("\tVBLANK");
-        } else if (CHECK_BIT(iflag, LCD)) {
-            RESET_BIT(iflag, LCD);
+        } else if (CHECK_BIT(iflag, IRQ_STAT)) {
+            RESET_BIT(iflag, IRQ_STAT);
             registers.pc = 0x0048;
             puts("\tLCD");
-        } else if (CHECK_BIT(iflag, TIMER)) {
-            RESET_BIT(iflag, TIMER);
+        } else if (CHECK_BIT(iflag, IRQ_TIMER)) {
+            RESET_BIT(iflag, IRQ_TIMER);
             registers.pc = 0x0050;
             puts("\tTIMER");
-        } else if (CHECK_BIT(iflag, SERIAL)) {
-            RESET_BIT(iflag, SERIAL);
+        } else if (CHECK_BIT(iflag, IRQ_SERIAL)) {
+            RESET_BIT(iflag, IRQ_SERIAL);
             registers.pc = 0x0058;
             puts("\tSERIAL");
-        } else if (CHECK_BIT(iflag, JOYPAD)) {
-            RESET_BIT(iflag, JOYPAD);
+        } else if (CHECK_BIT(iflag, IRQ_JOYPAD)) {
+            RESET_BIT(iflag, IRQ_JOYPAD);
             registers.pc = 0x0060;
             puts("\tJOYPAD");
         }
@@ -1332,13 +1332,13 @@ int cpu_step() {
     }
     registers.pc += instructions[opcode].operand_size;
     
-    char buf[32];
-    if (opcode == 0xCB) {
-        printf("opcode %02X %02X: %s\t\t(pc=%04X, sp=%04X, af=%04X, bc=%04X, de=%04X, hl=%04X) (ime=%d, ie=%02X, if=%02X)\n", opcode, operand, extended_instructions[operand].name, debug_pc, debug_sp, debug_af, debug_bc, debug_de, debug_hl, ime, mem_read(IE), mem_read(IF));
-    } else {
-        snprintf(buf, sizeof(buf), instructions[opcode].name, operand);
-        printf("opcode %02X: %s\t\t(pc=%04X, sp=%04X, af=%04X, bc=%04X, de=%04X, hl=%04X) (ime=%d, ie=%02X, if=%02X)\n", opcode, buf, debug_pc, debug_sp, debug_af, debug_bc, debug_de, debug_hl, ime, mem_read(IE), mem_read(IF));
-    }
+    // char buf[32];
+    // if (opcode == 0xCB) {
+    //     printf("opcode %02X %02X: %s\t\t(pc=%04X, sp=%04X, af=%04X, bc=%04X, de=%04X, hl=%04X) (ime=%d, ie=%02X, if=%02X)\n", opcode, operand, extended_instructions[operand].name, debug_pc, debug_sp, debug_af, debug_bc, debug_de, debug_hl, ime, mem_read(IE), mem_read(IF));
+    // } else {
+    //     snprintf(buf, sizeof(buf), instructions[opcode].name, operand);
+    //     printf("opcode %02X: %s\t\t(pc=%04X, sp=%04X, af=%04X, bc=%04X, de=%04X, hl=%04X) (ime=%d, ie=%02X, if=%02X)\n", opcode, buf, debug_pc, debug_sp, debug_af, debug_bc, debug_de, debug_hl, ime, mem_read(IE), mem_read(IF));
+    // }
 
     return cycles + cpu_exec_opcode(opcode, operand);
 }

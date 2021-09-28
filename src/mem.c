@@ -48,7 +48,7 @@ static void load_bios(void) {
     // fread(mem, 0xFF, 1, f);
     // fclose(f);
 
-    // this is the result of the registers after bios execution (comment if bios is used)
+    // this is the state of the registers after bios execution (comment if bios is used)
     registers.a = 0x01;
     registers.f = 0xB0;
     registers.b = 0x00;
@@ -101,7 +101,9 @@ byte_t mem_read(word_t address) {
 }
 
 void mem_write(word_t address, byte_t data) {
-    if (address == DIV) {
+    if (address <= VRAM) {
+        // TODO rom banks
+    } else if (address == DIV) {
         // writing to DIV resets it to 0
         mem[address] = 0;
     } else if (address >= OAM && address < UNUSABLE && ((mem[STAT] & 0x3) == 2 || (mem[STAT] & 0x3) == 3)) {

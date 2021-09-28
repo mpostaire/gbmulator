@@ -2,6 +2,7 @@
 
 #include "types.h"
 
-extern byte_t pixels[160 * 144 * 3];
-
-void ppu_step(int cycles);
+/**
+ * @returns a pixel buffer pointer to render on screen only when VBlank is reached. NULL in any other PPU mode.
+ */
+void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture);

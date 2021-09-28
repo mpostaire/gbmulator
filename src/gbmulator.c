@@ -57,42 +57,42 @@ static void handle_input(SDL_KeyboardEvent *key) {
         case SDLK_RIGHT:
             RESET_BIT(mem[P1], 4); // select direction buttons
             RESET_BIT(mem[P1], 0); // right
-            cpu_request_interrupt(JOYPAD);
+            cpu_request_interrupt(IRQ_JOYPAD);
             break;
         case SDLK_LEFT:
             RESET_BIT(mem[P1], 4); // select direction buttons
             RESET_BIT(mem[P1], 1); // left
-            cpu_request_interrupt(JOYPAD);
+            cpu_request_interrupt(IRQ_JOYPAD);
             break;
         case SDLK_DOWN:
             RESET_BIT(mem[P1], 4); // select direction buttons
             RESET_BIT(mem[P1], 3); // down
-            cpu_request_interrupt(JOYPAD);
+            cpu_request_interrupt(IRQ_JOYPAD);
             break;
         case SDLK_UP:
             RESET_BIT(mem[P1], 4); // select direction buttons
             RESET_BIT(mem[P1], 2); // up
-            cpu_request_interrupt(JOYPAD);
+            cpu_request_interrupt(IRQ_JOYPAD);
             break;
         case SDLK_a:
             RESET_BIT(mem[P1], 5); // select action buttons
             RESET_BIT(mem[P1], 0); // a
-            cpu_request_interrupt(JOYPAD);
+            cpu_request_interrupt(IRQ_JOYPAD);
             break;
         case SDLK_b:
             RESET_BIT(mem[P1], 5); // select action buttons
             RESET_BIT(mem[P1], 1); // b
-            cpu_request_interrupt(JOYPAD);
+            cpu_request_interrupt(IRQ_JOYPAD);
             break;
         case SDLK_RETURN:
             RESET_BIT(mem[P1], 5); // select action buttons
             RESET_BIT(mem[P1], 3); // start
-            cpu_request_interrupt(JOYPAD);
+            cpu_request_interrupt(IRQ_JOYPAD);
             break;
         case SDLK_SPACE:
             RESET_BIT(mem[P1], 5); // select action buttons
             RESET_BIT(mem[P1], 2); // select
-            cpu_request_interrupt(JOYPAD);
+            cpu_request_interrupt(IRQ_JOYPAD);
             break;
         }
     }
@@ -139,7 +139,7 @@ int main(int argc, char **argv) {
         while (cycles_count < 69905) {
             int cycles = cpu_step();
             timer_step(cycles);
-            ppu_step(cycles);
+            ppu_step(cycles, renderer, texture);
             cycles_count += cycles;
 
             // // TODO this is supposed to print test roms debug messages
@@ -148,11 +148,6 @@ int main(int argc, char **argv) {
             //     mem[0xFF02] = 0x00;
             // }
         }
-
-        // TODO render once per vblank (if we render more it's either useless because the same or when a frame is not yet finished)
-        SDL_UpdateTexture(texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
-        SDL_RenderCopy(renderer, texture, NULL, NULL);
-	    SDL_RenderPresent(renderer);
 
         frame_time = SDL_GetTicks() - frame_time;
         if (frame_time < frame_delay) {

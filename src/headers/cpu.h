@@ -3,11 +3,11 @@
 #include "types.h"
 
 enum interrupt {
-	VBLANK,
-	LCD,
-	TIMER,
-	SERIAL,
-	JOYPAD
+	IRQ_VBLANK,
+	IRQ_STAT,
+	IRQ_TIMER,
+	IRQ_SERIAL,
+	IRQ_JOYPAD
 };
 
 #define FLAG_Z 0x80 // flag zero
