@@ -576,7 +576,7 @@ static byte_t dec(byte_t reg) {
 static word_t rl(word_t reg) {
 	int carry = CHECK_FLAG(FLAG_C) ? 1 : 0;
     // set new carry to the value of leftmost bit
-	reg & 0x80 ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
+	(reg & 0x80) ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
     // rotate left
 	reg <<= 1;
     // set leftmost bit to the value of the old carry
@@ -859,7 +859,7 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0x42: // LD B,D
-        registers.b = registers.b;
+        registers.b = registers.d;
         cycles = 4;
         break;
     case 0x43: // LD B,E
