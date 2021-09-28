@@ -11,6 +11,9 @@
 static void handle_input(SDL_KeyboardEvent *key) {
     if (key->type == SDL_KEYUP) {
         // printf("Key release: ");
+        // TODO bits 4 and 5 are not set properly when key is released (it should reset only if no keys of its category are pressed?)
+        //      MAYBE THIS PART IS TOTALLY WRONG the cpu should write to bits 4 and 5 depending on wich input it wants to read and the
+        //       input bits change accordingly 
         switch (key->keysym.sym) {
         case SDLK_RIGHT:
             SET_BIT(mem[P1], 4); // select direction buttons

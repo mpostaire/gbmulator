@@ -83,69 +83,46 @@ void load_cartridge(char *filepath) {
     memcpy(&mem, &cartridge[0], VRAM);
 }
 
+// TODO MBC
 byte_t mem_read(word_t address) {
-    // if (address < ROM_BANKN) {
-    //     // printf("    mem read in ROM_BANK0 (%02X)\n", address);
-    // } else if (address < VRAM) {
-    //     printf("    mem read in ROM_BANKN (%02X)\n", address);
-    // } else if (address < ERAM) {
-    //     printf("    mem read in VRAM (%02X)\n", address);
-    // } else if (address < WRAM_BANK0) {
-    //     printf("    mem read in ERAM (%02X)\n", address);
-    // } else if (address < WRAM_BANKN) {
-    //     printf("    mem read in WRAM_BANK0 (%02X)\n", address);
-    // } else if (address < MIRROR) {
-    //     printf("    mem read in WRAM_BANKN (%02X)\n", address);
-    // } else if (address < OAM) {
-    //     printf("    mem read in MIRROR (%02X)\n", address);
-    // } else if (address < UNUSABLE) {
-    //     printf("    mem read in OAM (%02X)\n", address);
-    // } else if (address < IO) {
-    //     printf("    mem read in UNUSABLE (%02X)\n", address);
-    // } else if (address < HRAM) {
-    //     printf("    mem read in IO (%02X)\n", address);
-    // } else if (address < INTERRUPTS) {
-    //     printf("    mem read in HRAM (%02X)\n", address);
-    // } else if (address == INTERRUPTS) {
-    //     printf("    mem read in INTERRUPTS (%02X)\n", address);
-    // } else {
-    //     printf("    mem read outside memory!\n");
-    // }
+    // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
+    if (address >= OAM && address < UNUSABLE && CHECK_BIT(mem[LCDC], 7) && ((mem[STAT] & 0x3) == 2 || (mem[STAT] & 0x3) == 3))
+        return 0xFF;
+
+    // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
+    if ((address >= VRAM && address < ERAM) && CHECK_BIT(mem[LCDC], 7) && (mem[STAT] & 0x3) == 3)
+        return 0xFF;
+
+    // UNUSABLE memory is unusable
+    if (address >= UNUSABLE && address < IO)
+        return 0xFF;
+
     return mem[address];
 }
 
-// TODO emulate mirror memory
 void mem_write(word_t address, byte_t data) {
     if (address == DIV) {
+        // writing to DIV resets it to 0
         mem[address] = 0;
+    } else if (address >= OAM && address < UNUSABLE && ((mem[STAT] & 0x3) == 2 || (mem[STAT] & 0x3) == 3)) {
+        // OAM inaccessible by cpu while ppu in mode 2 or 3
+        return;
+    } else if ((address >= VRAM && address < ERAM) && (mem[STAT] & 0x3) == 3) {
+        // VRAM inaccessible by cpu while ppu in mode 3
+        return;
+    } else if (address >= UNUSABLE && address < IO) {
+        // UNUSABLE memory is unusable
+        return;
+    } else if (address == LY) {
+        // read only
+        return;
+    } else if (address == 0xFF46) {
+        // TODO OAM DMA transfer
+        mem[address] = data;
+    } else if (address == 0xFF50) {
+        // TODO lock boot rom
+        mem[address] = data;
     } else {
         mem[address] = data;
     }
-    // if (address < ROM_BANKN) {
-    //     printf("    mem write %02X in ROM_BANK0 (%02X)\n", data, address);
-    // } else if (address < VRAM) {
-    //     printf("    mem write %02X in ROM_BANKN (%02X)\n", data, address);
-    // } else if (address < ERAM) {
-    //     printf("    mem write %02X in VRAM (%02X)\n", data, address);
-    // } else if (address < WRAM_BANK0) {
-    //     printf("    mem write %02X in ERAM (%02X)\n", data, address);
-    // } else if (address < WRAM_BANKN) {
-    //     printf("    mem write %02X in WRAM_BANK0 (%02X)\n", data, address);
-    // } else if (address < MIRROR) {
-    //     printf("    mem write %02X in WRAM_BANKN (%02X)\n", data, address);
-    // } else if (address < OAM) {
-    //     printf("    mem write %02X in MIRROR (%02X)\n", data, address);
-    // } else if (address < UNUSABLE) {
-    //     printf("    mem write %02X in OAM (%02X)\n", data, address);
-    // } else if (address < IO) {
-    //     printf("    mem write %02X in UNUSABLE (%02X)\n", data, address);
-    // } else if (address < HRAM) {
-    //     printf("    mem write %02X in IO (%02X)\n", data, address);
-    // } else if (address < INTERRUPTS) {
-    //     printf("    mem write %02X in HRAM (%02X)\n", data, address);
-    // } else if (address == INTERRUPTS) {
-    //     printf("    mem write %02X in INTERRUPTS (%02X)\n", data, address);
-    // } else {
-    //     printf("    mem write outside memory!\n");
-    // }
 }
