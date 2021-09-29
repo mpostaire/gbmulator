@@ -541,10 +541,23 @@ static word_t pop() {
     return data;
 }
 
+static void and(byte_t reg) {
+    registers.a &= reg;
+    registers.a ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
+    RESET_FLAG(FLAG_N | FLAG_C);
+    SET_FLAG(FLAG_H);
+}
+
+static void or(byte_t reg) {
+    registers.a |= reg;
+    registers.a ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
+    RESET_FLAG(FLAG_C | FLAG_H | FLAG_N);
+}
+
 static void xor(byte_t reg) {
     registers.a ^= reg;
-    RESET_FLAG(FLAG_C | FLAG_H | FLAG_N);
     registers.a ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
+    RESET_FLAG(FLAG_C | FLAG_H | FLAG_N);
 }
 
 static void bit(byte_t reg, byte_t pos) {
@@ -636,6 +649,7 @@ static int cpu_exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     default:
+        printf("ERROR: opcode CB %02X: %s\n", opcode, extended_instructions[opcode].name);
         exit(EXIT_FAILURE);
         break;
     }
@@ -682,6 +696,10 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         registers.a = mem_read(registers.bc);
         cycles = 8;
         break;
+    case 0x0B: // DEC BC
+        registers.bc--;
+        cycles = 8;
+        break;
     case 0x0C: // INC C
         registers.c = inc(registers.c);
         cycles = 4;
@@ -725,6 +743,10 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         break;
     case 0x1A: // LD A,(DE)
         registers.a = mem_read(registers.de);
+        cycles = 8;
+        break;
+    case 0x1B: // DEC DE
+        registers.de--;
         cycles = 8;
         break;
     case 0x1C: // INC E
@@ -785,6 +807,10 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         registers.hl++;
         cycles = 8;
         break;
+    case 0x2B: // DEC HL
+        registers.hl--;
+        cycles = 8;
+        break;
     case 0x2C: // INC L
         registers.l = inc(registers.l);
         cycles = 4;
@@ -837,6 +863,10 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         } else {
             cycles = 8;
         }
+        break;
+    case 0x3B: // DEC SP
+        registers.sp--;
+        cycles = 8;
         break;
     case 0x3C: // INC A
         registers.a = inc(registers.a);
@@ -1102,6 +1132,38 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         // registers.a = registers.a;
         cycles = 4;
         break;
+    case 0xA0: // AND B
+        and(registers.b);
+        cycles = 4;
+        break;
+    case 0xA1: // AND C
+        and(registers.c);
+        cycles = 4;
+        break;
+    case 0xA2: // AND D
+        and(registers.d);
+        cycles = 4;
+        break;
+    case 0xA3: // AND E
+        and(registers.e);
+        cycles = 4;
+        break;
+    case 0xA4: // AND H
+        and(registers.h);
+        cycles = 4;
+        break;
+    case 0xA5: // AND L
+        and(registers.l);
+        cycles = 4;
+        break;
+    case 0xA6: // AND (HL)
+        and(mem_read(registers.hl));
+        cycles = 8;
+        break;
+    case 0xA7: // AND A
+        and(registers.a);
+        cycles = 4;
+        break;
     case 0xA8: // XOR B
         xor(registers.b);
         cycles = 4;
@@ -1132,6 +1194,38 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         break;
     case 0xAF: // XOR A
         xor(registers.a);
+        cycles = 4;
+        break;
+    case 0xB0: // OR B
+        or(registers.b);
+        cycles = 4;
+        break;
+    case 0xB1: // OR C
+        or(registers.c);
+        cycles = 4;
+        break;
+    case 0xB2: // OR D
+        or(registers.d);
+        cycles = 4;
+        break;
+    case 0xB3: // OR E
+        or(registers.e);
+        cycles = 4;
+        break;
+    case 0xB4: // OR H
+        or(registers.h);
+        cycles = 4;
+        break;
+    case 0xB5: // OR L
+        or(registers.l);
+        cycles = 4;
+        break;
+    case 0xB6: // OR (HL)
+        or(mem_read(registers.hl));
+        cycles = 8;
+        break;
+    case 0xB7: // OR A
+        or(registers.a);
         cycles = 4;
         break;
     case 0xB8: // CP B
@@ -1166,6 +1260,14 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         cp(registers.a);
         cycles = 4;
         break;
+    case 0xC0: // RET NZ
+        if (!CHECK_FLAG(FLAG_Z)) {
+            registers.pc = pop();
+            cycles = 20;
+        } else {
+            cycles = 8;
+        }
+        break;
     case 0xC1: // POP BC
         registers.bc = pop();
         cycles = 12;
@@ -1178,6 +1280,14 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         push(registers.bc);
         cycles = 16;
         break;
+    case 0xC8: // RET Z
+        if (CHECK_FLAG(FLAG_Z)) {
+            registers.pc = pop();
+            cycles = 20;
+        } else {
+            cycles = 8;
+        }
+        break;
     case 0xC9: // RET
         registers.pc = pop();
         cycles = 16; // TODO check wich is correct: in GBCPUman.pdf it's only 8 cycles
@@ -1189,12 +1299,33 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         registers.pc = operand;
         cycles = 24; // TODO check wich is correct: in GBCPUman.pdf it's only 12 cycles
         break;
+    case 0xD0: // RET NC
+        if (!CHECK_FLAG(FLAG_C)) {
+            registers.pc = pop();
+            cycles = 20;
+        } else {
+            cycles = 8;
+        }
+        break;
     case 0xD1: // POP DE
         registers.de = pop();
         cycles = 12;
         break;
     case 0xD5: // PUSH DE
         push(registers.de);
+        cycles = 16;
+        break;
+    case 0xD8: // RET C
+        if (CHECK_FLAG(FLAG_C)) {
+            registers.pc = pop();
+            cycles = 20;
+        } else {
+            cycles = 8;
+        }
+        break;
+    case 0xD9: // RETI
+        registers.pc = pop();
+        ime = 1;
         cycles = 16;
         break;
     case 0xE0: // LD (0xFF00 + n), A
@@ -1212,6 +1343,10 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
     case 0xE5: // PUSH HL
         push(registers.hl);
         cycles = 16;
+        break;
+    case 0xE6: // AND n
+        and(operand);
+        cycles = 8;
         break;
     case 0xEA: // LD (nn),A
         mem_write(operand, registers.a);
@@ -1241,6 +1376,10 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         push(registers.af);
         cycles = 16;
         break;
+    case 0xF6: // OR n
+        or(operand);
+        cycles = 8;
+        break;
     case 0xFA: // LD A,(nn)
         registers.a = mem_read(operand);
         cycles = 16;
@@ -1259,6 +1398,9 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         cycles = 16;
         break;
     default:;
+        char buf[32];
+        snprintf(buf, sizeof(buf), instructions[opcode].name, operand);
+        printf("ERROR: opcode %02X: %s\n", opcode, buf);
         exit(EXIT_FAILURE);
         break;
     }
