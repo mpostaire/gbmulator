@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
     SDL_bool is_running = SDL_TRUE;
     const Uint32 fps = 60;
     const Uint32 frame_delay = 1000 / fps;
-    Uint32 frame_time = 0;
+    Uint32 frame_time;
     SDL_Event event;
 
     load_cartridge("roms/Tetris.gb");

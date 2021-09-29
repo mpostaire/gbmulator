@@ -118,9 +118,12 @@ void mem_write(word_t address, byte_t data) {
     } else if (address == LY) {
         // read only
         return;
-    } else if (address == 0xFF46) {
-        // TODO OAM DMA transfer
-        mem[address] = data;
+    } else if (address == DMA) {
+        // OAM DMA transfer
+        word_t src_address = data * 100;
+        for (int i = 0; i < 0xA0; i++) {
+            mem[OAM + i] = mem[src_address + i];
+        }
     } else if (address == 0xFF50) {
         // TODO lock boot rom
         mem[address] = data;
