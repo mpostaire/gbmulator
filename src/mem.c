@@ -80,7 +80,7 @@ void load_cartridge(char *filepath) {
     // }
 
     // load cartridge into rom banks (everything before VRAM (0x8000))
-    memcpy(&mem, &cartridge[0], VRAM);
+    memcpy(&mem, &cartridge, VRAM);
 }
 
 // TODO MBC
@@ -120,10 +120,8 @@ void mem_write(word_t address, byte_t data) {
         return;
     } else if (address == DMA) {
         // OAM DMA transfer
-        word_t src_address = data * 100;
-        for (int i = 0; i < 0xA0; i++) {
-            mem[OAM + i] = mem[src_address + i];
-        }
+        // TODO this should not be instantaneous (it takes 640 cycles to complete and during that time the cpu can only access HRAM)
+        memcpy(&mem[OAM], &mem[data * 100], 0xA0 * sizeof(byte_t));
     } else if (address == 0xFF50) {
         // TODO lock boot rom
         mem[address] = data;
