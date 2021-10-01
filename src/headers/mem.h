@@ -65,7 +65,7 @@ enum mem_map {
     OBP0 = 0xFF48, // Object Palette 0 Data
     OBP1 = 0xFF49, // Object Palette 1 Data
     WY = 0xFF4A, // Window Y Position
-    WX = 0xFF4B, // Window X Position minus 7
+    WX = 0xFF4B, // Window X Position + 7
 
     HRAM = 0xFF80,
     IE = 0xFFFF // Interrupt Enable
