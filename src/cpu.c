@@ -2814,10 +2814,9 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         cycles = 12;
         break;
     case 0xF1: // POP AF
-        // registers.f can only retreive its flags (most significant nibble)
-        registers.a = mem_read(registers.sp + 1);
-        registers.f = mem_read(registers.sp) & 0xF0;
-        registers.sp += 2;
+        registers.af = pop();
+        // clear lower nibble of registers.f because it can only retreive its flags (most significant nibble)
+        registers.f &= 0xF0;
         cycles = 12;
         break;
     case 0xF2: // LD A,(0xFF00 + C)
