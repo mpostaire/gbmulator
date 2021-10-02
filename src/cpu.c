@@ -2924,14 +2924,6 @@ int cpu_handle_interrupts(void) {
             registers.pc = 0x0060;
         }
 
-        // if (instructions[mem[registers.pc]].operand_size == 0) {
-        //     printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x (cy: %ld) ppu:+0 |[00]0x0100 %02x\n", registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', registers.bc, registers.de, registers.hl, registers.sp, registers.pc, 0, mem[registers.pc]);
-        // } else if (instructions[mem[registers.pc]].operand_size == 1) {
-        //     printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x (cy: %ld) ppu:+0 |[00]0x0100 %02x %02x\n", registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', registers.bc, registers.de, registers.hl, registers.sp, registers.pc, 0, mem[registers.pc], mem[registers.pc + 1]);
-        // } else {
-        //     printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x (cy: %ld) ppu:+0 |[00]0x0100 %02x %02x %02x\n", registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', registers.bc, registers.de, registers.hl, registers.sp, registers.pc, 0, mem[registers.pc], mem[registers.pc + 1], mem[registers.pc + 2]);
-        // }
-
         return 20;
     }
 

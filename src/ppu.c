@@ -100,17 +100,13 @@ static void draw_tiles(void) {
     word_t bg_tilemap_address = CHECK_BIT(mem[LCDC], 3) ? 0x9C00 : 0x9800;
     word_t win_tilemap_address = CHECK_BIT(mem[LCDC], 6) ? 0x9C00 : 0x9800;
 
-    if (!CHECK_BIT(mem[LCDC], 0)) { // background and window disabled -- TODO not sure if this should clear all screen
-        // TODO temporary red
-        for (int x = 0; x < 160; x++) {
-            pixels[(y * 160 * 3) + (x * 3)] = 0xFF;
-            pixels[(y * 160 * 3) + (x * 3) + 1] = 0x00;
-            pixels[(y * 160 * 3) + (x * 3) + 2] = 0x00;
-        }
-        return;
-    }
-
     for (int x = 0; x < 160; x++) {
+        // background and window disabled, draw white pixel
+        if (!CHECK_BIT(mem[LCDC], 0)) {
+            SET_PIXEL(x, y, WHITE);
+            continue;
+        }
+
         // 1. FIND TILE DATA
 
         // wich line on the background or window we are currently on
