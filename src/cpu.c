@@ -732,7 +732,7 @@ static void sbc(byte_t reg) {
     SET_FLAG(FLAG_N);
 }
 
-static int cpu_exec_extended_opcode(byte_t opcode) {
+static int exec_extended_opcode(byte_t opcode) {
     int cycles;
     byte_t temp; // temporary variable used for some opcodes
 
@@ -1786,7 +1786,7 @@ static int cpu_exec_extended_opcode(byte_t opcode) {
     return cycles;
 }
 
-static int cpu_exec_opcode(byte_t opcode, word_t operand) {
+static int exec_opcode(byte_t opcode, word_t operand) {
     int cycles;
     unsigned int result; // temporary variable used for some opcodes
 
@@ -2665,7 +2665,7 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         }
         break;
     case 0xCB: // CB nn (prefix instruction)
-        return cpu_exec_extended_opcode(operand);
+        return exec_extended_opcode(operand);
     case 0xCC: // CALL Z, nn
         if (CHECK_FLAG(FLAG_Z)) {
             push(registers.pc);
@@ -2973,5 +2973,5 @@ int cpu_step(void) {
     //     printf("opcode %02X: %s\t\t(pc=%04X, sp=%04X, af=%04X, bc=%04X, de=%04X, hl=%04X) (ime=%d, ie=%02X, if=%02X)\n", opcode, buf, debug_pc, debug_sp, debug_af, debug_bc, debug_de, debug_hl, ime, mem_read(IE), mem_read(IF));
     // }
 
-    return cpu_exec_opcode(opcode, operand);
+    return exec_opcode(opcode, operand);
 }
