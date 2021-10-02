@@ -194,7 +194,7 @@ void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture) {
         }
     }
 
-    if (ppu_cycles > 456) {
+    if (ppu_cycles >= 456) {
         ppu_cycles -= 456; // not reset to 0 because there may be leftover cycles we want to take into account for the next scanline
         if (++mem[LY] > 153)
             mem[LY] = 0;

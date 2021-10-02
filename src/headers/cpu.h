@@ -66,6 +66,12 @@ typedef struct {
 	int operand_size;
 } instruction_t;
 
+// TODO remove these 2 lines
+extern const instruction_t instructions[256];
+extern const instruction_t extended_instructions[256];
+
 void cpu_request_interrupt(int irq);
+
+int cpu_handle_interrupts();
 
 int cpu_step();

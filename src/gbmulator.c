@@ -115,9 +115,22 @@ int main(int argc, char **argv) {
     Uint32 frame_time;
     SDL_Event event;
 
-    load_cartridge("roms/Tetris.gb");
+    // ALL CPU_INSTR TEST ROMS PASSED
     // load_cartridge("roms/tests/cpu_instrs/individual/01-special.gb");
+    // load_cartridge("roms/tests/cpu_instrs/individual/02-interrupts.gb");
+    // load_cartridge("roms/tests/cpu_instrs/individual/03-op sp,hl.gb");
+    // load_cartridge("roms/tests/cpu_instrs/individual/04-op r,imm.gb");
+    // load_cartridge("roms/tests/cpu_instrs/individual/05-op rp.gb");
+    // load_cartridge("roms/tests/cpu_instrs/individual/06-ld r,r.gb");
+    // load_cartridge("roms/tests/cpu_instrs/individual/07-jr,jp,call,ret,rst.gb");
+    // load_cartridge("roms/tests/cpu_instrs/individual/08-misc instrs.gb");
+    // load_cartridge("roms/tests/cpu_instrs/individual/09-op r,r.gb");
+    // load_cartridge("roms/tests/cpu_instrs/individual/10-bit ops.gb");
+    // load_cartridge("roms/tests/cpu_instrs/individual/11-op a,(hl).gb");
 
+    load_cartridge("roms/Tetris.gb");
+
+    long total_cycles = 0;
     while (is_running) {
         frame_time = SDL_GetTicks();
 
@@ -137,16 +150,24 @@ int main(int argc, char **argv) {
         // 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame
         int cycles_count = 0;
         while (cycles_count < 69905) {
-            int cycles = cpu_step();
+            // if (instructions[mem[registers.pc]].operand_size == 0) {
+            //     printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x (cy: %ld) ppu:+0 |[00]0x0100 %02x\n", registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', registers.bc, registers.de, registers.hl, registers.sp, registers.pc, total_cycles, mem[registers.pc]);
+            // } else if (instructions[mem[registers.pc]].operand_size == 1) {
+            //     printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x (cy: %ld) ppu:+0 |[00]0x0100 %02x %02x\n", registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', registers.bc, registers.de, registers.hl, registers.sp, registers.pc, total_cycles, mem[registers.pc], mem[registers.pc + 1]);
+            // } else {
+            //     printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x (cy: %ld) ppu:+0 |[00]0x0100 %02x %02x %02x\n", registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', registers.bc, registers.de, registers.hl, registers.sp, registers.pc, total_cycles, mem[registers.pc], mem[registers.pc + 1], mem[registers.pc + 2]);
+            // }
+            // if (total_cycles >= 11828596) {
+            //     exit(1);
+            // }
+
+            int cycles = cpu_handle_interrupts();
+            cycles += cpu_step();
             timer_step(cycles);
             ppu_step(cycles, renderer, texture);
-            cycles_count += cycles;
 
-            // // TODO this is supposed to print test roms debug messages
-            // if (mem[0xFF02] == 0x81) {
-            //     printf("%c", mem[0xFF01]);
-            //     mem[0xFF02] = 0x00;
-            // }
+            cycles_count += cycles;
+            total_cycles += cycles;
         }
 
         frame_time = SDL_GetTicks() - frame_time;

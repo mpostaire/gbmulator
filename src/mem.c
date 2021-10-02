@@ -65,6 +65,10 @@ void load_cartridge(char *filepath) {
     load_bios();
 
     FILE *f = fopen(filepath, "rb");
+    if (!f) {
+        perror("load_cartridge");
+        exit(1);
+    }
     fread(cartridge, sizeof(cartridge), 1, f);
     
     fclose(f);
@@ -101,16 +105,23 @@ byte_t mem_read(word_t address) {
 }
 
 void mem_write(word_t address, byte_t data) {
+    // TODO this is supposed to print test roms debug messages
+    if (address == SC && data == 0x81) {
+        printf("%c", mem[SB]);
+    }
+
     if (address <= VRAM) {
         // TODO rom banks
+        printf("/!\\ ROM BANKING NOT IMPLEMENTED YET! /!\\\n");
+        mem[address] = data; // should this write data in memory anyway?
     } else if (address == DIV) {
         // writing to DIV resets it to 0
         mem[address] = 0;
-    } else if (address >= OAM && address < UNUSABLE && ((mem[STAT] & 0x3) == 2 || (mem[STAT] & 0x3) == 3)) {
-        // OAM inaccessible by cpu while ppu in mode 2 or 3
+    } else if (address >= OAM && address < UNUSABLE && ((mem[STAT] & 0x3) == 2 || (mem[STAT] & 0x3) == 3) && CHECK_BIT(mem[LCDC], 7)) {
+        // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD enabled
         return;
-    } else if ((address >= VRAM && address < ERAM) && (mem[STAT] & 0x3) == 3) {
-        // VRAM inaccessible by cpu while ppu in mode 3
+    } else if ((address >= VRAM && address < ERAM) && (mem[STAT] & 0x3) == 3 && CHECK_BIT(mem[LCDC], 7)) {
+        // VRAM inaccessible by cpu while ppu in mode 3 and LCD enabled
         return;
     } else if (address >= UNUSABLE && address < IO) {
         // UNUSABLE memory is unusable

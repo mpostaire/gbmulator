@@ -7,6 +7,7 @@
 struct registers registers;
 // interrupt master enable
 int ime = 0;
+int halt = 0;
 
 const instruction_t instructions[256] = {
     {"NOP", 0},                   // 0x00
@@ -575,7 +576,6 @@ static byte_t inc(byte_t reg) {
     return reg;
 }
 
-// TODO half carry (FLAG_H) may be implemented wrong
 static byte_t dec(byte_t reg) {
     // if lower nibble of reg is 0, there will be a half carry after we decrement (not sure if this is a sufficient condition)
     (reg & 0x0F) == 0x00 ? SET_FLAG(FLAG_H) : RESET_FLAG(FLAG_H);
@@ -699,13 +699,12 @@ static void add8(byte_t val) {
 
 static void add16(word_t val) {
     unsigned int result = registers.hl + val;
-    (result & 0xFFFFF0000) ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
+    (result & 0xFFFF0000) ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
     (((registers.hl & 0x0FFF) + (val & 0x0FFF)) & 0x1000) == 0x1000 ? SET_FLAG(FLAG_H) : RESET_FLAG(FLAG_H);
     registers.hl = result & 0xFFFF;
     RESET_FLAG(FLAG_N);
 }
 
-// TODO not sure of this
 static void adc(byte_t val) {
     byte_t c = CHECK_FLAG(FLAG_C) ? 1 : 0;
     unsigned int result = registers.a + val + c;
@@ -716,7 +715,6 @@ static void adc(byte_t val) {
     RESET_FLAG(FLAG_N);
 }
 
-// TODO half carry (FLAG_H) and carry (FLAG_C) may be implemented wrong
 static void sub8(byte_t reg) {
     reg > registers.a ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
     (reg & 0x0F) > (registers.a & 0x0F) ? SET_FLAG(FLAG_H) : RESET_FLAG(FLAG_H);
@@ -725,7 +723,6 @@ static void sub8(byte_t reg) {
     SET_FLAG(FLAG_N);
 }
 
-// TODO half carry (FLAG_H) and carry (FLAG_C) may be implemented wrong
 static void sbc(byte_t reg) {
     byte_t c = CHECK_FLAG(FLAG_C) ? 1 : 0;
     reg + c > registers.a ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
@@ -737,7 +734,7 @@ static void sbc(byte_t reg) {
 
 static int cpu_exec_extended_opcode(byte_t opcode) {
     int cycles;
-    byte_t temp;
+    byte_t temp; // temporary variable used for some opcodes
 
     switch (opcode) {
     case 0x00: // RLC B
@@ -1791,6 +1788,7 @@ static int cpu_exec_extended_opcode(byte_t opcode) {
 
 static int cpu_exec_opcode(byte_t opcode, word_t operand) {
     int cycles;
+    unsigned int result; // temporary variable used for some opcodes
 
     switch (opcode) {
     case 0x00: // NOP
@@ -1826,7 +1824,8 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0x08: // LD (nn), SP
-        mem_write(operand, registers.sp);
+        mem_write(operand, registers.sp & 0xFF);
+        mem_write(operand + 1, registers.sp >> 8);
         cycles = 20;
         break;
     case 0x09: // ADD HL, BC
@@ -2303,6 +2302,10 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         mem_write(registers.hl, registers.l);
         cycles = 8;
         break;
+    case 0x76: // HALT
+        halt = 1;
+        cycles = 4;
+        break;
     case 0x77: // LD (HL),A
         mem_write(registers.hl, registers.a);
         cycles = 8;
@@ -2617,7 +2620,7 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         break;
     case 0xC3: // JP nn
         registers.pc = operand;
-        cycles = 16; // TODO check wich is correct: in GBCPUman.pdf it's only 12 cycles
+        cycles = 16;
         break;
     case 0xC4: // CALL NZ, nn
         if (!CHECK_FLAG(FLAG_Z)) {
@@ -2651,7 +2654,7 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         break;
     case 0xC9: // RET
         registers.pc = pop();
-        cycles = 16; // TODO check wich is correct: in GBCPUman.pdf it's only 8 cycles
+        cycles = 16;
         break;
     case 0xCA: // JP Z, nn
         if (CHECK_FLAG(FLAG_Z)) {
@@ -2675,7 +2678,7 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
     case 0xCD: // CALL nn
         push(registers.pc);
         registers.pc = operand;
-        cycles = 24; // TODO check wich is correct: in GBCPUman.pdf it's only 12 cycles
+        cycles = 24;
         break;
     case 0xCE: // ADC A, n
         adc(operand);
@@ -2792,11 +2795,19 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         registers.pc = 0x0020;
         cycles = 16;
         break;
+    case 0xE8:; // ADD SP, n
+        result = registers.sp + (s_byte_t) operand;
+        (((registers.sp & 0xFF) + ((s_byte_t) operand & 0xFF)) & 0x100) == 0x100 ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
+        (((registers.sp & 0x0F) + ((s_byte_t) operand & 0x0F)) & 0x10) == 0x10 ? SET_FLAG(FLAG_H) : RESET_FLAG(FLAG_H);
+        registers.sp = result & 0xFFFF;
+        RESET_FLAG(FLAG_N | FLAG_Z);
+        cycles = 16;
+        break;
     case 0xE9: // JP HL
         registers.pc = registers.hl;
         cycles = 4;
         break;
-    case 0xEA: // LD (nn),A
+    case 0xEA: // LD (nn), A
         mem_write(operand, registers.a);
         cycles = 16;
         break;
@@ -2840,10 +2851,10 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         registers.pc = 0x0030;
         cycles = 16;
         break;
-    case 0xF8:; // LD HL, SP+FE
-        unsigned int result = registers.sp + (s_word_t) operand;
-        (result & 0xFFFFF0000) ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
-        (((registers.hl & 0x0FFF) + ((s_word_t) operand & 0x0FFF)) & 0x1000) == 0x1000 ? SET_FLAG(FLAG_H) : RESET_FLAG(FLAG_H);
+    case 0xF8:; // LD HL, SP+n
+        result = registers.sp + (s_byte_t) operand;
+        (((registers.sp & 0xFF) + ((s_byte_t) operand & 0xFF)) & 0x100) == 0x100 ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
+        (((registers.sp & 0x0F) + ((s_byte_t) operand & 0x0F)) & 0x10) == 0x10 ? SET_FLAG(FLAG_H) : RESET_FLAG(FLAG_H);
         registers.hl = result & 0xFFFF;
         RESET_FLAG(FLAG_N | FLAG_Z);
         cycles = 12;
@@ -2852,7 +2863,7 @@ static int cpu_exec_opcode(byte_t opcode, word_t operand) {
         registers.sp = registers.hl;
         cycles = 8;
         break;
-    case 0xFA: // LD A,(nn)
+    case 0xFA: // LD A, (nn)
         registers.a = mem_read(operand);
         cycles = 16;
         break;
@@ -2884,7 +2895,11 @@ void cpu_request_interrupt(int irq) {
     SET_BIT(mem[IF], irq);
 }
 
-static int cpu_handle_interrupts() {
+int cpu_handle_interrupts() {
+    // wake cpu if there is one (or more) interrupt
+    if (halt && (mem[IE] & mem[IF]))
+        halt = 0;
+
     // ime is truly enabled when its value is 2 to emulate the EI delay by one instruction
     if (ime == 1) {
         ime++;
@@ -2895,24 +2910,27 @@ static int cpu_handle_interrupts() {
         if (CHECK_BIT(mem[IF], IRQ_VBLANK)) {
             RESET_BIT(mem[IF], IRQ_VBLANK);
             registers.pc = 0x0040;
-            // puts("\tVBLANK");
         } else if (CHECK_BIT(mem[IF], IRQ_STAT)) {
             RESET_BIT(mem[IF], IRQ_STAT);
             registers.pc = 0x0048;
-            // puts("\tLCD");
         } else if (CHECK_BIT(mem[IF], IRQ_TIMER)) {
             RESET_BIT(mem[IF], IRQ_TIMER);
             registers.pc = 0x0050;
-            // puts("\tTIMER");
         } else if (CHECK_BIT(mem[IF], IRQ_SERIAL)) {
             RESET_BIT(mem[IF], IRQ_SERIAL);
             registers.pc = 0x0058;
-            // puts("\tSERIAL");
         } else if (CHECK_BIT(mem[IF], IRQ_JOYPAD)) {
             RESET_BIT(mem[IF], IRQ_JOYPAD);
             registers.pc = 0x0060;
-            // puts("\tJOYPAD");
         }
+
+        // if (instructions[mem[registers.pc]].operand_size == 0) {
+        //     printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x (cy: %ld) ppu:+0 |[00]0x0100 %02x\n", registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', registers.bc, registers.de, registers.hl, registers.sp, registers.pc, 0, mem[registers.pc]);
+        // } else if (instructions[mem[registers.pc]].operand_size == 1) {
+        //     printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x (cy: %ld) ppu:+0 |[00]0x0100 %02x %02x\n", registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', registers.bc, registers.de, registers.hl, registers.sp, registers.pc, 0, mem[registers.pc], mem[registers.pc + 1]);
+        // } else {
+        //     printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x (cy: %ld) ppu:+0 |[00]0x0100 %02x %02x %02x\n", registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', registers.bc, registers.de, registers.hl, registers.sp, registers.pc, 0, mem[registers.pc], mem[registers.pc + 1], mem[registers.pc + 2]);
+        // }
 
         return 20;
     }
@@ -2921,7 +2939,7 @@ static int cpu_handle_interrupts() {
 }
 
 int cpu_step() {
-    int cycles = cpu_handle_interrupts();
+    if (halt) return 4;
 
     word_t debug_pc = registers.pc;
     word_t debug_sp = registers.sp;
@@ -2955,5 +2973,5 @@ int cpu_step() {
     //     printf("opcode %02X: %s\t\t(pc=%04X, sp=%04X, af=%04X, bc=%04X, de=%04X, hl=%04X) (ime=%d, ie=%02X, if=%02X)\n", opcode, buf, debug_pc, debug_sp, debug_af, debug_bc, debug_de, debug_hl, ime, mem_read(IE), mem_read(IF));
     // }
 
-    return cycles + cpu_exec_opcode(opcode, operand);
+    return cpu_exec_opcode(opcode, operand);
 }
