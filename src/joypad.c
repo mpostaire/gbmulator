@@ -3,6 +3,7 @@
 #include "joypad.h"
 #include "cpu.h"
 #include "mem.h"
+#include "ppu.h"
 
 byte_t joypad_action = 0xFF;
 byte_t joypad_direction = 0xFF;

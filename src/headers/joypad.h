@@ -1,5 +1,7 @@
 #pragma once
 
+#include <SDL2/SDL.h>
+
 #include "types.h"
 
 extern byte_t joypad_action;

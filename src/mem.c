@@ -5,6 +5,7 @@
 #include "types.h"
 #include "mem.h"
 #include "cpu.h"
+#include "joypad.h"
 
 byte_t cartridge[8000000];
 byte_t mem[0x10000];
