@@ -72,6 +72,6 @@ extern const instruction_t extended_instructions[256];
 
 void cpu_request_interrupt(int irq);
 
-int cpu_handle_interrupts();
+int cpu_handle_interrupts(void);
 
-int cpu_step();
+int cpu_step(void);

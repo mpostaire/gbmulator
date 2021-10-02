@@ -536,7 +536,7 @@ static void push(word_t word) {
     mem_write(registers.sp, lo);
 }
 
-static word_t pop() {
+static word_t pop(void) {
     word_t data = mem_read(registers.sp) | mem_read(registers.sp + 1) << 8;
     registers.sp += 2;
     return data;
@@ -2895,7 +2895,7 @@ void cpu_request_interrupt(int irq) {
     SET_BIT(mem[IF], irq);
 }
 
-int cpu_handle_interrupts() {
+int cpu_handle_interrupts(void) {
     // wake cpu if there is one (or more) interrupt
     if (halt && (mem[IE] & mem[IF]))
         halt = 0;
@@ -2938,7 +2938,7 @@ int cpu_handle_interrupts() {
     return 0;
 }
 
-int cpu_step() {
+int cpu_step(void) {
     if (halt) return 4;
 
     // word_t debug_pc = registers.pc;

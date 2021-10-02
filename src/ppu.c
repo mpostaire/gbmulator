@@ -42,9 +42,35 @@ enum ppu_modes {
 #define SET_MODE(m) mem[STAT] = (mem[STAT] & ~0x03) | m
 
 /**
+ * @returns color after applying palette.
+ */
+static enum colors get_color(byte_t color_data, word_t palette_address) {
+    // get relevant bits of the color palette the color_data maps to
+    byte_t hi, lo;
+    switch (color_data) {
+        case 0: hi = 1; lo = 0; break;
+        case 1: hi = 3; lo = 2; break;
+        case 2: hi = 5; lo = 4; break;
+        case 3: hi = 7; lo = 6; break;
+    }
+
+    // get the color using the palette
+    byte_t color = (GET_BIT(mem[palette_address], hi) << 1) | GET_BIT(mem[palette_address], lo);
+    switch (color) {
+        case 0: return WHITE;
+        case 1: return LIGHT_GRAY;
+        case 2: return DARK_GRAY;
+        case 3: return BLACK;
+    }
+
+    // should never reach this
+    return WHITE;
+}
+
+/**
  * Draws background and window pixels of line LY
  */
-static void ppu_draw_tiles() {
+static void ppu_draw_tiles(void) {
     byte_t y = mem[LY];
     byte_t window_y = mem[WY];
     byte_t window_x = mem[WX] - 7;
@@ -126,15 +152,15 @@ static void ppu_draw_tiles() {
 
         // construct color data
         byte_t color_data = (GET_BIT(pixel_data_2, relevant_bit) << 1) | GET_BIT(pixel_data_1, relevant_bit);
-        // TODO palette
-        SET_PIXEL(x, y, color_data);
+        // set pixel color using BG (for background and window) palette data
+        SET_PIXEL(x, y, get_color(color_data, BGP));
     }
 }
 
 /**
  * Draws sprites of line LY
  */
-static void ppu_draw_objects() {
+static void ppu_draw_objects(void) {
     if (!CHECK_BIT(mem[LCDC], 1)) // objects disabled
         return;
 }
