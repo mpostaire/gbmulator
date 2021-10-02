@@ -101,6 +101,22 @@ static void handle_input(SDL_KeyboardEvent *key) {
 }
 
 int main(int argc, char **argv) {
+    // ALL CPU_INSTR TEST ROMS PASSED
+    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/01-special.gb");
+    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/02-interrupts.gb");
+    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/03-op sp,hl.gb");
+    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/04-op r,imm.gb");
+    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/05-op rp.gb");
+    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/06-ld r,r.gb");
+    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/07-jr,jp,call,ret,rst.gb");
+    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/08-misc instrs.gb");
+    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/09-op r,r.gb");
+    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/10-bit ops.gb");
+    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/11-op a,(hl).gb");
+    // load_cartridge("roms/tests/blargg/instr_timing/instr_timing.gb");
+
+    load_cartridge("roms/Tetris.gb");
+
     SDL_Init(SDL_INIT_VIDEO);
 
     // TODO add rom load cartdrige (bios.gbc) into memory
@@ -114,21 +130,6 @@ int main(int argc, char **argv) {
     const Uint32 frame_delay = 1000 / fps;
     Uint32 frame_time;
     SDL_Event event;
-
-    // ALL CPU_INSTR TEST ROMS PASSED
-    // load_cartridge("roms/tests/cpu_instrs/individual/01-special.gb");
-    // load_cartridge("roms/tests/cpu_instrs/individual/02-interrupts.gb");
-    // load_cartridge("roms/tests/cpu_instrs/individual/03-op sp,hl.gb");
-    // load_cartridge("roms/tests/cpu_instrs/individual/04-op r,imm.gb");
-    // load_cartridge("roms/tests/cpu_instrs/individual/05-op rp.gb");
-    // load_cartridge("roms/tests/cpu_instrs/individual/06-ld r,r.gb");
-    // load_cartridge("roms/tests/cpu_instrs/individual/07-jr,jp,call,ret,rst.gb");
-    // load_cartridge("roms/tests/cpu_instrs/individual/08-misc instrs.gb");
-    // load_cartridge("roms/tests/cpu_instrs/individual/09-op r,r.gb");
-    // load_cartridge("roms/tests/cpu_instrs/individual/10-bit ops.gb");
-    // load_cartridge("roms/tests/cpu_instrs/individual/11-op a,(hl).gb");
-
-    load_cartridge("roms/Tetris.gb");
 
     long total_cycles = 0;
     while (is_running) {
@@ -161,6 +162,9 @@ int main(int argc, char **argv) {
             //     exit(1);
             // }
 
+            // TODO make timings accurate by forcing each cpu_step() to take 4 cycles: if it's not enough to finish an instruction,
+            // the next cpu_step() will resume the previous instruction. This will makes the timer "hack" (increment within a loop and not an if)
+            // obsolete while allowing accurate memory timings emulation.
             int cycles = cpu_handle_interrupts();
             cycles += cpu_step();
             timer_step(cycles);

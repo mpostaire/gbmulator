@@ -2941,16 +2941,16 @@ int cpu_handle_interrupts() {
 int cpu_step() {
     if (halt) return 4;
 
-    word_t debug_pc = registers.pc;
-    word_t debug_sp = registers.sp;
-    word_t debug_af = registers.af;
-    word_t debug_bc = registers.bc;
-    word_t debug_de = registers.de;
-    word_t debug_hl = registers.hl;
+    // word_t debug_pc = registers.pc;
+    // word_t debug_sp = registers.sp;
+    // word_t debug_af = registers.af;
+    // word_t debug_bc = registers.bc;
+    // word_t debug_de = registers.de;
+    // word_t debug_hl = registers.hl;
 
-    // TODO remove next 2 lines
-    byte_t ienable = mem[IE];
-    byte_t iflag = mem[IF];
+    // // TODO remove next 2 lines
+    // byte_t ienable = mem[IE];
+    // byte_t iflag = mem[IF];
 
     byte_t opcode = mem_read(registers.pc);
     registers.pc++;

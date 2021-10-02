@@ -27,6 +27,7 @@ void timer_step(int cycles) {
         tima_counter += cycles;
         // Loop here to increment the timer multiple times in case a cpu instruction was longer than max_cycles.
         // div_counter is not affected by this as no cpu instruction takes 256 cycles.
+        // This is needed as this is not an accurate emulator: the timer is not called every 4 cycles (causing wrong memory timings, ...).
         while (tima_counter >= max_cycles) {
             tima_counter -= max_cycles;
 
