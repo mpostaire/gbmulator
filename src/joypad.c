@@ -86,9 +86,6 @@ void joypad_update(SDL_KeyboardEvent *key) {
             RESET_BIT(joypad_action, 3);
             cpu_request_interrupt(IRQ_JOYPAD);
             break;
-        case SDLK_n:
-            cpu_step();
-            break;
         case SDLK_c:
             ppu_switch_colors();
             break;
