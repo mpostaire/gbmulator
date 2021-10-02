@@ -70,7 +70,6 @@ void joypad_update(SDL_KeyboardEvent *key) {
             RESET_BIT(joypad_direction, 3);
             cpu_request_interrupt(IRQ_JOYPAD);
             break;
-            break;
         case A:
             RESET_BIT(joypad_action, 0);
             cpu_request_interrupt(IRQ_JOYPAD);
