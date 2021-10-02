@@ -47,9 +47,6 @@ static void handle_input(SDL_KeyboardEvent *key) {
             SET_BIT(mem[P1], 5); // select action buttons
             SET_BIT(mem[P1], 2); // select
             break;
-        case SDLK_n:
-            cpu_step();
-            break;
         }
     } else {
         // printf("Key press: ");
@@ -93,6 +90,12 @@ static void handle_input(SDL_KeyboardEvent *key) {
             RESET_BIT(mem[P1], 5); // select action buttons
             RESET_BIT(mem[P1], 2); // select
             cpu_request_interrupt(IRQ_JOYPAD);
+            break;
+        case SDLK_n:
+            cpu_step();
+            break;
+        case SDLK_c:
+            ppu_switch_colors();
             break;
         }
     }

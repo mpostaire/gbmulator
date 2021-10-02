@@ -12,6 +12,7 @@ byte_t color_gray[4][3] = {
     { 0x77, 0x77, 0x77 },
     { 0x00, 0x00, 0x00 }
 };
+
 // Original colors
 byte_t color_green[4][3] = {
     { 0x9B, 0xBC, 0x0F },
@@ -19,7 +20,10 @@ byte_t color_green[4][3] = {
     { 0x30, 0x62, 0x30 },
     { 0x0F, 0x38, 0x0F }
 };
-#define COLOR_VALUES color_green
+
+byte_t (*color_values)[3] = color_gray;
+byte_t change_colors = 0;
+
 // TODO? LCD off special bright white color
 enum colors {
     WHITE,
@@ -27,8 +31,12 @@ enum colors {
     DARK_GRAY,
     BLACK
 };
+
 byte_t pixels[160 * 144 * 3];
-#define SET_PIXEL(x, y, c) pixels[(y * 160 * 3) + (x * 3)] = COLOR_VALUES[c][0]; pixels[(y * 160 * 3) + (x * 3) + 1] = COLOR_VALUES[c][1]; pixels[(y * 160 * 3) + (x * 3) + 2] = COLOR_VALUES[c][2];
+
+#define SET_PIXEL(x, y, c) pixels[(y * 160 * 3) + (x * 3)] = color_values[c][0]; \
+                            pixels[(y * 160 * 3) + (x * 3) + 1] = color_values[c][1]; \
+                            pixels[(y * 160 * 3) + (x * 3) + 2] = color_values[c][2];
 
 int ppu_cycles = 0;
 
@@ -40,6 +48,18 @@ enum ppu_modes {
 };
 #define IS_MODE(m) ((mem[STAT] & 0x03) == m)
 #define SET_MODE(m) mem[STAT] = (mem[STAT] & ~0x03) | m
+
+void switch_colors() {
+    if (color_values == color_green)
+        color_values = color_gray;
+    else
+        color_values = color_green;
+    change_colors = 0;
+}
+
+void ppu_switch_colors(void) {
+    change_colors = 1;
+}
 
 /**
  * @returns color after applying palette.
@@ -70,7 +90,7 @@ static enum colors get_color(byte_t color_data, word_t palette_address) {
 /**
  * Draws background and window pixels of line LY
  */
-static void ppu_draw_tiles(void) {
+static void draw_tiles(void) {
     byte_t y = mem[LY];
     byte_t window_y = mem[WY];
     byte_t window_x = mem[WX] - 7;
@@ -160,7 +180,7 @@ static void ppu_draw_tiles(void) {
 /**
  * Draws sprites of line LY
  */
-static void ppu_draw_objects(void) {
+static void draw_objects(void) {
     if (!CHECK_BIT(mem[LCDC], 1)) // objects disabled
         return;
 }
@@ -198,6 +218,10 @@ void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture) {
             SDL_UpdateTexture(texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
             SDL_RenderCopy(renderer, texture, NULL, NULL);
             SDL_RenderPresent(renderer);
+
+            // if a change colors is requested, do it after rendering the current frame to avoid doing it mid frame
+            if (change_colors)
+                switch_colors();
         }
     } else {
         if (ppu_cycles <= 80) { // Mode 2 (OAM) -- ends after 80 ppu_cycles
@@ -216,8 +240,8 @@ void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture) {
                 
                 // draw scanline (background, window and objects pixels on line LY) when we enter HBlank
                 if (mem[LY] < 144) {
-                    ppu_draw_tiles();
-                    ppu_draw_objects();
+                    draw_tiles();
+                    draw_objects();
                 }
             }
         }
