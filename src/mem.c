@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -10,8 +11,14 @@ byte_t mem[0x10000];
 
 // TODO: handle fopen fail
 static void load_bios(void) {
-    memset(mem, 0, sizeof(mem));
+    FILE *f = fopen("roms/bios.gb", "rb");
+    if (f) {
+        fread(mem, 0xFF, 1, f);
+        fclose(f);
+        return;
+    }
 
+    // this is the state of the memory after bios execution
     mem[0xFF05] = 0x00;
     mem[0xFF06] = 0x00;
     mem[0xFF07] = 0x00;
@@ -44,11 +51,7 @@ static void load_bios(void) {
     mem[0xFF4B] = 0x00;
     mem[0xFFFF] = 0x00;
 
-    // FILE *f = fopen("roms/bios.gb", "rb");
-    // fread(mem, 0xFF, 1, f);
-    // fclose(f);
-
-    // this is the state of the registers after bios execution (comment if bios is used)
+    // this is the state of the registers after bios execution
     registers.a = 0x01;
     registers.f = 0xB0;
     registers.b = 0x00;
@@ -62,12 +65,13 @@ static void load_bios(void) {
 }
 
 void load_cartridge(char *filepath) {
-    load_bios();
+    // clear memory
+    memset(&mem, 0, sizeof(mem));
 
     FILE *f = fopen(filepath, "rb");
     if (!f) {
         perror("load_cartridge");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     fread(cartridge, sizeof(cartridge), 1, f);
     
@@ -85,6 +89,10 @@ void load_cartridge(char *filepath) {
 
     // load cartridge into rom banks (everything before VRAM (0x8000))
     memcpy(&mem, &cartridge, VRAM);
+
+    // Load bios (if it exists) after cartridge to overwrite first 0x100 bytes.
+    // If bios don't exist, sets memory and registers accordingly. 
+    load_bios();
 }
 
 // TODO MBC
@@ -112,7 +120,7 @@ void mem_write(word_t address, byte_t data) {
 
     if (address <= VRAM) {
         // TODO rom banks
-        printf("/!\\ ROM BANKING NOT IMPLEMENTED YET! /!\\\n");
+        // printf("/!\\ ROM BANKING NOT IMPLEMENTED YET! /!\\\n");
         mem[address] = data; // should this write data in memory anyway?
     } else if (address == DIV) {
         // writing to DIV resets it to 0
@@ -132,9 +140,11 @@ void mem_write(word_t address, byte_t data) {
     } else if (address == DMA) {
         // OAM DMA transfer
         // TODO this should not be instantaneous (it takes 640 cycles to complete and during that time the cpu can only access HRAM)
-        memcpy(&mem[OAM], &mem[data * 100], 0xA0 * sizeof(byte_t));
-    } else if (address == 0xFF50) {
-        // TODO lock boot rom
+        memcpy(&mem[OAM], &mem[data * 0x100], 0xA0 * sizeof(byte_t));
+        mem[address] = data;
+    } else if (address == 0xFF50 && data == 1) {
+        // disable boot rom
+        memcpy(&mem, &cartridge, 0x100);
         mem[address] = data;
     } else {
         mem[address] = data;
