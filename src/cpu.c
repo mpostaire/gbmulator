@@ -1019,7 +1019,7 @@ static int cpu_exec_extended_opcode(byte_t opcode) {
         break;
     case 0x46: // BIT 0, (HL)
         bit(mem_read(registers.hl), 0);
-        cycles = 16;
+        cycles = 12;
         break;
     case 0x47: // BIT 0, A
         bit(registers.a, 0);
@@ -1051,7 +1051,7 @@ static int cpu_exec_extended_opcode(byte_t opcode) {
         break;
     case 0x4E: // BIT 1, (HL)
         bit(mem_read(registers.hl), 1);
-        cycles = 16;
+        cycles = 12;
         break;
     case 0x4F: // BIT 1, A
         bit(registers.a, 1);
@@ -1083,7 +1083,7 @@ static int cpu_exec_extended_opcode(byte_t opcode) {
         break;
     case 0x56: // BIT 2, (HL)
         bit(mem_read(registers.hl), 2);
-        cycles = 16;
+        cycles = 12;
         break;
     case 0x57: // BIT 2, A
         bit(registers.a, 2);
@@ -1115,7 +1115,7 @@ static int cpu_exec_extended_opcode(byte_t opcode) {
         break;
     case 0x5E: // BIT 3, (HL)
         bit(mem_read(registers.hl), 3);
-        cycles = 16;
+        cycles = 12;
         break;
     case 0x5F: // BIT 3, A
         bit(registers.a, 3);
@@ -1147,7 +1147,7 @@ static int cpu_exec_extended_opcode(byte_t opcode) {
         break;
     case 0x66: // BIT 4, (HL)
         bit(mem_read(registers.hl), 4);
-        cycles = 16;
+        cycles = 12;
         break;
     case 0x67: // BIT 4, A
         bit(registers.a, 4);
@@ -1179,7 +1179,7 @@ static int cpu_exec_extended_opcode(byte_t opcode) {
         break;
     case 0x6E: // BIT 5, (HL)
         bit(mem_read(registers.hl), 5);
-        cycles = 16;
+        cycles = 12;
         break;
     case 0x6F: // BIT 5, A
         bit(registers.a, 5);
@@ -1211,7 +1211,7 @@ static int cpu_exec_extended_opcode(byte_t opcode) {
         break;
     case 0x76: // BIT 6, (HL)
         bit(mem_read(registers.hl), 6);
-        cycles = 16;
+        cycles = 12;
         break;
     case 0x77: // BIT 6, A
         bit(registers.a, 6);
@@ -1243,7 +1243,7 @@ static int cpu_exec_extended_opcode(byte_t opcode) {
         break;
     case 0x7E: // BIT 7, (HL)
         bit(mem_read(registers.hl), 7);
-        cycles = 16;
+        cycles = 12;
         break;
     case 0x7F: // BIT 7, A
         bit(registers.a, 7);
