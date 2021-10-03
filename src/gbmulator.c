@@ -47,9 +47,15 @@ int main(int argc, char **argv) {
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
             case SDL_KEYDOWN:
+                if (event.key.repeat)
+                    break;
+                joypad_press(event.key.keysym.sym);
+                if (event.key.keysym.sym == SDLK_c)
+                    ppu_switch_colors();
+                break;
             case SDL_KEYUP:
-                if (!event.key.repeat) 
-                    joypad_update(&event.key);
+                if (!event.key.repeat)
+                    joypad_release(event.key.keysym.sym);
                 break;
             case SDL_QUIT:
                 is_running = SDL_FALSE;

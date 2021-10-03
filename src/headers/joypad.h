@@ -4,9 +4,8 @@
 
 #include "types.h"
 
-extern byte_t joypad_action;
-extern byte_t joypad_direction;
-
 byte_t joypad_get_input(void);
 
-void joypad_update(SDL_KeyboardEvent *key);
+void joypad_press(SDL_Keycode key);
+
+void joypad_release(SDL_Keycode key);
