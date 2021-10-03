@@ -3,6 +3,7 @@ A Game Boy emulator.
 
 TODO move bit macros from cpu.h to own header
 TODO sound
+TODO serial port/interrupt
 TODO GBC mode
 TODO savestates
 TODO configurable emulation speed

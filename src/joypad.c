@@ -5,8 +5,8 @@
 #include "mem.h"
 #include "ppu.h"
 
-byte_t joypad_action = 0xFF;
-byte_t joypad_direction = 0xFF;
+byte_t joypad_action = 0x0F;
+byte_t joypad_direction = 0x0F;
 
 enum buttons {
     RIGHT = SDLK_RIGHT,
@@ -21,9 +21,13 @@ enum buttons {
 
 byte_t joypad_get_input(void) {
     if (!CHECK_BIT(mem[P1], 4))
-        return joypad_direction;
+        return (mem[P1] & 0xF0) | joypad_direction;
+    else if (!CHECK_BIT(mem[P1], 5))
+        return (mem[P1] & 0xF0) | joypad_action;
+    else if (!CHECK_BIT(mem[P1], 4) && (!CHECK_BIT(mem[P1], 5)))
+        return (mem[P1] & 0xF0) | joypad_direction | joypad_action;
     else
-        return joypad_action;
+        return 0xFF;
 }
 
 void joypad_update(SDL_KeyboardEvent *key) {
@@ -58,34 +62,42 @@ void joypad_update(SDL_KeyboardEvent *key) {
         switch (key->keysym.sym) {
         case RIGHT:
             RESET_BIT(joypad_direction, 0);
-            cpu_request_interrupt(IRQ_JOYPAD);
+            if (!CHECK_BIT(mem[P1], 4))
+                cpu_request_interrupt(IRQ_JOYPAD);
             break;
         case LEFT:
             RESET_BIT(joypad_direction, 1);
-            cpu_request_interrupt(IRQ_JOYPAD);
+            if (!CHECK_BIT(mem[P1], 4))
+                cpu_request_interrupt(IRQ_JOYPAD);
             break;
         case UP:
             RESET_BIT(joypad_direction, 2);
-            cpu_request_interrupt(IRQ_JOYPAD);
+            if (!CHECK_BIT(mem[P1], 4))
+                cpu_request_interrupt(IRQ_JOYPAD);
         case DOWN:
             RESET_BIT(joypad_direction, 3);
-            cpu_request_interrupt(IRQ_JOYPAD);
+            if (!CHECK_BIT(mem[P1], 4))
+                cpu_request_interrupt(IRQ_JOYPAD);
             break;
         case A:
             RESET_BIT(joypad_action, 0);
-            cpu_request_interrupt(IRQ_JOYPAD);
+            if (!CHECK_BIT(mem[P1], 5))
+                cpu_request_interrupt(IRQ_JOYPAD);
             break;
         case B:
             RESET_BIT(joypad_action, 1);
-            cpu_request_interrupt(IRQ_JOYPAD);
+            if (!CHECK_BIT(mem[P1], 5))
+                cpu_request_interrupt(IRQ_JOYPAD);
             break;
         case SELECT:
             RESET_BIT(joypad_action, 2);
-            cpu_request_interrupt(IRQ_JOYPAD);
+            if (!CHECK_BIT(mem[P1], 5))
+                cpu_request_interrupt(IRQ_JOYPAD);
             break;
         case START:
             RESET_BIT(joypad_action, 3);
-            cpu_request_interrupt(IRQ_JOYPAD);
+            if (!CHECK_BIT(mem[P1], 5))
+                cpu_request_interrupt(IRQ_JOYPAD);
             break;
         case SDLK_c:
             ppu_switch_colors();

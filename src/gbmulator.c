@@ -27,6 +27,7 @@ int main(int argc, char **argv) {
     // load_cartridge("roms/tests/blargg/cpu_instrs/individual/11-op a,(hl).gb");
     // load_cartridge("roms/tests/blargg/instr_timing/instr_timing.gb");
 
+    // TODO program argument sets path to rom (optional: path to boot rom - default being roms/bios.gb)
     load_cartridge("roms/Tetris.gb");
 
     SDL_Init(SDL_INIT_VIDEO);
