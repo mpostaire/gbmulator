@@ -11,7 +11,6 @@
 
 int main(int argc, char **argv) {
     // TODO not all characters are displayed for these test roms...
-    //      check if its because ppu window is badly implemented (unlikely) or because last characters are objects (not actually implemented)
 
     // ALL CPU_INSTR TEST ROMS PASSED
     // load_cartridge("roms/tests/blargg/cpu_instrs/individual/01-special.gb");

@@ -10,8 +10,8 @@
 byte_t cartridge[8000000];
 byte_t mem[0x10000];
 
-// TODO: handle fopen fail
 static void load_bios(void) {
+    // TODO bios transition to cartridge fails (blank screen)
     FILE *f = fopen("roms/bios.gb", "rb");
     if (f) {
         fread(mem, 0xFF, 1, f);

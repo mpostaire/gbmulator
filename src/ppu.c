@@ -25,7 +25,7 @@ byte_t (*color_values)[3] = color_gray;
 byte_t change_colors = 0;
 
 // TODO? LCD off special bright white color
-enum colors {
+enum color {
     WHITE,
     LIGHT_GRAY,
     DARK_GRAY,
@@ -34,20 +34,21 @@ enum colors {
 
 byte_t pixels[160 * 144 * 3];
 
-#define SET_PIXEL(x, y, c) pixels[(y * 160 * 3) + (x * 3)] = color_values[c][0]; \
-                            pixels[(y * 160 * 3) + (x * 3) + 1] = color_values[c][1]; \
-                            pixels[(y * 160 * 3) + (x * 3) + 2] = color_values[c][2];
+#define SET_PIXEL(x, y, c) pixels[((y) * 160 * 3) + ((x) * 3)] = color_values[(c)][0]; \
+                            pixels[((y) * 160 * 3) + ((x) * 3) + 1] = color_values[(c)][1]; \
+                            pixels[((y) * 160 * 3) + ((x) * 3) + 2] = color_values[(c)][2];
 
-int ppu_cycles = 0;
-
-enum ppu_modes {
+enum ppu_mode {
     PPU_HBLANK,
     PPU_VBLANK,
     PPU_OAM,
     PPU_DRAWING
 };
-#define IS_MODE(m) ((mem[STAT] & 0x03) == m)
-#define SET_MODE(m) mem[STAT] = (mem[STAT] & ~0x03) | m
+
+#define IS_MODE(m) ((mem[STAT] & 0x03) == (m))
+#define SET_MODE(m) mem[STAT] = (mem[STAT] & ~0x03) | (m)
+
+int ppu_cycles = 0;
 
 void switch_colors() {
     if (color_values == color_green)
@@ -64,7 +65,7 @@ void ppu_switch_colors(void) {
 /**
  * @returns color after applying palette.
  */
-static enum colors get_color(byte_t color_data, word_t palette_address) {
+static enum color get_color(byte_t color_data, word_t palette_address) {
     // get relevant bits of the color palette the color_data maps to
     byte_t hi, lo;
     switch (color_data) {
@@ -90,7 +91,7 @@ static enum colors get_color(byte_t color_data, word_t palette_address) {
 /**
  * Draws background and window pixels of line LY
  */
-static void draw_tiles(void) {
+static void draw_bg_win(void) {
     byte_t y = mem[LY];
     byte_t window_y = mem[WY];
     byte_t window_x = mem[WX] - 7;
@@ -126,17 +127,6 @@ static void draw_tiles(void) {
             pos_x = scroll_x + x;
         }
 
-        // get tiledata block starting memory address
-        word_t tiledata_address;
-        int unsig;
-        if (CHECK_BIT(mem[LCDC], 4)) {
-            tiledata_address = 0x8000;
-            unsig = 1;
-        } else {
-            tiledata_address = 0x8800;
-            unsig = 0;
-        }
-
         // find tile_id x,y coordinates in the memory "2D array" holding the tile_ids.
         // True y pos is SCY + LY. Then divide by 8 because tiles are 8x8 and multiply by 32 because this is a 32x32 "2D array" in a 1D array.
         word_t tile_id_y = (pos_y / 8) * 32;
@@ -144,12 +134,14 @@ static void draw_tiles(void) {
         byte_t tile_id_x = pos_x / 8;
         word_t tile_id_address = (win ? win_tilemap_address : bg_tilemap_address) + tile_id_x + tile_id_y;
 
-        if (unsig) {
+        // get tiledata memory address
+        word_t tiledata_address;
+        if (CHECK_BIT(mem[LCDC], 4)) {
             byte_t tile_id = mem[tile_id_address];
-            tiledata_address += tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
+            tiledata_address = 0x8000 + tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
         } else {
             s_byte_t tile_id = (s_byte_t) mem[tile_id_address];
-            tiledata_address += tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
+            tiledata_address = 0x8800 + tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
         }
 
         // find the vertical line of the tile we are on (% 8 because tiles are 8 pixels tall, * 2 because each line takes 2 bytes of memory)
@@ -177,8 +169,82 @@ static void draw_tiles(void) {
  * Draws sprites of line LY
  */
 static void draw_objects(void) {
-    if (!CHECK_BIT(mem[LCDC], 1)) // objects disabled
+    // objects disabled
+    if (!CHECK_BIT(mem[LCDC], 1))
         return;
+    
+    byte_t y = mem[LY];
+    byte_t rendered_objects = 0; // Keeps track of the number of rendered objects. There is a limit of 10 per scanline.
+
+    // iterate over all possible object in OAM memory
+    for (byte_t obj_id = 0; obj_id < 40; obj_id++) {
+        // 1. GET OAM DATA
+
+        // each object takes 4 bytes in the OAM
+        word_t obj_address = OAM + (obj_id * 4);
+        
+        // obj y + 16 position is in byte 0
+        byte_t pos_y = mem[obj_address] - 16;
+        // obj x + 8 position is in byte 1
+        word_t pos_x = mem[obj_address + 1] - 8;
+        // obj position in the tile memory array
+        byte_t tile_index = mem[obj_address + 2];
+        // attributes flags
+        byte_t flags = mem[obj_address + 3];
+
+        // are objects 8x8 or 8x16?
+        byte_t obj_height = 8;
+        if (CHECK_BIT(flags, 2))
+            obj_height = 16;
+
+        // palette address
+        word_t palette = OBP0;
+        if (CHECK_BIT(flags, 4))
+            palette = OBP1;
+
+        // TODO object priority and bit 7 of obj attributes flags
+
+        // 2. FIND OBJECT TILE DATA
+
+        // don't render this object if it doesn't intercept the current scanline or there are already 10 objects on this scanline
+        if (rendered_objects > 10 || y < pos_y || y >= pos_y + obj_height)
+            continue;
+
+        rendered_objects += 1;
+
+        // find line of the object we are currently on
+        byte_t obj_line = y - pos_y;
+        if (CHECK_BIT(flags, 6)) // flip y
+            obj_line = (obj_line - obj_height) * -1;
+        obj_line *= 2; // each line takes 2 bytes in memory
+
+        // find object tile data in memory
+        word_t objdata_address = 0x8000 + tile_index * 16;
+
+        // 3. DRAW OBJECT
+
+        // pixel color data takes 2 bytes in memory
+        byte_t pixel_data_1 = mem[objdata_address + obj_line];
+        byte_t pixel_data_2 = mem[objdata_address + obj_line + 1];
+
+        // bit 7 of 1st byte == low bit of pixel 0, bit 7 of 2nd byte == high bit of pixel 0
+        // bit 6 of 1st byte == low bit of pixel 1, bit 6 of 2nd byte == high bit of pixel 1
+        // etc.
+        for (byte_t x = 0; x <= 7; x++) {
+            byte_t relevant_bit = x; // flip x
+            if (!CHECK_BIT(flags, 5)) // don't flip x
+                relevant_bit = (relevant_bit - 7) * -1;
+            
+            // construct color data
+            byte_t color_data = (GET_BIT(pixel_data_2, relevant_bit) << 1) | GET_BIT(pixel_data_1, relevant_bit);
+            // get color using palette
+            enum color c = get_color(color_data, palette);
+            // set pixel color
+            if (c != WHITE) { // WHITE is the transparent color for objects, don't draw it.
+                SET_PIXEL(pos_x + x, y, c);
+            }
+        }
+    }
 }
 
 /**
@@ -236,7 +302,7 @@ void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture) {
                 
                 // draw scanline (background, window and objects pixels on line LY) when we enter HBlank
                 if (mem[LY] < 144) {
-                    draw_tiles();
+                    draw_bg_win();
                     draw_objects();
                 }
             }
