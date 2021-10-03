@@ -11,10 +11,9 @@ byte_t cartridge[8000000];
 byte_t mem[0x10000];
 
 static void load_bios(void) {
-    // TODO bios transition to cartridge fails (blank screen)
     FILE *f = fopen("roms/bios.gb", "rb");
     if (f) {
-        fread(mem, 0xFF, 1, f);
+        fread(mem, 0x100, 1, f);
         fclose(f);
         return;
     }
@@ -75,7 +74,7 @@ void load_cartridge(char *filepath) {
         exit(EXIT_FAILURE);
     }
     fread(cartridge, sizeof(cartridge), 1, f);
-    
+
     fclose(f);
 
     // switch (cartridge[0x147]) {
