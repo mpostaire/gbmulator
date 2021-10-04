@@ -4,6 +4,8 @@
 #include "cpu.h"
 #include "mem.h"
 
+#include "debug.h"
+
 struct registers registers;
 // interrupt master enable
 int ime = 0;
@@ -1857,6 +1859,10 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         RESET_FLAG(FLAG_Z);
         cycles = 4;
         break;
+    case 0x10: // STOP
+        // TODO Halts until button press. Blargg's cpu_instrs.gb test rom wrongly assumes this is a CGB emulator and will reach this opcode. 
+        cycles = 4;
+        break;
     case 0x11: // LD DE, nn
         registers.de = operand;
         cycles = 12;
@@ -2923,6 +2929,9 @@ int cpu_handle_interrupts(void) {
             RESET_BIT(mem[IF], IRQ_JOYPAD);
             registers.pc = 0x0060;
         }
+
+        if (debug == 3)
+            print_trace();
 
         return 20;
     }

@@ -9,25 +9,24 @@
 #include "timer.h"
 #include "joypad.h"
 
+#include "debug.h"
+long total_cycles = 0;
+int debug = 0;
+
 int main(int argc, char **argv) {
     // TODO not all characters are displayed for these test roms...
 
     // ALL CPU_INSTR TEST ROMS PASSED
-    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/01-special.gb");
-    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/02-interrupts.gb");
-    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/03-op sp,hl.gb");
-    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/04-op r,imm.gb");
-    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/05-op rp.gb");
-    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/06-ld r,r.gb");
-    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/07-jr,jp,call,ret,rst.gb");
-    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/08-misc instrs.gb");
-    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/09-op r,r.gb");
-    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/10-bit ops.gb");
-    // load_cartridge("roms/tests/blargg/cpu_instrs/individual/11-op a,(hl).gb");
+    // load_cartridge("roms/tests/blargg/cpu_instrs/cpu_instrs.gb");
     // load_cartridge("roms/tests/blargg/instr_timing/instr_timing.gb");
 
+    // load_cartridge("roms/tests/mooneye/emulator-only/mbc1/rom_512kb.gb");
+    // load_cartridge("roms/tests/mooneye/emulator-only/mbc1/bits_ramg.gb");
+
     // TODO program argument sets path to rom (optional: path to boot rom - default being roms/bios.gb)
-    load_cartridge("roms/Tetris.gb");
+    // load_cartridge("roms/Tetris.gb"); // up button press read as down and never releases until down is pressed (also in super mario land)
+    // load_cartridge("roms/Dr. Mario.gb");
+    load_cartridge("roms/Super Mario Land.gb"); // sprite not rendered if next to left border (test right)
 
     SDL_Init(SDL_INIT_VIDEO);
 
@@ -49,6 +48,8 @@ int main(int argc, char **argv) {
                 if (event.key.repeat)
                     break;
                 joypad_press(event.key.keysym.sym);
+                // if (event.key.keysym.sym == SDLK_RETURN)
+                //     debug++;
                 if (event.key.keysym.sym == SDLK_c)
                     ppu_switch_colors();
                 break;
@@ -65,6 +66,9 @@ int main(int argc, char **argv) {
         // 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame
         int cycles_count = 0;
         while (cycles_count < 69905) {
+            if (debug)
+                print_trace();
+
             // TODO make timings accurate by forcing each cpu_step() to take 4 cycles: if it's not enough to finish an instruction,
             // the next cpu_step() will resume the previous instruction. This will makes the timer "hack" (increment within a loop and not an if)
             // obsolete while allowing accurate memory timings emulation.
@@ -73,6 +77,7 @@ int main(int argc, char **argv) {
             timer_step(cycles);
             ppu_step(cycles, renderer, texture);
 
+            total_cycles += cycles;
             cycles_count += cycles;
         }
 

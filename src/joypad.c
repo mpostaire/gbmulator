@@ -13,10 +13,10 @@ enum buttons {
     LEFT = SDLK_LEFT,
     UP = SDLK_UP,
     DOWN = SDLK_DOWN,
-    A = SDLK_a,
-    B = SDLK_b,
-    SELECT = SDLK_SPACE,
-    START = SDLK_RETURN
+    A = SDLK_KP_0,
+    B = SDLK_KP_PERIOD,
+    SELECT = SDLK_KP_2,
+    START = SDLK_KP_1
 };
 
 byte_t joypad_get_input(void) {

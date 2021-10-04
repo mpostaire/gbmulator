@@ -38,15 +38,7 @@ byte_t pixels[160 * 144 * 3];
                             pixels[((y) * 160 * 3) + ((x) * 3) + 1] = color_values[(c)][1]; \
                             pixels[((y) * 160 * 3) + ((x) * 3) + 2] = color_values[(c)][2];
 
-enum ppu_mode {
-    PPU_HBLANK,
-    PPU_VBLANK,
-    PPU_OAM,
-    PPU_DRAWING
-};
-
-#define IS_MODE(m) ((mem[STAT] & 0x03) == (m))
-#define SET_MODE(m) mem[STAT] = (mem[STAT] & ~0x03) | (m)
+#define PPU_SET_MODE(m) mem[STAT] = (mem[STAT] & ~0x03) | (m)
 
 int ppu_cycles = 0;
 
@@ -136,11 +128,12 @@ static void draw_bg_win(void) {
 
         // get tiledata memory address
         word_t tiledata_address;
+        s_word_t tile_id;
         if (CHECK_BIT(mem[LCDC], 4)) {
-            byte_t tile_id = mem[tile_id_address];
+            tile_id = mem[tile_id_address];
             tiledata_address = 0x8000 + tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
         } else {
-            s_byte_t tile_id = (s_byte_t) mem[tile_id_address];
+            tile_id = (s_byte_t) mem[tile_id_address] + 128;
             tiledata_address = 0x8800 + tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
         }
 
@@ -172,7 +165,7 @@ static void draw_objects(void) {
     // objects disabled
     if (!CHECK_BIT(mem[LCDC], 1))
         return;
-    
+
     byte_t y = mem[LY];
     byte_t rendered_objects = 0; // Keeps track of the number of rendered objects. There is a limit of 10 per scanline.
 
@@ -185,8 +178,8 @@ static void draw_objects(void) {
         
         // obj y + 16 position is in byte 0
         byte_t pos_y = mem[obj_address] - 16;
-        // obj x + 8 position is in byte 1
-        word_t pos_x = mem[obj_address + 1] - 8;
+        // obj x + 8 position is in byte 1 (signed word important here!)
+        s_word_t pos_x = mem[obj_address + 1] - 8;
         // obj position in the tile memory array
         byte_t tile_index = mem[obj_address + 2];
         // attributes flags
@@ -231,18 +224,20 @@ static void draw_objects(void) {
         // bit 6 of 1st byte == low bit of pixel 1, bit 6 of 2nd byte == high bit of pixel 1
         // etc.
         for (byte_t x = 0; x <= 7; x++) {
+            // don't draw pixel if it's outside screen
+            if (pos_x + x < 0 || pos_x + x > 159)
+                continue;
+
             byte_t relevant_bit = x; // flip x
             if (!CHECK_BIT(flags, 5)) // don't flip x
                 relevant_bit = (relevant_bit - 7) * -1;
             
             // construct color data
             byte_t color_data = (GET_BIT(pixel_data_2, relevant_bit) << 1) | GET_BIT(pixel_data_1, relevant_bit);
-            // get color using palette
-            enum color c = get_color(color_data, palette);
-            // set pixel color
-            if (c != WHITE) { // WHITE is the transparent color for objects, don't draw it.
-                SET_PIXEL(pos_x + x, y, c);
-            }
+            if (color_data == WHITE) // WHITE is the transparent color for objects, don't draw it (this needs to be done BEFORE palette conversion).
+                continue;
+            // set pixel color using palette
+            SET_PIXEL(pos_x + x, y, get_color(color_data, palette));
         }
     }
 }
@@ -270,8 +265,8 @@ void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture) {
     }
 
     if (mem[LY] == 144) { // Mode 1 (VBlank)
-        if (!IS_MODE(PPU_VBLANK)) {
-            SET_MODE(PPU_VBLANK);
+        if (!PPU_IS_MODE(PPU_VBLANK)) {
+            PPU_SET_MODE(PPU_VBLANK);
             if (CHECK_BIT(mem[STAT], 4))
                 cpu_request_interrupt(IRQ_STAT);
             cpu_request_interrupt(IRQ_VBLANK);
@@ -287,16 +282,16 @@ void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture) {
         }
     } else {
         if (ppu_cycles <= 80) { // Mode 2 (OAM) -- ends after 80 ppu_cycles
-            if (!IS_MODE(PPU_OAM))
-                SET_MODE(PPU_OAM);
+            if (!PPU_IS_MODE(PPU_OAM))
+                PPU_SET_MODE(PPU_OAM);
                 if (CHECK_BIT(mem[STAT], 5))
                     cpu_request_interrupt(IRQ_STAT);
         } else if (ppu_cycles <= 252) { // Mode 3 (Drawing) -- ends after 252 ppu_cycles
-            if (!IS_MODE(PPU_DRAWING))
-                SET_MODE(PPU_DRAWING);
+            if (!PPU_IS_MODE(PPU_DRAWING))
+                PPU_SET_MODE(PPU_DRAWING);
         } else if (ppu_cycles <= 456) { // Mode 0 (HBlank) -- ends after 456 ppu_cycles
-            if (!IS_MODE(PPU_HBLANK)) {
-                SET_MODE(PPU_HBLANK);
+            if (!PPU_IS_MODE(PPU_HBLANK)) {
+                PPU_SET_MODE(PPU_HBLANK);
                 if (CHECK_BIT(mem[STAT], 3))
                     cpu_request_interrupt(IRQ_STAT);
                 
