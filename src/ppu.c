@@ -33,6 +33,7 @@ enum color {
 };
 
 byte_t pixels[160 * 144 * 3];
+byte_t pixels_cache_color_data[160][144];
 
 #define SET_PIXEL(x, y, c) pixels[((y) * 160 * 3) + ((x) * 3)] = color_values[(c)][0]; \
                             pixels[((y) * 160 * 3) + ((x) * 3) + 1] = color_values[(c)][1]; \
@@ -42,7 +43,7 @@ byte_t pixels[160 * 144 * 3];
 
 int ppu_cycles = 0;
 
-void switch_colors() {
+void switch_colors(void) {
     if (color_values == color_green)
         color_values = color_gray;
     else
@@ -153,6 +154,8 @@ static void draw_bg_win(void) {
 
         // construct color data
         byte_t color_data = (GET_BIT(pixel_data_2, relevant_bit) << 1) | GET_BIT(pixel_data_1, relevant_bit);
+        // cache color_data to be used for objects rendering
+        pixels_cache_color_data[x][y] = color_data;
         // set pixel color using BG (for background and window) palette data
         SET_PIXEL(x, y, get_color(color_data, BGP));
     }
@@ -162,20 +165,52 @@ static void draw_bg_win(void) {
  * Draws sprites of line LY
  */
 static void draw_objects(void) {
+    // 1. FIND UP TO 10 OBJECTS TO RENDER
+
     // objects disabled
     if (!CHECK_BIT(mem[LCDC], 1))
         return;
 
     byte_t y = mem[LY];
     byte_t rendered_objects = 0; // Keeps track of the number of rendered objects. There is a limit of 10 per scanline.
+    word_t obj_to_render[10];
+
+    // are objects 8x8 or 8x16?
+    byte_t obj_height = 8;
+    if (CHECK_BIT(LCDC, 2))
+        obj_height = 16;
 
     // iterate over all possible object in OAM memory
     for (byte_t obj_id = 0; obj_id < 40; obj_id++) {
-        // 1. GET OAM DATA
-
         // each object takes 4 bytes in the OAM
         word_t obj_address = OAM + (obj_id * 4);
         
+        // obj y + 16 position is in byte 0
+        byte_t pos_y = mem[obj_address] - 16;
+
+        // don't render this object if it doesn't intercept the current scanline
+        if (y < pos_y || y >= pos_y + obj_height)
+            continue;
+
+        obj_to_render[rendered_objects] = obj_address;
+        if (++rendered_objects >= 10)
+            break;
+    }
+
+    // return if no object on this line
+    if (!rendered_objects)
+        return;
+
+    // 2. RENDER THE OBJECTS
+
+    // store the x position of each pixel drawn by the highest priority object
+    byte_t obj_pixel_priority[160];
+    // default at 255 because no object will have that much of x coordinate (and if so, will not be visible anyway)
+    memset(obj_pixel_priority, 255, sizeof(obj_pixel_priority));
+
+    // iterate over all objects to render
+    for (int obj = rendered_objects - 1; obj >= 0; obj--) {
+        word_t obj_address = obj_to_render[obj];
         // obj y + 16 position is in byte 0
         byte_t pos_y = mem[obj_address] - 16;
         // obj x + 8 position is in byte 1 (signed word important here!)
@@ -185,25 +220,10 @@ static void draw_objects(void) {
         // attributes flags
         byte_t flags = mem[obj_address + 3];
 
-        // are objects 8x8 or 8x16?
-        byte_t obj_height = 8;
-        if (CHECK_BIT(flags, 2))
-            obj_height = 16;
-
         // palette address
         word_t palette = OBP0;
         if (CHECK_BIT(flags, 4))
             palette = OBP1;
-
-        // TODO object priority and bit 7 of obj attributes flags
-
-        // 2. FIND OBJECT TILE DATA
-
-        // don't render this object if it doesn't intercept the current scanline or there are already 10 objects on this scanline
-        if (rendered_objects > 10 || y < pos_y || y >= pos_y + obj_height)
-            continue;
-
-        rendered_objects += 1;
 
         // find line of the object we are currently on
         byte_t obj_line = y - pos_y;
@@ -224,18 +244,30 @@ static void draw_objects(void) {
         // bit 6 of 1st byte == low bit of pixel 1, bit 6 of 2nd byte == high bit of pixel 1
         // etc.
         for (byte_t x = 0; x <= 7; x++) {
-            // don't draw pixel if it's outside screen
+            // don't draw pixel if it's outside the screen
             if (pos_x + x < 0 || pos_x + x > 159)
                 continue;
 
             byte_t relevant_bit = x; // flip x
             if (!CHECK_BIT(flags, 5)) // don't flip x
                 relevant_bit = (relevant_bit - 7) * -1;
-            
+
             // construct color data
             byte_t color_data = (GET_BIT(pixel_data_2, relevant_bit) << 1) | GET_BIT(pixel_data_1, relevant_bit);
             if (color_data == WHITE) // WHITE is the transparent color for objects, don't draw it (this needs to be done BEFORE palette conversion).
                 continue;
+
+            // if an object with lower x coordinate has already drawn this pixel, it has higher priority so we abort
+            if (obj_pixel_priority[pos_x + x] < pos_x)
+                continue;
+
+            // store current object x coordinate in priority array
+            obj_pixel_priority[pos_x + x] = pos_x;
+
+            // if object is below background, object can only be drawn current if backgournd/window color (before applying palette) is 0
+            if (CHECK_BIT(flags, 7) && pixels_cache_color_data[pos_x + x][y])
+                continue;
+
             // set pixel color using palette
             SET_PIXEL(pos_x + x, y, get_color(color_data, palette));
         }
@@ -282,10 +314,11 @@ void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture) {
         }
     } else {
         if (ppu_cycles <= 80) { // Mode 2 (OAM) -- ends after 80 ppu_cycles
-            if (!PPU_IS_MODE(PPU_OAM))
+            if (!PPU_IS_MODE(PPU_OAM)) {
                 PPU_SET_MODE(PPU_OAM);
                 if (CHECK_BIT(mem[STAT], 5))
                     cpu_request_interrupt(IRQ_STAT);
+            }
         } else if (ppu_cycles <= 252) { // Mode 3 (Drawing) -- ends after 252 ppu_cycles
             if (!PPU_IS_MODE(PPU_DRAWING))
                 PPU_SET_MODE(PPU_DRAWING);
