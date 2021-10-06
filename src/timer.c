@@ -2,16 +2,16 @@
 #include "mem.h"
 #include "cpu.h"
 
-int div_counter = 0;
+// TODO timer actual behavior is more subtle: https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html
+
+byte_t div_counter = 0;
 int tima_counter = 0;
 
 void timer_step(int cycles) {
-    // DIV register incremented at 16384 Hz (every 256 cycles)
-    div_counter += cycles;
-    if (div_counter >= 256) {
-        div_counter = 0;
-        mem[DIV]++; // force increment (mem_write would set this address to 0)
-    }
+    // DIV register incremented at 16384 Hz (every 256 cycles so every lower byte carry into upper byte)
+    word_t div = ((word_t) mem[DIV]) << 16 | div_counter;
+    div += cycles;
+    mem[DIV] = div >> 16;
 
     // if timer is enabled
     if (CHECK_BIT(mem[TAC], 2)) {
