@@ -46,6 +46,7 @@ void joypad_press(SDL_Keycode key) {
         RESET_BIT(joypad_direction, 2);
         if (!CHECK_BIT(mem[P1], 4))
             cpu_request_interrupt(IRQ_JOYPAD);
+        break;
     case DOWN:
         RESET_BIT(joypad_direction, 3);
         if (!CHECK_BIT(mem[P1], 4))
