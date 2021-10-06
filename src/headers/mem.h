@@ -6,13 +6,13 @@ extern byte_t cartridge[8000000];
 extern byte_t mem[0x10000];
 
 enum mem_map {
-    ROM_BANK0 = 0x0000,
-    ROM_BANKN = 0x4000,
-    VRAM = 0x8000,
+    ROM_BANK0 = 0x0000, // From cartridge, usually a fixed bank.
+    ROM_BANKN = 0x4000, // From cartridge, switchable bank via MBC (if any).
+    VRAM = 0x8000, // Only bank 0 in Non-CGB mode. Switchable bank 0/1 in CGB mode.
     ERAM = 0xA000,
     WRAM_BANK0 = 0xC000,
-    WRAM_BANKN = 0xD000,
-    MIRROR = 0xE000,
+    WRAM_BANKN = 0xD000, // Only bank 1 in Non-CGB mode. Switchable bank 1~7 in CGB mode.
+    ECHO = 0xE000,
     OAM = 0xFE00,
     UNUSABLE = 0xFEA0,
     IO = 0xFF00,
