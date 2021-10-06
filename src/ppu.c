@@ -289,9 +289,11 @@ void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture) {
         return;
     }
 
-    if (mem[LY] == mem[LYC] && CHECK_BIT(mem[STAT], 6)) { // LY == LYC compare
+    byte_t request_stat_irq = 0;
+
+    if (mem[LY] == mem[LYC]) { // LY == LYC compare
         SET_BIT(mem[STAT], 2);
-        cpu_request_interrupt(IRQ_STAT);
+        request_stat_irq = CHECK_BIT(mem[STAT], 6);
     } else {
         RESET_BIT(mem[STAT], 2);
     }
@@ -299,8 +301,7 @@ void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture) {
     if (mem[LY] == 144) { // Mode 1 (VBlank)
         if (!PPU_IS_MODE(PPU_VBLANK)) {
             PPU_SET_MODE(PPU_VBLANK);
-            if (CHECK_BIT(mem[STAT], 4))
-                cpu_request_interrupt(IRQ_STAT);
+            request_stat_irq = CHECK_BIT(mem[STAT], 4);
             cpu_request_interrupt(IRQ_VBLANK);
             
             // the frame is complete, it can be rendered
@@ -316,8 +317,7 @@ void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture) {
         if (ppu_cycles <= 80) { // Mode 2 (OAM) -- ends after 80 ppu_cycles
             if (!PPU_IS_MODE(PPU_OAM)) {
                 PPU_SET_MODE(PPU_OAM);
-                if (CHECK_BIT(mem[STAT], 5))
-                    cpu_request_interrupt(IRQ_STAT);
+                request_stat_irq = CHECK_BIT(mem[STAT], 5);
             }
         } else if (ppu_cycles <= 252) { // Mode 3 (Drawing) -- ends after 252 ppu_cycles
             if (!PPU_IS_MODE(PPU_DRAWING))
@@ -325,8 +325,7 @@ void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture) {
         } else if (ppu_cycles <= 456) { // Mode 0 (HBlank) -- ends after 456 ppu_cycles
             if (!PPU_IS_MODE(PPU_HBLANK)) {
                 PPU_SET_MODE(PPU_HBLANK);
-                if (CHECK_BIT(mem[STAT], 3))
-                    cpu_request_interrupt(IRQ_STAT);
+                request_stat_irq = CHECK_BIT(mem[STAT], 3);
                 
                 // draw scanline (background, window and objects pixels on line LY) when we enter HBlank
                 if (mem[LY] < 144) {
@@ -336,6 +335,9 @@ void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture) {
             }
         }
     }
+
+    if (request_stat_irq)
+        cpu_request_interrupt(IRQ_STAT);
 
     if (ppu_cycles >= 456) {
         ppu_cycles -= 456; // not reset to 0 because there may be leftover cycles we want to take into account for the next scanline
