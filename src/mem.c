@@ -20,12 +20,13 @@ enum mbc_type {
 
 byte_t cartridge[8000000];
 byte_t mem[0x10000];
+byte_t eram[0x8000]; // max 4 banks of size 0x2000
 byte_t mbc;
 byte_t rom_banks;
 byte_t ram_banks;
 byte_t eram_enabled = 0;
 byte_t current_rom_bank = 1;
-byte_t current_ram_bank = 0;
+byte_t current_eram_bank = 0;
 byte_t mbc_mode = 0;
 
 static void load_bios(void) {
@@ -85,10 +86,12 @@ static void load_bios(void) {
 void load_cartridge(char *filepath) {
     // clear memory
     memset(&mem, 0, sizeof(mem));
+    // clear eram -- TODO reload save data instead (if it exists)
+    memset(&eram, 0, sizeof(eram));
 
     FILE *f = fopen(filepath, "rb");
     if (!f) {
-        perror("load_cartridge");
+        perror("ERROR: load_cartridge");
         exit(EXIT_FAILURE);
     }
     fread(cartridge, sizeof(cartridge), 1, f);
@@ -96,7 +99,7 @@ void load_cartridge(char *filepath) {
     fclose(f);
 
     if (cartridge[0x0143] == 0xC0) {
-        printf("CGB only rom!\n");
+        printf("ERROR: CGB only rom\n");
         exit(EXIT_FAILURE);
     }
 
@@ -123,13 +126,15 @@ void load_cartridge(char *filepath) {
         mbc = MBC7;
         break;
     default:
-        // TODO handle this case
+        printf("ERROR: MBC byte %02X not supported\n", cartridge[0x0147]);
+        exit(EXIT_FAILURE);
         break;
     }
 
     rom_banks = 2 << cartridge[0x0148];
 
     switch (cartridge[0x0149]) {
+    case 0x00: ram_banks = 0; break;
     case 0x02: ram_banks = 1; break;
     case 0x03: ram_banks = 4; break;
     case 0x04: ram_banks = 16; break;
@@ -139,11 +144,20 @@ void load_cartridge(char *filepath) {
         break;
     }
 
-    char title[15];
+    char title[16];
     strncpy(title, (char *) &cartridge[0x134], 15);
     title[15] = '\0';
-    printf("playing %s\n", title);
-    printf("using MBC%d --> %d ROM banks + %d RAM banks\n", mbc, rom_banks, ram_banks);
+    printf("Playing %s\n", title);
+    printf("Cartridge using MBC%d with %d ROM banks + %d RAM banks\n", mbc, rom_banks, ram_banks);
+
+    // checksum validation
+    int sum = 0;
+    for (int i = 0x0134; i <= 0x014C; i++)
+        sum = sum - cartridge[i] - 1;
+    if (((byte_t) (sum & 0xFF)) != cartridge[0x014D]) {
+        printf("ERROR: invalid checksum\n");
+        exit(EXIT_FAILURE);
+    }
 
     // load cartridge into rom banks (everything before VRAM (0x8000))
     memcpy(&mem, &cartridge, VRAM);
@@ -157,20 +171,20 @@ void load_cartridge(char *filepath) {
 static void handle_mbc_registers(word_t address, byte_t data) {
     if (mbc == MBC0)
         return; // read only, do nothing
-    
+
     if (mbc == MBC1) {
         if (address < 0x2000) {
-            // FIXME > launch with bits_ramg.gb and see output message
             eram_enabled = (data & 0x0F) == 0x0A;
         } else if (address < 0x4000) {
             current_rom_bank = data & 0x1F;
             if (!current_rom_bank)
                 current_rom_bank = 0x01; // 0x00 not allowed
         } else if (address < 0x6000) {
-            current_ram_bank = data & 0x03;
-            if (!mbc_mode) { // ROM mode
-                current_rom_bank = ((data & 0x03) << 5) | (data & 0x1F);
-                current_ram_bank = 0;
+            if (mbc_mode) { // ROM mode
+                current_eram_bank = data & 0x03;
+            } else {
+                current_rom_bank = ((data & 0x03) << 5) | (current_rom_bank & 0x1F);
+                current_eram_bank = 0;
             }
         } else if (address < 0x8000) {
             mbc_mode = data & 0x01;
@@ -183,8 +197,8 @@ byte_t mem_read(word_t address) {
         if (address >= 0x4000 && address < 0x8000) // ROM_BANKN
             return cartridge[(address - 0x4000) + (current_rom_bank * 0x4000)];
 
-        if (address >= 0xA000 && address < 0xC000 && eram_enabled) // ERAM
-            return cartridge[(address - 0xA000) + (current_ram_bank * 0x2000)];
+        if (address >= 0xA000 && address < 0xC000) // ERAM
+            return eram_enabled ? eram[(address - 0xA000) + (current_eram_bank * 0x2000)] : 0xFF;
     }
 
     // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
@@ -210,14 +224,14 @@ void mem_write(word_t address, byte_t data) {
     if (address < VRAM) {
         handle_mbc_registers(address, data);
     } else if (mbc == MBC1 && address >= ERAM && address < WRAM_BANK0 && eram_enabled) {
-        cartridge[(address - 0xA000) + (current_ram_bank * 0x2000)] = data;
+        eram[(address - 0xA000) + (current_eram_bank * 0x2000)] = data;
     } else if (address == DIV) {
         // writing to DIV resets it to 0
         mem[address] = 0;
     } else if ((address >= OAM && address < UNUSABLE) && ((PPU_IS_MODE(PPU_OAM) || PPU_IS_MODE(PPU_DRAWING)) && CHECK_BIT(mem[LCDC], 7))) {
         // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD enabled
     // } else if ((address >= VRAM && address < ERAM) && (PPU_IS_MODE(PPU_DRAWING) && CHECK_BIT(mem[LCDC], 7))) {
-        // FIXME this condition commented right now because it causes display errors (missing characters) in test roms
+        // FIXME this condition commented right now because it causes display errors
         // VRAM inaccessible by cpu while ppu in mode 3 and LCD enabled
     } else if (address >= UNUSABLE && address < IO) {
         // UNUSABLE memory is unusable
