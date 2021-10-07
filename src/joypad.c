@@ -5,8 +5,8 @@
 #include "mem.h"
 #include "ppu.h"
 
-byte_t joypad_action = 0x0F;
-byte_t joypad_direction = 0x0F;
+byte_t joypad_action = 0xCF;
+byte_t joypad_direction = 0xCF;
 
 enum buttons {
     RIGHT = SDLK_RIGHT,

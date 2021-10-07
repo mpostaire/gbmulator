@@ -8,6 +8,7 @@
 void print_trace() {
     byte_t opcode = mem_read(registers.pc);
     byte_t operand_size = instructions[mem_read(registers.pc)].operand_size;
+    long total_cycles = 0;
     // char buf[32];
     // snprintf(buf, sizeof(buf), instructions[opcode].name, mem[registers.pc + 1]);
     if (operand_size == 0) {

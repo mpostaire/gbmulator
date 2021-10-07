@@ -11,24 +11,19 @@
 
 #define WINDOW_SCALE 3
 
-#include "debug.h"
-long total_cycles = 0;
-int debug = 0;
-
 int main(int argc, char **argv) {
-    // TODO not all characters are displayed for these test roms...
-
     // ALL CPU_INSTR TEST ROMS PASSED
     // load_cartridge("roms/tests/blargg/cpu_instrs/cpu_instrs.gb");
     // load_cartridge("roms/tests/blargg/instr_timing/instr_timing.gb");
 
     // load_cartridge("roms/tests/mooneye/emulator-only/mbc1/rom_512kb.gb");
-    // load_cartridge("roms/tests/mooneye/emulator-only/mbc1/bits_ramg.gb");
+    // load_cartridge("roms/tests/mooneye/emulator-only/mbc1/bits_mode.gb");
 
     // TODO program argument sets path to rom (optional: path to boot rom - default being roms/bios.gb)
-    // load_cartridge("roms/Tetris.gb"); // up button press read as down and never releases until down is pressed (also in super mario land)
-    // load_cartridge("roms/Dr. Mario.gb");
-    load_cartridge("roms/Super Mario Land.gb"); // sprite not rendered if next to left border (test right)
+    // load_cartridge("roms/Tetris.gb");
+    // load_cartridge("roms/Super Mario Land.gb");
+    load_cartridge("roms/Dr. Mario.gb"); // debug: halt loop (maybe timer waits for some condition that never happens)
+    // load_cartridge("roms/Pokemon Red.gb");
 
     SDL_Init(SDL_INIT_VIDEO);
 
@@ -68,9 +63,6 @@ int main(int argc, char **argv) {
         // 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame
         int cycles_count = 0;
         while (cycles_count < 69905) {
-            if (debug)
-                print_trace();
-
             // TODO make timings accurate by forcing each cpu_step() to take 4 cycles: if it's not enough to finish an instruction,
             // the next cpu_step() will resume the previous instruction. This will makes the timer "hack" (increment within a loop and not an if)
             // obsolete while allowing accurate memory timings emulation.
@@ -79,7 +71,6 @@ int main(int argc, char **argv) {
             timer_step(cycles);
             ppu_step(cycles, renderer, texture);
 
-            total_cycles += cycles;
             cycles_count += cycles;
         }
 
