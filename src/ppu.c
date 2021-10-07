@@ -284,6 +284,7 @@ void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture) {
     if (!CHECK_BIT(mem[LCDC], 7)) { // is LCD disabled?
         // TODO not sure of the handling of LCD disabled
         // TODO LCD disabled should fill screen with a color brighter than WHITE
+        mem[STAT] = mem[STAT] & 0xFC;
         ppu_cycles = 0;
         mem[LY] = 0;
         return;
