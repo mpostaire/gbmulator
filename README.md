@@ -1,9 +1,22 @@
 # gbmulator
 A Game Boy emulator.
 
+# Key bindings
+Key bindings are not configurable yet.
+|Key|Action|
+|---|---|
+|Up arrow|UP|
+|Down arrow|DOWN|
+|Left arrow|LEFT|
+|Right arrow|RIGHT|
+|NUMPAD 0|A|
+|NUMPAD period|B|
+|NUMPAD 1|START|
+|NUMPAD 2|SELECT|
+
 # TODO
 
-- move bit macros from cpu.h to own header
+- configurable key bindings
 - sound
 - serial port/interrupt
 - GBC mode
