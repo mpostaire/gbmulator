@@ -11,6 +11,8 @@ struct registers registers;
 int ime = 0;
 int halt = 0;
 
+// TODO check if all instructions are implemented
+
 const instruction_t instructions[256] = {
     {"NOP", 0},                   // 0x00
     {"LD BC, %04X", 2},           // 0x01

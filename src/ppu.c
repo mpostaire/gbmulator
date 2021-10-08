@@ -1,4 +1,5 @@
-#include <SDL2/SDL.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "ppu.h"
 #include "types.h"
@@ -32,14 +33,16 @@ enum color {
     BLACK
 };
 
+byte_t vram_pixels[160 * 144 * 3];
+
 byte_t pixels[160 * 144 * 3];
 byte_t pixels_cache_color_data[160][144];
 
-#define SET_PIXEL(x, y, c) pixels[((y) * 160 * 3) + ((x) * 3)] = color_values[(c)][0]; \
+#define SET_PIXEL(buf, x, y, c) *(buf + ((y) * 160 * 3) + ((x) * 3)) = color_values[(c)][0]; \
                             pixels[((y) * 160 * 3) + ((x) * 3) + 1] = color_values[(c)][1]; \
                             pixels[((y) * 160 * 3) + ((x) * 3) + 2] = color_values[(c)][2];
 
-#define PPU_SET_MODE(m) mem[STAT] = (mem[STAT] & ~0x03) | (m)
+#define PPU_SET_MODE(m) mem[STAT] = (mem[STAT] & 0xFC) | (m)
 
 int ppu_cycles = 0;
 
@@ -97,7 +100,7 @@ static void draw_bg_win(void) {
     for (int x = 0; x < 160; x++) {
         // background and window disabled, draw white pixel
         if (!CHECK_BIT(mem[LCDC], 0)) {
-            SET_PIXEL(x, y, WHITE);
+            SET_PIXEL(pixels, x, y, WHITE);
             continue;
         }
 
@@ -157,7 +160,7 @@ static void draw_bg_win(void) {
         // cache color_data to be used for objects rendering
         pixels_cache_color_data[x][y] = color_data;
         // set pixel color using BG (for background and window) palette data
-        SET_PIXEL(x, y, get_color(color_data, BGP));
+        SET_PIXEL(pixels, x, y, get_color(color_data, BGP));
     }
 }
 
@@ -269,7 +272,7 @@ static void draw_objects(void) {
                 continue;
 
             // set pixel color using palette
-            SET_PIXEL(pos_x + x, y, get_color(color_data, palette));
+            SET_PIXEL(pixels, pos_x + x, y, get_color(color_data, palette));
         }
     }
 }
@@ -278,7 +281,7 @@ static void draw_objects(void) {
  * This does not implement the pixel FIFO but draws each scanline instantly when starting PPU_HBLANK (mode 0).
  * TODO if STAT interrupts are a problem, implement these corner cases: http://gameboy.mongenel.com/dmg/istat98.txt
  */
-void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture) {
+byte_t *ppu_step(int cycles) {
     ppu_cycles += cycles;
 
     if (!CHECK_BIT(mem[LCDC], 7)) { // is LCD disabled?
@@ -287,10 +290,11 @@ void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture) {
         mem[STAT] = mem[STAT] & 0xFC;
         ppu_cycles = 0;
         mem[LY] = 0;
-        return;
+        return NULL;
     }
 
     byte_t request_stat_irq = 0;
+    byte_t draw_frame = 0;
 
     if (mem[LY] == mem[LYC]) { // LY == LYC compare
         SET_BIT(mem[STAT], 2);
@@ -306,9 +310,7 @@ void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture) {
             cpu_request_interrupt(IRQ_VBLANK);
             
             // the frame is complete, it can be rendered
-            SDL_UpdateTexture(texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
-            SDL_RenderCopy(renderer, texture, NULL, NULL);
-            SDL_RenderPresent(renderer);
+            draw_frame = 1;
 
             // if a change colors is requested, do it after rendering the current frame to avoid doing it mid frame
             if (change_colors)
@@ -321,8 +323,7 @@ void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture) {
                 request_stat_irq = CHECK_BIT(mem[STAT], 5);
             }
         } else if (ppu_cycles <= 252) { // Mode 3 (Drawing) -- ends after 252 ppu_cycles
-            if (!PPU_IS_MODE(PPU_DRAWING))
-                PPU_SET_MODE(PPU_DRAWING);
+            PPU_SET_MODE(PPU_DRAWING);
         } else if (ppu_cycles <= 456) { // Mode 0 (HBlank) -- ends after 456 ppu_cycles
             if (!PPU_IS_MODE(PPU_HBLANK)) {
                 PPU_SET_MODE(PPU_HBLANK);
@@ -345,4 +346,64 @@ void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture) {
         if (++mem[LY] > 153)
             mem[LY] = 0;
     }
+
+    return draw_frame ? pixels : NULL;
+}
+
+byte_t *ppu_debug_oam() {
+    // are objects 8x8 or 8x16?
+    byte_t obj_height = 8;
+    if (CHECK_BIT(LCDC, 2))
+        obj_height = 16;
+
+    // iterate over all possible object in OAM memory
+    for (byte_t obj_id = 0; obj_id < 40; obj_id++) {
+        // each object takes 4 bytes in the OAM
+        word_t obj_address = OAM + (obj_id * 4);
+
+        // obj y + 16 position is in byte 0
+        byte_t pos_y = mem[obj_address] - 16;
+        // obj x + 8 position is in byte 1 (signed word important here!)
+        s_word_t pos_x = mem[obj_address + 1] - 8;
+        // obj position in the tile memory array
+        byte_t tile_index = mem[obj_address + 2];
+        // attributes flags
+        byte_t flags = mem[obj_address + 3];
+
+        // palette address
+        word_t palette = OBP0;
+        if (CHECK_BIT(flags, 4))
+            palette = OBP1;
+
+        for (byte_t obj_line = 0; obj_line < obj_height; obj_line++) {
+            if (CHECK_BIT(flags, 6)) // flip y
+                obj_line = (obj_line - obj_height) * -1;
+            obj_line *= 2; // each line takes 2 bytes in memory
+
+            // find object tile data in memory
+            word_t objdata_address = 0x8000 + tile_index * 16;
+
+            // 3. DRAW OBJECT
+
+            // pixel color data takes 2 bytes in memory
+            byte_t pixel_data_1 = mem[objdata_address + obj_line];
+            byte_t pixel_data_2 = mem[objdata_address + obj_line + 1];
+
+            // bit 7 of 1st byte == low bit of pixel 0, bit 7 of 2nd byte == high bit of pixel 0
+            // bit 6 of 1st byte == low bit of pixel 1, bit 6 of 2nd byte == high bit of pixel 1
+            // etc.
+            for (byte_t x = 0; x <= 7; x++) {
+                byte_t relevant_bit = x; // flip x
+                if (!CHECK_BIT(flags, 5)) // don't flip x
+                    relevant_bit = (relevant_bit - 7) * -1;
+
+                // construct color data
+                byte_t color_data = (GET_BIT(pixel_data_2, relevant_bit) << 1) | GET_BIT(pixel_data_1, relevant_bit);
+
+                // set pixel color using palette
+                SET_PIXEL(vram_pixels, x + obj_id, obj_line, color_data);
+            }
+        }
+    }
+    return vram_pixels;
 }

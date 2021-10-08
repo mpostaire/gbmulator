@@ -1,7 +1,5 @@
 #pragma once
 
-#include <SDL2/SDL.h>
-
 #include "types.h"
 
 enum ppu_mode {
@@ -15,4 +13,6 @@ enum ppu_mode {
 
 void ppu_switch_colors(void);
 
-void ppu_step(int cycles, SDL_Renderer *renderer, SDL_Texture *texture);
+byte_t *ppu_step(int cycles);
+
+byte_t *ppu_debug_oam();

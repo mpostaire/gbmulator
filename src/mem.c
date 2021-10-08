@@ -13,21 +13,34 @@ enum mbc_type {
     MBC1,
     MBC2,
     MBC3,
-    MBC5 = 5,
+    MBC5,
     MBC6,
     MBC7
+};
+
+struct rtc_counter {
+    byte_t s;
+    byte_t m;
+    byte_t h;
+    byte_t dl;
+    byte_t dh;
 };
 
 byte_t cartridge[8000000];
 byte_t mem[0x10000];
 byte_t eram[0x8000]; // max 4 banks of size 0x2000
+
 byte_t mbc;
 byte_t rom_banks;
 byte_t ram_banks;
-byte_t eram_enabled = 0;
 byte_t current_rom_bank = 1;
 byte_t current_eram_bank = 0;
-byte_t mbc_mode = 0;
+byte_t mbc1_mode = 0;
+byte_t eram_enabled = 0;
+byte_t rtc_enabled = 0;
+byte_t rtc_register = 0;
+byte_t rtc_latch = 0;
+struct rtc_counter rtc;
 
 static void load_bios(void) {
     FILE *f = fopen("roms/bios.gb", "rb");
@@ -116,15 +129,15 @@ void load_cartridge(char *filepath) {
     case 0x0F: case 0x10: case 0x11: case 0x12: case 0x13:
         mbc = MBC3;
         break;
-    case 0x19: case 0x1A: case 0x1B: case 0x1C: case 0x1D: case 0x1E:
-        mbc = MBC5;
-        break;
-    case 0x20:
-        mbc = MBC6;
-        break;
-    case 0x22:
-        mbc = MBC7;
-        break;
+    // case 0x19: case 0x1A: case 0x1B: case 0x1C: case 0x1D: case 0x1E:
+    //     mbc = MBC5;
+    //     break;
+    // case 0x20:
+    //     mbc = MBC6;
+    //     break;
+    // case 0x22:
+    //     mbc = MBC7;
+    //     break;
     default:
         printf("ERROR: MBC byte %02X not supported\n", cartridge[0x0147]);
         exit(EXIT_FAILURE);
@@ -168,37 +181,139 @@ void load_cartridge(char *filepath) {
 }
 
 // TODO MBC1 special cases where rom bank 0 is changed are not implemented
-static void handle_mbc_registers(word_t address, byte_t data) {
-    if (mbc == MBC0)
-        return; // read only, do nothing
-
-    if (mbc == MBC1) {
+static void write_mbc_registers(word_t address, byte_t data) {
+    switch (mbc) {
+    case MBC0:
+        break; // read only, do nothing
+    case MBC1: // TODO not all mooneye's MBC tests pass
         if (address < 0x2000) {
             eram_enabled = (data & 0x0F) == 0x0A;
         } else if (address < 0x4000) {
             current_rom_bank = data & 0x1F;
-            if (!current_rom_bank)
-                current_rom_bank = 0x01; // 0x00 not allowed
+            if (current_rom_bank == 0x00)
+                current_rom_bank++;
+            current_rom_bank %= rom_banks;
         } else if (address < 0x6000) {
-            if (mbc_mode) { // ROM mode
+            if (mbc1_mode) { // ROM mode
                 current_eram_bank = data & 0x03;
+                current_eram_bank %= ram_banks;
             } else {
                 current_rom_bank = ((data & 0x03) << 5) | (current_rom_bank & 0x1F);
+                if (current_rom_bank == 0x00 || current_rom_bank == 0x20 || current_rom_bank == 0x40 || current_rom_bank == 0x60)
+                    current_rom_bank++;
+                current_rom_bank %= rom_banks;
                 current_eram_bank = 0;
             }
         } else if (address < 0x8000) {
-            mbc_mode = data & 0x01;
+            mbc1_mode = data & 0x01;
         }
+        break;
+    case MBC2: // TODO not all mooneye's MBC tests pass
+        if (address < 0x2000) {
+            if (!CHECK_BIT(address, 8))
+                eram_enabled = (data & 0x0F) == 0x0A;
+        } else if (address < 0x4000) {
+            current_rom_bank = data & 0x0F;
+            if (current_rom_bank == 0x00)
+                current_rom_bank = 0x01; // 0x00 not allowed
+            current_rom_bank %= rom_banks;
+        }
+        break;
+    case MBC3:
+        if (address < 0x2000) {
+            eram_enabled = (data & 0x0F) == 0x0A;
+            rtc_enabled = (data & 0x0F) == 0x0A;
+        } else if (address < 0x4000) {
+            current_rom_bank = data & 0x7F;
+            if (current_rom_bank == 0x00)
+                current_rom_bank = 0x01; // 0x00 not allowed
+            current_rom_bank %= rom_banks;
+        } else if (address < 0x6000) {
+            if (data <= 0x03) {
+                current_eram_bank = data;
+                current_eram_bank %= ram_banks;
+            } else if (data >= 0x08 && data <= 0x0C) {
+                rtc_register = data;
+                current_eram_bank = -1;
+            }
+        } else if (address < 0x8000) {
+            if (rtc_latch == 0x00 && data == 0x01) {
+                // TODO rtc counter
+            }
+            rtc_latch = data;
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+// TODO not all mooneye's MBC tests pass
+static void write_mbc_eram(word_t address, byte_t data) {
+    switch (mbc) {
+    case MBC1:
+        if (eram_enabled)
+            eram[(address - 0xA000) + (current_eram_bank * 0x2000)] = data;
+        break;
+    case MBC2:
+        if (eram_enabled)
+            eram[(address - 0xA000) + (current_eram_bank * 0x2000)] = data & 0x0F;
+        break;
+    case MBC3:
+        if (eram_enabled && current_eram_bank >= 0) {
+            eram[(address - 0xA000) + (current_eram_bank * 0x2000)] = data;
+        } else if (rtc_enabled) {
+            switch (rtc_register) {
+            case 0x08:
+                rtc.s = data;
+                break;
+            case 0x09:
+                rtc.m = data;
+                break;
+            case 0x0A:
+                rtc.h = data;
+                break;
+            case 0x0B:
+                rtc.dl = data;
+                break;
+            case 0x0C:
+                rtc.dh = data;
+                break;
+            default:
+                break;
+            }
+        }
+        break;
+    default:
+        break;
     }
 }
 
 byte_t mem_read(word_t address) {
-    if (mbc == MBC1) {
+    if (mbc == MBC1 || mbc == MBC2 || mbc == MBC3) { // TODO not all mooneye's MBC tests pass
         if (address >= 0x4000 && address < 0x8000) // ROM_BANKN
             return cartridge[(address - 0x4000) + (current_rom_bank * 0x4000)];
 
-        if (address >= 0xA000 && address < 0xC000) // ERAM
+        if (address >= 0xA000 && address < 0xC000) { // ERAM
+            if (rtc_enabled) {
+                switch (rtc_register) {
+                case 0x08:
+                    return rtc.s;
+                case 0x09:
+                    return rtc.m;
+                case 0x0A:
+                    return rtc.h;
+                case 0x0B:
+                    return rtc.dl;
+                case 0x0C:
+                    return rtc.dh;
+                default:
+                    break;
+                }
+            }
+
             return eram_enabled ? eram[(address - 0xA000) + (current_eram_bank * 0x2000)] : 0xFF;
+        }
     }
 
     // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
@@ -222,9 +337,9 @@ byte_t mem_read(word_t address) {
 
 void mem_write(word_t address, byte_t data) {
     if (address < VRAM) {
-        handle_mbc_registers(address, data);
-    } else if (mbc == MBC1 && address >= ERAM && address < WRAM_BANK0 && eram_enabled) {
-        eram[(address - 0xA000) + (current_eram_bank * 0x2000)] = data;
+        write_mbc_registers(address, data);
+    } else if (address >= ERAM && address < WRAM_BANK0) {
+        write_mbc_eram(address, data);
     } else if (address == DIV) {
         // writing to DIV resets it to 0
         mem[address] = 0;

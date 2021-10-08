@@ -21,7 +21,7 @@ $(ODIR):
 	mkdir $@
 
 run: all
-	./$(EXEC)
+	./$(EXEC) "roms/Pokemon Red.gb"
 
 debug: CFLAGS+=-g -D DEBUG
 debug: clean all
