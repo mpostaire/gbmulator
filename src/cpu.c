@@ -4,8 +4,6 @@
 #include "cpu.h"
 #include "mem.h"
 
-#include "debug.h"
-
 struct registers registers;
 // interrupt master enable
 int ime = 0;
@@ -2897,6 +2895,18 @@ static int exec_opcode(byte_t opcode, word_t operand) {
     }
 
     return cycles;
+}
+
+static void print_trace(void) {
+    byte_t opcode = mem_read(registers.pc);
+    byte_t operand_size = instructions[mem_read(registers.pc)].operand_size;
+    if (operand_size == 0) {
+        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x        %s\n", registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', registers.bc, registers.de, registers.hl, registers.sp, registers.pc, mem[registers.pc], instructions[opcode].name);
+    } else if (operand_size == 1) {
+        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x     %s\n", registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', registers.bc, registers.de, registers.hl, registers.sp, registers.pc, mem[registers.pc], mem[registers.pc + 1], instructions[opcode].name);
+    } else {
+        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x %02x  %s\n", registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', registers.bc, registers.de, registers.hl, registers.sp, registers.pc, mem[registers.pc], mem[registers.pc + 1], mem[registers.pc + 2], instructions[opcode].name);
+    }
 }
 
 void cpu_request_interrupt(int irq) {
