@@ -12,9 +12,6 @@
 #define WINDOW_TITLE "gbmulator"
 #define WINDOW_SCALE 3
 
-int debug_vram = 0;
-int paused = 0;
-
 int main(int argc, char **argv) {
     // TODO program argument sets path to rom (optional: path to boot rom - default being roms/bios.gb)
     //      + print help, keybindings, etc...
@@ -39,19 +36,15 @@ int main(int argc, char **argv) {
 
     SDL_Init(SDL_INIT_VIDEO);
 
-    const int game_width =  160 * WINDOW_SCALE;
-    const int game_height =  144 * WINDOW_SCALE;
-
-    SDL_Window *window = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, debug_vram ? game_width * 2 : game_width, game_height, SDL_WINDOW_SHOWN /*| SDL_WINDOW_RESIZABLE*/);
+    SDL_Window *window = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 160 * WINDOW_SCALE, 144 * WINDOW_SCALE, SDL_WINDOW_SHOWN /*| SDL_WINDOW_RESIZABLE*/);
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    SDL_Texture* game_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, 160, 144);
-    SDL_Texture* vram_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, 160, 144);
-    SDL_Rect game_rect = { .x = 0, .y = 0, .w = game_width, .h = game_height };
-    SDL_Rect vram_rect = { .x = game_width, .y = 0, .w = game_width, .h = game_height };
+    SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, 160, 144);
 
     SDL_bool is_running = SDL_TRUE;
     const Uint32 fps = 60;
     const Uint32 frame_delay = 1000 / fps;
+
+    SDL_bool paused = 0;
 
     while (is_running) {
         Uint32 frame_time = SDL_GetTicks();
@@ -66,10 +59,6 @@ int main(int argc, char **argv) {
                 switch (event.key.keysym.sym) {
                 case SDLK_c:
                     ppu_switch_colors();
-                    break;
-                case SDLK_d:
-                    debug_vram = !debug_vram;
-                    SDL_SetWindowSize(window, debug_vram ? game_width * 2 : game_width, game_height);
                     break;
                 case SDLK_p:
                     paused = !paused;
@@ -98,15 +87,8 @@ int main(int argc, char **argv) {
             timer_step(cycles);
             byte_t *pixels = ppu_step(cycles);
             if (pixels) {
-                SDL_UpdateTexture(game_texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
-                SDL_RenderCopy(renderer, game_texture, NULL, &game_rect);
-
-                if (debug_vram) {
-                    pixels = ppu_debug_oam();
-                    SDL_UpdateTexture(vram_texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
-                    SDL_RenderCopy(renderer, vram_texture, NULL, &vram_rect);
-                }
-
+                SDL_UpdateTexture(texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
+                SDL_RenderCopy(renderer, texture, NULL, NULL);
                 SDL_RenderPresent(renderer);
             }
 
@@ -118,6 +100,8 @@ int main(int argc, char **argv) {
             SDL_Delay(frame_delay - frame_time);
         }
     }
+
+    mem_save_eram();
 
     SDL_DestroyWindow(window);
     SDL_DestroyRenderer(renderer);

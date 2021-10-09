@@ -20,7 +20,7 @@ Key bindings are not configurable yet.
 - sound
 - serial port/interrupt
 - GBC mode
-- savestates + in game normal save
+- savestates
 - configurable emulation speed
 
 ## Resources used

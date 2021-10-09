@@ -73,6 +73,8 @@ enum mem_map {
 
 void load_cartridge(char *filepath);
 
+void mem_save_eram(void);
+
 /**
  * only used in instructions (opcode execution)
  */

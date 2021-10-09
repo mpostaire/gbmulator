@@ -33,12 +33,10 @@ enum color {
     BLACK
 };
 
-byte_t vram_pixels[160 * 144 * 3];
-
 byte_t pixels[160 * 144 * 3];
 byte_t pixels_cache_color_data[160][144];
 
-#define SET_PIXEL(buf, x, y, c) *(buf + ((y) * 160 * 3) + ((x) * 3)) = color_values[(c)][0]; \
+#define SET_PIXEL(x, y, c) pixels[((y) * 160 * 3) + ((x) * 3)] = color_values[(c)][0]; \
                             pixels[((y) * 160 * 3) + ((x) * 3) + 1] = color_values[(c)][1]; \
                             pixels[((y) * 160 * 3) + ((x) * 3) + 2] = color_values[(c)][2];
 
@@ -63,25 +61,16 @@ void ppu_switch_colors(void) {
  */
 static enum color get_color(byte_t color_data, word_t palette_address) {
     // get relevant bits of the color palette the color_data maps to
-    byte_t hi, lo;
+    byte_t filter;
     switch (color_data) {
-        case 0: hi = 1; lo = 0; break;
-        case 1: hi = 3; lo = 2; break;
-        case 2: hi = 5; lo = 4; break;
-        case 3: hi = 7; lo = 6; break;
+        case 0: filter = 0x03; break;
+        case 1: filter = 0x0C; break;
+        case 2: filter = 0x30; break;
+        case 3: filter = 0xC0; break;
     }
 
-    // get the color using the palette
-    byte_t color = (GET_BIT(mem[palette_address], hi) << 1) | GET_BIT(mem[palette_address], lo);
-    switch (color) {
-        case 0: return WHITE;
-        case 1: return LIGHT_GRAY;
-        case 2: return DARK_GRAY;
-        case 3: return BLACK;
-    }
-
-    // should never reach this
-    return WHITE;
+    // return the color using the palette
+    return (mem[palette_address] & filter) >> (color_data * 2);
 }
 
 /**
@@ -100,7 +89,7 @@ static void draw_bg_win(void) {
     for (int x = 0; x < 160; x++) {
         // background and window disabled, draw white pixel
         if (!CHECK_BIT(mem[LCDC], 0)) {
-            SET_PIXEL(pixels, x, y, WHITE);
+            SET_PIXEL(x, y, WHITE);
             continue;
         }
 
@@ -160,7 +149,7 @@ static void draw_bg_win(void) {
         // cache color_data to be used for objects rendering
         pixels_cache_color_data[x][y] = color_data;
         // set pixel color using BG (for background and window) palette data
-        SET_PIXEL(pixels, x, y, get_color(color_data, BGP));
+        SET_PIXEL(x, y, get_color(color_data, BGP));
     }
 }
 
@@ -189,7 +178,7 @@ static void draw_objects(void) {
         word_t obj_address = OAM + (obj_id * 4);
         
         // obj y + 16 position is in byte 0
-        byte_t pos_y = mem[obj_address] - 16;
+        s_word_t pos_y = mem[obj_address] - 16;
 
         // don't render this object if it doesn't intercept the current scanline
         if (y < pos_y || y >= pos_y + obj_height)
@@ -215,7 +204,7 @@ static void draw_objects(void) {
     for (int obj = rendered_objects - 1; obj >= 0; obj--) {
         word_t obj_address = obj_to_render[obj];
         // obj y + 16 position is in byte 0
-        byte_t pos_y = mem[obj_address] - 16;
+        s_word_t pos_y = mem[obj_address] - 16;
         // obj x + 8 position is in byte 1 (signed word important here!)
         s_word_t pos_x = mem[obj_address + 1] - 8;
         // obj position in the tile memory array
@@ -247,8 +236,9 @@ static void draw_objects(void) {
         // bit 6 of 1st byte == low bit of pixel 1, bit 6 of 2nd byte == high bit of pixel 1
         // etc.
         for (byte_t x = 0; x <= 7; x++) {
+            word_t pixel_x = pos_x + x;
             // don't draw pixel if it's outside the screen
-            if (pos_x + x < 0 || pos_x + x > 159)
+            if (pixel_x < 0 || pixel_x > 159)
                 continue;
 
             byte_t relevant_bit = x; // flip x
@@ -261,18 +251,18 @@ static void draw_objects(void) {
                 continue;
 
             // if an object with lower x coordinate has already drawn this pixel, it has higher priority so we abort
-            if (obj_pixel_priority[pos_x + x] < pos_x)
+            if (obj_pixel_priority[pixel_x] < pos_x)
                 continue;
 
             // store current object x coordinate in priority array
-            obj_pixel_priority[pos_x + x] = pos_x;
+            obj_pixel_priority[pixel_x] = pos_x;
 
             // if object is below background, object can only be drawn current if backgournd/window color (before applying palette) is 0
-            if (CHECK_BIT(flags, 7) && pixels_cache_color_data[pos_x + x][y])
+            if (CHECK_BIT(flags, 7) && pixels_cache_color_data[pixel_x][y])
                 continue;
 
             // set pixel color using palette
-            SET_PIXEL(pixels, pos_x + x, y, get_color(color_data, palette));
+            SET_PIXEL(pixel_x, y, get_color(color_data, palette));
         }
     }
 }
@@ -348,62 +338,4 @@ byte_t *ppu_step(int cycles) {
     }
 
     return draw_frame ? pixels : NULL;
-}
-
-byte_t *ppu_debug_oam() {
-    // are objects 8x8 or 8x16?
-    byte_t obj_height = 8;
-    if (CHECK_BIT(LCDC, 2))
-        obj_height = 16;
-
-    // iterate over all possible object in OAM memory
-    for (byte_t obj_id = 0; obj_id < 40; obj_id++) {
-        // each object takes 4 bytes in the OAM
-        word_t obj_address = OAM + (obj_id * 4);
-
-        // obj y + 16 position is in byte 0
-        byte_t pos_y = mem[obj_address] - 16;
-        // obj x + 8 position is in byte 1 (signed word important here!)
-        s_word_t pos_x = mem[obj_address + 1] - 8;
-        // obj position in the tile memory array
-        byte_t tile_index = mem[obj_address + 2];
-        // attributes flags
-        byte_t flags = mem[obj_address + 3];
-
-        // palette address
-        word_t palette = OBP0;
-        if (CHECK_BIT(flags, 4))
-            palette = OBP1;
-
-        for (byte_t obj_line = 0; obj_line < obj_height; obj_line++) {
-            if (CHECK_BIT(flags, 6)) // flip y
-                obj_line = (obj_line - obj_height) * -1;
-            obj_line *= 2; // each line takes 2 bytes in memory
-
-            // find object tile data in memory
-            word_t objdata_address = 0x8000 + tile_index * 16;
-
-            // 3. DRAW OBJECT
-
-            // pixel color data takes 2 bytes in memory
-            byte_t pixel_data_1 = mem[objdata_address + obj_line];
-            byte_t pixel_data_2 = mem[objdata_address + obj_line + 1];
-
-            // bit 7 of 1st byte == low bit of pixel 0, bit 7 of 2nd byte == high bit of pixel 0
-            // bit 6 of 1st byte == low bit of pixel 1, bit 6 of 2nd byte == high bit of pixel 1
-            // etc.
-            for (byte_t x = 0; x <= 7; x++) {
-                byte_t relevant_bit = x; // flip x
-                if (!CHECK_BIT(flags, 5)) // don't flip x
-                    relevant_bit = (relevant_bit - 7) * -1;
-
-                // construct color data
-                byte_t color_data = (GET_BIT(pixel_data_2, relevant_bit) << 1) | GET_BIT(pixel_data_1, relevant_bit);
-
-                // set pixel color using palette
-                SET_PIXEL(vram_pixels, x + obj_id, obj_line, color_data);
-            }
-        }
-    }
-    return vram_pixels;
 }

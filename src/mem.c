@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "types.h"
 #include "mem.h"
@@ -24,6 +25,7 @@ struct rtc_counter {
     byte_t h;
     byte_t dl;
     byte_t dh;
+    time_t value_in_seconds; // current rtc counter seconds, minutes, hours and days in seconds (helps with rtc_update())
 };
 
 byte_t cartridge[8000000];
@@ -39,8 +41,31 @@ byte_t mbc1_mode = 0;
 byte_t eram_enabled = 0;
 byte_t rtc_enabled = 0;
 byte_t rtc_register = 0;
+time_t rtc_last_update_time = 0;
 byte_t rtc_latch = 0;
 struct rtc_counter rtc;
+
+char *rom_filepath;
+
+static char *get_save_filepath(void) {
+    size_t len = strlen(rom_filepath);
+    char *buf = malloc(len + 2);
+    if (!buf) {
+        perror("ERROR get_save_filepath");
+        exit(EXIT_FAILURE);
+    }
+    strncpy(buf, rom_filepath, len);
+    for (int i = len + 1; i >= 0; i--) {
+        if (buf[i] == '.') {
+            buf[i + 1] = 's';
+            buf[i + 2] = 'a';
+            buf[i + 3] = 'v';
+            break;
+        }
+    }
+    buf[len + 1] = '\0';
+    return buf;
+}
 
 static void load_bios(void) {
     FILE *f = fopen("roms/bios.gb", "rb");
@@ -97,9 +122,11 @@ static void load_bios(void) {
 }
 
 void load_cartridge(char *filepath) {
+    rom_filepath = filepath;
+
     // clear memory
     memset(&mem, 0, sizeof(mem));
-    // clear eram -- TODO reload save data instead (if it exists)
+    // clear eram
     memset(&eram, 0, sizeof(eram));
 
     FILE *f = fopen(filepath, "rb");
@@ -157,6 +184,7 @@ void load_cartridge(char *filepath) {
         break;
     }
 
+    // get rom title
     char title[16];
     strncpy(title, (char *) &cartridge[0x134], 15);
     title[15] = '\0';
@@ -178,6 +206,62 @@ void load_cartridge(char *filepath) {
     // Load bios (if it exists) after cartridge to overwrite first 0x100 bytes.
     // If bios don't exist, sets memory and registers accordingly. 
     load_bios();
+
+    // load save into ERAM
+    char *save_filepath = get_save_filepath();
+    f = fopen(save_filepath, "rb");
+    free(save_filepath);
+    if (!f) return; // if can't read save file, ignore it and proceed without save.
+    fread(eram, sizeof(eram), 1, f);
+    fclose(f);
+}
+
+void mem_save_eram(void) {
+    if (!ram_banks) return;
+
+    char *save_filepath = get_save_filepath();
+    FILE *f = fopen(save_filepath, "wb");
+    free(save_filepath);
+
+    if (!f) {
+        perror("ERROR opening the save file");
+        exit(EXIT_FAILURE);
+    }
+    if (!fwrite(eram, sizeof(eram), 1, f)) {
+        printf("ERROR writing to save file\n");
+        exit(EXIT_FAILURE);
+    }
+    fclose(f);
+}
+
+static void rtc_update(void) {
+    // get current time in seconds
+    time_t current_update_time = time(NULL);
+
+    // get time elapsed
+    time_t rtc_last_update_time = rtc.s + 60 * rtc.m + 3600 * rtc.h + 86400 * (rtc.dl | (rtc.dh & 0x01) << 8);
+    time_t elapsed = current_update_time - rtc_last_update_time;
+
+    rtc.value_in_seconds += elapsed;
+
+    word_t d = rtc.value_in_seconds / 86400;
+    elapsed %= 86400;
+    if (d >= 0x0200) { // day overflow
+        SET_BIT(rtc.dh, 7);
+        d %= 0x0200;
+    }
+    rtc.dh |= (d & 0x01) >> 8;
+    rtc.dl = d & 0xFF;
+
+    rtc.h = elapsed / 3600;
+    elapsed %= 3600;
+
+    rtc.m = elapsed / 60;
+    elapsed %= 60;
+
+    rtc.s = elapsed;
+
+    rtc_last_update_time = current_update_time;
 }
 
 // TODO MBC1 special cases where rom bank 0 is changed are not implemented
@@ -237,9 +321,8 @@ static void write_mbc_registers(word_t address, byte_t data) {
                 current_eram_bank = -1;
             }
         } else if (address < 0x8000) {
-            if (rtc_latch == 0x00 && data == 0x01) {
-                // TODO rtc counter
-            }
+            if (rtc_latch == 0x00 && data == 0x01 && !CHECK_BIT(rtc.dh, 6))
+                rtc_update();
             rtc_latch = data;
         }
         break;
@@ -264,23 +347,12 @@ static void write_mbc_eram(word_t address, byte_t data) {
             eram[(address - 0xA000) + (current_eram_bank * 0x2000)] = data;
         } else if (rtc_enabled) {
             switch (rtc_register) {
-            case 0x08:
-                rtc.s = data;
-                break;
-            case 0x09:
-                rtc.m = data;
-                break;
-            case 0x0A:
-                rtc.h = data;
-                break;
-            case 0x0B:
-                rtc.dl = data;
-                break;
-            case 0x0C:
-                rtc.dh = data;
-                break;
-            default:
-                break;
+            case 0x08: rtc.s = data; break;
+            case 0x09: rtc.m = data; break;
+            case 0x0A: rtc.h = data; break;
+            case 0x0B: rtc.dl = data; break;
+            case 0x0C: rtc.dh = data; break;
+            default: break;
             }
         }
         break;
@@ -297,18 +369,12 @@ byte_t mem_read(word_t address) {
         if (address >= 0xA000 && address < 0xC000) { // ERAM
             if (rtc_enabled) {
                 switch (rtc_register) {
-                case 0x08:
-                    return rtc.s;
-                case 0x09:
-                    return rtc.m;
-                case 0x0A:
-                    return rtc.h;
-                case 0x0B:
-                    return rtc.dl;
-                case 0x0C:
-                    return rtc.dh;
-                default:
-                    break;
+                case 0x08: return rtc.s;
+                case 0x09: return rtc.m;
+                case 0x0A: return rtc.h;
+                case 0x0B: return rtc.dl;
+                case 0x0C: return rtc.dh;
+                default: break; // break, not return because we want to access eram (if enabled) in this case
                 }
             }
 

@@ -14,5 +14,3 @@ enum ppu_mode {
 void ppu_switch_colors(void);
 
 byte_t *ppu_step(int cycles);
-
-byte_t *ppu_debug_oam();
