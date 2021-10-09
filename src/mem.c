@@ -367,7 +367,7 @@ byte_t mem_read(word_t address) {
             return cartridge[(address - 0x4000) + (current_rom_bank * 0x4000)];
 
         if (address >= 0xA000 && address < 0xC000) { // ERAM
-            if (rtc_enabled) {
+            if (rtc_enabled) { // implies mbc == MBC3 because rtc_enabled is set to 0 by default
                 switch (rtc_register) {
                 case 0x08: return rtc.s;
                 case 0x09: return rtc.m;
