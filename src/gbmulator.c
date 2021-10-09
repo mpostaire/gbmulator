@@ -8,6 +8,7 @@
 #include "ppu.h"
 #include "timer.h"
 #include "joypad.h"
+#include "serial.h"
 
 #define WINDOW_TITLE "gbmulator"
 #define WINDOW_SCALE 3
@@ -85,6 +86,7 @@ int main(int argc, char **argv) {
             int cycles = cpu_handle_interrupts();
             cycles += cpu_step();
             timer_step(cycles);
+            serial_step(cycles);
             byte_t *pixels = ppu_step(cycles);
             if (pixels) {
                 SDL_UpdateTexture(texture, NULL, pixels, 160 * sizeof(byte_t) * 3);

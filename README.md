@@ -18,7 +18,7 @@ Key bindings are not configurable yet.
 
 - configurable key bindings
 - sound
-- serial port/interrupt
+- working serial data port data transfer with 2 emulators
 - GBC mode
 - savestates
 - configurable emulation speed
