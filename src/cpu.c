@@ -4,14 +4,16 @@
 #include "cpu.h"
 #include "mem.h"
 
+struct instruction {
+	char *name;
+	int operand_size;
+};
+
 struct registers registers;
-// interrupt master enable
-int ime = 0;
+int ime = 0; // interrupt master enable
 int halt = 0;
 
-// TODO check if all instructions are implemented
-
-const instruction_t instructions[256] = {
+const struct instruction instructions[256] = {
     {"NOP", 0},                   // 0x00
     {"LD BC, %04X", 2},           // 0x01
     {"LD (BC), A", 0},            // 0x02
@@ -223,7 +225,7 @@ const instruction_t instructions[256] = {
     {"RET NC", 0},                // 0xD0
     {"POP DE", 0},                // 0xD1
     {"JP NC, %04X", 2},           // 0xD2
-    {"UNKNOWN", 0},               // 0xD3
+    {"UNDEFINED", 0},             // 0xD3
     {"CALL NC, %04X", 2},         // 0xD4
     {"PUSH DE", 0},               // 0xD5
     {"SUB A, %02X", 1},           // 0xD6
@@ -231,32 +233,32 @@ const instruction_t instructions[256] = {
     {"RET C", 0},                 // 0xD8
     {"RETI", 0},                  // 0xD9
     {"JP C, %04X", 2},            // 0xDA
-    {"UNKNOWN", 0},               // 0xDB
+    {"UNDEFINED", 0},             // 0xDB
     {"CALL C, %04X", 2},          // 0xDC
-    {"UNKNOWN", 0},               // 0xDD
+    {"UNDEFINED", 0},             // 0xDD
     {"SBC %02X", 1},              // 0xDE
     {"RST 0x18", 0},              // 0xDF
     {"LD (0xFF00 + %02X), A", 1}, // 0xE0
     {"POP HL", 0},                // 0xE1
     {"LD (0xFF00 + C), A", 0},    // 0xE2
-    {"UNKNOWN", 0},               // 0xE3
-    {"UNKNOWN", 0},               // 0xE4
+    {"UNDEFINED", 0},             // 0xE3
+    {"UNDEFINED", 0},             // 0xE4
     {"PUSH HL", 0},               // 0xE5
     {"AND %02X", 1},              // 0xE6
     {"RST 0x20", 0},              // 0xE7
     {"ADD SP,%02X", 1},           // 0xE8
     {"JP HL", 0},                 // 0xE9
     {"LD (%04X), A", 2},          // 0xEA
-    {"UNKNOWN", 0},               // 0xEB
-    {"UNKNOWN", 0},               // 0xEC
-    {"UNKNOWN", 0},               // 0xED
+    {"UNDEFINED", 0},             // 0xEB
+    {"UNDEFINED", 0},             // 0xEC
+    {"UNDEFINED", 0},             // 0xED
     {"XOR %02X", 1},              // 0xEE
     {"RST 0x28", 0},              // 0xEF
     {"LD A, (0xFF00 + %02X)", 1}, // 0xF0
     {"POP AF", 0},                // 0xF1
     {"LD A, (0xFF00 + C)", 0},    // 0xF2
     {"DI", 0},                    // 0xF3
-    {"UNKNOWN", 0},               // 0xF4
+    {"UNDEFINED", 0},             // 0xF4
     {"PUSH AF", 0},               // 0xF5
     {"OR %02X", 1},               // 0xF6
     {"RST 0x30", 0},              // 0xF7
@@ -264,13 +266,13 @@ const instruction_t instructions[256] = {
     {"LD SP, HL", 0},             // 0xF9
     {"LD A, (%04X)", 2},          // 0xFA
     {"EI", 0},                    // 0xFB
-    {"UNKNOWN", 0},               // 0xFC
-    {"UNKNOWN", 0},               // 0xFD
+    {"UNDEFINED", 0},             // 0xFC
+    {"UNDEFINED", 0},             // 0xFD
     {"CP %02X", 1},               // 0xFE
     {"RST 0x38", 0},              // 0xFF
 };
 
-const instruction_t extended_instructions[256] = {
+const struct instruction extended_instructions[256] = {
     {"RLC B", 0},       // 0x00
     {"RLC C", 0},       // 0x01
     {"RLC D", 0},       // 0x02
@@ -843,6 +845,30 @@ static int exec_extended_opcode(byte_t opcode) {
         registers.c = rr(registers.c);
         cycles = 8;
         break;
+    case 0x1A: // RR D
+        registers.d = rr(registers.d);
+        cycles = 8;
+        break;
+    case 0x1B: // RR E
+        registers.e = rr(registers.e);
+        cycles = 8;
+        break;
+    case 0x1C: // RR H
+        registers.h = rr(registers.h);
+        cycles = 8;
+        break;
+    case 0x1D: // RR L
+        registers.l = rr(registers.l);
+        cycles = 8;
+        break;
+    case 0x1E: // RR (HL)
+        mem_write(registers.hl, rr(mem_read(registers.hl)));
+        cycles = 16;
+        break;
+    case 0x1F: // RR A
+        registers.a = rr(registers.a);
+        cycles = 8;
+        break;
     case 0x20: // SLA B
         registers.b = sla(registers.b);
         cycles = 8;
@@ -905,30 +931,6 @@ static int exec_extended_opcode(byte_t opcode) {
         break;
     case 0x2F: // SRA A
         registers.a = sra(registers.a);
-        cycles = 8;
-        break;
-    case 0x1A: // RR D
-        registers.d = rr(registers.d);
-        cycles = 8;
-        break;
-    case 0x1B: // RR E
-        registers.e = rr(registers.e);
-        cycles = 8;
-        break;
-    case 0x1C: // RR H
-        registers.h = rr(registers.h);
-        cycles = 8;
-        break;
-    case 0x1D: // RR L
-        registers.l = rr(registers.l);
-        cycles = 8;
-        break;
-    case 0x1E: // RR (HL)
-        mem_write(registers.hl, rr(mem_read(registers.hl)));
-        cycles = 16;
-        break;
-    case 0x1F: // RR A
-        registers.a = rr(registers.a);
         cycles = 8;
         break;
     case 0x30: // SWAP B
@@ -2049,6 +2051,11 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         mem_write(registers.hl, operand);
         cycles = 12;
         break;
+    case 0x37: // SCF
+        RESET_FLAG(FLAG_N | FLAG_H);
+        SET_FLAG(FLAG_C);
+        cycles = 4;
+        break;
     case 0x38: // JR C, n
         if (CHECK_FLAG(FLAG_C)) {
             registers.pc += (s_byte_t) operand;
@@ -2056,11 +2063,6 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         } else {
             cycles = 8;
         }
-        break;
-    case 0x37: // SCF
-        RESET_FLAG(FLAG_N | FLAG_H);
-        SET_FLAG(FLAG_C);
-        cycles = 4;
         break;
     case 0x39: // ADD HL, SP
         add16(registers.sp);
