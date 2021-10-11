@@ -122,7 +122,7 @@ static void complete_connection(void) {
             } else {
                 close(other_sfd);
                 other_sfd = -1;
-                printf("Could not make a connection\n");
+                perror("Could not make a connection");
             }
         }
     }
