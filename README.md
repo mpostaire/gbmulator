@@ -1,5 +1,5 @@
 # gbmulator
-A Game Boy emulator.
+A Game Boy emulator with serial data transfer (link cable) support over tcp.
 
 # Key bindings
 Key bindings are not configurable yet.
@@ -18,10 +18,10 @@ Key bindings are not configurable yet.
 
 - configurable key bindings
 - sound
-- working serial data port data transfer with 2 emulators
 - GBC mode
 - savestates
 - configurable emulation speed
+- Fix buggy serial data transfer
 
 ## Resources used
 - https://gbdev.io/pandocs/

@@ -41,7 +41,6 @@ byte_t mbc1_mode = 0;
 byte_t eram_enabled = 0;
 byte_t rtc_enabled = 0;
 byte_t rtc_register = 0;
-time_t rtc_last_update_time = 0;
 byte_t rtc_latch = 0;
 struct rtc_counter rtc;
 
@@ -239,8 +238,7 @@ static void rtc_update(void) {
     time_t current_update_time = time(NULL);
 
     // get time elapsed
-    time_t rtc_last_update_time = rtc.s + 60 * rtc.m + 3600 * rtc.h + 86400 * (rtc.dl | (rtc.dh & 0x01) << 8);
-    time_t elapsed = current_update_time - rtc_last_update_time;
+    time_t elapsed = current_update_time - rtc.value_in_seconds;
 
     rtc.value_in_seconds += elapsed;
 
@@ -260,8 +258,6 @@ static void rtc_update(void) {
     elapsed %= 60;
 
     rtc.s = elapsed;
-
-    rtc_last_update_time = current_update_time;
 }
 
 // TODO MBC1 special cases where rom bank 0 is changed are not implemented

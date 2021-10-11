@@ -65,6 +65,12 @@ int main(int argc, char **argv) {
                     paused = !paused;
                     SDL_SetWindowTitle(window, paused ? WINDOW_TITLE" - PAUSED" : WINDOW_TITLE);
                     break;
+                case SDLK_s:
+                    serial_start_server("127.0.0.1", 7777);
+                    break;
+                case SDLK_d:
+                    serial_connect_to_server("127.0.0.1", 7777);
+                    break;
                 }
                 break;
             case SDL_KEYUP:
@@ -104,6 +110,7 @@ int main(int argc, char **argv) {
     }
 
     mem_save_eram();
+    serial_close_connection();
 
     SDL_DestroyWindow(window);
     SDL_DestroyRenderer(renderer);
