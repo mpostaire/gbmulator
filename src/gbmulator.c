@@ -66,7 +66,7 @@ int main(int argc, char **argv) {
                     SDL_SetWindowTitle(window, paused ? WINDOW_TITLE" - PAUSED" : WINDOW_TITLE);
                     break;
                 case SDLK_s:
-                    serial_start_server("127.0.0.1", 7777);
+                    serial_start_server(7777);
                     break;
                 case SDLK_d:
                     serial_connect_to_server("127.0.0.1", 7777);

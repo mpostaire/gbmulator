@@ -23,7 +23,7 @@ int other_sfd = -1;
 int connected = 0;
 struct sockaddr_in other_addr;
 
-int serial_start_server(const char* address, const int port) {
+int serial_start_server(const int port) {
     if (sfd != -1 || is_server)
         return 0;
 

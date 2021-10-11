@@ -1,6 +1,6 @@
 #pragma once
 
-int serial_start_server(const char* address, const int port);
+int serial_start_server(const int port);
 
 int serial_connect_to_server(const char* address, const int port);
 
