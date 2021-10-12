@@ -20,7 +20,6 @@ Key bindings are not configurable yet.
 - sound
 - GBC mode
 - savestates
-- configurable emulation speed
 - Fix buggy serial data transfer
 
 ## Resources used

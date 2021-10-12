@@ -271,7 +271,7 @@ static void draw_objects(void) {
  * This does not implement the pixel FIFO but draws each scanline instantly when starting PPU_HBLANK (mode 0).
  * TODO if STAT interrupts are a problem, implement these corner cases: http://gameboy.mongenel.com/dmg/istat98.txt
  */
-byte_t *ppu_step(int cycles) {
+byte_t ppu_step(int cycles) {
     ppu_cycles += cycles;
 
     if (!CHECK_BIT(mem[LCDC], 7)) { // is LCD disabled?
@@ -280,7 +280,7 @@ byte_t *ppu_step(int cycles) {
         mem[STAT] = mem[STAT] & 0xFC;
         ppu_cycles = 0;
         mem[LY] = 0;
-        return NULL;
+        return 0;
     }
 
     byte_t request_stat_irq = 0;
@@ -337,5 +337,5 @@ byte_t *ppu_step(int cycles) {
             mem[LY] = 0;
     }
 
-    return draw_frame ? pixels : NULL;
+    return draw_frame;
 }

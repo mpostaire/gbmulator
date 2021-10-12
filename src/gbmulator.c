@@ -12,6 +12,7 @@
 
 #define WINDOW_TITLE "gbmulator"
 #define WINDOW_SCALE 3
+#define MAX_SPEED 4
 
 int main(int argc, char **argv) {
     // TODO program argument sets path to rom (optional: path to boot rom - default being roms/bios.gb)
@@ -30,11 +31,6 @@ int main(int argc, char **argv) {
     // load_cartridge("roms/tests/mooneye/emulator-only/mbc1/bits_mode.gb");
     // load_cartridge("roms/tests/mooneye/emulator-only/mbc2/bits_romb.gb");
 
-    // load_cartridge("roms/Tetris.gb");
-    // load_cartridge("roms/Super Mario Land.gb");
-    // load_cartridge("roms/Dr. Mario.gb");
-    // load_cartridge("roms/Pokemon Red.gb");
-
     SDL_Init(SDL_INIT_VIDEO);
 
     SDL_Window *window = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 160 * WINDOW_SCALE, 144 * WINDOW_SCALE, SDL_WINDOW_SHOWN /*| SDL_WINDOW_RESIZABLE*/);
@@ -46,6 +42,10 @@ int main(int argc, char **argv) {
     const Uint32 frame_delay = 1000 / fps;
 
     SDL_bool paused = 0;
+    SDL_bool draw_frame = 0;
+    int speed = 1;
+
+    printf("Emulation speed: %dx\n", speed);
 
     while (is_running) {
         Uint32 frame_time = SDL_GetTicks();
@@ -71,6 +71,10 @@ int main(int argc, char **argv) {
                 case SDLK_d:
                     serial_connect_to_server("127.0.0.1", 7777);
                     break;
+                case SDLK_m:
+                    speed = (speed % MAX_SPEED) + 1;
+                    printf("Emulation speed: %dx\n", speed);
+                    break;
                 }
                 break;
             case SDL_KEYUP:
@@ -85,7 +89,7 @@ int main(int argc, char **argv) {
 
         // 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame
         int cycles_count = 0;
-        while (!paused && cycles_count < 69905) {
+        while (!paused && cycles_count < 69905 * speed) {
             // TODO make timings accurate by forcing each cpu_step() to take 4 cycles: if it's not enough to finish an instruction,
             // the next cpu_step() will resume the previous instruction. This will makes the timer "hack" (increment within a loop and not an if)
             // obsolete while allowing accurate memory timings emulation.
@@ -93,14 +97,17 @@ int main(int argc, char **argv) {
             cycles += cpu_step();
             timer_step(cycles);
             serial_step(cycles);
-            byte_t *pixels = ppu_step(cycles);
-            if (pixels) {
-                SDL_UpdateTexture(texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
-                SDL_RenderCopy(renderer, texture, NULL, NULL);
-                SDL_RenderPresent(renderer);
-            }
+            draw_frame = ppu_step(cycles) || draw_frame;
 
             cycles_count += cycles;
+        }
+
+        // draw last new frame if it's complete
+        if (draw_frame) {
+            SDL_UpdateTexture(texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
+            SDL_RenderCopy(renderer, texture, NULL, NULL);
+            SDL_RenderPresent(renderer);
+            draw_frame = 0;
         }
 
         frame_time = SDL_GetTicks() - frame_time;
