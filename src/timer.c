@@ -11,7 +11,7 @@ void timer_step(int cycles) {
     // DIV register incremented at 16384 Hz (every 256 cycles)
     div_counter += cycles;
     if (div_counter >= 256) {
-        div_counter = 0;
+        div_counter -= 256;
         mem[DIV]++; // force increment (mem_write would set this address to 0)
     }
 
