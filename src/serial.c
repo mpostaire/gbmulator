@@ -10,10 +10,15 @@
 #include "cpu.h"
 #include "mem.h"
 
-// TODO this is still buggy: tetris works fine, dr mario has glitched game over screen and pokemon red has glitched fight and trade
+// TODO this is still buggy: tetris works fine, dr mario has glitched game over screen (unrelated?) and pokemon red has glitched fight and trade
 // TODO fix problems when a emulator is paused during a connection
 // TODO handle disconnection
 // TODO this may cause glitches in sound emulation due to the blocking send and recv (investigate when sound is implemented)
+
+struct pkt {
+    byte_t data;
+    byte_t transfer;
+};
 
 int cycles_counter = 0;
 int bit_counter = 0;
@@ -135,50 +140,59 @@ static void complete_connection(void) {
  * 
  * Cause of glitches because the 2 emulators are not completely synchronized?
  * Or maybe messages aren't sent/received due to errors? <-- test this first
+ * 
+ * TODO /!\ MUST DO ------> compare trace of bgb serial link packets with this one (at cycles_counter >= 512) to spot difference
+ * if none, its a cycles sync problem and its bad...
+ * 
+ * I'll have to implement a cpu sync by forcing each iteration to take 4 cycles
+ * (passing memory timings of blargg's tests) and send the current cycle to the serial link for comparison to do the interrupt at the same
+ * time (same cycle)
+ * maybe with 512 as limit value, problems are due to the cpu not using the SB byte and being interrupted before it has the time... but unlikely
+ * as the interrupts disable other interrupts as they are processed
+ * 
+ * If emulator on 1 computer faster than the other, may cause problems --> cpu cycle sync important?
  */
 void serial_step(int cycles) {
     cycles_counter += cycles;
 
-    if (cycles_counter >= 512) { // 8192 Hz clock
-        cycles_counter -= 512; // keep leftover cycles (if any)
+    // TODO this should be a 8192 Hz clock (cycles_counter >= 512)... but as it's too fast and cause bugs, this will do for now
+    if (cycles_counter >= 4096) {
+        cycles_counter -= 4096; // keep leftover cycles (if any)
 
         if (!connected)
             complete_connection();
 
-        // if connected, check for any receiving data (non blocking in case we don't receive anything)
-        if (connected) {
-            byte_t buf;
-            // if we receive the SB byte of another emulator without sending one first, we are the slave of the connection
-            // we know we didn't send a SB byte first because otherwise, we would have been blocked waiting for an answer.
-            if (recv(other_sfd, &buf, sizeof(byte_t), MSG_NOSIGNAL | MSG_DONTWAIT) == 1) {
-                // send back our SB byte
-                send(other_sfd, &mem[SB], sizeof(byte_t), MSG_NOSIGNAL| MSG_DONTWAIT);
-                // store the other emulator's SB byte in ours and request interrupt
-                mem[SB] = buf;
-                cpu_request_interrupt(IRQ_SERIAL);
-                return;
-            }
-        }
-
         // transfer requested / in progress with internal clock (we are the master of the connection)
+        byte_t transfer = 0;
         if (CHECK_BIT(mem[SC], 7) && CHECK_BIT(mem[SC], 0)) {
             if (bit_counter < 8) { // emulate 8 bit shifting
                 bit_counter++;
-            } else if (connected) { // once all the bits have been shifted and we have a connection
-                // send our SB byte to the other emulator
-                send(other_sfd, &mem[SB], sizeof(byte_t), MSG_NOSIGNAL); // send once all data
-                // wait for the other emulator's SB byte and place it in ours.
-                if (recv(other_sfd, &mem[SB], sizeof(byte_t), MSG_NOSIGNAL) == 1) {
-                    RESET_BIT(mem[SC], 7);
-                    cpu_request_interrupt(IRQ_SERIAL);
-                    bit_counter = 0;
-                }
-            } else { // if not connected, receive 0xFF and request interrupt
-                RESET_BIT(mem[SC], 7);
-                mem[SB] = 0xFF;
-                cpu_request_interrupt(IRQ_SERIAL);
+            } else {
                 bit_counter = 0;
+                transfer = 1;
             }
+        }
+
+        if (connected) {
+            // send our SB register and transfer flag
+            struct pkt outbuf = { .data = mem[SB], .transfer = transfer };
+            send(other_sfd, &outbuf, sizeof(outbuf), MSG_NOSIGNAL);
+
+            // receive their SB register and transfer flag
+            struct pkt inbuf = { 0 };
+            recv(other_sfd, &inbuf, sizeof(inbuf), MSG_NOSIGNAL);
+
+            // if either one of us initiate the transfer (transfer flag is true), swap our SB registers and request interrupt
+            if (outbuf.transfer || inbuf.transfer) {
+                // printf("send %02X, recv %02X\n", outbuf.data, inbuf.data);
+                mem[SB] = inbuf.data;
+                RESET_BIT(mem[SC], 7);
+                cpu_request_interrupt(IRQ_SERIAL);
+            }
+        } else if (transfer) { // not connected but still transfer pending
+            mem[SB] = 0xFF;
+            RESET_BIT(mem[SC], 7);
+            cpu_request_interrupt(IRQ_SERIAL);
         }
     }
 }
