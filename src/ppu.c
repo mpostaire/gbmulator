@@ -25,20 +25,9 @@ byte_t color_green[4][3] = {
 byte_t (*color_values)[3] = color_gray;
 byte_t change_colors = 0;
 
-// TODO? LCD off special bright white color
-enum color {
-    WHITE,
-    LIGHT_GRAY,
-    DARK_GRAY,
-    BLACK
-};
-
+byte_t blank_pixel[3];
 byte_t pixels[160 * 144 * 3];
 byte_t pixels_cache_color_data[160][144];
-
-#define SET_PIXEL(x, y, c) pixels[((y) * 160 * 3) + ((x) * 3)] = color_values[(c)][0]; \
-                            pixels[((y) * 160 * 3) + ((x) * 3) + 1] = color_values[(c)][1]; \
-                            pixels[((y) * 160 * 3) + ((x) * 3) + 2] = color_values[(c)][2];
 
 #define PPU_SET_MODE(m) mem[STAT] = (mem[STAT] & 0xFC) | (m)
 
@@ -89,7 +78,7 @@ static void draw_bg_win(void) {
     for (int x = 0; x < 160; x++) {
         // background and window disabled, draw white pixel
         if (!CHECK_BIT(mem[LCDC], 0)) {
-            SET_PIXEL(x, y, WHITE);
+            SET_PIXEL(pixels, x, y, WHITE);
             continue;
         }
 
@@ -149,7 +138,7 @@ static void draw_bg_win(void) {
         // cache color_data to be used for objects rendering
         pixels_cache_color_data[x][y] = color_data;
         // set pixel color using BG (for background and window) palette data
-        SET_PIXEL(x, y, get_color(color_data, BGP));
+        SET_PIXEL(pixels, x, y, get_color(color_data, BGP));
     }
 }
 
@@ -169,7 +158,7 @@ static void draw_objects(void) {
 
     // are objects 8x8 or 8x16?
     byte_t obj_height = 8;
-    if (CHECK_BIT(LCDC, 2))
+    if (CHECK_BIT(mem[LCDC], 2))
         obj_height = 16;
 
     // iterate over all possible object in OAM memory
@@ -262,7 +251,7 @@ static void draw_objects(void) {
                 continue;
 
             // set pixel color using palette
-            SET_PIXEL(pixel_x, y, get_color(color_data, palette));
+            SET_PIXEL(pixels, pixel_x, y, get_color(color_data, palette));
         }
     }
 }
@@ -277,7 +266,7 @@ byte_t ppu_step(int cycles) {
     if (!CHECK_BIT(mem[LCDC], 7)) { // is LCD disabled?
         // TODO not sure of the handling of LCD disabled
         // TODO LCD disabled should fill screen with a color brighter than WHITE
-        mem[STAT] = mem[STAT] & 0xFC;
+        PPU_SET_MODE(PPU_HBLANK);
         ppu_cycles = 0;
         mem[LY] = 0;
         return 0;

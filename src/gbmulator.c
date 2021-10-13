@@ -9,6 +9,7 @@
 #include "timer.h"
 #include "joypad.h"
 #include "serial.h"
+#include "apu.h"
 
 #define WINDOW_TITLE "gbmulator"
 #define WINDOW_SCALE 3
@@ -36,20 +37,18 @@ int main(int argc, char **argv) {
     SDL_Window *window = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 160 * WINDOW_SCALE, 144 * WINDOW_SCALE, SDL_WINDOW_SHOWN /*| SDL_WINDOW_RESIZABLE*/);
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, 160, 144);
+    SDL_Texture* blank_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STATIC, 1, 1);
 
     SDL_bool is_running = SDL_TRUE;
-    const Uint32 fps = 60;
-    const Uint32 frame_delay = 1000 / fps;
+    // 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame
+    const Uint32 cycles_per_frame = 4194304 / 60;
 
     SDL_bool paused = 0;
-    SDL_bool draw_frame = 0;
     int speed = 1;
 
     printf("Emulation speed: %dx\n", speed);
 
     while (is_running) {
-        Uint32 frame_time = SDL_GetTicks();
-
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
@@ -87,9 +86,8 @@ int main(int argc, char **argv) {
             }
         }
 
-        // 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame
         int cycles_count = 0;
-        while (!paused && cycles_count < 69905 * speed) {
+        while (!paused && cycles_count < cycles_per_frame * speed) {
             // TODO make timings accurate by forcing each cpu_step() to take 4 cycles: if it's not enough to finish an instruction,
             // the next cpu_step() will resume the previous instruction. This will makes the timer "hack" (increment within a loop and not an if)
             // obsolete while allowing accurate memory timings emulation.
@@ -97,23 +95,27 @@ int main(int argc, char **argv) {
             cycles += cpu_step();
             timer_step(cycles);
             serial_step(cycles);
-            draw_frame = ppu_step(cycles) || draw_frame;
+            apu_step(cycles);
+            SDL_bool draw_frame = ppu_step(cycles);
+            if (draw_frame)
+                SDL_UpdateTexture(texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
 
             cycles_count += cycles;
         }
 
-        // draw last new frame if it's complete
-        if (draw_frame) {
-            SDL_UpdateTexture(texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
-            SDL_RenderCopy(renderer, texture, NULL, NULL);
-            SDL_RenderPresent(renderer);
-            draw_frame = 0;
-        }
+        // avoid tearing by using 2 buffers?
 
-        frame_time = SDL_GetTicks() - frame_time;
-        if (frame_time < frame_delay) {
-            SDL_Delay(frame_delay - frame_time);
+        // draw last new frame if it's complete
+        if (CHECK_BIT(mem[LCDC], 7))
+            SDL_RenderCopy(renderer, texture, NULL, NULL);
+        else {
+            SET_PIXEL(blank_pixel, 0, 0, WHITE); // SET_PIXEL here to refresh color in case of color change
+            SDL_UpdateTexture(blank_texture, NULL, &blank_pixel, sizeof(byte_t) * 3);
+            SDL_RenderCopy(renderer, blank_texture, NULL, NULL);
         }
+        SDL_RenderPresent(renderer);
+
+        // no delay at the end of the loop because it's redundant with vsync
     }
 
     mem_save_eram();

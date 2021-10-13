@@ -16,6 +16,7 @@ Key bindings are not configurable yet.
 
 # TODO
 
+- better mbc support
 - configurable key bindings
 - sound
 - GBC mode
