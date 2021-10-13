@@ -103,8 +103,6 @@ int main(int argc, char **argv) {
             cycles_count += cycles;
         }
 
-        // avoid tearing by using 2 buffers?
-
         // draw last new frame if it's complete
         if (CHECK_BIT(mem[LCDC], 7))
             SDL_RenderCopy(renderer, texture, NULL, NULL);
