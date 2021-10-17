@@ -260,12 +260,12 @@ void apu_step(int cycles) {
             take_sample_cycles_count = 0;
 
             float channel1_output = 0;
-            // if (CHECK_BIT(mem[NR52], CHANNEL_1))
-                // channel1_output = (((channel1.duty ? 1.0f : -1.0f) * channel1.envelope_volume)) / 15.0f; // divide by 15.0 to make it between -1.0 and 1.0
+            if (CHECK_BIT(mem[NR52], CHANNEL_1))
+                channel1_output = (((channel1.duty ? 1.0f : -1.0f) * channel1.envelope_volume)) / 15.0f; // divide by 15.0 to make it between -1.0 and 1.0
 
             float channel2_output = 0;
-            // if (CHECK_BIT(mem[NR52], CHANNEL_2))
-            //     channel2_output = (((channel2.duty ? 1.0f : -1.0f) * channel2.envelope_volume)) / 15.0f; // divide by 15.0 to make it between -1.0 and 1.0
+            if (CHECK_BIT(mem[NR52], CHANNEL_2))
+                channel2_output = (((channel2.duty ? 1.0f : -1.0f) * channel2.envelope_volume)) / 15.0f; // divide by 15.0 to make it between -1.0 and 1.0
 
             float channel3_output = 0;
             // if (CHECK_BIT(mem[NR52], CHANNEL_3)) {
