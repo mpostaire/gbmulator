@@ -8,6 +8,7 @@
 #include "cpu.h"
 #include "ppu.h"
 #include "joypad.h"
+#include "apu.h"
 
 enum mbc_type {
     MBC0,
@@ -426,6 +427,42 @@ void mem_write(word_t address, byte_t data) {
     } else if (address == P1) {
         // prevent writes to the lower nibble of the P1 register (joypad)
         mem[address] = data & 0xF0;
+    } else if (address == NR11) {
+        mem[address] = data;
+        channel1.length_timer = 64 - (data & 0x3F);
+    } else if (address == NR14) {
+        mem[address] = data;
+        if (CHECK_BIT(data, 7))
+            apu_channel_trigger(&channel1);
+    } else if (address == NR21) {
+        mem[address] = data;
+        channel2.length_timer = 64 - (data & 0x3F);
+    } else if (address == NR24) {
+        mem[address] = data;
+        if (CHECK_BIT(data, 7))
+            apu_channel_trigger(&channel2);
+    } else if (address == NR31) {
+        mem[address] = data;
+        channel3.length_timer = 256 - data;
+    } else if (address == NR34) {
+        mem[address] = data;
+        if (CHECK_BIT(data, 7))
+            apu_channel_trigger(&channel3);
+    } else if (address == NR41) {
+        mem[address] = data;
+        channel4.length_timer = 64 - (data & 0x3F);
+    } else if (address == NR44) {
+        mem[address] = data;
+        if (CHECK_BIT(data, 7))
+            apu_channel_trigger(&channel4);
+    } else if (address == NR52) {
+        mem[address] |= data & 0x80;
+        // if (!CHECK_BIT(data, 7)) {
+        //     // TODO destroy the contetns of all sound registers
+        // }
+    } else if (address >= WAVE_RAM && address < LCDC) {
+        if (!CHECK_BIT(mem[NR30], 7))
+            mem[address] = data;
     } else {
         mem[address] = data;
     }

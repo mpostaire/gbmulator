@@ -8,7 +8,7 @@ extern byte_t mem[0x10000];
 enum mem_map {
     ROM_BANK0 = 0x0000, // From cartridge, usually a fixed bank.
     ROM_BANKN = 0x4000, // From cartridge, switchable bank via MBC (if any).
-    VRAM = 0x8000, // Only bank 0 in Non-CGB mode. Switchable bank 0/1 in CGB mode.
+    VRAM = 0x8000,      // Only bank 0 in Non-CGB mode. Switchable bank 0/1 in CGB mode.
     ERAM = 0xA000,
     WRAM_BANK0 = 0xC000,
     WRAM_BANKN = 0xD000, // Only bank 1 in Non-CGB mode. Switchable bank 1~7 in CGB mode.
@@ -23,10 +23,10 @@ enum mem_map {
     SC = 0xFF02, // Serial transfer control
 
     // Timer
-    DIV = 0xFF04, // Divider Register
+    DIV = 0xFF04,  // Divider Register
     TIMA = 0xFF05, // Timer counter
-    TMA = 0xFF06, // Timer Modulo
-    TAC = 0xFF07, // Timer Control
+    TMA = 0xFF06,  // Timer Modulo
+    TAC = 0xFF07,  // Timer Control
 
     IF = 0xFF0F, // Interrupt Flag
 
@@ -53,19 +53,21 @@ enum mem_map {
     NR51 = 0xFF25, // Selection of Sound output terminal
     NR52 = 0xFF26, // Sound on/off
 
+    WAVE_RAM = 0xFF30, // Wave Pattern RAM
+
     // Pixel Processing Unit (PPU)
     LCDC = 0xFF40, // LCD Control
     STAT = 0xFF41, // LCDC Status
-    SCY = 0xFF42, // Scroll Y
-    SCX = 0xFF43, // Scroll X
-    LY = 0xFF44, // LCD Y-Coordinate
-    LYC = 0xFF45, // LY Compare
-    DMA = 0xFF46, // DMA Transfer and Start Address
-    BGP = 0xFF47, // BG Palette Data
+    SCY = 0xFF42,  // Scroll Y
+    SCX = 0xFF43,  // Scroll X
+    LY = 0xFF44,   // LCD Y-Coordinate
+    LYC = 0xFF45,  // LY Compare
+    DMA = 0xFF46,  // DMA Transfer and Start Address
+    BGP = 0xFF47,  // BG Palette Data
     OBP0 = 0xFF48, // Object Palette 0 Data
     OBP1 = 0xFF49, // Object Palette 1 Data
-    WY = 0xFF4A, // Window Y Position
-    WX = 0xFF4B, // Window X Position + 7
+    WY = 0xFF4A,   // Window Y Position
+    WX = 0xFF4B,   // Window X Position + 7
 
     HRAM = 0xFF80,
     IE = 0xFFFF // Interrupt Enable

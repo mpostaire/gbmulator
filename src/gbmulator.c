@@ -32,7 +32,8 @@ int main(int argc, char **argv) {
     // load_cartridge("roms/tests/mooneye/emulator-only/mbc1/bits_mode.gb");
     // load_cartridge("roms/tests/mooneye/emulator-only/mbc2/bits_romb.gb");
 
-    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
+    apu_init();
 
     SDL_Window *window = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 160 * WINDOW_SCALE, 144 * WINDOW_SCALE, SDL_WINDOW_SHOWN /*| SDL_WINDOW_RESIZABLE*/);
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
@@ -95,18 +96,18 @@ int main(int argc, char **argv) {
             cycles += cpu_step();
             timer_step(cycles);
             serial_step(cycles);
-            apu_step(cycles);
             SDL_bool draw_frame = ppu_step(cycles);
             if (draw_frame)
                 SDL_UpdateTexture(texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
 
+            apu_step(cycles);
             cycles_count += cycles;
         }
 
         // draw last new frame if it's complete
-        if (CHECK_BIT(mem[LCDC], 7))
+        if (CHECK_BIT(mem[LCDC], 7)) {
             SDL_RenderCopy(renderer, texture, NULL, NULL);
-        else {
+        } else {
             SET_PIXEL(blank_pixel, 0, 0, WHITE); // SET_PIXEL here to refresh color in case of color change
             SDL_UpdateTexture(blank_texture, NULL, &blank_pixel, sizeof(byte_t) * 3);
             SDL_RenderCopy(renderer, blank_texture, NULL, NULL);
