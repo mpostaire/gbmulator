@@ -78,7 +78,7 @@ static void draw_bg_win(void) {
     for (int x = 0; x < 160; x++) {
         // background and window disabled, draw white pixel
         if (!CHECK_BIT(mem[LCDC], 0)) {
-            SET_PIXEL(pixels, x, y, WHITE);
+            SET_PIXEL(pixels, x, y, get_color(WHITE, BGP));
             continue;
         }
 
@@ -276,8 +276,10 @@ byte_t ppu_step(int cycles) {
     byte_t draw_frame = 0;
 
     if (mem[LY] == mem[LYC]) { // LY == LYC compare
-        SET_BIT(mem[STAT], 2);
-        request_stat_irq = CHECK_BIT(mem[STAT], 6);
+        if (!CHECK_BIT(mem[STAT], 2)) { // if a LY == LYC coincidence interrupt has been fired for this scanline, do not fire it again 
+            SET_BIT(mem[STAT], 2);
+            request_stat_irq = CHECK_BIT(mem[STAT], 6);
+        }
     } else {
         RESET_BIT(mem[STAT], 2);
     }
