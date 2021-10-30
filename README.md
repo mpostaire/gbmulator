@@ -18,7 +18,7 @@ Key bindings are not configurable yet.
 
 - better mbc support
 - configurable key bindings
-- sound
+- fix apu bugs
 - GBC mode
 - savestates
 - Fix buggy serial data transfer

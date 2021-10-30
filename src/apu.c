@@ -6,6 +6,8 @@
 #include "mem.h"
 #include "cpu.h"
 
+// FIXME audible pops
+
 #define SAMPLE_COUNT 2048
 
 const byte_t duty_cycles[4][8] = {
@@ -102,9 +104,9 @@ static void channel_step(channel_t *c) {
     c->freq_timer--;
     if (c->freq_timer <= 0) {
         if (c->id == CHANNEL_4) {
-            byte_t divisor = *c->NRx3;
+            byte_t divisor = *c->NRx3 & 0x07;
             c->freq_timer = divisor ? divisor << 4 : 8;
-            c->freq_timer <<= (*c->NRx4 >> 4);
+            c->freq_timer <<= (*c->NRx3 >> 4);
 
             byte_t xor_ret = (c->LFSR & 0x01) ^ ((c->LFSR & 0x02) >> 1);
             c->LFSR = (c->LFSR >> 1) | (xor_ret << 14);
@@ -237,7 +239,7 @@ static float channel_dac(channel_t *c) {
     case CHANNEL_3:
         if (c->dac_enabled /*&& c->enabled*/) { // TODO check why channel 3 enabled flag is not working properly
             byte_t sample = mem[WAVE_RAM + (c->wave_position / 2)];
-            if (c->wave_position % 2 == 0)
+            if (c->wave_position % 2 == 0) // TODO check if this works properly (I think it always reads the 2 nibbles as the same values)
                 sample >>= 4;
             sample &= 0x0F;
             switch ((mem[NR32] >> 5) & 0x03) {
@@ -251,12 +253,12 @@ static float channel_dac(channel_t *c) {
                 sample >>= 2; // 25% volume
                 break;
             }
-            // TODO channel 3 is buggy
             return (sample / 7.5f) - 1.0f; // divide by 7.5 then substract 1.0 to make it between -1.0 and 1.0
         }
         break;
-    case CHANNEL_4:
-        // TODO
+    case CHANNEL_4: // TODO works but it seems (in Tetris) this channel volume is a bit too loud
+        if (c->dac_enabled && c->enabled)
+            return ((!(c->LFSR & 0x01) * c->envelope_volume) / 7.5f) - 1.0f;
         break;
     }
     return 0.0f;
@@ -315,10 +317,6 @@ void apu_step(int cycles) {
         take_sample_cycles_count++;
         if (take_sample_cycles_count >= 95) { // 44100 Hz
             take_sample_cycles_count = 0;
-
-            // // float channel4_output = (((channel4.LFSR & 0x01) * channel4.envelope_volume) / 15.0f);
-            // // printf("%d * %d = %f\n", (channel4.LFSR & 0x01), channel4.envelope_volume, channel4_output);
-            // float channel4_output = 0;
 
             float S01_volume = ((mem[NR50] & 0x07) + 1) / 8.0f; // keep it between 0.0f and 1.0f
             float S02_volume = (((mem[NR50] & 0x70) >> 4) + 1) / 8.0f; // keep it between 0.0f and 1.0f

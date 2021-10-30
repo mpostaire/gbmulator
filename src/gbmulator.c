@@ -15,6 +15,8 @@
 #define WINDOW_SCALE 3
 #define MAX_SPEED 4
 
+// FIXME super mario land no longer works properly --> LY==LYC interrupt fix commit is responsible (check argentum emulator ppu code to see how its handled)
+
 int main(int argc, char **argv) {
     // TODO program argument sets path to rom (optional: path to boot rom - default being roms/bios.gb)
     //      + print help, keybindings, etc...
