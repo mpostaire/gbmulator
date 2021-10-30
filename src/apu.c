@@ -9,11 +9,13 @@
 #define SAMPLE_COUNT 2048
 
 const byte_t duty_cycles[4][8] = {
-    { 1, 0, 0, 0, 0, 0, 0, 0 },
-    { 1, 1, 0, 0, 0, 0, 0, 0 },
-    { 1, 1, 1, 1, 0, 0, 0, 0 },
-    { 1, 1, 1, 1, 1, 1, 0, 0 }
+    { 0, 0, 0, 0, 0, 0, 0, 1 },
+    { 1, 0, 0, 0, 0, 0, 0, 1 },
+    { 1, 0, 0, 0, 0, 1, 1, 1 },
+    { 0, 1, 1, 1, 1, 1, 1, 0 }
 };
+
+byte_t apu_enabled = 0;
 
 SDL_AudioDeviceID device;
 int take_sample_cycles_count = 0;
@@ -32,6 +34,8 @@ enum channel_id {
 };
 
 channel_t channel1 = {
+    .enabled = 0,
+    .dac_enabled = 0,
     .duty_position = 0,
     .duty = 0,
     .freq_timer = 0,
@@ -50,6 +54,8 @@ channel_t channel1 = {
 };
 
 channel_t channel2 = { 
+    .enabled = 0,
+    .dac_enabled = 0,
     .duty_position = 0,
     .duty = 0,
     .freq_timer = 0,
@@ -64,6 +70,8 @@ channel_t channel2 = {
 };
 
 channel_t channel3 = {
+    .enabled = 0,
+    .dac_enabled = 0,
     .wave_position = 0,
     .freq_timer = 0,
     .length_timer = 0,
@@ -76,6 +84,8 @@ channel_t channel3 = {
 };
 
 channel_t channel4 = { 
+    .enabled = 0,
+    .dac_enabled = 0,
     .freq_timer = 0,
     .length_timer = 0,
     .envelope_timer = 0,
@@ -126,7 +136,7 @@ static void channel_length(channel_t *c) {
 
     c->length_timer--;
     if (c->length_timer <= 0)
-        RESET_BIT(mem[NR52], c->id); // disable channel
+        c->enabled = 0;
 }
 
 static int calc_sweep_freq(channel_t *c) {
@@ -137,7 +147,7 @@ static int calc_sweep_freq(channel_t *c) {
         freq = c->sweep_freq + freq;
     
     if (freq > 2047)
-        RESET_BIT(mem[NR52], c->id); // disable channel
+        c->enabled = 0;
     
     return freq;
 }
@@ -179,15 +189,21 @@ static void channel_envelope(channel_t *c) {
     }
 }
 
+// TODO channel 3 ony enables channel and do nothing else?????
 void apu_channel_trigger(channel_t *c) {
-    SET_BIT(mem[NR52], c->id); // channel enabled
+    c->enabled = 1;
     if (c->length_timer <= 0)
         c->length_timer = c->id == CHANNEL_3 ? 256 : 64;
 
-    // TODO find out if this should really be done
-    // byte_t freq = ((mem[NR14] & 0x03) << 8) | mem[NR13];
-    // channel1_freq_timer = ((2048 - freq) * 4);
-    
+    // // TODO find out if this should really be done
+    // byte_t freq = ((*c->NRx4 & 0x03) << 8) | *c->NRx3;
+    // if (c->id == CHANNEL_3) {
+    //     c->freq_timer = ((2048 - freq) * 2);
+    //     c->wave_position = 0;
+    // } else {
+    //     c->freq_timer = ((2048 - freq) * 4);
+    // }
+
     if (c->id != CHANNEL_3) {
         c->envelope_timer = *c->NRx2 & 0x07;
         c->envelope_volume = *c->NRx2 >> 4;
@@ -199,15 +215,56 @@ void apu_channel_trigger(channel_t *c) {
         c->sweep_timer = sweep_period > 0 ? sweep_period : 8;
         byte_t sweep_shift = *c->NRx0 & 0x07;
         c->sweep_enabled = (sweep_period > 0) || (sweep_shift > 0);
+
+        if (sweep_shift > 0)
+            calc_sweep_freq(c);
     }
 
     if (c->id == CHANNEL_4)
         c->LFSR = 0x7FFF;
+
+    if ((c->id == CHANNEL_3 && !CHECK_BIT(*c->NRx3, 7)) || (c->id != CHANNEL_3 && !(*c->NRx2 >> 3)))
+        c->enabled = 0;
+}
+
+static float channel_dac(channel_t *c) {
+    switch (c->id) {
+    case CHANNEL_1:
+    case CHANNEL_2:
+        if (c->dac_enabled && c->enabled)
+            return ((c->duty * c->envelope_volume) / 7.5f) - 1.0f;
+        break;
+    case CHANNEL_3:
+        if (c->dac_enabled && c->enabled) {
+            byte_t sample = mem[WAVE_RAM + (c->wave_position / 2)];
+            if (c->wave_position & 0x01)
+                sample >>= 4;
+            sample &= 0x0F;
+            switch ((mem[NR32] >> 5) & 0x03) {
+            case 0:
+                sample >>= 4; // mute
+                break;
+            case 2:
+                sample >>= 1; // 50% volume
+                break;
+            case 3:
+                sample >>= 2; // 25% volume
+                break;
+            }
+            // TODO channel 3 is buggy
+            return (sample / 7.5f) - 1.0f; // divide by 7.5 then substract 1.0 to make it between -1.0 and 1.0
+        }
+        break;
+    case CHANNEL_4:
+        // TODO
+        break;
+    }
+    return 0.0f;
 }
 
 // TODO reduce samples_count as the emulation speed increases to avoid losing performances??
 void apu_step(int cycles) {
-    if (!CHECK_BIT(mem[NR52], 7))
+    if (!apu_enabled)
         return;
 
     while (cycles-- > 0) {
@@ -259,51 +316,19 @@ void apu_step(int cycles) {
         if (take_sample_cycles_count >= 95) { // 44100 Hz
             take_sample_cycles_count = 0;
 
-            float channel1_output = 0;
-            if (CHECK_BIT(mem[NR52], CHANNEL_1))
-                channel1_output = (((channel1.duty ? 1.0f : -1.0f) * channel1.envelope_volume)) / 15.0f; // divide by 15.0 to make it between -1.0 and 1.0
+            // // float channel4_output = (((channel4.LFSR & 0x01) * channel4.envelope_volume) / 15.0f);
+            // // printf("%d * %d = %f\n", (channel4.LFSR & 0x01), channel4.envelope_volume, channel4_output);
+            // float channel4_output = 0;
 
-            float channel2_output = 0;
-            if (CHECK_BIT(mem[NR52], CHANNEL_2))
-                channel2_output = (((channel2.duty ? 1.0f : -1.0f) * channel2.envelope_volume)) / 15.0f; // divide by 15.0 to make it between -1.0 and 1.0
-
-            float channel3_output = 0;
-            // if (CHECK_BIT(mem[NR52], CHANNEL_3)) {
-            //     byte_t sample = mem[WAVE_RAM + (channel3.wave_position / 2)];
-            //     if (channel3.wave_position & 1) {
-            //         sample >>= 4;
-            //     }
-            //     sample &= 0x0F;
-            //     switch ((mem[NR32] >> 5) & 0x03) {
-            //         case 0:
-            //             sample >>= 4; // mute
-            //             break;
-            //         case 2:
-            //             sample >>= 1; // 50% volume
-            //             break;
-            //         case 3:
-            //             sample >>= 2; // 25% volume
-            //             break;
-            //     }
-            //     // TODO channel3 is buggy (compare pokemon red title screen with bgb)
-            //     channel3_output = sample / 15.0f;
-            //     // channel3_output = (sample / 7.5f) - 1.0f; // divide by 7.5 then substract 1.0 to make it between -1.0 and 1.0
-            //     printf("%d\n", sample);
-            // }
-
-            // float channel4_output = (((channel4.LFSR & 0x01) * channel4.envelope_volume) / 15.0f);
-            // printf("%d * %d = %f\n", (channel4.LFSR & 0x01), channel4.envelope_volume, channel4_output);
-            float channel4_output = 0;
-
-            float S01_volume = (mem[NR50] & 0x07) / 7.0f; // keep it between 0.0f and 1.0f
-            float S02_volume = ((mem[NR50] & 0x70) >> 4) / 7.0f; // keep it between 0.0f and 1.0f
-            float S01_output = (((CHECK_BIT(mem[NR51], CHANNEL_1) ? channel1_output : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_2) ? channel2_output : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_3) ? channel3_output : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_4) ? channel4_output : 0.0f)) / 4.0f) * S01_volume;
-            float S02_output = (((CHECK_BIT(mem[NR51], CHANNEL_1 + 4) ? channel1_output : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_2 + 4) ? channel2_output : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_3 + 4) ? channel3_output : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_4 + 4) ? channel4_output : 0.0f)) / 4.0f) * S02_volume;
+            float S01_volume = ((mem[NR50] & 0x07) + 1) / 8.0f; // keep it between 0.0f and 1.0f
+            float S02_volume = (((mem[NR50] & 0x70) >> 4) + 1) / 8.0f; // keep it between 0.0f and 1.0f
+            float S01_output = ((CHECK_BIT(mem[NR51], CHANNEL_1) ? channel_dac(&channel1) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_2) ? channel_dac(&channel2) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_3) ? channel_dac(&channel3) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_4) ? channel_dac(&channel4) : 0.0f)) / 4.0f;
+            float S02_output = ((CHECK_BIT(mem[NR51], CHANNEL_1 + 4) ? channel_dac(&channel1) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_2 + 4) ? channel_dac(&channel2) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_3 + 4) ? channel_dac(&channel3) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_4 + 4) ? channel_dac(&channel4) : 0.0f)) / 4.0f;
 
             // S01 (right)
-            audio_buffer[audio_buffer_id++] = S01_output;
+            audio_buffer[audio_buffer_id++] = S01_output * S01_volume;
             // S02 (left)
-            audio_buffer[audio_buffer_id++] = S02_output;
+            audio_buffer[audio_buffer_id++] = S02_output * S02_volume;
         }
 
         if (audio_buffer_id >= SAMPLE_COUNT) {

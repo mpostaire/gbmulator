@@ -36,6 +36,7 @@ enum mem_map {
     NR12 = 0xFF12, // Channel 1 Volume Envelope
     NR13 = 0xFF13, // Channel 1 Frequency lo data
     NR14 = 0xFF14, // Channel 1 Frequency hi data
+    NR20 = 0xFF15, // Unused
     NR21 = 0xFF16, // Channel 2 Sound Length/Wave Pattern Duty
     NR22 = 0xFF17, // Channel 2 Volume Envelope
     NR23 = 0xFF18, // Channel 2 Frequency lo data
@@ -45,6 +46,7 @@ enum mem_map {
     NR32 = 0xFF1C, // Channel 3 Select output level
     NR33 = 0xFF1D, // Channel 3 Frequency lo data
     NR34 = 0xFF1E, // Channel 3 Frequency hi data
+    NR40 = 0xFF1F, // Unused
     NR41 = 0xFF20, // Channel 4 Sound Length
     NR42 = 0xFF21, // Channel 4 Volume Envelope
     NR43 = 0xFF22, // Channel 4 Polynomial Counter

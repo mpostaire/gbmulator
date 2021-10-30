@@ -1,6 +1,9 @@
 #pragma once
 
 typedef struct channel {
+    byte_t enabled;
+    byte_t dac_enabled;
+
     byte_t wave_position;
     byte_t duty_position;
     byte_t duty;
@@ -27,6 +30,8 @@ extern channel_t channel1;
 extern channel_t channel2;
 extern channel_t channel3;
 extern channel_t channel4;
+
+extern byte_t apu_enabled;
 
 void apu_channel_trigger(channel_t *c);
 

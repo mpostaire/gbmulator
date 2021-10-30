@@ -394,6 +394,59 @@ byte_t mem_read(word_t address) {
     // Reading from P1 register returns joypad input state according to its current bit 4 or 5 value
     if (address == P1)
         return joypad_get_input();
+    
+    if (address == NR10)
+        return mem[NR10] | 0x80;
+    if (address == NR11)
+        return mem[NR11] | 0x3F;
+    if (address == NR12)
+        return mem[NR12] | 0x00; // useless?
+    if (address == NR13)
+        return 0xFF;
+    if (address == NR14)
+        return mem[NR14] | 0xBF;
+
+    if (address == NR20)
+        return 0xFF;
+    if (address == NR21)
+        return mem[NR21] | 0x3F;
+    if (address == NR22)
+        return mem[NR22] | 0x00; // useless?
+    if (address == NR23)
+        return 0xFF;
+    if (address == NR24)
+        return mem[NR24] | 0xBF;
+
+    if (address == NR30)
+        return (channel3.dac_enabled << 7) | 0x7F;
+    if (address == NR31)
+        return 0xFF;
+    if (address == NR32)
+        return mem[NR32] | 0x9F;
+    if (address == NR33)
+        return 0xFF;
+    if (address == NR34)
+        return mem[NR34] | 0xBF;
+
+    if (address == NR40)
+        return 0xFF;
+    if (address == NR41)
+        return 0xFF;
+    if (address == NR42)
+        return mem[NR42] | 0x00; // useless?
+    if (address == NR43)
+        return mem[NR43] | 0x00; // useless?
+    if (address == NR44)
+        return mem[NR44] | 0xBF;
+
+    if (address == NR50)
+        return mem[NR50] | 0x00; // useless?
+    if (address == NR51)
+        return mem[NR51] | 0x00; // useless?
+    if (address == NR52) // TODO fix buggy channel enables (01-registers in blargg dmg sound tests)
+        return (apu_enabled << 7) | 0x70 | channel4.enabled << 3 | channel3.enabled << 2 | channel2.enabled << 1 | channel1.enabled;
+    if (address > NR52 && address < WAVE_RAM)
+        return 0xFF;
 
     return mem[address];
 }
@@ -427,39 +480,146 @@ void mem_write(word_t address, byte_t data) {
     } else if (address == P1) {
         // prevent writes to the lower nibble of the P1 register (joypad)
         mem[address] = data & 0xF0;
+    } else if (address == NR10) {
+        if (!apu_enabled)
+            return;
+        mem[address] = data;
     } else if (address == NR11) {
+        if (!apu_enabled)
+            return;
         mem[address] = data;
         channel1.length_timer = 64 - (data & 0x3F);
-    } else if (address == NR14) {
+    } else if (address == NR12) {
+        if (!apu_enabled)
+            return;
         mem[address] = data;
-        if (CHECK_BIT(data, 7))
+        channel1.dac_enabled = (data >> 3) != 0;
+        if (!channel1.dac_enabled)
+            channel1.enabled = 0;
+    } else if (address == NR13) {
+        if (!apu_enabled)
+            return;
+        mem[address] = data;
+    } else if (address == NR14) {
+        if (!apu_enabled)
+            return;
+        mem[address] = data;
+        if (CHECK_BIT(data, 7) && channel1.dac_enabled)
             apu_channel_trigger(&channel1);
+    } else if (address == NR20) {
+        if (!apu_enabled)
+            return;
+        mem[address] = data;
     } else if (address == NR21) {
+        if (!apu_enabled)
+            return;
         mem[address] = data;
         channel2.length_timer = 64 - (data & 0x3F);
-    } else if (address == NR24) {
+    } else if (address == NR22) {
+        if (!apu_enabled)
+            return;
         mem[address] = data;
-        if (CHECK_BIT(data, 7))
+        channel2.dac_enabled = (data >> 3) != 0;
+        if (!channel2.dac_enabled)
+            channel2.enabled = 0;
+    } else if (address == NR23) {
+        if (!apu_enabled)
+            return;
+        mem[address] = data;
+    } else if (address == NR24) {
+        if (!apu_enabled)
+            return;
+        mem[address] = data;
+        if (CHECK_BIT(data, 7) && channel2.dac_enabled)
             apu_channel_trigger(&channel2);
+    } else if (address == NR30) {
+        if (!apu_enabled)
+            return;
+        mem[address] = data;
+        channel3.dac_enabled = (data >> 7) != 0;
+        if (!channel3.dac_enabled)
+            channel3.enabled = 0;
     } else if (address == NR31) {
+        if (!apu_enabled)
+            return;
         mem[address] = data;
         channel3.length_timer = 256 - data;
-    } else if (address == NR34) {
+    } else if (address == NR32) {
+        if (!apu_enabled)
+            return;
         mem[address] = data;
-        if (CHECK_BIT(data, 7))
+    } else if (address == NR33) {
+        if (!apu_enabled)
+            return;
+        mem[address] = data;
+    } else if (address == NR34) {
+        if (!apu_enabled)
+            return;
+        mem[address] = data;
+        if (CHECK_BIT(data, 7) && channel3.dac_enabled)
             apu_channel_trigger(&channel3);
+    } else if (address == NR40) {
+        if (!apu_enabled)
+            return;
+        mem[address] = data;
     } else if (address == NR41) {
+        if (!apu_enabled)
+            return;
         mem[address] = data;
         channel4.length_timer = 64 - (data & 0x3F);
-    } else if (address == NR44) {
+    } else if (address == NR42) {
+        if (!apu_enabled)
+            return;
         mem[address] = data;
-        if (CHECK_BIT(data, 7))
+        channel4.dac_enabled = (data >> 3) != 0;
+        if (!channel4.dac_enabled)
+            channel4.enabled = 0;
+    } else if (address == NR43) {
+        if (!apu_enabled)
+            return;
+        mem[address] = data;
+    } else if (address == NR44) {
+        if (!apu_enabled)
+            return;
+        mem[address] = data;
+        if (CHECK_BIT(data, 7) && channel4.dac_enabled)
             apu_channel_trigger(&channel4);
+    } else if (address == NR50) {
+        if (!apu_enabled)
+            return;
+        mem[address] = data;
+    } else if (address == NR51) {
+        if (!apu_enabled)
+            return;
+        mem[address] = data;
     } else if (address == NR52) {
-        mem[address] |= data & 0x80;
-        // if (!CHECK_BIT(data, 7)) {
-        //     // TODO destroy the contetns of all sound registers
-        // }
+        apu_enabled = CHECK_BIT(data, 7) ? 1 : 0;
+        if (!CHECK_BIT(data, 7)) {
+            mem[NR10] = 0x00;
+            mem[NR11] = 0x00;
+            mem[NR12] = 0x00;
+            mem[NR13] = 0x00;
+            mem[NR14] = 0x00;
+
+            mem[NR21] = 0x00;
+            mem[NR22] = 0x00;
+            mem[NR23] = 0x00;
+            mem[NR24] = 0x00;
+
+            mem[NR30] = 0x00;
+            mem[NR31] = 0x00;
+            mem[NR32] = 0x00;
+            mem[NR33] = 0x00;
+            mem[NR34] = 0x00;
+
+            mem[NR41] = 0x00;
+            mem[NR42] = 0x00;
+            mem[NR43] = 0x00;
+            mem[NR44] = 0x00;
+
+            mem[NR50] = 0x00;
+            mem[NR51] = 0x00;
+        }
     } else if (address >= WAVE_RAM && address < LCDC) {
         if (!CHECK_BIT(mem[NR30], 7))
             mem[address] = data;
