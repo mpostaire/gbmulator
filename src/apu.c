@@ -39,8 +39,8 @@ channel_t channel1 = {
     .duty_position = 0,
     .duty = 0,
     .freq_timer = 0,
-    .length_timer = 0,
-    .envelope_timer = 0,
+    .length_counter = 0,
+    .envelope_period = 0,
     .envelope_volume = 0,
     .sweep_timer = 0,
     .sweep_freq = 0,
@@ -59,8 +59,8 @@ channel_t channel2 = {
     .duty_position = 0,
     .duty = 0,
     .freq_timer = 0,
-    .length_timer = 0,
-    .envelope_timer = 0,
+    .length_counter = 0,
+    .envelope_period = 0,
     .envelope_volume = 0,
     .NRx1 = &mem[NR21],
     .NRx2 = &mem[NR22],
@@ -74,7 +74,7 @@ channel_t channel3 = {
     .dac_enabled = 0,
     .wave_position = 0,
     .freq_timer = 0,
-    .length_timer = 0,
+    .length_counter = 0,
     .NRx0 = &mem[NR30],
     .NRx1 = &mem[NR31],
     .NRx2 = &mem[NR32],
@@ -87,8 +87,8 @@ channel_t channel4 = {
     .enabled = 0,
     .dac_enabled = 0,
     .freq_timer = 0,
-    .length_timer = 0,
-    .envelope_timer = 0,
+    .length_counter = 0,
+    .envelope_period = 0,
     .envelope_volume = 0,
     .NRx1 = &mem[NR41],
     .NRx2 = &mem[NR42],
@@ -134,8 +134,8 @@ static void channel_length(channel_t *c) {
     if (!CHECK_BIT(*c->NRx4, 6)) // length enabled ?
         return;
 
-    c->length_timer--;
-    if (c->length_timer <= 0)
+    c->length_counter--;
+    if (c->length_counter <= 0)
         c->enabled = 0;
 }
 
@@ -178,9 +178,9 @@ static void channel_envelope(channel_t *c) {
     if (!(*c->NRx2 & 0x07))
         return;
 
-    c->envelope_timer--;
-    if (c->envelope_timer <= 0) {
-        c->envelope_timer = *c->NRx2 & 0x07;
+    c->envelope_period--;
+    if (c->envelope_period <= 0) {
+        c->envelope_period = *c->NRx2 & 0x07;
         byte_t direction = (*c->NRx2 & 0x08) >> 3;
         if (c->envelope_volume < 0x0F && direction)
             c->envelope_volume++;
@@ -192,8 +192,8 @@ static void channel_envelope(channel_t *c) {
 // TODO channel 3 ony enables channel and do nothing else?????
 void apu_channel_trigger(channel_t *c) {
     c->enabled = 1;
-    if (c->length_timer <= 0)
-        c->length_timer = c->id == CHANNEL_3 ? 256 : 64;
+    if (c->length_counter <= 0)
+        c->length_counter = c->id == CHANNEL_3 ? 256 : 64;
 
     // // TODO find out if this should really be done
     // byte_t freq = ((*c->NRx4 & 0x03) << 8) | *c->NRx3;
@@ -205,7 +205,7 @@ void apu_channel_trigger(channel_t *c) {
     // }
 
     if (c->id != CHANNEL_3) {
-        c->envelope_timer = *c->NRx2 & 0x07;
+        c->envelope_period = *c->NRx2 & 0x07;
         c->envelope_volume = *c->NRx2 >> 4;
     }
 
@@ -235,9 +235,9 @@ static float channel_dac(channel_t *c) {
             return ((c->duty * c->envelope_volume) / 7.5f) - 1.0f;
         break;
     case CHANNEL_3:
-        if (c->dac_enabled && c->enabled) {
+        if (c->dac_enabled /*&& c->enabled*/) { // TODO check why channel 3 enabled flag is not working properly
             byte_t sample = mem[WAVE_RAM + (c->wave_position / 2)];
-            if (c->wave_position & 0x01)
+            if (c->wave_position % 2 == 0)
                 sample >>= 4;
             sample &= 0x0F;
             switch ((mem[NR32] >> 5) & 0x03) {

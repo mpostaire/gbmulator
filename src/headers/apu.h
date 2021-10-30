@@ -8,12 +8,12 @@ typedef struct channel {
     byte_t duty_position;
     byte_t duty;
     int freq_timer;
-    int length_timer;
-    int envelope_timer;
-    byte_t envelope_volume;
-    int sweep_timer;
-    int sweep_freq;
-    byte_t sweep_enabled;
+    int length_counter; // length module
+    int envelope_period; // envelope module
+    byte_t envelope_volume; // envelope module
+    int sweep_timer; // sweep module
+    int sweep_freq; // sweep module
+    byte_t sweep_enabled; // sweep module
 
     // registers
     byte_t *NRx0;

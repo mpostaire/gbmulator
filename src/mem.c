@@ -488,7 +488,7 @@ void mem_write(word_t address, byte_t data) {
         if (!apu_enabled)
             return;
         mem[address] = data;
-        channel1.length_timer = 64 - (data & 0x3F);
+        channel1.length_counter = 64 - (data & 0x3F);
     } else if (address == NR12) {
         if (!apu_enabled)
             return;
@@ -514,7 +514,7 @@ void mem_write(word_t address, byte_t data) {
         if (!apu_enabled)
             return;
         mem[address] = data;
-        channel2.length_timer = 64 - (data & 0x3F);
+        channel2.length_counter = 64 - (data & 0x3F);
     } else if (address == NR22) {
         if (!apu_enabled)
             return;
@@ -543,7 +543,7 @@ void mem_write(word_t address, byte_t data) {
         if (!apu_enabled)
             return;
         mem[address] = data;
-        channel3.length_timer = 256 - data;
+        channel3.length_counter = 256 - data;
     } else if (address == NR32) {
         if (!apu_enabled)
             return;
@@ -566,7 +566,7 @@ void mem_write(word_t address, byte_t data) {
         if (!apu_enabled)
             return;
         mem[address] = data;
-        channel4.length_timer = 64 - (data & 0x3F);
+        channel4.length_counter = 64 - (data & 0x3F);
     } else if (address == NR42) {
         if (!apu_enabled)
             return;
