@@ -323,10 +323,10 @@ void apu_step(int cycles) {
             float S01_output = ((CHECK_BIT(mem[NR51], CHANNEL_1) ? channel_dac(&channel1) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_2) ? channel_dac(&channel2) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_3) ? channel_dac(&channel3) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_4) ? channel_dac(&channel4) : 0.0f)) / 4.0f;
             float S02_output = ((CHECK_BIT(mem[NR51], CHANNEL_1 + 4) ? channel_dac(&channel1) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_2 + 4) ? channel_dac(&channel2) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_3 + 4) ? channel_dac(&channel3) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_4 + 4) ? channel_dac(&channel4) : 0.0f)) / 4.0f;
 
-            // S01 (right)
-            audio_buffer[audio_buffer_id++] = S01_output * S01_volume;
             // S02 (left)
             audio_buffer[audio_buffer_id++] = S02_output * S02_volume;
+            // S01 (right)
+            audio_buffer[audio_buffer_id++] = S01_output * S01_volume;
         }
 
         if (audio_buffer_id >= SAMPLE_COUNT) {
@@ -346,6 +346,6 @@ void apu_init(void) {
     AudioSettings.channels = 2;
     AudioSettings.samples = SAMPLE_COUNT;
     AudioSettings.callback = NULL;
-    device = SDL_OpenAudioDevice(NULL, 0, &AudioSettings, NULL, 0); // TODO maybe don't allow any change
+    device = SDL_OpenAudioDevice(NULL, 0, &AudioSettings, NULL, 0);
     SDL_PauseAudioDevice(device, 0);
 }
