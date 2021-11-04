@@ -209,7 +209,7 @@ static void draw_objects(void) {
         // find line of the object we are currently on
         byte_t obj_line = y - pos_y;
         if (CHECK_BIT(flags, 6)) // flip y
-            obj_line = (obj_line - obj_height) * -1;
+            obj_line = (obj_line - (obj_height - 1)) * -1;
         obj_line *= 2; // each line takes 2 bytes in memory
 
         // find object tile data in memory
