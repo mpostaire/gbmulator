@@ -2,7 +2,6 @@
 
 typedef struct channel {
     byte_t enabled;
-    byte_t dac_enabled;
 
     byte_t wave_position;
     byte_t duty_position;

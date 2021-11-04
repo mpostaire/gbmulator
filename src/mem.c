@@ -9,6 +9,7 @@
 #include "ppu.h"
 #include "joypad.h"
 #include "apu.h"
+#include "boot.h"
 
 enum mbc_type {
     MBC0,
@@ -68,57 +69,13 @@ static char *get_save_filepath(void) {
 }
 
 static void load_bios(void) {
-    FILE *f = fopen("roms/bios.gb", "rb");
+    FILE *f = fopen("roms/dmg_boot.bin", "rb");
     if (f) {
         fread(mem, 0x100, 1, f);
         fclose(f);
-        return;
+    } else {
+        memcpy(&mem, &dmg_boot, sizeof(dmg_boot));
     }
-
-    // this is the state of the memory after bios execution
-    mem[0xFF05] = 0x00;
-    mem[0xFF06] = 0x00;
-    mem[0xFF07] = 0x00;
-    mem[0xFF10] = 0x80;
-    mem[0xFF11] = 0xBF;
-    mem[0xFF12] = 0xF3;
-    mem[0xFF14] = 0xBF;
-    mem[0xFF16] = 0x3F;
-    mem[0xFF17] = 0x00;
-    mem[0xFF19] = 0xBF;
-    mem[0xFF1A] = 0x7F;
-    mem[0xFF1B] = 0xFF;
-    mem[0xFF1C] = 0x9F;
-    mem[0xFF1E] = 0xBF;
-    mem[0xFF20] = 0xFF;
-    mem[0xFF21] = 0x00;
-    mem[0xFF22] = 0x00;
-    mem[0xFF23] = 0xBF;
-    mem[0xFF24] = 0x77;
-    mem[0xFF25] = 0xF3;
-    mem[0xFF26] = 0xF1;
-    mem[0xFF40] = 0x91;
-    mem[0xFF42] = 0x00;
-    mem[0xFF43] = 0x00;
-    mem[0xFF45] = 0x00;
-    mem[0xFF47] = 0xFC;
-    mem[0xFF48] = 0xFF;
-    mem[0xFF49] = 0xFF;
-    mem[0xFF4A] = 0x00;
-    mem[0xFF4B] = 0x00;
-    mem[0xFFFF] = 0x00;
-
-    // this is the state of the registers after bios execution
-    registers.a = 0x01;
-    registers.f = 0xB0;
-    registers.b = 0x00;
-    registers.c = 0x13;
-    registers.d = 0x00;
-    registers.e = 0xD8;
-    registers.h = 0x01;
-    registers.l = 0x4D;
-    registers.pc = 0x100;
-    registers.sp = 0xFFFE;
 }
 
 void load_cartridge(char *filepath) {
@@ -418,7 +375,7 @@ byte_t mem_read(word_t address) {
         return mem[NR24] | 0xBF;
 
     if (address == NR30)
-        return (channel3.dac_enabled << 7) | 0x7F;
+        return mem[NR30] | 0x7F;
     if (address == NR31)
         return 0xFF;
     if (address == NR32)
@@ -443,7 +400,7 @@ byte_t mem_read(word_t address) {
         return mem[NR50] | 0x00; // useless?
     if (address == NR51)
         return mem[NR51] | 0x00; // useless?
-    if (address == NR52) // TODO fix buggy channel enables (01-registers in blargg dmg sound tests)
+    if (address == NR52)
         return (apu_enabled << 7) | 0x70 | channel4.enabled << 3 | channel3.enabled << 2 | channel2.enabled << 1 | channel1.enabled;
     if (address > NR52 && address < WAVE_RAM)
         return 0xFF;
@@ -493,8 +450,7 @@ void mem_write(word_t address, byte_t data) {
         if (!apu_enabled)
             return;
         mem[address] = data;
-        channel1.dac_enabled = (data >> 3) != 0;
-        if (!channel1.dac_enabled)
+        if (!(data >> 3)) // if dac disabled
             channel1.enabled = 0;
     } else if (address == NR13) {
         if (!apu_enabled)
@@ -504,7 +460,7 @@ void mem_write(word_t address, byte_t data) {
         if (!apu_enabled)
             return;
         mem[address] = data;
-        if (CHECK_BIT(data, 7) && channel1.dac_enabled)
+        if (CHECK_BIT(data, 7) && (data >> 3)) // if trigger requested and dac enabled
             apu_channel_trigger(&channel1);
     } else if (address == NR20) {
         if (!apu_enabled)
@@ -519,8 +475,7 @@ void mem_write(word_t address, byte_t data) {
         if (!apu_enabled)
             return;
         mem[address] = data;
-        channel2.dac_enabled = (data >> 3) != 0;
-        if (!channel2.dac_enabled)
+        if (!(data >> 3)) // if dac disabled
             channel2.enabled = 0;
     } else if (address == NR23) {
         if (!apu_enabled)
@@ -530,14 +485,13 @@ void mem_write(word_t address, byte_t data) {
         if (!apu_enabled)
             return;
         mem[address] = data;
-        if (CHECK_BIT(data, 7) && channel2.dac_enabled)
+        if (CHECK_BIT(data, 7) && (data >> 3)) // if trigger requested and dac enabled
             apu_channel_trigger(&channel2);
     } else if (address == NR30) {
         if (!apu_enabled)
             return;
         mem[address] = data;
-        channel3.dac_enabled = (data >> 7) != 0;
-        if (!channel3.dac_enabled)
+        if (!(data >> 7)) // if dac disabled
             channel3.enabled = 0;
     } else if (address == NR31) {
         if (!apu_enabled)
@@ -556,7 +510,7 @@ void mem_write(word_t address, byte_t data) {
         if (!apu_enabled)
             return;
         mem[address] = data;
-        if (CHECK_BIT(data, 7) && channel3.dac_enabled)
+        if (CHECK_BIT(data, 7) && (data >> 7)) // if trigger requested and dac enabled
             apu_channel_trigger(&channel3);
     } else if (address == NR40) {
         if (!apu_enabled)
@@ -571,8 +525,7 @@ void mem_write(word_t address, byte_t data) {
         if (!apu_enabled)
             return;
         mem[address] = data;
-        channel4.dac_enabled = (data >> 3) != 0;
-        if (!channel4.dac_enabled)
+        if (!(data >> 3)) // if dac disabled
             channel4.enabled = 0;
     } else if (address == NR43) {
         if (!apu_enabled)
@@ -582,7 +535,7 @@ void mem_write(word_t address, byte_t data) {
         if (!apu_enabled)
             return;
         mem[address] = data;
-        if (CHECK_BIT(data, 7) && channel4.dac_enabled)
+        if (CHECK_BIT(data, 7) && (data >> 3)) // if trigger requested and dac enabled
             apu_channel_trigger(&channel4);
     } else if (address == NR50) {
         if (!apu_enabled)
@@ -593,33 +546,9 @@ void mem_write(word_t address, byte_t data) {
             return;
         mem[address] = data;
     } else if (address == NR52) {
-        apu_enabled = CHECK_BIT(data, 7) ? 1 : 0;
-        if (!CHECK_BIT(data, 7)) {
-            mem[NR10] = 0x00;
-            mem[NR11] = 0x00;
-            mem[NR12] = 0x00;
-            mem[NR13] = 0x00;
-            mem[NR14] = 0x00;
-
-            mem[NR21] = 0x00;
-            mem[NR22] = 0x00;
-            mem[NR23] = 0x00;
-            mem[NR24] = 0x00;
-
-            mem[NR30] = 0x00;
-            mem[NR31] = 0x00;
-            mem[NR32] = 0x00;
-            mem[NR33] = 0x00;
-            mem[NR34] = 0x00;
-
-            mem[NR41] = 0x00;
-            mem[NR42] = 0x00;
-            mem[NR43] = 0x00;
-            mem[NR44] = 0x00;
-
-            mem[NR50] = 0x00;
-            mem[NR51] = 0x00;
-        }
+        apu_enabled = data >> 7;
+        if (!apu_enabled)
+            memset(&mem[NR10], 0x00, 32 * sizeof(byte_t)); // clear all registers
     } else if (address >= WAVE_RAM && address < LCDC) {
         if (!CHECK_BIT(mem[NR30], 7))
             mem[address] = data;

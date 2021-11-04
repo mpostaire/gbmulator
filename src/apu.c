@@ -37,7 +37,6 @@ enum channel_id {
 
 channel_t channel1 = {
     .enabled = 0,
-    .dac_enabled = 0,
     .duty_position = 0,
     .duty = 0,
     .freq_timer = 0,
@@ -57,7 +56,6 @@ channel_t channel1 = {
 
 channel_t channel2 = { 
     .enabled = 0,
-    .dac_enabled = 0,
     .duty_position = 0,
     .duty = 0,
     .freq_timer = 0,
@@ -73,7 +71,6 @@ channel_t channel2 = {
 
 channel_t channel3 = {
     .enabled = 0,
-    .dac_enabled = 0,
     .wave_position = 0,
     .freq_timer = 0,
     .length_counter = 0,
@@ -87,7 +84,6 @@ channel_t channel3 = {
 
 channel_t channel4 = { 
     .enabled = 0,
-    .dac_enabled = 0,
     .freq_timer = 0,
     .length_counter = 0,
     .envelope_period = 0,
@@ -225,7 +221,7 @@ void apu_channel_trigger(channel_t *c) {
     if (c->id == CHANNEL_4)
         c->LFSR = 0x7FFF;
 
-    if ((c->id == CHANNEL_3 && !CHECK_BIT(*c->NRx3, 7)) || (c->id != CHANNEL_3 && !(*c->NRx2 >> 3)))
+    if ((c->id == CHANNEL_3 && !CHECK_BIT(*c->NRx0, 7)) || (c->id != CHANNEL_3 && !(*c->NRx2 >> 3)))
         c->enabled = 0;
 }
 
@@ -233,11 +229,11 @@ static float channel_dac(channel_t *c) {
     switch (c->id) {
     case CHANNEL_1:
     case CHANNEL_2:
-        if (c->dac_enabled && c->enabled)
+        if ((*c->NRx2 >> 3) && c->enabled) // if dac enabled and channel enabled
             return ((c->duty * c->envelope_volume) / 7.5f) - 1.0f;
         break;
     case CHANNEL_3:
-        if (c->dac_enabled /*&& c->enabled*/) { // TODO check why channel 3 enabled flag is not working properly
+        if ((*c->NRx0 >> 7) /*&& c->enabled*/) { // if dac enabled and channel enabled -- TODO check why channel 3 enabled flag is not working properly
             byte_t sample = mem[WAVE_RAM + (c->wave_position / 2)];
             if (c->wave_position % 2 == 0) // TODO check if this works properly (I think it always reads the 2 nibbles as the same values)
                 sample >>= 4;
@@ -257,7 +253,7 @@ static float channel_dac(channel_t *c) {
         }
         break;
     case CHANNEL_4: // TODO works but it seems (in Tetris) this channel volume is a bit too loud
-        if (c->dac_enabled && c->enabled)
+        if ((*c->NRx2 >> 3) && c->enabled) // if dac enabled and channel enabled
             return ((!(c->LFSR & 0x01) * c->envelope_volume) / 7.5f) - 1.0f;
         break;
     }
