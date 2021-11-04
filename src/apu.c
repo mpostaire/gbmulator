@@ -260,8 +260,7 @@ static float channel_dac(channel_t *c) {
     return 0.0f;
 }
 
-// TODO reduce samples_count as the emulation speed increases to avoid losing performances??
-void apu_step(int cycles) {
+void apu_step(int cycles, float speed) {
     if (!apu_enabled)
         return;
 
@@ -311,7 +310,7 @@ void apu_step(int cycles) {
         channel_step(&channel4);
 
         take_sample_cycles_count++;
-        if (take_sample_cycles_count >= 95) { // 44100 Hz
+        if (take_sample_cycles_count >= 95 * speed) { // 44100 Hz (if speed == 1.0f)
             take_sample_cycles_count = 0;
 
             float S01_volume = ((mem[NR50] & 0x07) + 1) / 8.0f; // keep it between 0.0f and 1.0f

@@ -34,6 +34,6 @@ extern byte_t apu_enabled;
 
 void apu_channel_trigger(channel_t *c);
 
-void apu_step(int cycles);
+void apu_step(int cycles, float speed);
 
 void apu_init(void);

@@ -47,9 +47,9 @@ int main(int argc, char **argv) {
     const Uint32 cycles_per_frame = 4194304 / 60;
 
     SDL_bool paused = 0;
-    int speed = 1;
+    float speed = 1.0f;
 
-    printf("Emulation speed: %dx\n", speed);
+    printf("Emulation speed: %fx\n", speed);
 
     while (is_running) {
         SDL_Event event;
@@ -74,8 +74,10 @@ int main(int argc, char **argv) {
                     serial_connect_to_server("127.0.0.1", 7777);
                     break;
                 case SDLK_m:
-                    speed = (speed % MAX_SPEED) + 1;
-                    printf("Emulation speed: %dx\n", speed);
+                    speed += 0.5f;
+                    if (speed > MAX_SPEED)
+                        speed = 1.0f;
+                    printf("Emulation speed: %fx\n", speed);
                     break;
                 }
                 break;
@@ -102,7 +104,7 @@ int main(int argc, char **argv) {
             if (draw_frame)
                 SDL_UpdateTexture(texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
 
-            apu_step(cycles);
+            apu_step(cycles, speed);
             cycles_count += cycles;
         }
 
