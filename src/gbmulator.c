@@ -49,7 +49,7 @@ int main(int argc, char **argv) {
     SDL_bool paused = 0;
     float speed = 1.0f;
 
-    printf("Emulation speed: %fx\n", speed);
+    printf("Emulation speed: x%.1f\n", speed);
 
     while (is_running) {
         SDL_Event event;
@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
                     speed += 0.5f;
                     if (speed > MAX_SPEED)
                         speed = 1.0f;
-                    printf("Emulation speed: %fx\n", speed);
+                    printf("Emulation speed: x%.1f\n", speed);
                     break;
                 }
                 break;

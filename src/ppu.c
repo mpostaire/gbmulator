@@ -165,7 +165,7 @@ static void draw_objects(void) {
     for (byte_t obj_id = 0; obj_id < 40; obj_id++) {
         // each object takes 4 bytes in the OAM
         word_t obj_address = OAM + (obj_id * 4);
-        
+
         // obj y + 16 position is in byte 0
         s_word_t pos_y = mem[obj_address] - 16;
 
@@ -198,6 +198,8 @@ static void draw_objects(void) {
         s_word_t pos_x = mem[obj_address + 1] - 8;
         // obj position in the tile memory array
         byte_t tile_index = mem[obj_address + 2];
+        if (obj_height > 8)
+            tile_index &= 0xFE;
         // attributes flags
         byte_t flags = mem[obj_address + 3];
 
@@ -256,11 +258,96 @@ static void draw_objects(void) {
     }
 }
 
+int lyc() {
+    if (mem[LY] == mem[LYC]) { // LY == LYC compare // FIXME BEFORE FIXING EVERYTHING ELSE (this may be the source of a LOT of problems)
+        SET_BIT(mem[STAT], 2);
+        return CHECK_BIT(mem[STAT], 6);
+    } else {
+        RESET_BIT(mem[STAT], 2);
+        return 0;
+    }
+}
+
 /**
  * This does not implement the pixel FIFO but draws each scanline instantly when starting PPU_HBLANK (mode 0).
  * TODO if STAT interrupts are a problem, implement these corner cases: http://gameboy.mongenel.com/dmg/istat98.txt
  */
+byte_t ignore = 0;
 byte_t ppu_step(int cycles) {
+    if (!CHECK_BIT(mem[LCDC], 7)) { // is LCD disabled?
+        // TODO not sure of the handling of LCD disabled
+        // TODO LCD disabled should fill screen with a color brighter than WHITE
+        PPU_SET_MODE(PPU_HBLANK);
+        ppu_cycles = 0;
+        mem[LY] = 0;
+        return 0;
+    }
+
+    ppu_cycles += cycles;
+    byte_t request_stat_irq = 0;
+    byte_t draw_frame = 0;
+    RESET_BIT(mem[STAT], 2);
+
+    switch (mem[STAT] & 0x03) { // switch current mode
+    case PPU_OAM:
+        if (ppu_cycles >= 80) {
+            ppu_cycles -= 80;
+            PPU_SET_MODE(PPU_DRAWING);
+        }
+        break;
+    case PPU_DRAWING:
+        if (ppu_cycles >= 172) {
+            ppu_cycles -= 172;
+            PPU_SET_MODE(PPU_HBLANK);
+            request_stat_irq = CHECK_BIT(mem[STAT], 3);
+
+            draw_bg_win();
+            draw_objects();
+        }
+        break;
+    case PPU_HBLANK:
+        if (ppu_cycles >= 204) {
+            ppu_cycles -= 204;
+            mem[LY] += 1;
+            ignore = 0;
+
+            if (mem[LY] == 144) {
+                PPU_SET_MODE(PPU_VBLANK);
+                request_stat_irq = CHECK_BIT(mem[STAT], 4);
+                draw_frame = 1;
+                cpu_request_interrupt(IRQ_VBLANK);
+            } else {
+                PPU_SET_MODE(PPU_OAM);
+                request_stat_irq = CHECK_BIT(mem[STAT], 5);
+            }
+        }
+        break;
+    case PPU_VBLANK:
+        if (ppu_cycles >= 456) {
+            ppu_cycles -= 456;
+            mem[LY] += 1;
+            ignore = 0;
+
+            if (mem[LY] == 154) {
+                mem[LY] = 0;
+                PPU_SET_MODE(PPU_OAM);
+                request_stat_irq = CHECK_BIT(mem[STAT], 5);
+            }
+        }
+        break;
+    }
+
+    if (!ignore && lyc()) {
+        ignore = 1;
+        request_stat_irq = 1;
+    }
+
+    if (request_stat_irq)
+        cpu_request_interrupt(IRQ_STAT);
+    return draw_frame;
+}
+
+byte_t ppu_step1(int cycles) {
     ppu_cycles += cycles;
 
     if (!CHECK_BIT(mem[LCDC], 7)) { // is LCD disabled?
@@ -274,15 +361,6 @@ byte_t ppu_step(int cycles) {
 
     byte_t request_stat_irq = 0;
     byte_t draw_frame = 0;
-
-    if (mem[LY] == mem[LYC]) { // LY == LYC compare
-        if (!CHECK_BIT(mem[STAT], 2)) { // if a LY == LYC coincidence interrupt has been fired for this scanline, do not fire it again 
-            SET_BIT(mem[STAT], 2);
-            request_stat_irq = CHECK_BIT(mem[STAT], 6);
-        }
-    } else {
-        RESET_BIT(mem[STAT], 2);
-    }
 
     if (mem[LY] == 144) { // Mode 1 (VBlank)
         if (!PPU_IS_MODE(PPU_VBLANK)) {
@@ -324,6 +402,8 @@ byte_t ppu_step(int cycles) {
 
     if (ppu_cycles >= 456) {
         ppu_cycles -= 456; // not reset to 0 because there may be leftover cycles we want to take into account for the next scanline
+        if (lyc())
+            request_stat_irq = 1;
         if (++mem[LY] > 153)
             mem[LY] = 0;
     }

@@ -418,8 +418,7 @@ void mem_write(word_t address, byte_t data) {
         mem[address] = 0;
     } else if ((address >= OAM && address < UNUSABLE) && ((PPU_IS_MODE(PPU_OAM) || PPU_IS_MODE(PPU_DRAWING)) && CHECK_BIT(mem[LCDC], 7))) {
         // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD enabled
-    // } else if ((address >= VRAM && address < ERAM) && (PPU_IS_MODE(PPU_DRAWING) && CHECK_BIT(mem[LCDC], 7))) {
-        // FIXME this condition commented right now because it causes display errors
+    } else if ((address >= VRAM && address < ERAM) && (PPU_IS_MODE(PPU_DRAWING) && CHECK_BIT(mem[LCDC], 7))) {
         // VRAM inaccessible by cpu while ppu in mode 3 and LCD enabled
     } else if (address >= UNUSABLE && address < IO) {
         // UNUSABLE memory is unusable
@@ -552,6 +551,8 @@ void mem_write(word_t address, byte_t data) {
     } else if (address >= WAVE_RAM && address < LCDC) {
         if (!CHECK_BIT(mem[NR30], 7))
             mem[address] = data;
+    } else if (address == STAT) {
+        mem[address] = 0x80 | (data & 0x78) | (mem[address] & 0x07);
     } else {
         mem[address] = data;
     }

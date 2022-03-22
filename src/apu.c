@@ -330,7 +330,7 @@ void apu_step(int cycles, float speed) {
                 SDL_Delay(1);
             SDL_QueueAudio(device, &audio_buffer, sizeof(audio_buffer));
         }
-	}
+    }
 
 }
 

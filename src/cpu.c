@@ -5,8 +5,8 @@
 #include "mem.h"
 
 struct instruction {
-	char *name;
-	int operand_size;
+    char *name;
+    int operand_size;
 };
 
 struct registers registers;
@@ -566,9 +566,9 @@ static void xor(byte_t reg) {
 }
 
 static void bit(byte_t reg, byte_t pos) {
-	CHECK_BIT(reg, pos) ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
-	RESET_FLAG(FLAG_N);
-	SET_FLAG(FLAG_H);
+    CHECK_BIT(reg, pos) ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
+    RESET_FLAG(FLAG_N);
+    SET_FLAG(FLAG_H);
 }
 
 static byte_t inc(byte_t reg) {
@@ -590,92 +590,92 @@ static byte_t dec(byte_t reg) {
 }
 
 static byte_t rl(byte_t reg) {
-	int carry = CHECK_FLAG(FLAG_C) ? 1 : 0;
+    int carry = CHECK_FLAG(FLAG_C) ? 1 : 0;
     // set new carry to the value of leftmost bit
-	(reg & 0x80) ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
+    (reg & 0x80) ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
     // shift left
-	reg <<= 1;
+    reg <<= 1;
     // set rightmost bit to the value of the old carry
-	reg += carry;
+    reg += carry;
 
-	reg ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
-	RESET_FLAG(FLAG_N | FLAG_H);
-	return reg;
+    reg ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
+    RESET_FLAG(FLAG_N | FLAG_H);
+    return reg;
 }
 
 static byte_t rlc(byte_t reg) {
     // set new carry to the value of leftmost bit
-	(reg & 0x80) ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
+    (reg & 0x80) ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
     // shift left
-	reg <<= 1;
+    reg <<= 1;
     // set rightmost bit to the value of the carry (previous bit 7 value)
-	reg += CHECK_FLAG(FLAG_C) ? 1 : 0;
+    reg += CHECK_FLAG(FLAG_C) ? 1 : 0;
 
-	reg ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
-	RESET_FLAG(FLAG_N | FLAG_H);
-	return reg;
+    reg ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
+    RESET_FLAG(FLAG_N | FLAG_H);
+    return reg;
 }
 
 static byte_t srl(byte_t reg) {
     // set carry to the value of rightmost bit
-	(reg & 0x01) ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
+    (reg & 0x01) ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
     // shift right
-	reg >>= 1;
+    reg >>= 1;
 
-	reg ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
-	RESET_FLAG(FLAG_N | FLAG_H);
-	return reg;
+    reg ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
+    RESET_FLAG(FLAG_N | FLAG_H);
+    return reg;
 }
 
 static byte_t sla(byte_t reg) {
     // set carry to the value of leftmost bit
-	(reg & 0x80) ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
+    (reg & 0x80) ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
     // shift left
-	reg <<= 1;
+    reg <<= 1;
 
-	reg ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
-	RESET_FLAG(FLAG_N | FLAG_H);
-	return reg;
+    reg ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
+    RESET_FLAG(FLAG_N | FLAG_H);
+    return reg;
 }
 
 static byte_t sra(byte_t reg) {
     // set carry to the value of rightmost bit
     int msb = reg & 0x80;
-	(reg & 0x01) ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
+    (reg & 0x01) ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
     // shift right
-	reg >>= 1;
+    reg >>= 1;
     reg |= msb;
 
-	reg ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
-	RESET_FLAG(FLAG_N | FLAG_H);
-	return reg;
+    reg ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
+    RESET_FLAG(FLAG_N | FLAG_H);
+    return reg;
 }
 
 static byte_t rr(byte_t reg) {
-	int carry = CHECK_FLAG(FLAG_C) ? 1 : 0;
+    int carry = CHECK_FLAG(FLAG_C) ? 1 : 0;
     // set new carry to the value of rightmost bit
-	(reg & 0x01) ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
+    (reg & 0x01) ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
     // shift right
-	reg >>= 1;
+    reg >>= 1;
     // set leftmost bit to the value of the old carry
     carry ? SET_BIT(reg, 7) : RESET_BIT(reg, 7);
 
-	reg ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
-	RESET_FLAG(FLAG_N | FLAG_H);
-	return reg;
+    reg ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
+    RESET_FLAG(FLAG_N | FLAG_H);
+    return reg;
 }
 
 static byte_t rrc(byte_t reg) {
     // set new carry to the value of rightmost bit
-	(reg & 0x01) ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
+    (reg & 0x01) ? SET_FLAG(FLAG_C) : RESET_FLAG(FLAG_C);
     // shift right
-	reg >>= 1;
+    reg >>= 1;
     // set leftmost bit to the value of the carry (previous bit 0 value)
     CHECK_FLAG(FLAG_C) ? SET_BIT(reg, 7) : RESET_BIT(reg, 7);
 
-	reg ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
-	RESET_FLAG(FLAG_N | FLAG_H);
-	return reg;
+    reg ? RESET_FLAG(FLAG_Z) : SET_FLAG(FLAG_Z);
+    RESET_FLAG(FLAG_N | FLAG_H);
+    return reg;
 }
 
 static byte_t swap(byte_t reg) {
