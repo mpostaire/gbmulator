@@ -18,14 +18,14 @@
 // FIXME super mario land no longer works properly --> LY==LYC interrupt fix commit is responsible (check argentum emulator ppu code to see how its handled)
 
 int main(int argc, char **argv) {
-    // TODO program argument sets path to rom (optional: path to boot rom - default being roms/bios.gb)
-    //      + print help, keybindings, etc...
-    if (argc < 2) {
-        printf("Usage: %s path/to/rom.gb\n", argv[0]);
+    SDL_bool cartridge_loaded = SDL_FALSE;
+    if (argc == 2) {
+        load_cartridge(argv[1]);
+        cartridge_loaded = SDL_TRUE;
+    } else if (argc > 2) {
+        printf("Usage: %s [path/to/rom.gb]\n", argv[0]);
         exit(EXIT_FAILURE);
     }
-
-    load_cartridge(argv[1]);
 
     // ALL CPU_INSTR TEST ROMS PASSED
     // load_cartridge("roms/tests/blargg/cpu_instrs/cpu_instrs.gb");
@@ -85,10 +85,22 @@ int main(int argc, char **argv) {
                 if (!event.key.repeat)
                     joypad_release(event.key.keysym.sym);
                 break;
+            case SDL_DROPFILE:
+                if (!cartridge_loaded) {
+                    load_cartridge(event.drop.file);
+                    cartridge_loaded = !cartridge_loaded;
+                }
+                break;
             case SDL_QUIT:
                 is_running = SDL_FALSE;
                 break;
             }
+        }
+
+        if (!cartridge_loaded) {
+            SDL_WaitEvent(NULL);
+            // TODO display menu buffer instead
+            continue;
         }
 
         int cycles_count = 0;
