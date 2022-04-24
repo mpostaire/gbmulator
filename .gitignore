@@ -4,3 +4,4 @@
 !src/*
 !Makefile
 .vscode
+!font

@@ -10,6 +10,7 @@
 #include "joypad.h"
 #include "serial.h"
 #include "apu.h"
+#include "ui.h"
 
 #define WINDOW_TITLE "gbmulator"
 #define WINDOW_SCALE 3
@@ -39,8 +40,12 @@ int main(int argc, char **argv) {
 
     SDL_Window *window = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 160 * WINDOW_SCALE, 144 * WINDOW_SCALE, SDL_WINDOW_SHOWN /*| SDL_WINDOW_RESIZABLE*/);
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, 160, 144);
-    SDL_Texture* blank_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STATIC, 1, 1);
+    SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, 160, 144);
+
+    byte_t blank_pixel[3];
+    SDL_Texture *blank_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STATIC, 1, 1);
+
+    SDL_Texture *overlay_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, 160, 144);
 
     SDL_bool is_running = SDL_TRUE;
     // 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame
@@ -97,9 +102,13 @@ int main(int argc, char **argv) {
             }
         }
 
-        if (!cartridge_loaded) {
-            SDL_WaitEvent(NULL);
+        if (paused || !cartridge_loaded) {
             // TODO display menu buffer instead
+            ui_draw_menu();
+            SDL_UpdateTexture(overlay_texture, NULL, overlay_pixels, 160 * sizeof(byte_t) * 3);
+            SDL_RenderCopy(renderer, overlay_texture, NULL, NULL);
+            SDL_RenderPresent(renderer);
+            SDL_Delay(1 / 60.0);
             continue;
         }
 
@@ -124,7 +133,7 @@ int main(int argc, char **argv) {
         if (CHECK_BIT(mem[LCDC], 7)) {
             SDL_RenderCopy(renderer, texture, NULL, NULL);
         } else {
-            SET_PIXEL(blank_pixel, 0, 0, WHITE); // SET_PIXEL here to refresh color in case of color change
+            SET_PIXEL(blank_pixel, 0, 0, WHITE); // SET_PIXEL here to refresh color in case of emulation color change
             SDL_UpdateTexture(blank_texture, NULL, &blank_pixel, sizeof(byte_t) * 3);
             SDL_RenderCopy(renderer, blank_texture, NULL, NULL);
         }

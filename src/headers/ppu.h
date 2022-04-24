@@ -2,14 +2,6 @@
 
 #include "types.h"
 
-// TODO? LCD off special bright white color
-enum color {
-    WHITE,
-    LIGHT_GRAY,
-    DARK_GRAY,
-    BLACK
-};
-
 enum ppu_mode {
     PPU_HBLANK,
     PPU_VBLANK,
@@ -25,7 +17,6 @@ enum ppu_mode {
 
 extern byte_t (*color_values)[3];
 
-extern byte_t blank_pixel[3];
 extern byte_t pixels[160 * 144 * 3];
 
 void ppu_switch_colors(void);

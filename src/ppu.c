@@ -25,7 +25,6 @@ byte_t color_green[4][3] = {
 byte_t (*color_values)[3] = color_gray;
 byte_t change_colors = 0;
 
-byte_t blank_pixel[3];
 byte_t pixels[160 * 144 * 3];
 byte_t pixels_cache_color_data[160][144];
 
@@ -48,7 +47,7 @@ void ppu_switch_colors(void) {
 /**
  * @returns color after applying palette.
  */
-static enum color get_color(byte_t color_data, word_t palette_address) {
+static color get_color(byte_t color_data, word_t palette_address) {
     // get relevant bits of the color palette the color_data maps to
     byte_t filter;
     switch (color_data) {
@@ -314,8 +313,13 @@ byte_t ppu_step(int cycles) {
             if (mem[LY] == 144) {
                 PPU_SET_MODE(PPU_VBLANK);
                 request_stat_irq = CHECK_BIT(mem[STAT], 4);
+
                 draw_frame = 1;
                 cpu_request_interrupt(IRQ_VBLANK);
+                
+                // if a change colors is requested, do it after rendering the current frame to avoid doing it mid frame
+                if (change_colors)
+                    switch_colors();
             } else {
                 PPU_SET_MODE(PPU_OAM);
                 request_stat_irq = CHECK_BIT(mem[STAT], 5);
@@ -344,69 +348,5 @@ byte_t ppu_step(int cycles) {
 
     if (request_stat_irq)
         cpu_request_interrupt(IRQ_STAT);
-    return draw_frame;
-}
-
-byte_t ppu_step1(int cycles) {
-    ppu_cycles += cycles;
-
-    if (!CHECK_BIT(mem[LCDC], 7)) { // is LCD disabled?
-        // TODO not sure of the handling of LCD disabled
-        // TODO LCD disabled should fill screen with a color brighter than WHITE
-        PPU_SET_MODE(PPU_HBLANK);
-        ppu_cycles = 0;
-        mem[LY] = 0;
-        return 0;
-    }
-
-    byte_t request_stat_irq = 0;
-    byte_t draw_frame = 0;
-
-    if (mem[LY] == 144) { // Mode 1 (VBlank)
-        if (!PPU_IS_MODE(PPU_VBLANK)) {
-            PPU_SET_MODE(PPU_VBLANK);
-            request_stat_irq = CHECK_BIT(mem[STAT], 4);
-            cpu_request_interrupt(IRQ_VBLANK);
-            
-            // the frame is complete, it can be rendered
-            draw_frame = 1;
-
-            // if a change colors is requested, do it after rendering the current frame to avoid doing it mid frame
-            if (change_colors)
-                switch_colors();
-        }
-    } else {
-        if (ppu_cycles <= 80) { // Mode 2 (OAM) -- ends after 80 ppu_cycles
-            if (!PPU_IS_MODE(PPU_OAM)) {
-                PPU_SET_MODE(PPU_OAM);
-                request_stat_irq = CHECK_BIT(mem[STAT], 5);
-            }
-        } else if (ppu_cycles <= 252) { // Mode 3 (Drawing) -- ends after 252 ppu_cycles
-            PPU_SET_MODE(PPU_DRAWING);
-        } else if (ppu_cycles <= 456) { // Mode 0 (HBlank) -- ends after 456 ppu_cycles
-            if (!PPU_IS_MODE(PPU_HBLANK)) {
-                PPU_SET_MODE(PPU_HBLANK);
-                request_stat_irq = CHECK_BIT(mem[STAT], 3);
-                
-                // draw scanline (background, window and objects pixels on line LY) when we enter HBlank
-                if (mem[LY] < 144) {
-                    draw_bg_win();
-                    draw_objects();
-                }
-            }
-        }
-    }
-
-    if (request_stat_irq)
-        cpu_request_interrupt(IRQ_STAT);
-
-    if (ppu_cycles >= 456) {
-        ppu_cycles -= 456; // not reset to 0 because there may be leftover cycles we want to take into account for the next scanline
-        if (lyc())
-            request_stat_irq = 1;
-        if (++mem[LY] > 153)
-            mem[LY] = 0;
-    }
-
     return draw_frame;
 }
