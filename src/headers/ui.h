@@ -1,7 +1,13 @@
 #pragma once
 
+#include <SDL2/SDL.h>
+
 #include "types.h"
 
-extern byte_t overlay_pixels[160 * 144 * 3];
+extern byte_t ui_pixels[160 * 144 * 3];
+
+void ui_init(void);
 
 void ui_draw_menu(void);
+
+void ui_press(SDL_Keycode key);

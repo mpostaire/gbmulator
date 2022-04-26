@@ -3,20 +3,10 @@
 #include "joypad.h"
 #include "cpu.h"
 #include "mem.h"
+#include "types.h"
 
 byte_t joypad_action = 0xCF;
 byte_t joypad_direction = 0xCF;
-
-enum buttons {
-    RIGHT = SDLK_RIGHT,
-    LEFT = SDLK_LEFT,
-    UP = SDLK_UP,
-    DOWN = SDLK_DOWN,
-    A = SDLK_KP_0,
-    B = SDLK_KP_PERIOD,
-    SELECT = SDLK_KP_2,
-    START = SDLK_KP_1
-};
 
 byte_t joypad_get_input(void) {
     if (!CHECK_BIT(mem[P1], 4))

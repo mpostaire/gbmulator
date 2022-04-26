@@ -1,6 +1,11 @@
+#include <stdio.h>
+#include <string.h>
+
 #include "types.h"
+#include "gbmulator.h"
 #include "ui.h"
 #include "cpu.h"
+#include "mem.h"
 #include "ppu.h"
 
 // TODO check in every header to move stuff like SET_PIXEL, GET_BIT, WHITE (all colors) into util.h
@@ -107,8 +112,122 @@ const byte_t font[0x5F][0x8] = {
     {0x00, 0x00, 0x00, 0x10, 0x2A, 0x04, 0x00, 0x00}
 };
 
-byte_t overlay_pixels[160 * 144 * 3];
+byte_t ui_pixels[160 * 144 * 3];
 
+enum menu_type {
+    ACTION, // do something when A is pressed
+    INPUT,  // add char to text input when any key is pressed (except UP/DOWN/LEFT/RIGHT/A/B)
+    CHOICE, // change value when LEFT/RIGHT are pressed
+    SUBMENU // enter a submenu when A is pressed
+};
+
+static void back_to_main_menu(void);
+
+typedef struct menu menu_t;
+
+// TODO add INPUT variables inside union, (input function + default value (to be printed gray and can be written over))
+typedef struct menu_entry {
+    char *label;
+    byte_t type;
+    union {
+        void (*action)(void);
+        menu_t *submenu;
+        struct {
+            void (*choose)(struct menu_entry *);
+            byte_t length;
+            byte_t position;
+        } choices;
+    };
+} menu_entry_t;
+
+struct menu {
+    char *title;
+    byte_t position;
+    byte_t length;
+    menu_entry_t entries[];
+};
+
+static void test(void) {
+    puts("test");
+}
+
+static void insert_cartridge(void) {
+    // using zenity is an ugly way of loading a file...
+    FILE *fp;
+    char buf[256];
+    if ((fp = popen("zenity --file-selection --title=\"Select a ROM\"", "r")) == NULL) {
+        perror("ERROR: open_files_dialog");
+        // TODO handle failure without quitting
+        // exit(EXIT_FAILURE);
+    }
+
+    fgets(buf, 256, fp);
+    // remove trailing '\r' and '\n'
+    buf[strcspn(buf, "\r\n")] = '\0';
+
+    if (pclose(fp) == -1) {
+        perror("ERROR: open_files_dialog");
+        exit(EXIT_FAILURE);
+    }
+
+    load_cartridge(buf);
+    gbmulator_unpause();
+}
+
+static void choose_win_scale(menu_entry_t *entry) {
+
+}
+
+static void choose_speed(menu_entry_t *entry) {
+
+}
+
+static void choose_sound(menu_entry_t *entry) {
+
+}
+
+static void choose_color(menu_entry_t *entry) {
+
+}
+
+menu_t options_menu = {
+    .title = "Options",
+    .position = 0,
+    .length = 7,
+    .entries = {
+        { "Win scale: |1x,2x,3x,4x", CHOICE, .choices = { choose_win_scale, 4, 0} },
+        { "Speed: |1.0x,1.5x,2.0x,2.5x,3.0x,3.5x,4.0x", CHOICE, .choices = { choose_speed, 7, 0 } },
+        { "Sound: |ON ,OFF", CHOICE, .choices = { choose_sound, 2, 0 } },
+        { "Color: |gray,orig", CHOICE, .choices = { choose_color, 2, 0 } },
+        { "Link host: ", INPUT, .action = test },
+        { "Link port: ", INPUT, .action = test },
+        { "Back...", ACTION, .action = back_to_main_menu }
+    }
+};
+
+menu_t main_menu = {
+    .title = "GBmulator",
+    .position = 0,
+    .length = 4,
+    .entries = {
+        { "Insert cartridge", ACTION, .action = insert_cartridge },
+        { "Game link cable...", ACTION, .action = test },
+        { "Options...", SUBMENU, .submenu = &options_menu },
+        { "Exit", ACTION, .action = gbmulator_exit }
+    }
+};
+
+menu_t *current_menu = &main_menu;
+
+static void back_to_main_menu(void) {
+    current_menu = &main_menu;
+}
+
+void ui_init(void) {
+    // TODO
+}
+
+// TODO handle switch colors
 static void print_char(const char c, int x, int y, color color) {
     int index = c - 32;
     if (index < 0) return;
@@ -117,19 +236,107 @@ static void print_char(const char c, int x, int y, color color) {
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
             if (GET_BIT(char_data[j], abs(i - 8))) {
-                SET_PIXEL(overlay_pixels, x + i, y + j, color);
+                SET_PIXEL(ui_pixels, x + i, y + j, color);
             }
         }
     }
 }
 
 // TODO support custom color
-static void ui_print(const char *text, int x, int y, color color) {
+static void print_text(const char *text, int x, int y, color color) {
     for (int i = 0; text[i]; i++) {
+        if (text[i] == '|')
+            return;
         print_char(text[i], x + (i * 8), y, color);
     }
 }
 
+static void ui_clear(void) {
+    for (int i = 0; i < 160; i++) {
+        for (int j = 0; j < 144; j++) {
+            SET_PIXEL(ui_pixels, i, j, BLACK);
+        }
+    }
+}
+
+static void print_choice(const char *choices, int x, int y, color color, int n) {
+    int delim_count = 0;
+    int printed_char_count = 1;
+    print_char('<', x, y, LIGHT_GRAY);
+    for (int i = 0; choices[i]; i++) {
+        if (choices[i] == ',') {
+            delim_count++;
+            continue;
+        }
+        if (delim_count < n)
+            continue;
+        if (delim_count > n)
+            break;
+        print_char(choices[i], x + (printed_char_count * 8), y, color);
+        printed_char_count++;
+    }
+    print_char('>', x + (printed_char_count * 8), y, LIGHT_GRAY);
+}
+
 void ui_draw_menu(void) {
-    ui_print("Insert cartridge", 0, 0, WHITE);
+    // clear ui pixels
+    ui_clear();
+
+    byte_t title_x = 72 - ((strlen(current_menu->title) * 8) / 2);
+    byte_t labels_start_y = 72 - ((current_menu->length * 8) / 2);
+
+    print_text(current_menu->title, title_x, 32, WHITE);
+    print_text(">", 0, labels_start_y + (8 * current_menu->position), WHITE);
+    for (byte_t i = 0; i < current_menu->length; i++) {
+        menu_entry_t *entry = &current_menu->entries[i];
+        byte_t y = labels_start_y + (i * 8);
+        print_text(entry->label, 8, y, WHITE);
+        if (entry->type == CHOICE) {
+            int delim_index = strcspn(entry->label, "|");
+            char *choices = &entry->label[delim_index + 1];
+            print_choice(choices, (delim_index * 8) + 8, y, WHITE, entry->choices.position);
+        }
+    }
+}
+
+void ui_press(SDL_Keycode key) {
+    switch (key) {
+    case RIGHT:
+    case LEFT:
+        switch (current_menu->entries[current_menu->position].type) {
+        case CHOICE:
+            menu_entry_t *entry = &current_menu->entries[current_menu->position];
+            (entry->choices.choose)(entry);
+            int new_pos = key == RIGHT ? entry->choices.position + 1 : entry->choices.position - 1;
+            if (new_pos < 0)
+                new_pos = entry->choices.length - 1;
+            else if (new_pos > entry->choices.length - 1)
+                new_pos = 0;
+            entry->choices.position = new_pos;
+            break;
+        }
+        break;
+    case UP:
+        current_menu->position = current_menu->position - 1 < 0 ? current_menu->length - 1 : current_menu->position - 1;
+        break;
+    case DOWN:
+        current_menu->position = (current_menu->position + 1) % current_menu->length;
+        break;
+    case A:
+        switch (current_menu->entries[current_menu->position].type) {
+        case ACTION:
+            (current_menu->entries[current_menu->position].action)();
+            break;
+        case SUBMENU:
+            // if I decide to add more than 1 level of depth of menus/submenus, make a stack of menus and push here
+            current_menu = current_menu->entries[current_menu->position].submenu;
+            current_menu->position = 0;
+            break;
+        }
+        break;
+    case B:
+        // if I decide to add more than 1 level of depth of menus/submenus, make a stack of menus and push here
+        back_to_main_menu();
+        break;
+    }
 }
