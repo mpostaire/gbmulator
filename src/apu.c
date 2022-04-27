@@ -5,6 +5,7 @@
 #include "apu.h"
 #include "mem.h"
 #include "cpu.h"
+#include "gbmulator.h"
 
 // FIXME audible pops
 
@@ -319,9 +320,9 @@ void apu_step(int cycles, float speed) {
             float S02_output = ((CHECK_BIT(mem[NR51], CHANNEL_1 + 4) ? channel_dac(&channel1) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_2 + 4) ? channel_dac(&channel2) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_3 + 4) ? channel_dac(&channel3) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_4 + 4) ? channel_dac(&channel4) : 0.0f)) / 4.0f;
 
             // S02 (left)
-            audio_buffer[audio_buffer_id++] = S02_output * S02_volume;
+            audio_buffer[audio_buffer_id++] = S02_output * S02_volume * config.sound;
             // S01 (right)
-            audio_buffer[audio_buffer_id++] = S01_output * S01_volume;
+            audio_buffer[audio_buffer_id++] = S01_output * S01_volume * config.sound;
         }
 
         if (audio_buffer_id >= SAMPLE_COUNT) {

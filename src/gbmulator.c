@@ -11,22 +11,31 @@
 #include "serial.h"
 #include "apu.h"
 #include "ui.h"
+#include "gbmulator.h"
 
-#define WINDOW_TITLE "gbmulator"
-#define WINDOW_SCALE 3
+#define WINDOW_TITLE "GBmulator"
 #define MAX_SPEED 4
 
 // FIXME super mario land no longer works properly --> LY==LYC interrupt fix commit is responsible (check argentum emulator ppu code to see how its handled)
 
 SDL_bool is_running = SDL_TRUE;
-SDL_bool paused = SDL_TRUE;
+SDL_bool is_paused = SDL_FALSE;
+
+struct config config = {
+    .scale = 3,
+    .speed = 1.0f,
+    .sound = 1,
+    .color_palette = 0,
+    .link_host = "127.0.0.1",
+    .link_port = 7777
+};
 
 void gbmulator_exit(void) {
     is_running = SDL_FALSE;
 }
 
 void gbmulator_unpause(void) {
-    paused = SDL_FALSE;
+    is_paused = SDL_FALSE;
 }
 
 // TODO config struct in gbmulator.h as extern top access everywhere (initialized in this file)
@@ -35,13 +44,12 @@ void gbmulator_unpause(void) {
 //      -> make ui_init() function to set all CHOICE menu entries to value in config file (or keep default if none)
 
 int main(int argc, char **argv) {
-    if (argc == 2) {
-        load_cartridge(argv[1]);
-        paused = SDL_FALSE;
-    } else if (argc > 2) {
-        printf("Usage: %s [path/to/rom.gb]\n", argv[0]);
+    if (argc != 2) {
+        printf("Usage: %s path/to/rom.gb\n", argv[0]);
         exit(EXIT_FAILURE);
     }
+
+    load_cartridge(argv[1]);
 
     // ALL CPU_INSTR TEST ROMS PASSED
     // load_cartridge("roms/tests/blargg/cpu_instrs/cpu_instrs.gb");
@@ -54,7 +62,15 @@ int main(int argc, char **argv) {
     apu_init();
     ui_init();
 
-    SDL_Window *window = SDL_CreateWindow(paused ? WINDOW_TITLE" - PAUSED" : WINDOW_TITLE, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 160 * WINDOW_SCALE, 144 * WINDOW_SCALE, SDL_WINDOW_SHOWN /*| SDL_WINDOW_RESIZABLE*/);
+    byte_t scale = config.scale;
+
+    SDL_Window *window = SDL_CreateWindow(
+        WINDOW_TITLE,
+        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+        160 * scale,
+        144 * scale,
+        SDL_WINDOW_SHOWN /*| SDL_WINDOW_RESIZABLE*/
+    );
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, 160, 144);
 
@@ -66,51 +82,29 @@ int main(int argc, char **argv) {
     // 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame
     const Uint32 cycles_per_frame = 4194304 / 60;
 
-    float speed = 1.0f;
-
-    printf("Emulation speed: x%.1f\n", speed);
+    printf("Emulation speed: x%.1f\n", config.speed);
 
     while (is_running) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
             case SDL_KEYDOWN:
-                if (paused)
-                    ui_press(event.key.keysym.sym);
+                if (event.key.repeat)
+                    break;
                 switch (event.key.keysym.sym) {
-                case SDLK_c:
-                    ppu_switch_colors();
-                    break;
                 case SDLK_p:
-                    // TODO if no cartridge loaded, disable unpausing (force paused == SDL_TRUE)
-                    paused = !paused;
-                    SDL_SetWindowTitle(window, paused ? WINDOW_TITLE" - PAUSED" : WINDOW_TITLE);
-                    break;
-                case SDLK_s:
-                    serial_start_server(7777);
-                    break;
-                case SDLK_d:
-                    serial_connect_to_server("127.0.0.1", 7777);
-                    break;
-                case SDLK_m:
-                    speed += 0.5f;
-                    if (speed > MAX_SPEED)
-                        speed = 1.0f;
-                    printf("Emulation speed: x%.1f\n", speed);
+                case SDLK_ESCAPE:
+                    is_paused = !is_paused;
                     break;
                 }
-                if (!event.key.repeat)
+                if (is_paused)
+                    ui_press(event.key.keysym.sym);
+                else
                     joypad_press(event.key.keysym.sym);
                 break;
             case SDL_KEYUP:
                 if (!event.key.repeat)
                     joypad_release(event.key.keysym.sym);
-                break;
-            case SDL_DROPFILE:
-                // TODO handle failure to load (wrong file type)
-                // TODO prompt for confirmation to load if there is already a loaded cartridge
-                // TODO save eram before a load_cartridge if there is already a loaded cartridge
-                load_cartridge(event.drop.file);
                 break;
             case SDL_QUIT:
                 is_running = SDL_FALSE;
@@ -118,18 +112,24 @@ int main(int argc, char **argv) {
             }
         }
 
-        if (paused) {
-            // TODO display menu buffer instead
+        if (is_paused) {
+            // display menu
             ui_draw_menu();
+
+            if (scale != config.scale) {
+                scale = config.scale;
+                SDL_SetWindowSize(window, 160 * scale, 144 * scale);
+            }
+
             SDL_UpdateTexture(overlay_texture, NULL, ui_pixels, 160 * sizeof(byte_t) * 3);
             SDL_RenderCopy(renderer, overlay_texture, NULL, NULL);
             SDL_RenderPresent(renderer);
-            SDL_Delay(1 / 60.0);
+            SDL_Delay(1 / 30.0);
             continue;
         }
 
         int cycles_count = 0;
-        while (cycles_count < cycles_per_frame * speed) {
+        while (cycles_count < cycles_per_frame * config.speed) {
             // TODO make timings accurate by forcing each cpu_step() to take 4 cycles: if it's not enough to finish an instruction,
             // the next cpu_step() will resume the previous instruction. This will makes the timer "hack" (increment within a loop and not an if)
             // obsolete while allowing accurate memory timings emulation.
@@ -141,7 +141,7 @@ int main(int argc, char **argv) {
             if (draw_frame)
                 SDL_UpdateTexture(texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
 
-            apu_step(cycles, speed);
+            apu_step(cycles, config.speed);
             cycles_count += cycles;
         }
 

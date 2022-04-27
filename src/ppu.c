@@ -5,25 +5,22 @@
 #include "types.h"
 #include "mem.h"
 #include "cpu.h"
+#include "gbmulator.h"
 
-// Grayscale colors
-byte_t color_gray[4][3] = {
-    { 0xFF, 0xFF, 0xFF },
-    { 0xCC, 0xCC, 0xCC },
-    { 0x77, 0x77, 0x77 },
-    { 0x00, 0x00, 0x00 }
+byte_t color_palettes[][4][3] = {
+    { // grayscale colors
+        { 0xFF, 0xFF, 0xFF },
+        { 0xCC, 0xCC, 0xCC },
+        { 0x77, 0x77, 0x77 },
+        { 0x00, 0x00, 0x00 }
+    },
+    { // green colors (original)
+        { 0x9B, 0xBC, 0x0F },
+        { 0x8B, 0xAC, 0x0F },
+        { 0x30, 0x62, 0x30 },
+        { 0x0F, 0x38, 0x0F }
+    }
 };
-
-// Original colors
-byte_t color_green[4][3] = {
-    { 0x9B, 0xBC, 0x0F },
-    { 0x8B, 0xAC, 0x0F },
-    { 0x30, 0x62, 0x30 },
-    { 0x0F, 0x38, 0x0F }
-};
-
-byte_t (*color_values)[3] = color_gray;
-byte_t change_colors = 0;
 
 byte_t pixels[160 * 144 * 3];
 byte_t pixels_cache_color_data[160][144];
@@ -31,18 +28,6 @@ byte_t pixels_cache_color_data[160][144];
 #define PPU_SET_MODE(m) mem[STAT] = (mem[STAT] & 0xFC) | (m)
 
 int ppu_cycles = 0;
-
-void switch_colors(void) {
-    if (color_values == color_green)
-        color_values = color_gray;
-    else
-        color_values = color_green;
-    change_colors = 0;
-}
-
-void ppu_switch_colors(void) {
-    change_colors = 1;
-}
 
 /**
  * @returns color after applying palette.
@@ -316,10 +301,6 @@ byte_t ppu_step(int cycles) {
 
                 draw_frame = 1;
                 cpu_request_interrupt(IRQ_VBLANK);
-                
-                // if a change colors is requested, do it after rendering the current frame to avoid doing it mid frame
-                if (change_colors)
-                    switch_colors();
             } else {
                 PPU_SET_MODE(PPU_OAM);
                 request_stat_irq = CHECK_BIT(mem[STAT], 5);
