@@ -35,6 +35,12 @@ clean:
 cleaner: clean
 	rm -f $(EXEC)
 
+install:
+	install -m 0755 $(EXEC) /usr/bin
+
+uninstall:
+	rm -f /usr/bin/$(EXEC)
+
 -include $(ODIR)/*.d
 
-.PHONY: all clean run
+.PHONY: all clean run install debug

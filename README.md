@@ -1,7 +1,33 @@
 # gbmulator
 A Game Boy emulator with serial data transfer (link cable) support over tcp.
 
-# Key bindings
+## Images
+
+TODO
+
+## Installation
+
+```sh
+# 1. Clone this repository
+git clone https://github.com/mpostaire/gbmulator.git
+# 2. cd into the cloned repository
+cd gbmulator
+# 3. Compile gbmulator
+make
+# 4. Install gbmulator
+sudo make install
+# Optional: Uninstall gbmulator
+sudo make uninstall
+```
+
+## Usage
+
+To launch the emulator you must call it from the command line with the path of a rom as the first argument.
+```sh
+gbmulator path/to/rom.gb
+```
+
+## Key bindings
 Key bindings are not configurable yet.
 |Key|Action|
 |---|---|
@@ -13,8 +39,9 @@ Key bindings are not configurable yet.
 |NUMPAD period|B|
 |NUMPAD 1|START|
 |NUMPAD 2|SELECT|
+|P or ESCAPE|Options menu|
 
-# TODO
+## TODO
 
 - better mbc support
 - configurable key bindings
