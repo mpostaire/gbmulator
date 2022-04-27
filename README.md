@@ -43,10 +43,12 @@ Key bindings are not configurable yet.
 
 ## TODO
 
+- memory DMA transfer not instant + blocks everything except hram
+- fix ppu
+- GBC mode
 - better mbc support
 - configurable key bindings
 - fix apu bugs
-- GBC mode
 - savestates
 - Fix buggy serial data transfer
 
