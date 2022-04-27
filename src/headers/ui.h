@@ -4,7 +4,7 @@
 
 #include "types.h"
 
-extern byte_t ui_pixels[160 * 144 * 3];
+extern byte_t ui_pixels[160 * 144 * 4];
 
 void ui_init(void);
 

@@ -11,6 +11,11 @@
 // TODO check in every header to move stuff like SET_PIXEL, GET_BIT, WHITE (all colors) into util.h
 #define abs(x) (((x) < 0) ? -(x) : (x))
 
+#define SET_PIXEL_RGBA(buf, x, y, color, alpha) *(buf + ((y) * 160 * 4) + ((x) * 4)) = color_palettes[config.color_palette][(color)][0]; \
+                            *(buf + ((y) * 160 * 4) + ((x) * 4) + 1) = color_palettes[config.color_palette][(color)][1]; \
+                            *(buf + ((y) * 160 * 4) + ((x) * 4) + 2) = color_palettes[config.color_palette][(color)][2]; \
+                            *(buf + ((y) * 160 * 4) + ((x) * 4) + 3) = (alpha);
+
 const byte_t font[0x5F][0x8] = {
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
     {0x00, 0x10, 0x10, 0x10, 0x10, 0x00, 0x10, 0x00},
@@ -109,7 +114,7 @@ const byte_t font[0x5F][0x8] = {
     {0x00, 0x00, 0x00, 0x10, 0x2A, 0x04, 0x00, 0x00}
 };
 
-byte_t ui_pixels[160 * 144 * 3];
+byte_t ui_pixels[160 * 144 * 4];
 
 enum menu_type {
     ACTION, // do something when A is pressed
@@ -127,7 +132,6 @@ static void choose_sound(menu_entry_t *entry);
 static void choose_color(menu_entry_t *entry);
 static void choose_link_type(menu_entry_t *entry);
 static void back_to_prev_menu(void);
-
 
 // TODO add INPUT variables inside union, (input function + default value (to be printed gray and can be written over))
 struct menu_entry {
@@ -209,6 +213,8 @@ static void choose_sound(menu_entry_t *entry) {
 
 static void choose_color(menu_entry_t *entry) {
     config.color_palette = entry->choices.position;
+    // TODO call ppu_change_emulated_colors that iterate over the entire 'pixels' buffer and convert values to the other palette value
+    //      -> get RGB current values, find in the old palette the coresponding color, then replace by the new RGB values
 }
 
 static void choose_link_type(menu_entry_t *entry) {
@@ -239,7 +245,7 @@ static void print_char(const char c, int x, int y, color color) {
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
             if (GET_BIT(char_data[j], abs(i - 8))) {
-                SET_PIXEL(ui_pixels, x + i, y + j, color);
+                SET_PIXEL_RGBA(ui_pixels, x + i, y + j, color, 0xFF);
             }
         }
     }
@@ -256,7 +262,7 @@ static void print_text(const char *text, int x, int y, color color) {
 static void ui_clear(void) {
     for (int i = 0; i < 160; i++) {
         for (int j = 0; j < 144; j++) {
-            SET_PIXEL(ui_pixels, i, j, BLACK);
+            SET_PIXEL_RGBA(ui_pixels, i, j, BLACK, 0xD5);
         }
     }
 }
@@ -264,7 +270,7 @@ static void ui_clear(void) {
 static void print_choice(const char *choices, int x, int y, color color, int n) {
     int delim_count = 0;
     int printed_char_count = 1;
-    print_char('<', x, y, DARK_GRAY);
+    print_char('<', x, y, LIGHT_GRAY);
     for (int i = 0; choices[i]; i++) {
         if (choices[i] == ',') {
             delim_count++;
@@ -277,7 +283,7 @@ static void print_choice(const char *choices, int x, int y, color color, int n) 
         print_char(choices[i], x + (printed_char_count * 8), y, color);
         printed_char_count++;
     }
-    print_char('>', x + (printed_char_count * 8), y, DARK_GRAY);
+    print_char('>', x + (printed_char_count * 8), y, LIGHT_GRAY);
 }
 
 void ui_draw_menu(void) {

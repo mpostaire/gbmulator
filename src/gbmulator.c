@@ -77,7 +77,8 @@ int main(int argc, char **argv) {
     byte_t blank_pixel[3];
     SDL_Texture *blank_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STATIC, 1, 1);
 
-    SDL_Texture *overlay_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, 160, 144);
+    SDL_Texture *overlay_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, 160, 144);
+    SDL_SetTextureBlendMode(overlay_texture, SDL_BLENDMODE_BLEND);
 
     // 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame
     const Uint32 cycles_per_frame = 4194304 / 60;
@@ -121,7 +122,8 @@ int main(int argc, char **argv) {
                 SDL_SetWindowSize(window, 160 * scale, 144 * scale);
             }
 
-            SDL_UpdateTexture(overlay_texture, NULL, ui_pixels, 160 * sizeof(byte_t) * 3);
+            SDL_UpdateTexture(overlay_texture, NULL, ui_pixels, 160 * sizeof(byte_t) * 4);
+            SDL_RenderCopy(renderer, texture, NULL, NULL);
             SDL_RenderCopy(renderer, overlay_texture, NULL, NULL);
             SDL_RenderPresent(renderer);
             SDL_Delay(1 / 30.0);
