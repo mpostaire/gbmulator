@@ -2899,6 +2899,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
     return cycles;
 }
 
+#ifdef DEBUG
 static void print_trace(void) {
     byte_t opcode = mem_read(registers.pc);
     byte_t operand_size = instructions[mem_read(registers.pc)].operand_size;
@@ -2910,6 +2911,7 @@ static void print_trace(void) {
         printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x %02x  %s\n", registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', registers.bc, registers.de, registers.hl, registers.sp, registers.pc, mem[registers.pc], mem[registers.pc + 1], mem[registers.pc + 2], instructions[opcode].name);
     }
 }
+#endif
 
 void cpu_request_interrupt(int irq) {
     SET_BIT(mem[IF], irq);
@@ -2953,7 +2955,9 @@ int cpu_handle_interrupts(void) {
 int cpu_step(void) {
     if (halt) return 4;
 
-    // print_trace();
+    #ifdef DEBUG
+    print_trace();
+    #endif
 
     byte_t opcode = mem_read(registers.pc);
     registers.pc++;
