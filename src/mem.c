@@ -46,7 +46,7 @@ byte_t rtc_register = 0;
 byte_t rtc_latch = 0;
 struct rtc_counter rtc;
 
-char *rom_filepath;
+const char *rom_filepath;
 
 static char *get_save_filepath(void) {
     size_t len = strlen(rom_filepath);
@@ -68,7 +68,7 @@ static char *get_save_filepath(void) {
     return buf;
 }
 
-void mem_load_cartridge(char *filepath) {
+char *mem_load_cartridge(const char *filepath) {
     rom_filepath = filepath;
 
     // clear memory
@@ -86,7 +86,7 @@ void mem_load_cartridge(char *filepath) {
     fclose(f);
 
     if (cartridge[0x0143] == 0xC0) {
-        printf("ERROR: CGB only rom - this emulator does not support CGB games yet\n");
+        printf("ERROR: mem_load_cartridge: CGB only rom - this emulator does not support CGB games yet\n");
         exit(EXIT_FAILURE);
     }
 
@@ -113,7 +113,7 @@ void mem_load_cartridge(char *filepath) {
     //     mbc = MBC7;
     //     break;
     default:
-        printf("ERROR: MBC byte %02X not supported\n", cartridge[0x0147]);
+        printf("ERROR: mem_load_cartridge: MBC byte %02X not supported\n", cartridge[0x0147]);
         exit(EXIT_FAILURE);
         break;
     }
@@ -131,19 +131,23 @@ void mem_load_cartridge(char *filepath) {
         break;
     }
 
-    // get rom title
-    char title[16];
-    strncpy(title, (char *) &cartridge[0x134], 15);
-    title[15] = '\0';
-    printf("Playing %s\n", title);
     printf("Cartridge using MBC%d with %d ROM banks + %d RAM banks\n", mbc, rom_banks, ram_banks);
+
+    // get rom title
+    char *title = malloc(sizeof(char) * 17);
+    if (!title) {
+        perror("ERROR: mem_load_cartridge");
+        exit(EXIT_FAILURE);
+    }
+    strncpy(title, (char *) &cartridge[0x134], 16);
+    title[16] = '\0';
 
     // checksum validation
     int sum = 0;
     for (int i = 0x0134; i <= 0x014C; i++)
         sum = sum - cartridge[i] - 1;
     if (((byte_t) (sum & 0xFF)) != cartridge[0x014D]) {
-        printf("ERROR: invalid checksum\n");
+        printf("ERROR: mem_load_cartridge: invalid checksum\n");
         exit(EXIT_FAILURE);
     }
 
@@ -157,9 +161,13 @@ void mem_load_cartridge(char *filepath) {
     char *save_filepath = get_save_filepath();
     f = fopen(save_filepath, "rb");
     free(save_filepath);
-    if (!f) return; // if can't read save file, ignore it and proceed without save.
-    fread(eram, sizeof(eram), 1, f);
-    fclose(f);
+    // if there is a save file, load it into eram
+    if (f) {
+        fread(eram, sizeof(eram), 1, f);
+        fclose(f);
+    }
+
+    return title;
 }
 
 void mem_save_eram(void) {
@@ -170,11 +178,11 @@ void mem_save_eram(void) {
     free(save_filepath);
 
     if (!f) {
-        perror("ERROR opening the save file");
+        perror("ERROR: mem_save_eram: opening the save file");
         exit(EXIT_FAILURE);
     }
     if (!fwrite(eram, sizeof(eram), 1, f)) {
-        printf("ERROR writing to save file\n");
+        printf("ERROR: mem_save_eram: writing to save file\n");
         exit(EXIT_FAILURE);
     }
     fclose(f);

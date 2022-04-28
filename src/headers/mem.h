@@ -75,7 +75,10 @@ enum mem_map {
     IE = 0xFFFF // Interrupt Enable
 };
 
-void mem_load_cartridge(char *filepath);
+/**
+ * @returns loaded rom title
+ */
+char *mem_load_cartridge(const char *filepath);
 
 void mem_save_eram(void);
 

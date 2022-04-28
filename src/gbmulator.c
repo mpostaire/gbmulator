@@ -52,7 +52,9 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    mem_load_cartridge(argv[1]);
+    char *rom_title = mem_load_cartridge(argv[1]);
+    char window_title[sizeof(WINDOW_TITLE) + 19];
+    snprintf(window_title, sizeof(window_title), WINDOW_TITLE" - %s", rom_title);
 
     // ALL CPU_INSTR TEST ROMS PASSED
     // mem_load_cartridge("roms/tests/blargg/cpu_instrs/cpu_instrs.gb");
@@ -68,7 +70,7 @@ int main(int argc, char **argv) {
     byte_t scale = config.scale;
 
     SDL_Window *window = SDL_CreateWindow(
-        WINDOW_TITLE,
+        window_title,
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         160 * scale,
         144 * scale,
@@ -168,7 +170,7 @@ int main(int argc, char **argv) {
         }
         SDL_RenderPresent(renderer);
 
-        // no delay at the end of the loop because it's redundant with vsync
+        // no delay at the end of the loop because it's redundant with vsync and sound emulation
     }
 
     mem_save_eram();
