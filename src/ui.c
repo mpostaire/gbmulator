@@ -243,7 +243,7 @@ static void print_char(const char c, int x, int y, color color) {
     const byte_t *char_data = font[index];
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
-            if (GET_BIT(char_data[j], abs(i - 8))) {
+            if (GET_BIT(char_data[j], abs(i - 7))) {
                 SET_PIXEL_RGBA(ui_pixels, x + i, y + j, color, 0xFF);
             }
         }
