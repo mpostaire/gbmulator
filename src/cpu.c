@@ -2961,17 +2961,13 @@ int cpu_step(void) {
 
     byte_t opcode = mem_read(registers.pc);
     registers.pc++;
-    word_t operand;
+    word_t operand = 0; // initialize to 0 to shut gcc warnings
     switch (instructions[opcode].operand_size) {
     case 1:
         operand = mem_read(registers.pc);
         break;
     case 2:
         operand = mem_read(registers.pc) | mem_read(registers.pc + 1) << 8;
-        break;
-    default:
-        printf("ERROR: cpu_step - invalid operand_size");
-        exit(EXIT_FAILURE);
         break;
     }
     registers.pc += instructions[opcode].operand_size;
