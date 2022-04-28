@@ -10,6 +10,9 @@ OBJ= $(SRC:$(SDIR)/%.c=$(ODIR)/%.o)
 
 all: $(ODIR) $(EXEC)
 
+debug: CFLAGS+=-g -Og
+debug: all
+
 $(EXEC): $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDLIBS)
 
@@ -22,9 +25,6 @@ $(ODIR):
 
 run: all
 	./$(EXEC) "roms/Pokemon Red.gb"
-
-debug: CFLAGS+=-g -Og
-debug: clean all
 
 check: $(SDIR)/*.c
 	cppcheck --enable=all --suppress=missingIncludeSystem $(SDIR)
