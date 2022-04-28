@@ -30,21 +30,43 @@ byte_t pixels_cache_color_data[160][144];
 
 int ppu_cycles = 0;
 
+void ppu_update_pixels_with_palette(byte_t new_palette) {
+    // replace old color values of the pixels with the new ones according to the new palette
+    for (int i = 0; i < 160; i++) {
+        for (int j = 0; j < 144; j++) {
+            byte_t *R = (pixels + ((j) * 160 * 3) + ((i) * 3)) ;
+            byte_t *G = (pixels + ((j) * 160 * 3) + ((i) * 3) + 1);
+            byte_t *B = (pixels + ((j) * 160 * 3) + ((i) * 3) + 2);
+
+            // find which color is at pixel (i,j)
+            color c;
+            for (c = WHITE; c <= BLACK; c++) {
+                if (*R == color_palettes[config.color_palette][c][0] &&
+                    *G == color_palettes[config.color_palette][c][1] &&
+                    *B == color_palettes[config.color_palette][c][2]) {
+                    break;
+                }
+            }
+
+            // replace old color value by the new one according to the new palette
+            *R = color_palettes[new_palette][c][0];
+            *G = color_palettes[new_palette][c][1];
+            *B = color_palettes[new_palette][c][2];
+        }
+    }
+}
+
 /**
  * @returns color after applying palette.
  */
 static color get_color(byte_t color_data, word_t palette_address) {
     // get relevant bits of the color palette the color_data maps to
-    byte_t filter;
+    byte_t filter = 0; // initialize to 0 to shut gcc warnings
     switch (color_data) {
         case 0: filter = 0x03; break;
         case 1: filter = 0x0C; break;
         case 2: filter = 0x30; break;
         case 3: filter = 0xC0; break;
-        default:
-            printf("ERROR: get_color - invalid color_data");
-            exit(EXIT_FAILURE);
-            break;
     }
 
     // return the color using the palette
