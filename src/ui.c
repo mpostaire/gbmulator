@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -7,6 +8,9 @@
 #include "cpu.h"
 #include "mem.h"
 #include "ppu.h"
+#include "link.h"
+
+// TODO fix this file (it's ugly code).
 
 // TODO check in every header to move stuff like SET_PIXEL, GET_BIT, WHITE (all colors) into util.h
 #define abs(x) (((x) < 0) ? -(x) : (x))
@@ -130,21 +134,28 @@ static void choose_win_scale(menu_entry_t *entry);
 static void choose_speed(menu_entry_t *entry);
 static void choose_sound(menu_entry_t *entry);
 static void choose_color(menu_entry_t *entry);
-static void choose_link_type(menu_entry_t *entry);
-static void back_to_prev_menu(void);
+static void choose_link_mode(menu_entry_t *entry);
+static void start_link();
+static void back_to_prev_menu();
 
-// TODO add INPUT variables inside union, (input function + default value (to be printed gray and can be written over))
 struct menu_entry {
     char *label;
     byte_t type;
+    byte_t disabled;
     union {
         void (*action)(void);
         menu_t *submenu;
         struct {
-            void (*choose)(struct menu_entry *);
+            void (*choose)(menu_entry_t *);
             byte_t length;
             byte_t position;
         } choices;
+        struct {
+            char *input;
+            byte_t cursor;
+            byte_t max_length;
+            byte_t is_numeric;
+        } user_input;
     };
 };
 
@@ -154,10 +165,6 @@ struct menu {
     byte_t length;
     menu_entry_t entries[];
 };
-
-static void test(void) {
-    puts("test");
-}
 
 menu_t options_menu = {
     .title = "Options",
@@ -177,10 +184,10 @@ menu_t link_menu = {
     .position = 0,
     .length = 5,
     .entries = {
-        { "Type:     |server,client", CHOICE, .choices = { choose_link_type, 2, 0 } },
-        { "Host: ", INPUT, .action = test },
-        { "Port: ", INPUT, .action = test },
-        { "Start link", ACTION, .action = test },
+        { "Mode:     |server,client", CHOICE, .choices = { choose_link_mode, 2, 0 } },
+        { "Host: ", INPUT },
+        { "Port: ", INPUT, .user_input.is_numeric = 1 },
+        { "Start link", ACTION, .action = start_link },
         { "Back...", ACTION, .action = back_to_prev_menu }
     }
 };
@@ -191,7 +198,7 @@ menu_t main_menu = {
     .length = 4,
     .entries = {
         { "Resume", ACTION, .action = gbmulator_unpause },
-        { "Game link cable...", SUBMENU, .submenu = &link_menu },
+        { "Link cable...", SUBMENU, .submenu = &link_menu },
         { "Options...", SUBMENU, .submenu = &options_menu },
         { "Exit", ACTION, .action = gbmulator_exit }
     }
@@ -216,8 +223,20 @@ static void choose_color(menu_entry_t *entry) {
     config.color_palette = entry->choices.position;
 }
 
-static void choose_link_type(menu_entry_t *entry) {
+static void choose_link_mode(menu_entry_t *entry) {
+    config.link_mode = entry->choices.position;
+    link_menu.entries[1].disabled = !config.link_mode;
+}
 
+static void start_link(void) {
+    strncpy(config.link_host, link_menu.entries[1].user_input.input, 40);
+    config.link_port = atoi(link_menu.entries[2].user_input.input);
+    // printf("%s-%d\n", entry->user_input.input, atoi(entry->user_input.input));
+
+    if (config.link_mode)
+        link_connect_to_server(config.link_host, config.link_port);
+    else
+        link_start_server(config.link_port);
 }
 
 static void back_to_prev_menu(void) {
@@ -229,16 +248,43 @@ static void back_to_prev_menu(void) {
     }
 }
 
+void ui_back_to_main_menu(void) {
+    current_menu = &main_menu;
+    main_menu.position = 0;
+}
+
 void ui_init(void) {
     options_menu.entries[0].choices.position = config.scale - 1;
     options_menu.entries[1].choices.position = config.speed / 0.5f - 2;
     options_menu.entries[2].choices.position = config.sound * 4;
     options_menu.entries[3].choices.position = config.color_palette;
+
+    link_menu.entries[0].choices.position = config.link_mode;
+
+    if (!(link_menu.entries[1].user_input.input = malloc(sizeof(char) * 40))) {
+        perror("ERROR: ui_init");
+        exit(EXIT_FAILURE);
+    }
+    strncpy(link_menu.entries[1].user_input.input, config.link_host, 40);
+
+    link_menu.entries[1].user_input.cursor = strlen(config.link_host);
+    link_menu.entries[1].disabled = !config.link_mode;
+
+    char **buf = &link_menu.entries[2].user_input.input;
+    if (!(*buf = malloc(sizeof(char) * 6))) {
+        perror("ERROR: ui_init");
+        exit(EXIT_FAILURE);
+    }
+    link_menu.entries[1].user_input.max_length = 39;
+    
+    link_menu.entries[2].user_input.cursor = snprintf(*buf, sizeof(char) * 6, "%d", config.link_port);
+    link_menu.entries[2].user_input.input = *buf;
+    link_menu.entries[2].user_input.max_length = 5;
 }
 
 static void print_char(const char c, int x, int y, color color) {
     int index = c - 32;
-    if (index < 0) return;
+    if (index < 0 || index >= 0x5F) return;
     
     const byte_t *char_data = font[index];
     for (int i = 0; i < 8; i++) {
@@ -285,7 +331,12 @@ static void print_choice(const char *choices, int x, int y, color color, int n) 
     print_char('>', x + (printed_char_count * 8), y, LIGHT_GRAY);
 }
 
+byte_t draw_frames = 0;
 void ui_draw_menu(void) {
+    draw_frames++;
+    if (draw_frames > 64)
+        draw_frames = 0;
+
     // clear ui pixels
     ui_clear();
 
@@ -297,23 +348,54 @@ void ui_draw_menu(void) {
     for (byte_t i = 0; i < current_menu->length; i++) {
         menu_entry_t *entry = &current_menu->entries[i];
         byte_t y = labels_start_y + (i * 8);
-        print_text(entry->label, 8, y, WHITE);
+        color text_color = entry->disabled ? DARK_GRAY : WHITE;
+        print_text(entry->label, 8, y, text_color);
 
-        if (entry->type == CHOICE) {
+        switch (entry->type) {
+        case CHOICE:
             int delim_index = strcspn(entry->label, "|");
             char *choices = &entry->label[delim_index + 1];
-            print_choice(choices, (delim_index * 8) + 8, y, WHITE, entry->choices.position);
+            print_choice(choices, (delim_index * 8) + 8, y, text_color, entry->choices.position);
+            break;
+        case INPUT:
+            // TODO handle long input (draw substring following the user_input.cursor)
+            byte_t x = (strlen(entry->label) * 8) + 8;
+            print_text(entry->user_input.input, x, y, text_color);
+            if (current_menu->position == i && draw_frames < 32) {
+                print_char('|', x + (entry->user_input.cursor * 8) - 4, y, WHITE);
+            }
+            break;
         }
     }
+
+    // TODO bottom right corner label status: "Link: Inactive, Waiting, Active"
+    // for this an access to link status is needed (not possible yet)
+    // print_text("Link:", 0, 0, WHITE);
+    // print_text("I", 40, 0, WHITE);
 }
 
-void ui_press(SDL_Keycode key) {
+static void delete_char_at(char **text, byte_t n) {
+    if (n < 0 || n >= strlen(*text))
+        return;
+
+    int i = n;
+    for (; (*text)[i + 1]; i++) {
+        (*text)[i] = (*text)[i + 1];
+    }
+    (*text)[i] = '\0';
+}
+
+void ui_press(SDL_Keysym *keysym) {
+    SDL_Keycode key = keysym->sym;
+    int count;
+    menu_entry_t *entry = &current_menu->entries[current_menu->position];
+    draw_frames = 0;
+
     switch (key) {
     case RIGHT:
     case LEFT:
         switch (current_menu->entries[current_menu->position].type) {
         case CHOICE:
-            menu_entry_t *entry = &current_menu->entries[current_menu->position];
             int new_pos = key == RIGHT ? entry->choices.position + 1 : entry->choices.position - 1;
             if (new_pos < 0)
                 new_pos = entry->choices.length - 1;
@@ -322,31 +404,84 @@ void ui_press(SDL_Keycode key) {
             entry->choices.position = new_pos;
             (entry->choices.choose)(entry);
             break;
+        case INPUT:
+            int new_cursor = entry->user_input.cursor + (key == RIGHT ? 1 : -1);
+            int len = strlen(entry->user_input.input);
+            if (new_cursor > len)
+                new_cursor = len;
+            else if (new_cursor < 0)
+                new_cursor = 0;
+            entry->user_input.cursor = new_cursor;
         }
         break;
     case UP:
-        current_menu->position = current_menu->position - 1 < 0 ? current_menu->length - 1 : current_menu->position - 1;
+        count = 0;
+        do {
+            current_menu->position = current_menu->position - 1 < 0 ? current_menu->length - 1 : current_menu->position - 1;
+            count++;
+        } while(current_menu->entries[current_menu->position].disabled && count < current_menu->length);
         break;
     case DOWN:
-        current_menu->position = (current_menu->position + 1) % current_menu->length;
+        count = 0;
+        do {
+            current_menu->position = (current_menu->position + 1) % current_menu->length;
+            count++;
+        } while(current_menu->entries[current_menu->position].disabled && count < current_menu->length);
         break;
     case A:
+        if (entry->type == INPUT)
+            break;
     case SDLK_RETURN:
     case SDLK_KP_ENTER:
-        switch (current_menu->entries[current_menu->position].type) {
+        switch (entry->type) {
         case ACTION:
-            (current_menu->entries[current_menu->position].action)();
+            (entry->action)();
             break;
         case SUBMENU:
             // if I ever decide to add more than 1 level of depth of menus/submenus, make a stack of menus and push here
-            current_menu = current_menu->entries[current_menu->position].submenu;
+            current_menu = entry->submenu;
             current_menu->position = 0;
             break;
         }
         break;
     case B:
         // if I ever decide to add more than 1 level of depth of menus/submenus, make a stack of menus and pop here
-        back_to_prev_menu();
+        if (entry->type != INPUT)
+            back_to_prev_menu();
         break;
+    }
+
+    if (entry->type == INPUT) {
+        if (key == SDLK_DELETE) {
+            delete_char_at(&entry->user_input.input, entry->user_input.cursor);
+        } else if (key == SDLK_BACKSPACE) {
+            delete_char_at(&entry->user_input.input, entry->user_input.cursor - 1);
+            int new_cursor = entry->user_input.cursor - 1;
+            if (new_cursor < 0)
+                new_cursor = 0;
+            entry->user_input.cursor = new_cursor;
+        }
+    }
+}
+
+void ui_text_input(char *text) {
+    menu_entry_t *entry = &current_menu->entries[current_menu->position];
+    
+    if (entry->type != INPUT)
+        return;
+    
+    char key = text[0];
+
+    if (entry->user_input.is_numeric && (key < '0' || key > '9'))
+        return;
+
+    if (strlen(entry->user_input.input) >= entry->user_input.max_length)
+        return;
+    char c = entry->user_input.input[entry->user_input.cursor];
+    entry->user_input.input[entry->user_input.cursor++] = key;
+    for (int i = entry->user_input.cursor; i <= entry->user_input.max_length; i++) {
+        char temp = entry->user_input.input[i];
+        entry->user_input.input[i] = c;
+        c = temp;
     }
 }

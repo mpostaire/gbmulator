@@ -7,7 +7,8 @@ struct config {
     float speed;
     float sound;
     byte_t color_palette;
-    char *link_host;
+    byte_t link_mode;
+    char link_host[40];
     word_t link_port;
 } extern config;
 

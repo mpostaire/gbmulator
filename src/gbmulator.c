@@ -21,6 +21,8 @@
 // TODO when no argument, show alternative menu with title Insert cartridge, ACTION: zenity open ROM from files, label: Or drag and drop ROM
 // TODO set window title to "GBmulator - rom title"
 
+// TODO fix pause menu when starting game link connexion while pause menu is still active
+
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_FALSE;
 
@@ -29,6 +31,7 @@ struct config config = {
     .speed = 1.0f,
     .sound = 1.0f,
     .color_palette = 0,
+    .link_mode = 0,
     .link_host = "127.0.0.1",
     .link_port = 7777
 };
@@ -55,6 +58,7 @@ int main(int argc, char **argv) {
     char *rom_title = mem_load_cartridge(argv[1]);
     char window_title[sizeof(WINDOW_TITLE) + 19];
     snprintf(window_title, sizeof(window_title), WINDOW_TITLE" - %s", rom_title);
+    printf("Playing %s\n", rom_title);
 
     // ALL CPU_INSTR TEST ROMS PASSED
     // mem_load_cartridge("roms/tests/blargg/cpu_instrs/cpu_instrs.gb");
@@ -94,19 +98,24 @@ int main(int argc, char **argv) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
+            case SDL_TEXTINPUT:
+                if (is_paused)
+                    ui_text_input(event.text.text);
+                break;
             case SDL_KEYDOWN:
+                if (is_paused)
+                    ui_press(&event.key.keysym);
                 if (event.key.repeat)
                     break;
                 switch (event.key.keysym.sym) {
-                case SDLK_p:
+                case SDLK_PAUSE:
                 case SDLK_ESCAPE:
+                    if (is_paused)
+                        ui_back_to_main_menu();
                     is_paused = !is_paused;
                     break;
                 }
-                if (is_paused)
-                    ui_press(event.key.keysym.sym);
-                else
-                    joypad_press(event.key.keysym.sym);
+                joypad_press(event.key.keysym.sym);
                 break;
             case SDL_KEYUP:
                 if (!event.key.repeat)

@@ -61,7 +61,7 @@ int link_start_server(const int port) {
 
     is_server = 1;
 
-    printf("Waiting for a connection...\n");
+    printf("Link server waiting for client on port %d...\n", port);
 
     return 1;
 }
@@ -89,6 +89,8 @@ int link_connect_to_server(const char* address, const int port) {
     }
 
     is_server = 0;
+
+    printf("Link client connecting to server %s:%d...\n", address, port);
 
     return 1;
 }
