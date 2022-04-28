@@ -5,7 +5,7 @@
 struct config {
     byte_t scale;
     float speed;
-    byte_t sound;
+    float sound;
     byte_t color_palette;
     char *link_host;
     word_t link_port;

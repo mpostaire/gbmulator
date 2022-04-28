@@ -164,9 +164,9 @@ menu_t options_menu = {
     .position = 0,
     .length = 5,
     .entries = {
-        { "Scale:        |1x,2x,3x,4x,5x", CHOICE, .choices = { choose_win_scale, 5, 0 } },
+        { "Scale:      | 1x , 2x , 3x , 4x , 5x ", CHOICE, .choices = { choose_win_scale, 5, 0 } },
         { "Speed:      |1.0x,1.5x,2.0x,2.5x,3.0x,3.5x,4.0x", CHOICE, .choices = { choose_speed, 7, 0 } },
-        { "Sound:       |OFF,ON ", CHOICE, .choices = { choose_sound, 2, 1 } },
+        { "Sound:      | OFF, 25%, 50%, 75%,100%", CHOICE, .choices = { choose_sound, 5, 4 } },
         { "Color:      |gray,orig", CHOICE, .choices = { choose_color, 2, 0 } },
         { "Back...", ACTION, .action = back_to_prev_menu }
     }
@@ -208,7 +208,7 @@ static void choose_speed(menu_entry_t *entry) {
 }
 
 static void choose_sound(menu_entry_t *entry) {
-    config.sound = entry->choices.position;
+    config.sound = entry->choices.position * 0.25f;
 }
 
 static void choose_color(menu_entry_t *entry) {
@@ -232,7 +232,7 @@ static void back_to_prev_menu(void) {
 void ui_init(void) {
     options_menu.entries[0].choices.position = config.scale - 1;
     options_menu.entries[1].choices.position = config.speed / 0.5f - 2;
-    options_menu.entries[2].choices.position = config.sound;
+    options_menu.entries[2].choices.position = config.sound * 4;
     options_menu.entries[3].choices.position = config.color_palette;
 }
 
