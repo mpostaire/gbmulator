@@ -39,7 +39,7 @@ Key bindings are not configurable yet.
 |NUMPAD period|B|
 |NUMPAD 1|START|
 |NUMPAD 2|SELECT|
-|P or ESCAPE|Options menu|
+|ESCAPE or PAUSE|Options menu|
 
 ## TODO
 

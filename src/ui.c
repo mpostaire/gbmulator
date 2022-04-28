@@ -282,6 +282,12 @@ void ui_init(void) {
     link_menu.entries[2].user_input.max_length = 5;
 }
 
+static void print_cursor(int x, int y, color color) {
+    for (int i = 0; i < 8; i++) {
+        SET_PIXEL_RGBA(ui_pixels, x, y + i, color, 0xFF);
+    }
+}
+
 static void print_char(const char c, int x, int y, color color) {
     int index = c - 32;
     if (index < 0 || index >= 0x5F) return;
@@ -362,7 +368,7 @@ void ui_draw_menu(void) {
             byte_t x = (strlen(entry->label) * 8) + 8;
             print_text(entry->user_input.input, x, y, text_color);
             if (current_menu->position == i && draw_frames < 32) {
-                print_char('|', x + (entry->user_input.cursor * 8) - 4, y, WHITE);
+                print_cursor(x + (entry->user_input.cursor * 8), y, WHITE);
             }
             break;
         }

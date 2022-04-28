@@ -21,7 +21,7 @@
 // TODO when no argument, show alternative menu with title Insert cartridge, ACTION: zenity open ROM from files, label: Or drag and drop ROM
 // TODO set window title to "GBmulator - rom title"
 
-// TODO fix pause menu when starting game link connexion while pause menu is still active
+// TODO fix pause menu when starting game link connexion while pause menu is still active (it's working but weirdly so low priority)
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_FALSE;
