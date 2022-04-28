@@ -8,7 +8,7 @@
 #include "ppu.h"
 #include "timer.h"
 #include "joypad.h"
-#include "serial.h"
+#include "link.h"
 #include "apu.h"
 #include "ui.h"
 #include "gbmulator.h"
@@ -151,7 +151,7 @@ int main(int argc, char **argv) {
             int cycles = cpu_handle_interrupts();
             cycles += cpu_step();
             timer_step(cycles);
-            serial_step(cycles);
+            link_step(cycles);
             SDL_bool draw_frame = ppu_step(cycles);
             if (draw_frame)
                 SDL_UpdateTexture(texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
@@ -174,7 +174,7 @@ int main(int argc, char **argv) {
     }
 
     mem_save_eram();
-    serial_close_connection();
+    link_close_connection();
 
     SDL_DestroyWindow(window);
     SDL_DestroyRenderer(renderer);

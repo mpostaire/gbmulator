@@ -28,7 +28,7 @@ int other_sfd = -1;
 int connected = 0;
 struct sockaddr_in other_addr;
 
-int serial_start_server(const int port) {
+int link_start_server(const int port) {
     if (sfd != -1 || is_server)
         return 0;
 
@@ -66,7 +66,7 @@ int serial_start_server(const int port) {
     return 1;
 }
 
-int serial_connect_to_server(const char* address, const int port) {
+int link_connect_to_server(const char* address, const int port) {
     if (other_sfd != -1 || is_server)
         return 0;
 
@@ -93,7 +93,7 @@ int serial_connect_to_server(const char* address, const int port) {
     return 1;
 }
 
-void serial_close_connection(void) {
+void link_close_connection(void) {
     close(other_sfd);
     if (is_server)
         close(sfd);
@@ -152,7 +152,7 @@ static void complete_connection(void) {
  * 
  * If emulator on 1 computer faster than the other, may cause problems --> cpu cycle sync important?
  */
-void serial_step(int cycles) {
+void link_step(int cycles) {
     cycles_counter += cycles;
 
     // TODO this should be a 8192 Hz clock (cycles_counter >= 512)... but as it's too fast and cause bugs, this will do for now
