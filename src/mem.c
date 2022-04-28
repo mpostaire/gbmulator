@@ -68,17 +68,7 @@ static char *get_save_filepath(void) {
     return buf;
 }
 
-static void load_bios(void) {
-    FILE *f = fopen("roms/dmg_boot.bin", "rb");
-    if (f) {
-        fread(mem, 0x100, 1, f);
-        fclose(f);
-    } else {
-        memcpy(&mem, &dmg_boot, sizeof(dmg_boot));
-    }
-}
-
-void load_cartridge(char *filepath) {
+void mem_load_cartridge(char *filepath) {
     rom_filepath = filepath;
 
     // clear memory
@@ -88,7 +78,7 @@ void load_cartridge(char *filepath) {
 
     FILE *f = fopen(filepath, "rb");
     if (!f) {
-        perror("ERROR: load_cartridge");
+        perror("ERROR: mem_load_cartridge");
         exit(EXIT_FAILURE);
     }
     fread(cartridge, sizeof(cartridge), 1, f);
@@ -96,7 +86,7 @@ void load_cartridge(char *filepath) {
     fclose(f);
 
     if (cartridge[0x0143] == 0xC0) {
-        printf("ERROR: CGB only rom\n");
+        printf("ERROR: CGB only rom - this emulator does not support CGB games yet\n");
         exit(EXIT_FAILURE);
     }
 
@@ -160,9 +150,8 @@ void load_cartridge(char *filepath) {
     // load cartridge into rom banks (everything before VRAM (0x8000))
     memcpy(&mem, &cartridge, VRAM);
 
-    // Load bios (if it exists) after cartridge to overwrite first 0x100 bytes.
-    // If bios don't exist, sets memory and registers accordingly. 
-    load_bios();
+    // Load bios after cartridge to overwrite first 0x100 bytes.
+    memcpy(&mem, &dmg_boot, sizeof(dmg_boot));
 
     // load save into ERAM
     char *save_filepath = get_save_filepath();

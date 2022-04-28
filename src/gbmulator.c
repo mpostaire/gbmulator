@@ -18,6 +18,9 @@
 
 // FIXME super mario land no longer works properly --> LY==LYC interrupt fix commit is responsible (check argentum emulator ppu code to see how its handled)
 
+// TODO when no argument, show alternative menu with title Insert cartridge, ACTION: zenity open ROM from files, label: Or drag and drop ROM
+// TODO set window title to "GBmulator - rom title"
+
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_FALSE;
 
@@ -49,14 +52,14 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    load_cartridge(argv[1]);
+    mem_load_cartridge(argv[1]);
 
     // ALL CPU_INSTR TEST ROMS PASSED
-    // load_cartridge("roms/tests/blargg/cpu_instrs/cpu_instrs.gb");
-    // load_cartridge("roms/tests/blargg/instr_timing/instr_timing.gb");
+    // mem_load_cartridge("roms/tests/blargg/cpu_instrs/cpu_instrs.gb");
+    // mem_load_cartridge("roms/tests/blargg/instr_timing/instr_timing.gb");
 
-    // load_cartridge("roms/tests/mooneye/emulator-only/mbc1/bits_mode.gb");
-    // load_cartridge("roms/tests/mooneye/emulator-only/mbc2/bits_romb.gb");
+    // mem_load_cartridge("roms/tests/mooneye/emulator-only/mbc1/bits_mode.gb");
+    // mem_load_cartridge("roms/tests/mooneye/emulator-only/mbc2/bits_romb.gb");
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     apu_init();
@@ -83,9 +86,9 @@ int main(int argc, char **argv) {
     // 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame
     const Uint32 cycles_per_frame = 4194304 / 60;
 
-    printf("Emulation speed: x%.1f\n", config.speed);
-
+    // main gbmulator loop
     while (is_running) {
+        // input handling
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
@@ -113,6 +116,7 @@ int main(int argc, char **argv) {
             }
         }
 
+        // emulation paused handling
         if (is_paused) {
             // display menu
             ui_draw_menu();
@@ -122,14 +126,21 @@ int main(int argc, char **argv) {
                 SDL_SetWindowSize(window, 160 * scale, 144 * scale);
             }
 
-            SDL_UpdateTexture(overlay_texture, NULL, ui_pixels, 160 * sizeof(byte_t) * 4);
+            // update main texture to show color palette changes
+            SDL_UpdateTexture(texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
             SDL_RenderCopy(renderer, texture, NULL, NULL);
+
+            // update overlay (menu) texture
+            SDL_UpdateTexture(overlay_texture, NULL, ui_pixels, 160 * sizeof(byte_t) * 4);
             SDL_RenderCopy(renderer, overlay_texture, NULL, NULL);
+
             SDL_RenderPresent(renderer);
+            // delay to aim 30 fps (and avoid 100% CPU use) here because the normal delay is done by the sound emulation which is paused
             SDL_Delay(1 / 30.0);
             continue;
         }
 
+        // emulation loop
         int cycles_count = 0;
         while (cycles_count < cycles_per_frame * config.speed) {
             // TODO make timings accurate by forcing each cpu_step() to take 4 cycles: if it's not enough to finish an instruction,

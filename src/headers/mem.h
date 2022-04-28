@@ -75,7 +75,7 @@ enum mem_map {
     IE = 0xFFFF // Interrupt Enable
 };
 
-void load_cartridge(char *filepath);
+void mem_load_cartridge(char *filepath);
 
 void mem_save_eram(void);
 
