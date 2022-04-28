@@ -1,7 +1,7 @@
 SDIR=src
 ODIR=out
 IDIR=$(SDIR)/headers
-CFLAGS=-std=gnu99 -Wall -I$(IDIR)
+CFLAGS=-std=gnu99 -Wall -O2 -I$(IDIR)
 LDLIBS=-lSDL2
 CC=gcc
 EXEC=gbmulator
@@ -23,7 +23,7 @@ $(ODIR):
 run: all
 	./$(EXEC) "roms/Pokemon Red.gb"
 
-debug: CFLAGS+=-g -D DEBUG
+debug: CFLAGS+=-g -Og
 debug: clean all
 
 check: $(SDIR)/*.c

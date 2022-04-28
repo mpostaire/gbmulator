@@ -2969,6 +2969,10 @@ int cpu_step(void) {
     case 2:
         operand = mem_read(registers.pc) | mem_read(registers.pc + 1) << 8;
         break;
+    default:
+        printf("ERROR: cpu_step - invalid operand_size");
+        exit(EXIT_FAILURE);
+        break;
     }
     registers.pc += instructions[opcode].operand_size;
 

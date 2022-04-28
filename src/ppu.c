@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "ppu.h"
@@ -40,6 +41,10 @@ static color get_color(byte_t color_data, word_t palette_address) {
         case 1: filter = 0x0C; break;
         case 2: filter = 0x30; break;
         case 3: filter = 0xC0; break;
+        default:
+            printf("ERROR: get_color - invalid color_data");
+            exit(EXIT_FAILURE);
+            break;
     }
 
     // return the color using the palette
