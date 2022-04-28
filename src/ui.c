@@ -120,6 +120,8 @@ const byte_t font[0x5F][0x8] = {
 
 byte_t ui_pixels[160 * 144 * 4];
 
+byte_t draw_frames = 0;
+
 enum menu_type {
     ACTION, // do something when A is pressed
     INPUT,  // add char to text input when any key is pressed (except UP/DOWN/LEFT/RIGHT/A/B)
@@ -237,6 +239,12 @@ static void start_link(void) {
         link_connect_to_server(config.link_host, config.link_port);
     else
         link_start_server(config.link_port);
+    
+    link_menu.entries[0].disabled = 1;
+    link_menu.entries[1].disabled = 1;
+    link_menu.entries[2].disabled = 1;
+    link_menu.entries[3].disabled = 1;
+    link_menu.position = 4;
 }
 
 static void back_to_prev_menu(void) {
@@ -318,10 +326,10 @@ static void ui_clear(void) {
     }
 }
 
-static void print_choice(const char *choices, int x, int y, color color, int n) {
+static void print_choice(const char *choices, int x, int y, int n, color text_color, color arrow_color) {
     int delim_count = 0;
     int printed_char_count = 1;
-    print_char('<', x, y, LIGHT_GRAY);
+    print_char('<', x, y, arrow_color);
     for (int i = 0; choices[i]; i++) {
         if (choices[i] == ',') {
             delim_count++;
@@ -331,13 +339,12 @@ static void print_choice(const char *choices, int x, int y, color color, int n) 
             continue;
         if (delim_count > n)
             break;
-        print_char(choices[i], x + (printed_char_count * 8), y, color);
+        print_char(choices[i], x + (printed_char_count * 8), y, text_color);
         printed_char_count++;
     }
-    print_char('>', x + (printed_char_count * 8), y, LIGHT_GRAY);
+    print_char('>', x + (printed_char_count * 8), y, arrow_color);
 }
 
-byte_t draw_frames = 0;
 void ui_draw_menu(void) {
     draw_frames++;
     if (draw_frames > 64)
@@ -361,7 +368,7 @@ void ui_draw_menu(void) {
         case CHOICE:
             int delim_index = strcspn(entry->label, "|");
             char *choices = &entry->label[delim_index + 1];
-            print_choice(choices, (delim_index * 8) + 8, y, text_color, entry->choices.position);
+            print_choice(choices, (delim_index * 8) + 8, y, entry->choices.position, text_color, entry->disabled ? DARK_GRAY : LIGHT_GRAY);
             break;
         case INPUT:
             // TODO handle long input (draw substring following the user_input.cursor)
@@ -447,6 +454,9 @@ void ui_press(SDL_Keysym *keysym) {
             // if I ever decide to add more than 1 level of depth of menus/submenus, make a stack of menus and push here
             current_menu = entry->submenu;
             current_menu->position = 0;
+            while(current_menu->entries[current_menu->position].disabled && current_menu->position < current_menu->length) {
+                current_menu->position++;
+            }
             break;
         }
         break;
