@@ -157,6 +157,8 @@ struct menu_entry {
             byte_t cursor;
             byte_t max_length;
             byte_t is_numeric;
+            byte_t visible_lo;
+            byte_t visible_hi;
         } user_input;
     };
 };
@@ -182,7 +184,7 @@ menu_t options_menu = {
 };
 
 menu_t link_menu = {
-    .title = "Game link cable",
+    .title = "Link cable",
     .position = 0,
     .length = 5,
     .entries = {
@@ -235,16 +237,19 @@ static void start_link(void) {
     config.link_port = atoi(link_menu.entries[2].user_input.input);
     // printf("%s-%d\n", entry->user_input.input, atoi(entry->user_input.input));
 
+    int success;
     if (config.link_mode)
-        link_connect_to_server(config.link_host, config.link_port);
+        success = link_connect_to_server(config.link_host, config.link_port);
     else
-        link_start_server(config.link_port);
+        success = link_start_server(config.link_port);
     
-    link_menu.entries[0].disabled = 1;
-    link_menu.entries[1].disabled = 1;
-    link_menu.entries[2].disabled = 1;
-    link_menu.entries[3].disabled = 1;
-    link_menu.position = 4;
+    if (success){
+        link_menu.entries[0].disabled = 1;
+        link_menu.entries[1].disabled = 1;
+        link_menu.entries[2].disabled = 1;
+        link_menu.entries[3].disabled = 1;
+        link_menu.position = 4;
+    }
 }
 
 static void back_to_prev_menu(void) {
@@ -277,17 +282,19 @@ void ui_init(void) {
 
     link_menu.entries[1].user_input.cursor = strlen(config.link_host);
     link_menu.entries[1].disabled = !config.link_mode;
+    link_menu.entries[1].user_input.max_length = 39;
+    link_menu.entries[1].user_input.visible_hi = 12;
 
     char **buf = &link_menu.entries[2].user_input.input;
     if (!(*buf = malloc(sizeof(char) * 6))) {
         perror("ERROR: ui_init");
         exit(EXIT_FAILURE);
     }
-    link_menu.entries[1].user_input.max_length = 39;
-    
+
     link_menu.entries[2].user_input.cursor = snprintf(*buf, sizeof(char) * 6, "%d", config.link_port);
     link_menu.entries[2].user_input.input = *buf;
     link_menu.entries[2].user_input.max_length = 5;
+    link_menu.entries[2].user_input.visible_hi = 5;
 }
 
 static void print_cursor(int x, int y, color color) {
@@ -371,11 +378,26 @@ void ui_draw_menu(void) {
             print_choice(choices, (delim_index * 8) + 8, y, entry->choices.position, text_color, entry->disabled ? DARK_GRAY : LIGHT_GRAY);
             break;
         case INPUT:
-            // TODO handle long input (draw substring following the user_input.cursor)
             byte_t x = (strlen(entry->label) * 8) + 8;
-            print_text(entry->user_input.input, x, y, text_color);
+
+            if (entry->user_input.cursor > entry->user_input.visible_hi) {
+                byte_t diff = entry->user_input.cursor - entry->user_input.visible_hi;
+                entry->user_input.visible_lo += diff;
+                entry->user_input.visible_hi += diff;
+            } else if (entry->user_input.cursor < entry->user_input.visible_lo) {
+                byte_t diff = entry->user_input.visible_lo - entry->user_input.cursor;
+                entry->user_input.visible_lo -= diff;
+                entry->user_input.visible_hi -= diff;
+            }
+
+            char visible_input[13];
+            byte_t n = entry->user_input.visible_hi - entry->user_input.visible_lo;
+            strncpy(visible_input, &entry->user_input.input[entry->user_input.visible_lo], n);
+            visible_input[n] = '\0';
+
+            print_text(visible_input, x, y, text_color);
             if (current_menu->position == i && draw_frames < 32) {
-                print_cursor(x + (entry->user_input.cursor * 8), y, WHITE);
+                print_cursor(x + ((entry->user_input.cursor - entry->user_input.visible_lo) * 8), y, WHITE);
             }
             break;
         }
@@ -433,6 +455,8 @@ void ui_press(SDL_Keysym *keysym) {
             current_menu->position = current_menu->position - 1 < 0 ? current_menu->length - 1 : current_menu->position - 1;
             count++;
         } while(current_menu->entries[current_menu->position].disabled && count < current_menu->length);
+        if (current_menu->entries[current_menu->position].type == INPUT)
+            current_menu->entries[current_menu->position].user_input.cursor = strlen(current_menu->entries[current_menu->position].user_input.input);
         break;
     case DOWN:
         count = 0;
@@ -440,6 +464,8 @@ void ui_press(SDL_Keysym *keysym) {
             current_menu->position = (current_menu->position + 1) % current_menu->length;
             count++;
         } while(current_menu->entries[current_menu->position].disabled && count < current_menu->length);
+        if (current_menu->entries[current_menu->position].type == INPUT)
+            current_menu->entries[current_menu->position].user_input.cursor = strlen(current_menu->entries[current_menu->position].user_input.input);
         break;
     case A:
         if (entry->type == INPUT)
@@ -470,12 +496,22 @@ void ui_press(SDL_Keysym *keysym) {
     if (entry->type == INPUT) {
         if (key == SDLK_DELETE) {
             delete_char_at(&entry->user_input.input, entry->user_input.cursor);
+
+            if (entry->user_input.visible_lo > 0) {
+                entry->user_input.visible_lo -= 1;
+                entry->user_input.visible_hi -= 1;
+            }
         } else if (key == SDLK_BACKSPACE) {
-            delete_char_at(&entry->user_input.input, entry->user_input.cursor - 1);
             int new_cursor = entry->user_input.cursor - 1;
+            delete_char_at(&entry->user_input.input, new_cursor);
             if (new_cursor < 0)
                 new_cursor = 0;
             entry->user_input.cursor = new_cursor;
+
+            if (entry->user_input.visible_lo > 0) {
+                entry->user_input.visible_lo -= 1;
+                entry->user_input.visible_hi -= 1;
+            }
         }
     }
 }
