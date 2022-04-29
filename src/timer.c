@@ -1,4 +1,5 @@
 #include "timer.h"
+#include "utils.h"
 #include "mem.h"
 #include "cpu.h"
 

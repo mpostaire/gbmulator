@@ -9,11 +9,9 @@
 #include "mem.h"
 #include "ppu.h"
 #include "link.h"
+#include "utils.h"
 
 // TODO fix this file (it's ugly code).
-
-// TODO check in every header to move stuff like SET_PIXEL, GET_BIT, WHITE (all colors) into util.h
-#define abs(x) (((x) < 0) ? -(x) : (x))
 
 #define SET_PIXEL_RGBA(buf, x, y, color, alpha) *(buf + ((y) * 160 * 4) + ((x) * 4)) = color_palettes[config.color_palette][(color)][0]; \
                             *(buf + ((y) * 160 * 4) + ((x) * 4) + 1) = color_palettes[config.color_palette][(color)][1]; \

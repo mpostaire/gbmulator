@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <SDL2/SDL.h>
 
+#include "utils.h"
 #include "types.h"
 #include "apu.h"
 #include "mem.h"
-#include "cpu.h"
 #include "gbmulator.h"
 
 // FIXME audible pops

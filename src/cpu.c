@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "utils.h"
 #include "cpu.h"
 #include "mem.h"
 

@@ -3,6 +3,7 @@
 #include "joypad.h"
 #include "cpu.h"
 #include "mem.h"
+#include "utils.h"
 #include "types.h"
 
 byte_t joypad_action = 0xCF;

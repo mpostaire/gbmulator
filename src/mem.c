@@ -5,7 +5,7 @@
 
 #include "types.h"
 #include "mem.h"
-#include "cpu.h"
+#include "utils.h"
 #include "ppu.h"
 #include "joypad.h"
 #include "apu.h"

@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
+#include "utils.h"
 #include "cpu.h"
 #include "mem.h"
 

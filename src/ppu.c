@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "ppu.h"
+#include "utils.h"
 #include "types.h"
 #include "mem.h"
 #include "cpu.h"

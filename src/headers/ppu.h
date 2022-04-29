@@ -20,6 +20,9 @@ extern byte_t color_palettes[][4][3];
 
 extern byte_t pixels[160 * 144 * 3];
 
+/**
+ * convert the pixels buffer from the color values of the old emulation palette to the new color values of the new palette
+ */
 void ppu_update_pixels_with_palette(byte_t palette);
 
 byte_t ppu_step(int cycles);

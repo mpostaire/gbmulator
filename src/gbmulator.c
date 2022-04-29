@@ -3,6 +3,7 @@
 #include <SDL2/SDL.h>
 
 #include "types.h"
+#include "utils.h"
 #include "mem.h"
 #include "cpu.h"
 #include "ppu.h"
@@ -19,7 +20,6 @@
 // FIXME super mario land no longer works properly --> LY==LYC interrupt fix commit is responsible (check argentum emulator ppu code to see how its handled)
 
 // TODO when no argument, show alternative menu with title Insert cartridge, ACTION: zenity open ROM from files, label: Or drag and drop ROM
-// TODO set window title to "GBmulator - rom title"
 
 // TODO fix pause menu when starting game link connexion while pause menu is still active (it's working but weirdly so low priority)
 
