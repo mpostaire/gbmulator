@@ -25,8 +25,6 @@
 // TODO create subdir containing the emulation files/code and keep main/ui/config/utils separate inside the root src dir
 //      separate the emulation code from the main/ui/config/utils by making appropriate getter/setter/etc.
 
-// TODO fix black window appear / disappear then true window appear
-
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_FALSE;
 
@@ -66,7 +64,7 @@ int main(int argc, char **argv) {
 
     SDL_Window *window = SDL_CreateWindow(
         window_title,
-        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         160 * scale,
         144 * scale,
         SDL_WINDOW_SHOWN /*| SDL_WINDOW_RESIZABLE*/
