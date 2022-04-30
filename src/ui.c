@@ -520,7 +520,7 @@ void ui_press(SDL_Keysym *keysym) {
     }
 }
 
-void ui_text_input(char *text) {
+void ui_text_input(const char *text) {
     menu_entry_t *entry = &current_menu->entries[current_menu->position];
     
     if (entry->type != INPUT)

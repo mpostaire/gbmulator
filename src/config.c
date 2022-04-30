@@ -14,11 +14,11 @@ const char *load_config(void) {
     char *xdg_config_home = getenv("XDG_CONFIG_HOME");
     char *prefix = xdg_config_home;
     char *home = getenv("HOME");
-    char buf[strlen(home) + 10];
+    char default_prefix[strlen(home) + 10];
 
     if (!prefix) {
-        snprintf(buf, strlen(home) + 9, "%s%s", home, "/.config");
-        prefix = buf;
+        snprintf(default_prefix, strlen(home) + 9, "%s%s", home, "/.config");
+        prefix = default_prefix;
     }
 
     char *config_path = malloc(sizeof(char) * (strlen(prefix) + 27));
@@ -84,4 +84,6 @@ void save_config(const char* config_path) {
     );
 
     printf("Saving config to %s\n", config_path);
+
+    fclose(f);
 }

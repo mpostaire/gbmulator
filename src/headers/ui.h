@@ -14,4 +14,4 @@ void ui_draw_menu(void);
 
 void ui_press(SDL_Keysym *keysym);
 
-void ui_text_input(char *text);
+void ui_text_input(const char *text);
