@@ -1,9 +1,15 @@
 # gbmulator
-A Game Boy emulator with serial data transfer (link cable) support over tcp.
+A Game Boy emulator with sound and serial data transfer (link cable) support over tcp.
 
 ## Images
 
-TODO
+Some games
+
+![games](images/games.png)
+
+GBmulator's menus
+
+![menus](images/menus.png)
 
 ## Installation
 
