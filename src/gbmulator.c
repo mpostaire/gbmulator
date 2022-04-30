@@ -12,10 +12,9 @@
 #include "link.h"
 #include "apu.h"
 #include "ui.h"
-#include "gbmulator.h"
+#include "config.h"
 
 #define WINDOW_TITLE "GBmulator"
-#define MAX_SPEED 4
 
 // FIXME super mario land no longer works properly --> LY==LYC interrupt fix commit is responsible (check argentum emulator ppu code to see how its handled)
 
@@ -23,18 +22,13 @@
 
 // TODO fix pause menu when starting game link connexion while pause menu is still active (it's working but weirdly so low priority)
 
+// TODO create subdir containing the emulation files/code and keep main/ui/config/utils separate inside the root src dir
+//      separate the emulation code from the main/ui/config/utils by making appropriate getter/setter/etc.
+
+// TODO fix black window appear / disappear then true window appear
+
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_FALSE;
-
-struct config config = {
-    .scale = 3,
-    .speed = 1.0f,
-    .sound = 1.0f,
-    .color_palette = 0,
-    .link_mode = 0,
-    .link_host = "127.0.0.1",
-    .link_port = 7777
-};
 
 void gbmulator_exit(void) {
     is_running = SDL_FALSE;
@@ -44,16 +38,13 @@ void gbmulator_unpause(void) {
     is_paused = SDL_FALSE;
 }
 
-// TODO config struct in gbmulator.h as extern top access everywhere (initialized in this file)
-//      make in gbmulator.c a parse config file function to overwrite default values (file in (XDG_CONFIG_HOME || $HOME/.config)/gbmulator/gbmulator.conf)
-//      -> if file does not exist, create it with default values
-//      -> make ui_init() function to set all CHOICE menu entries to value in config file (or keep default if none)
-
 int main(int argc, char **argv) {
     if (argc != 2) {
         printf("Usage: %s path/to/rom.gb\n", argv[0]);
         exit(EXIT_FAILURE);
     }
+
+    const char *config_path = load_config();
 
     char *rom_title = mem_load_cartridge(argv[1]);
     char window_title[sizeof(WINDOW_TITLE) + 19];
@@ -184,6 +175,8 @@ int main(int argc, char **argv) {
 
     mem_save_eram();
     link_close_connection();
+    
+    save_config(config_path);
 
     SDL_DestroyWindow(window);
     SDL_DestroyRenderer(renderer);

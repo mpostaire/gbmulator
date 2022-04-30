@@ -5,7 +5,7 @@
 #include "types.h"
 #include "apu.h"
 #include "mem.h"
-#include "gbmulator.h"
+#include "config.h"
 
 // FIXME audible pops
 

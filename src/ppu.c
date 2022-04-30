@@ -7,7 +7,7 @@
 #include "types.h"
 #include "mem.h"
 #include "cpu.h"
-#include "gbmulator.h"
+#include "config.h"
 
 byte_t color_palettes[][4][3] = {
     { // grayscale colors

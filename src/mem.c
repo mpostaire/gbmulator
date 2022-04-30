@@ -50,21 +50,16 @@ const char *rom_filepath;
 
 static char *get_save_filepath(void) {
     size_t len = strlen(rom_filepath);
-    char *buf = malloc(len + 2);
+    char *buf = malloc(sizeof(char) * (len + 2));
     if (!buf) {
         perror("ERROR get_save_filepath");
         exit(EXIT_FAILURE);
     }
-    strncpy(buf, rom_filepath, len);
-    for (int i = len + 1; i >= 0; i--) {
-        if (buf[i] == '.') {
-            buf[i + 1] = 's';
-            buf[i + 2] = 'a';
-            buf[i + 3] = 'v';
-            break;
-        }
-    }
-    buf[len + 1] = '\0';
+
+    char *last_period = strrchr(rom_filepath, '.');
+    int last_period_index = (int) (last_period - rom_filepath);
+    snprintf(buf, len + 2, "%.*s.sav", last_period_index, rom_filepath);
+
     return buf;
 }
 

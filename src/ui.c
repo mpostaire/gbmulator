@@ -135,6 +135,8 @@ static void choose_speed(menu_entry_t *entry);
 static void choose_sound(menu_entry_t *entry);
 static void choose_color(menu_entry_t *entry);
 static void choose_link_mode(menu_entry_t *entry);
+static void on_input_link_host(menu_entry_t *entry);
+static void on_input_link_port(menu_entry_t *entry);
 static void start_link();
 static void back_to_prev_menu();
 
@@ -152,6 +154,7 @@ struct menu_entry {
         } choices;
         struct {
             char *input;
+            void (*on_input)(menu_entry_t *);
             byte_t cursor;
             byte_t max_length;
             byte_t is_numeric;
@@ -187,8 +190,8 @@ menu_t link_menu = {
     .length = 5,
     .entries = {
         { "Mode:     |server,client", CHOICE, .choices = { choose_link_mode, 2, 0 } },
-        { "Host: ", INPUT },
-        { "Port: ", INPUT, .user_input.is_numeric = 1 },
+        { "Host: ", INPUT, .disabled = 1, .user_input.on_input = on_input_link_host },
+        { "Port: ", INPUT, .user_input = { .is_numeric = 1, .on_input = on_input_link_port } },
         { "Start link", ACTION, .action = start_link },
         { "Back...", ACTION, .action = back_to_prev_menu }
     }
@@ -226,17 +229,21 @@ static void choose_color(menu_entry_t *entry) {
 }
 
 static void choose_link_mode(menu_entry_t *entry) {
-    config.link_mode = entry->choices.position;
-    link_menu.entries[1].disabled = !config.link_mode;
+    link_menu.entries[1].disabled = !entry->choices.position;
+}
+
+static void on_input_link_host(menu_entry_t *entry) {
+    strncpy(config.link_host, entry->user_input.input, 39);
+    config.link_host[39] = '\0';
+}
+
+static void on_input_link_port(menu_entry_t *entry) {
+    config.link_port = atoi(entry->user_input.input);
 }
 
 static void start_link(void) {
-    strncpy(config.link_host, link_menu.entries[1].user_input.input, 40);
-    config.link_port = atoi(link_menu.entries[2].user_input.input);
-    // printf("%s-%d\n", entry->user_input.input, atoi(entry->user_input.input));
-
     int success;
-    if (config.link_mode)
+    if (link_menu.entries[0].choices.position)
         success = link_connect_to_server(config.link_host, config.link_port);
     else
         success = link_start_server(config.link_port);
@@ -270,16 +277,13 @@ void ui_init(void) {
     options_menu.entries[2].choices.position = config.sound * 4;
     options_menu.entries[3].choices.position = config.color_palette;
 
-    link_menu.entries[0].choices.position = config.link_mode;
-
     if (!(link_menu.entries[1].user_input.input = malloc(sizeof(char) * 40))) {
         perror("ERROR: ui_init");
         exit(EXIT_FAILURE);
     }
-    strncpy(link_menu.entries[1].user_input.input, config.link_host, 40);
+    snprintf(link_menu.entries[1].user_input.input, sizeof(config.link_host), "%s", config.link_host);
 
     link_menu.entries[1].user_input.cursor = strlen(config.link_host);
-    link_menu.entries[1].disabled = !config.link_mode;
     link_menu.entries[1].user_input.max_length = 39;
     link_menu.entries[1].user_input.visible_hi = 12;
 
@@ -389,9 +393,8 @@ void ui_draw_menu(void) {
             }
 
             char visible_input[13];
-            byte_t n = entry->user_input.visible_hi - entry->user_input.visible_lo;
-            strncpy(visible_input, &entry->user_input.input[entry->user_input.visible_lo], n);
-            visible_input[n] = '\0';
+            byte_t n = (entry->user_input.visible_hi - entry->user_input.visible_lo) + 1;
+            snprintf(visible_input, n, "%s", &entry->user_input.input[entry->user_input.visible_lo]);
 
             print_text(visible_input, x, y, text_color);
             if (current_menu->position == i && draw_frames < 32) {
@@ -494,6 +497,7 @@ void ui_press(SDL_Keysym *keysym) {
     if (entry->type == INPUT) {
         if (key == SDLK_DELETE) {
             delete_char_at(&entry->user_input.input, entry->user_input.cursor);
+            entry->user_input.on_input(entry);
 
             if (entry->user_input.visible_lo > 0) {
                 entry->user_input.visible_lo -= 1;
@@ -502,6 +506,8 @@ void ui_press(SDL_Keysym *keysym) {
         } else if (key == SDLK_BACKSPACE) {
             int new_cursor = entry->user_input.cursor - 1;
             delete_char_at(&entry->user_input.input, new_cursor);
+            entry->user_input.on_input(entry);
+
             if (new_cursor < 0)
                 new_cursor = 0;
             entry->user_input.cursor = new_cursor;
@@ -524,9 +530,9 @@ void ui_text_input(char *text) {
 
     if (entry->user_input.is_numeric && (key < '0' || key > '9'))
         return;
-
     if (strlen(entry->user_input.input) >= entry->user_input.max_length)
         return;
+
     char c = entry->user_input.input[entry->user_input.cursor];
     entry->user_input.input[entry->user_input.cursor++] = key;
     for (int i = entry->user_input.cursor; i <= entry->user_input.max_length; i++) {
@@ -534,4 +540,6 @@ void ui_text_input(char *text) {
         entry->user_input.input[i] = c;
         c = temp;
     }
+
+    entry->user_input.on_input(entry);
 }

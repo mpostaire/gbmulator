@@ -1,7 +1,7 @@
 #pragma once
 
 #include "types.h"
-#include "gbmulator.h"
+#include "config.h"
 
 enum ppu_mode {
     PPU_HBLANK,
