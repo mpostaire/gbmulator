@@ -1,6 +1,6 @@
 #pragma once
 
-#include "types.h"
+#include "emulator/emulator.h"
 
 struct config {
     byte_t scale;

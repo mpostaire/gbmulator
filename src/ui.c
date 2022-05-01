@@ -2,13 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "types.h"
 #include "gbmulator.h"
 #include "config.h"
-#include "ppu.h"
-#include "apu.h"
-#include "link.h"
-#include "utils.h"
+#include "emulator/emulator.h"
 
 // TODO fix this file (it's ugly code).
 
@@ -415,7 +411,7 @@ void ui_draw_menu(void) {
 }
 
 static void delete_char_at(char **text, byte_t n) {
-    if (n < 0 || n >= strlen(*text))
+    if (n >= strlen(*text))
         return;
 
     int i = n;
@@ -426,17 +422,17 @@ static void delete_char_at(char **text, byte_t n) {
 }
 
 void ui_press(SDL_Keysym *keysym) {
-    SDL_Keycode key = keysym->sym;
+    int key = sdl_key_to_joypad(keysym->sym);
     int count;
     menu_entry_t *entry = &current_menu->entries[current_menu->position];
     draw_frames = 0;
 
     switch (key) {
-    case RIGHT:
-    case LEFT:
+    case JOYPAD_RIGHT:
+    case JOYPAD_LEFT:
         switch (current_menu->entries[current_menu->position].type) {
         case CHOICE:
-            int new_pos = key == RIGHT ? entry->choices.position + 1 : entry->choices.position - 1;
+            int new_pos = key == JOYPAD_RIGHT ? entry->choices.position + 1 : entry->choices.position - 1;
             if (new_pos < 0)
                 new_pos = entry->choices.length - 1;
             else if (new_pos > entry->choices.length - 1)
@@ -445,7 +441,7 @@ void ui_press(SDL_Keysym *keysym) {
             (entry->choices.choose)(entry);
             break;
         case INPUT:
-            int new_cursor = entry->user_input.cursor + (key == RIGHT ? 1 : -1);
+            int new_cursor = entry->user_input.cursor + (key == JOYPAD_RIGHT ? 1 : -1);
             int len = strlen(entry->user_input.input);
             if (new_cursor > len)
                 new_cursor = len;
@@ -454,7 +450,7 @@ void ui_press(SDL_Keysym *keysym) {
             entry->user_input.cursor = new_cursor;
         }
         break;
-    case UP:
+    case JOYPAD_UP:
         count = 0;
         do {
             current_menu->position = current_menu->position - 1 < 0 ? current_menu->length - 1 : current_menu->position - 1;
@@ -463,7 +459,7 @@ void ui_press(SDL_Keysym *keysym) {
         if (current_menu->entries[current_menu->position].type == INPUT)
             current_menu->entries[current_menu->position].user_input.cursor = strlen(current_menu->entries[current_menu->position].user_input.input);
         break;
-    case DOWN:
+    case JOYPAD_DOWN:
         count = 0;
         do {
             current_menu->position = (current_menu->position + 1) % current_menu->length;
@@ -472,7 +468,7 @@ void ui_press(SDL_Keysym *keysym) {
         if (current_menu->entries[current_menu->position].type == INPUT)
             current_menu->entries[current_menu->position].user_input.cursor = strlen(current_menu->entries[current_menu->position].user_input.input);
         break;
-    case A:
+    case JOYPAD_A:
         if (entry->type == INPUT)
             break;
     case SDLK_RETURN:
@@ -491,7 +487,7 @@ void ui_press(SDL_Keysym *keysym) {
             break;
         }
         break;
-    case B:
+    case JOYPAD_B:
         // if I ever decide to add more than 1 level of depth of menus/submenus, make a stack of menus and pop here
         if (entry->type != INPUT)
             back_to_prev_menu();

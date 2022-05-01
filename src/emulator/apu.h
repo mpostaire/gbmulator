@@ -1,5 +1,7 @@
 #pragma once
 
+#include "types.h"
+
 #define APU_SAMPLE_RATE 44100
 #define APU_SAMPLE_COUNT 2048
 

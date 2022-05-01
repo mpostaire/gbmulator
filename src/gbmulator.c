@@ -2,17 +2,9 @@
 #include <stdio.h>
 #include <SDL2/SDL.h>
 
-#include "types.h"
-#include "utils.h"
-#include "mmu.h"
-#include "cpu.h"
-#include "ppu.h"
-#include "timer.h"
-#include "joypad.h"
-#include "link.h"
-#include "apu.h"
 #include "ui.h"
 #include "config.h"
+#include "emulator/emulator.h"
 
 #define WINDOW_TITLE "GBmulator"
 
@@ -22,8 +14,7 @@
 
 // TODO fix pause menu when starting game link connexion while pause menu is still active (it's working but weirdly so low priority)
 
-// TODO create subdir containing the emulation files/code and keep main/ui/config/(utils except bit macros - they stay with emulator code) separate inside the root src dir
-//      separate the emulation code from the main/ui/config/utils by making appropriate getter/setter/etc.
+// TODO rechceck mbc1/2/etc tests as i may have fixed some things
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_FALSE;
@@ -39,6 +30,20 @@ void gbmulator_unpause(void) {
     is_paused = SDL_FALSE;
 }
 
+int sdl_key_to_joypad(SDL_Keycode key) {
+    switch (key) {
+    case SDLK_RIGHT: return JOYPAD_RIGHT;
+    case SDLK_LEFT: return JOYPAD_LEFT;
+    case SDLK_UP: return JOYPAD_UP;
+    case SDLK_DOWN: return JOYPAD_DOWN;
+    case SDLK_KP_0: return JOYPAD_A;
+    case SDLK_KP_PERIOD: return JOYPAD_B;
+    case SDLK_KP_2: return JOYPAD_SELECT;
+    case SDLK_KP_1: return JOYPAD_START;
+    default: return key;
+    }
+}
+
 static void ppu_vblank_cb(byte_t *pixels) {
     SDL_UpdateTexture(ppu_texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
 }
@@ -49,24 +54,37 @@ static void apu_samples_ready_cb(float *audio_buffer) {
     SDL_QueueAudio(audio_device, audio_buffer, sizeof(float) * APU_SAMPLE_COUNT);
 }
 
-/**
- * Runs the emulator for an ammount of cycles.
- * @param cycles_limit the ammount of cycles the emulator will run for.
- */
-static void emulator_run_cycles(int cycles_limit) {
-    int cycles_count = 0;
-    while (cycles_count < cycles_limit) {
-        // TODO make timings accurate by forcing each cpu_step() to take 4 cycles: if it's not enough to finish an instruction,
-        // the next cpu_step() will resume the previous instruction. This will makes the timer "hack" (increment within a loop and not an if)
-        // obsolete while allowing accurate memory timings emulation.
-        int cycles = cpu_step();
-        timer_step(cycles);
-        link_step(cycles);
-        // TODO insert mmu_step(cycles) here to implement OAM DMA transfer delay
-        ppu_step(cycles);
-        apu_step(cycles);
-
-        cycles_count += cycles;
+static void handle_input(void) {
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+        switch (event.type) {
+        case SDL_TEXTINPUT:
+            if (is_paused)
+                ui_text_input(event.text.text);
+            break;
+        case SDL_KEYDOWN:
+            if (is_paused)
+                ui_press(&event.key.keysym);
+            if (event.key.repeat)
+                break;
+            switch (event.key.keysym.sym) {
+            case SDLK_PAUSE:
+            case SDLK_ESCAPE:
+                if (is_paused)
+                    ui_back_to_main_menu();
+                is_paused = !is_paused;
+                break;
+            }
+            joypad_press(sdl_key_to_joypad(event.key.keysym.sym));
+            break;
+        case SDL_KEYUP:
+            if (!event.key.repeat)
+                joypad_release(sdl_key_to_joypad(event.key.keysym.sym));
+            break;
+        case SDL_QUIT:
+            is_running = SDL_FALSE;
+            break;
+        }
     }
 }
 
@@ -78,7 +96,8 @@ int main(int argc, char **argv) {
 
     const char *config_path = load_config();
 
-    char *rom_title = mmu_load_cartridge(argv[1]);
+    // char *rom_title = mmu_load_cartridge(argv[1]);
+    char *rom_title = mmu_load_cartridge("roms/tests/mooneye/emulator-only/mbc1/rom_4Mb.gb"); // floating point exception
     char window_title[sizeof(WINDOW_TITLE) + 19];
     snprintf(window_title, sizeof(window_title), WINDOW_TITLE" - %s", rom_title);
     printf("Playing %s\n", rom_title);
@@ -121,38 +140,7 @@ int main(int argc, char **argv) {
 
     // main gbmulator loop
     while (is_running) {
-        // input handling
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            switch (event.type) {
-            case SDL_TEXTINPUT:
-                if (is_paused)
-                    ui_text_input(event.text.text);
-                break;
-            case SDL_KEYDOWN:
-                if (is_paused)
-                    ui_press(&event.key.keysym);
-                if (event.key.repeat)
-                    break;
-                switch (event.key.keysym.sym) {
-                case SDLK_PAUSE:
-                case SDLK_ESCAPE:
-                    if (is_paused)
-                        ui_back_to_main_menu();
-                    is_paused = !is_paused;
-                    break;
-                }
-                joypad_press(event.key.keysym.sym);
-                break;
-            case SDL_KEYUP:
-                if (!event.key.repeat)
-                    joypad_release(event.key.keysym.sym);
-                break;
-            case SDL_QUIT:
-                is_running = SDL_FALSE;
-                break;
-            }
-        }
+        handle_input();
 
         // emulation paused handling
         if (is_paused) {

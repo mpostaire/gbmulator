@@ -1,7 +1,7 @@
 *
 !*.*
 !src
-!src/*
+!src/**
 !Makefile
 .vscode
 !font

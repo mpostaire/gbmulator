@@ -38,7 +38,7 @@ byte_t mbc;
 byte_t rom_banks;
 byte_t ram_banks;
 byte_t current_rom_bank = 1;
-byte_t current_eram_bank = 0;
+s_word_t current_eram_bank = 0;
 byte_t mbc1_mode = 0;
 byte_t eram_enabled = 0;
 byte_t rtc_enabled = 0;

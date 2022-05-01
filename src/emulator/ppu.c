@@ -217,7 +217,7 @@ static void draw_objects(void) {
         // bit 6 of 1st byte == low bit of pixel 1, bit 6 of 2nd byte == high bit of pixel 1
         // etc.
         for (byte_t x = 0; x <= 7; x++) {
-            word_t pixel_x = pos_x + x;
+            s_word_t pixel_x = pos_x + x;
             // don't draw pixel if it's outside the screen
             if (pixel_x < 0 || pixel_x > 159)
                 continue;
@@ -350,14 +350,14 @@ void ppu_update_pixels_with_palette(byte_t new_palette) {
                 if (*R == color_palettes[current_color_palette][c][0] &&
                     *G == color_palettes[current_color_palette][c][1] &&
                     *B == color_palettes[current_color_palette][c][2]) {
+
+                    // replace old color value by the new one according to the new palette
+                    *R = color_palettes[new_palette][c][0];
+                    *G = color_palettes[new_palette][c][1];
+                    *B = color_palettes[new_palette][c][2];
                     break;
                 }
             }
-
-            // replace old color value by the new one according to the new palette
-            *R = color_palettes[new_palette][c][0];
-            *G = color_palettes[new_palette][c][1];
-            *B = color_palettes[new_palette][c][2];
         }
     }
 }

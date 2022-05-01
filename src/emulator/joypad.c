@@ -1,5 +1,3 @@
-#include <SDL2/SDL.h>
-
 #include "joypad.h"
 #include "cpu.h"
 #include "mmu.h"
@@ -20,44 +18,44 @@ byte_t joypad_get_input(void) {
         return 0xFF;
 }
 
-void joypad_press(SDL_Keycode key) {
+void joypad_press(enum joypad_button key) {
     switch (key) {
-    case RIGHT:
+    case JOYPAD_RIGHT:
         RESET_BIT(joypad_direction, 0);
         if (!CHECK_BIT(mem[P1], 4))
             cpu_request_interrupt(IRQ_JOYPAD);
         break;
-    case LEFT:
+    case JOYPAD_LEFT:
         RESET_BIT(joypad_direction, 1);
         if (!CHECK_BIT(mem[P1], 4))
             cpu_request_interrupt(IRQ_JOYPAD);
         break;
-    case UP:
+    case JOYPAD_UP:
         RESET_BIT(joypad_direction, 2);
         if (!CHECK_BIT(mem[P1], 4))
             cpu_request_interrupt(IRQ_JOYPAD);
         break;
-    case DOWN:
+    case JOYPAD_DOWN:
         RESET_BIT(joypad_direction, 3);
         if (!CHECK_BIT(mem[P1], 4))
             cpu_request_interrupt(IRQ_JOYPAD);
         break;
-    case A:
+    case JOYPAD_A:
         RESET_BIT(joypad_action, 0);
         if (!CHECK_BIT(mem[P1], 5))
             cpu_request_interrupt(IRQ_JOYPAD);
         break;
-    case B:
+    case JOYPAD_B:
         RESET_BIT(joypad_action, 1);
         if (!CHECK_BIT(mem[P1], 5))
             cpu_request_interrupt(IRQ_JOYPAD);
         break;
-    case SELECT:
+    case JOYPAD_SELECT:
         RESET_BIT(joypad_action, 2);
         if (!CHECK_BIT(mem[P1], 5))
             cpu_request_interrupt(IRQ_JOYPAD);
         break;
-    case START:
+    case JOYPAD_START:
         RESET_BIT(joypad_action, 3);
         if (!CHECK_BIT(mem[P1], 5))
             cpu_request_interrupt(IRQ_JOYPAD);
@@ -65,30 +63,30 @@ void joypad_press(SDL_Keycode key) {
     }
 }
 
-void joypad_release(SDL_Keycode key) {
+void joypad_release(enum joypad_button key) {
     switch (key) {
-    case RIGHT:
+    case JOYPAD_RIGHT:
         SET_BIT(joypad_direction, 0);
         break;
-    case LEFT:
+    case JOYPAD_LEFT:
         SET_BIT(joypad_direction, 1);
         break;
-    case UP:
+    case JOYPAD_UP:
         SET_BIT(joypad_direction, 2);
         break;
-    case DOWN:
+    case JOYPAD_DOWN:
         SET_BIT(joypad_direction, 3);
         break;
-    case A:
+    case JOYPAD_A:
         SET_BIT(joypad_action, 0);
         break;
-    case B:
+    case JOYPAD_B:
         SET_BIT(joypad_action, 1);
         break;
-    case SELECT:
+    case JOYPAD_SELECT:
         SET_BIT(joypad_action, 2);
         break;
-    case START:
+    case JOYPAD_START:
         SET_BIT(joypad_action, 3);
         break;
     }

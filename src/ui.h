@@ -2,7 +2,7 @@
 
 #include <SDL2/SDL.h>
 
-#include "types.h"
+#include "emulator/emulator.h"
 
 byte_t *ui_init(void);
 

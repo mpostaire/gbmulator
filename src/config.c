@@ -1,7 +1,14 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <dirent.h>
+#include <errno.h>
+#include <string.h>
+
 #include "config.h"
 #include "utils.h"
-#include "ppu.h"
-#include "apu.h"
+#include "emulator/emulator.h"
 
 struct config config = {
     .scale = 3,
@@ -9,6 +16,49 @@ struct config config = {
     .link_host = "127.0.0.1",
     .link_port = 7777
 };
+
+/**
+ * @returns 1 if directory_path is a directory, 0 otherwise.
+ */
+static int dir_exists(const char *directory_path) {
+    DIR *dir = opendir(directory_path);
+	if (dir == NULL) {
+		if (errno == ENOENT)
+			return 0;
+		perror("ERROR: directory_exists");
+        exit(EXIT_FAILURE);
+	}
+	closedir(dir);
+	return 1;
+}
+
+/**
+ * Creates directory_path and its parents if they don't exist.
+ */
+static void mkdirp(const char *directory_path) {
+    char buf[256];
+    snprintf(buf, sizeof(buf), "%s", directory_path);
+    size_t len = strlen(buf);
+
+    if (buf[len - 1] == '/')
+        buf[len - 1] = 0;
+
+    for (char *p = buf + 1; *p; p++) {
+        if (*p == '/') {
+            *p = 0;
+            if (mkdir(buf, S_IRWXU | S_IRGRP | S_IROTH) && errno != EEXIST) {
+                perror("ERROR: mkdirp");
+                exit(EXIT_FAILURE);
+            }
+            *p = '/';
+        }
+    }
+
+    if (mkdir(buf, S_IRWXU | S_IRGRP | S_IROTH) && errno != EEXIST) {
+        perror("ERROR: mkdirp");
+        exit(EXIT_FAILURE);
+    }
+}
 
 const char *load_config(void) {
     char *xdg_config_home = getenv("XDG_CONFIG_HOME");
@@ -37,7 +87,7 @@ const char *load_config(void) {
 
         char buf[64];
         while (fgets(buf, 64, f)) {
-            if (sscanf(buf, "scale=%hhd", &scale)) {
+            if (sscanf(buf, "scale=%hhu", &scale)) {
                 if (scale >= 1 && scale <= 5)
                     config.scale = scale;
             } else if (sscanf(buf, "speed=%f", &speed)) {
@@ -54,7 +104,7 @@ const char *load_config(void) {
 
                     apu_set_global_sound_level(sound);
                 }
-            } else if (sscanf(buf, "color_palette=%hhd", &color_palette)) {
+            } else if (sscanf(buf, "color_palette=%hhu", &color_palette)) {
                 ppu_set_color_palette(color_palette);
             } else if (sscanf(buf, "link_host=%39s", link_host)) {
                 strncpy(config.link_host, link_host, 40);
