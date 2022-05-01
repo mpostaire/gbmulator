@@ -20,6 +20,7 @@ SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_FALSE;
 
 SDL_Texture *ppu_texture;
+int ppu_texture_pitch;
 SDL_AudioDeviceID audio_device;
 
 void gbmulator_exit(void) {
@@ -45,11 +46,11 @@ int sdl_key_to_joypad(SDL_Keycode key) {
 }
 
 static void ppu_vblank_cb(byte_t *pixels) {
-    SDL_UpdateTexture(ppu_texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
+    SDL_UpdateTexture(ppu_texture, NULL, pixels, ppu_texture_pitch);
 }
 
 static void apu_samples_ready_cb(float *audio_buffer) {
-    while (SDL_GetQueuedAudioSize(audio_device) > APU_SAMPLE_COUNT * sizeof(float))
+    while (SDL_GetQueuedAudioSize(audio_device) > sizeof(float) * APU_SAMPLE_COUNT)
         SDL_Delay(1);
     SDL_QueueAudio(audio_device, audio_buffer, sizeof(float) * APU_SAMPLE_COUNT);
 }
@@ -94,17 +95,14 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    const char *config_path = load_config();
+    const char *config_path = config_load();
 
-    char *rom_title = mmu_load_cartridge(argv[1]);
+    char *rom_title = emulator_init(argv[1], ppu_vblank_cb, apu_samples_ready_cb);
     char window_title[sizeof(WINDOW_TITLE) + 19];
     snprintf(window_title, sizeof(window_title), WINDOW_TITLE" - %s", rom_title);
     printf("Playing %s\n", rom_title);
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
-
-    ppu_set_vblank_callback(ppu_vblank_cb);
-    apu_set_samples_ready_callback(apu_samples_ready_cb);
 
     byte_t *ui_pixels = ui_init();
 
@@ -113,28 +111,28 @@ int main(int argc, char **argv) {
     SDL_Window *window = SDL_CreateWindow(
         window_title,
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        160 * scale,
-        144 * scale,
+        GB_SCREEN_WIDTH * scale,
+        GB_SCREEN_HEIGHT * scale,
         SDL_WINDOW_HIDDEN /*| SDL_WINDOW_RESIZABLE*/
     );
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
 
-    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, 160, 144);
-
+    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 3;
     byte_t blank_pixel[3];
-    SDL_Texture *blank_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STATIC, 1, 1);
-
-    SDL_Texture *ui_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, 160, 144);
+    SDL_Texture *blank_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, 1, 1);
+    SDL_Texture *ui_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    int ui_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
     SDL_SetTextureBlendMode(ui_texture, SDL_BLENDMODE_BLEND);
 
-    SDL_AudioSpec AudioSettings = { 0 };
-    AudioSettings.freq = APU_SAMPLE_RATE;
-    AudioSettings.format = AUDIO_F32SYS;
-    AudioSettings.channels = 2;
-    AudioSettings.samples = APU_SAMPLE_COUNT;
-    AudioSettings.callback = NULL;
-    audio_device = SDL_OpenAudioDevice(NULL, 0, &AudioSettings, NULL, 0);
+    SDL_AudioSpec audio_settings = {
+        .freq = APU_SAMPLE_RATE,
+        .format = AUDIO_F32SYS,
+        .channels = 2,
+        .samples = APU_SAMPLE_COUNT
+    };
+    audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
     SDL_PauseAudioDevice(audio_device, 0);
 
     // main gbmulator loop
@@ -148,14 +146,14 @@ int main(int argc, char **argv) {
 
             if (scale != config.scale) {
                 scale = config.scale;
-                SDL_SetWindowSize(window, 160 * scale, 144 * scale);
+                SDL_SetWindowSize(window, GB_SCREEN_WIDTH * scale, GB_SCREEN_HEIGHT * scale);
             }
 
             // update ppu_texture to show color palette changes
-            SDL_UpdateTexture(ppu_texture, NULL, ppu_get_pixels(), 160 * sizeof(byte_t) * 3);
+            SDL_UpdateTexture(ppu_texture, NULL, ppu_get_pixels(), ppu_texture_pitch);
             SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
 
-            SDL_UpdateTexture(ui_texture, NULL, ui_pixels, 160 * sizeof(byte_t) * 4);
+            SDL_UpdateTexture(ui_texture, NULL, ui_pixels, ui_texture_pitch);
             SDL_RenderCopy(renderer, ui_texture, NULL, NULL);
 
             SDL_RenderPresent(renderer);
@@ -185,10 +183,9 @@ int main(int argc, char **argv) {
         // no delay at the end of the loop because it's redundant with vsync and sound emulation
     }
 
-    mmu_save_eram();
-    link_close_connection();
-    
-    save_config(config_path);
+    emulator_quit();
+
+    config_save(config_path);
 
     SDL_DestroyWindow(window);
     SDL_DestroyRenderer(renderer);

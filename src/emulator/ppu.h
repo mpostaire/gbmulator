@@ -4,6 +4,9 @@
 
 #define PPU_IS_MODE(m) ((mem[STAT] & 0x03) == (m))
 
+#define GB_SCREEN_WIDTH 160
+#define GB_SCREEN_HEIGHT 144
+
 enum ppu_mode {
     PPU_HBLANK,
     PPU_VBLANK,

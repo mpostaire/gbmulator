@@ -10,10 +10,10 @@
 
 #define SET_PIXEL_RGBA(buf, x, y, color, alpha) \
     byte_t *_tmp_color_values = ppu_get_color_values((color)); \
-    *(buf + ((y) * 160 * 4) + ((x) * 4)) = _tmp_color_values[0]; \
-    *(buf + ((y) * 160 * 4) + ((x) * 4) + 1) = _tmp_color_values[1]; \
-    *(buf + ((y) * 160 * 4) + ((x) * 4) + 2) = _tmp_color_values[2]; \
-    *(buf + ((y) * 160 * 4) + ((x) * 4) + 3) = (alpha);
+    *(buf + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)) = _tmp_color_values[0]; \
+    *(buf + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1) = _tmp_color_values[1]; \
+    *(buf + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2) = _tmp_color_values[2]; \
+    *(buf + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 3) = (alpha);
 
 const byte_t font[0x5F][0x8] = {
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
@@ -113,7 +113,7 @@ const byte_t font[0x5F][0x8] = {
     { 0x00, 0x00, 0x00, 0x10, 0x2A, 0x04, 0x00, 0x00 }
 };
 
-byte_t ui_pixels[160 * 144 * 4];
+byte_t ui_pixels[GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 4];
 
 byte_t draw_frames = 0;
 
@@ -328,8 +328,8 @@ static void print_text(const char *text, int x, int y, color color) {
 }
 
 static void ui_clear(void) {
-    for (int i = 0; i < 160; i++) {
-        for (int j = 0; j < 144; j++) {
+    for (int i = 0; i < GB_SCREEN_WIDTH; i++) {
+        for (int j = 0; j < GB_SCREEN_HEIGHT; j++) {
             SET_PIXEL_RGBA(ui_pixels, i, j, BLACK, 0xD5);
         }
     }

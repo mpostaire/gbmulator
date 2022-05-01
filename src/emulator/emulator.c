@@ -22,3 +22,14 @@ void emulator_run_cycles(int cycles_limit) {
         cycles_count += cycles;
     }
 }
+
+char *emulator_init(const char *rom_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer)) {
+    ppu_set_vblank_callback(ppu_vblank_cb);
+    apu_set_samples_ready_callback(apu_samples_ready_cb);
+    return mmu_load_cartridge(rom_path);
+}
+
+void emulator_quit(void) {
+    mmu_save_eram();
+    link_close_connection();
+}

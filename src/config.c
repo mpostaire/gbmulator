@@ -7,7 +7,6 @@
 #include <string.h>
 
 #include "config.h"
-#include "utils.h"
 #include "emulator/emulator.h"
 
 struct config config = {
@@ -60,7 +59,7 @@ static void mkdirp(const char *directory_path) {
     }
 }
 
-const char *load_config(void) {
+const char *config_load(void) {
     char *xdg_config_home = getenv("XDG_CONFIG_HOME");
     char *prefix = xdg_config_home;
     char *home = getenv("HOME");
@@ -119,7 +118,7 @@ const char *load_config(void) {
     return config_path;
 }
 
-void save_config(const char* config_path) {
+void config_save(const char* config_path) {
     char *last_slash = strrchr(config_path, '/');
     int last_slash_index = (int) (last_slash - config_path);
 

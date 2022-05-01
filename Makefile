@@ -12,9 +12,9 @@ SRC:=$(call rwildcard,$(SDIR),*.c)
 OBJ:=$(SRC:$(SDIR)/%.c=$(ODIR)/%.o)
 
 # ODIR and subdirectories structure to mkdir if they don't exist
-to_make_odirs:=$(sort $(foreach d,$(OBJ),$(subst /$(lastword $(subst /, ,$d)),,$d)))
+odirs_structure:=$(sort $(foreach d,$(OBJ),$(subst /$(lastword $(subst /, ,$d)),,$d)))
 
-all: $(to_make_odirs) $(EXEC)
+all: $(odirs_structure) $(EXEC)
 
 debug: CFLAGS+=-g -Og -D DEBUG
 debug: all
@@ -26,7 +26,7 @@ $(ODIR)/%.o: $(SDIR)/%.c
 	$(CC) -o $@ $< $(CFLAGS) -c -MMD
 	$(CC) -o $@ -c $< $(CFLAGS) $(LDLIBS)
 
-$(to_make_odirs):
+$(odirs_structure):
 	mkdir -p $@
 
 run: all

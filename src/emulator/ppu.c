@@ -8,9 +8,9 @@
 
 #define PPU_SET_MODE(m) mem[STAT] = (mem[STAT] & 0xFC) | (m)
 
-#define SET_PIXEL(buf, x, y, color) *(buf + ((y) * 160 * 3) + ((x) * 3)) = color_palettes[current_color_palette][(color)][0]; \
-                            *(buf + ((y) * 160 * 3) + ((x) * 3) + 1) = color_palettes[current_color_palette][(color)][1]; \
-                            *(buf + ((y) * 160 * 3) + ((x) * 3) + 2) = color_palettes[current_color_palette][(color)][2];
+#define SET_PIXEL(buf, x, y, color) *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = color_palettes[current_color_palette][(color)][0]; \
+                            *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 1) = color_palettes[current_color_palette][(color)][1]; \
+                            *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 2) = color_palettes[current_color_palette][(color)][2];
 
 byte_t color_palettes[][4][3] = {
     { // grayscale colors
@@ -28,8 +28,8 @@ byte_t color_palettes[][4][3] = {
 };
 byte_t current_color_palette = 0;
 
-byte_t pixels[160 * 144 * 3];
-byte_t pixels_cache_color_data[160][144];
+byte_t pixels[GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 3];
+byte_t pixels_cache_color_data[GB_SCREEN_WIDTH][GB_SCREEN_HEIGHT];
 
 int ppu_cycles = 0;
 
@@ -65,7 +65,7 @@ static void draw_bg_win(void) {
     word_t bg_tilemap_address = CHECK_BIT(mem[LCDC], 3) ? 0x9C00 : 0x9800;
     word_t win_tilemap_address = CHECK_BIT(mem[LCDC], 6) ? 0x9C00 : 0x9800;
 
-    for (int x = 0; x < 160; x++) {
+    for (int x = 0; x < GB_SCREEN_WIDTH; x++) {
         // background and window disabled, draw white pixel
         if (!CHECK_BIT(mem[LCDC], 0)) {
             SET_PIXEL(pixels, x, y, get_color(WHITE, BGP));
@@ -175,7 +175,7 @@ static void draw_objects(void) {
     // 2. RENDER THE OBJECTS
 
     // store the x position of each pixel drawn by the highest priority object
-    byte_t obj_pixel_priority[160];
+    byte_t obj_pixel_priority[GB_SCREEN_WIDTH];
     // default at 255 because no object will have that much of x coordinate (and if so, will not be visible anyway)
     memset(obj_pixel_priority, 255, sizeof(obj_pixel_priority));
 
@@ -300,7 +300,7 @@ void ppu_step(int cycles) {
             mem[LY] += 1;
             ignore = 0;
 
-            if (mem[LY] == 144) {
+            if (mem[LY] == GB_SCREEN_HEIGHT) {
                 PPU_SET_MODE(PPU_VBLANK);
                 request_stat_irq = CHECK_BIT(mem[STAT], 4);
 
@@ -338,11 +338,11 @@ void ppu_step(int cycles) {
 
 void ppu_update_pixels_with_palette(byte_t new_palette) {
     // replace old color values of the pixels with the new ones according to the new palette
-    for (int i = 0; i < 160; i++) {
-        for (int j = 0; j < 144; j++) {
-            byte_t *R = (pixels + ((j) * 160 * 3) + ((i) * 3)) ;
-            byte_t *G = (pixels + ((j) * 160 * 3) + ((i) * 3) + 1);
-            byte_t *B = (pixels + ((j) * 160 * 3) + ((i) * 3) + 2);
+    for (int i = 0; i < GB_SCREEN_WIDTH; i++) {
+        for (int j = 0; j < GB_SCREEN_HEIGHT; j++) {
+            byte_t *R = (pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3)) ;
+            byte_t *G = (pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3) + 1);
+            byte_t *B = (pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3) + 2);
 
             // find which color is at pixel (i,j)
             color c;

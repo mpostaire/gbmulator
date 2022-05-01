@@ -9,6 +9,6 @@ struct config {
     int link_port;
 } extern config;
 
-const char *load_config(void);
+const char *config_load(void);
 
-void save_config(const char* config_path);
+void config_save(const char* config_path);
