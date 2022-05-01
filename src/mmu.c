@@ -4,7 +4,7 @@
 #include <time.h>
 
 #include "types.h"
-#include "mem.h"
+#include "mmu.h"
 #include "utils.h"
 #include "ppu.h"
 #include "joypad.h"
@@ -63,7 +63,7 @@ static char *get_save_filepath(void) {
     return buf;
 }
 
-char *mem_load_cartridge(const char *filepath) {
+char *mmu_load_cartridge(const char *filepath) {
     rom_filepath = filepath;
 
     // clear memory
@@ -73,7 +73,7 @@ char *mem_load_cartridge(const char *filepath) {
 
     FILE *f = fopen(filepath, "rb");
     if (!f) {
-        perror("ERROR: mem_load_cartridge");
+        perror("ERROR: mmu_load_cartridge");
         exit(EXIT_FAILURE);
     }
     fread(cartridge, sizeof(cartridge), 1, f);
@@ -81,7 +81,7 @@ char *mem_load_cartridge(const char *filepath) {
     fclose(f);
 
     if (cartridge[0x0143] == 0xC0) {
-        printf("ERROR: mem_load_cartridge: CGB only rom - this emulator does not support CGB games yet\n");
+        printf("ERROR: mmu_load_cartridge: CGB only rom - this emulator does not support CGB games yet\n");
         exit(EXIT_FAILURE);
     }
 
@@ -108,7 +108,7 @@ char *mem_load_cartridge(const char *filepath) {
     //     mbc = MBC7;
     //     break;
     default:
-        printf("ERROR: mem_load_cartridge: MBC byte %02X not supported\n", cartridge[0x0147]);
+        printf("ERROR: mmu_load_cartridge: MBC byte %02X not supported\n", cartridge[0x0147]);
         exit(EXIT_FAILURE);
         break;
     }
@@ -131,7 +131,7 @@ char *mem_load_cartridge(const char *filepath) {
     // get rom title
     char *title = malloc(sizeof(char) * 17);
     if (!title) {
-        perror("ERROR: mem_load_cartridge");
+        perror("ERROR: mmu_load_cartridge");
         exit(EXIT_FAILURE);
     }
     strncpy(title, (char *) &cartridge[0x134], 16);
@@ -142,7 +142,7 @@ char *mem_load_cartridge(const char *filepath) {
     for (int i = 0x0134; i <= 0x014C; i++)
         sum = sum - cartridge[i] - 1;
     if (((byte_t) (sum & 0xFF)) != cartridge[0x014D]) {
-        printf("ERROR: mem_load_cartridge: invalid checksum\n");
+        printf("ERROR: mmu_load_cartridge: invalid checksum\n");
         exit(EXIT_FAILURE);
     }
 
@@ -165,7 +165,7 @@ char *mem_load_cartridge(const char *filepath) {
     return title;
 }
 
-void mem_save_eram(void) {
+void mmu_save_eram(void) {
     if (!ram_banks) return;
 
     char *save_filepath = get_save_filepath();
@@ -173,11 +173,11 @@ void mem_save_eram(void) {
     free(save_filepath);
 
     if (!f) {
-        perror("ERROR: mem_save_eram: opening the save file");
+        perror("ERROR: mmu_save_eram: opening the save file");
         exit(EXIT_FAILURE);
     }
     if (!fwrite(eram, sizeof(eram), 1, f)) {
-        printf("ERROR: mem_save_eram: writing to save file\n");
+        printf("ERROR: mmu_save_eram: writing to save file\n");
         exit(EXIT_FAILURE);
     }
     fclose(f);
@@ -307,7 +307,7 @@ static void write_mbc_eram(word_t address, byte_t data) {
     }
 }
 
-byte_t mem_read(word_t address) {
+byte_t mmu_read(word_t address) {
     if (mbc == MBC1 || mbc == MBC2 || mbc == MBC3) { // TODO not all mooneye's MBC tests pass
         if (address >= 0x4000 && address < 0x8000) // ROM_BANKN
             return cartridge[(address - 0x4000) + (current_rom_bank * 0x4000)];
@@ -400,7 +400,7 @@ byte_t mem_read(word_t address) {
     return mem[address];
 }
 
-void mem_write(word_t address, byte_t data) {
+void mmu_write(word_t address, byte_t data) {
     if (address < VRAM) {
         write_mbc_registers(address, data);
     } else if (address >= ERAM && address < WRAM_BANK0) {

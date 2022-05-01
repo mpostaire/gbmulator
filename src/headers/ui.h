@@ -4,9 +4,7 @@
 
 #include "types.h"
 
-extern byte_t ui_pixels[160 * 144 * 4];
-
-void ui_init(void);
+byte_t *ui_init(void);
 
 void ui_back_to_main_menu(void);
 

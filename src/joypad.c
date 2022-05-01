@@ -2,7 +2,7 @@
 
 #include "joypad.h"
 #include "cpu.h"
-#include "mem.h"
+#include "mmu.h"
 #include "utils.h"
 #include "types.h"
 

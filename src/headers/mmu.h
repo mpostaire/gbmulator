@@ -78,16 +78,16 @@ enum mem_map {
 /**
  * @returns loaded rom title
  */
-char *mem_load_cartridge(const char *filepath);
+char *mmu_load_cartridge(const char *filepath);
 
-void mem_save_eram(void);
-
-/**
- * only used in instructions (opcode execution)
- */
-byte_t mem_read(word_t address);
+void mmu_save_eram(void);
 
 /**
  * only used in instructions (opcode execution)
  */
-void mem_write(word_t address, byte_t data);
+byte_t mmu_read(word_t address);
+
+/**
+ * only used in instructions (opcode execution)
+ */
+void mmu_write(word_t address, byte_t data);

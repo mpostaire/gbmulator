@@ -1,5 +1,8 @@
 #pragma once
 
+#define APU_SAMPLE_RATE 44100
+#define APU_SAMPLE_COUNT 2048
+
 typedef struct channel {
     byte_t enabled;
 
@@ -34,6 +37,15 @@ extern byte_t apu_enabled;
 
 void apu_channel_trigger(channel_t *c);
 
-void apu_step(int cycles, float speed);
+/**
+ * Calls samples_ready_callback given in the apu_init() function whenever there is audio to be played.
+ */
+void apu_step(int cycles);
 
-void apu_init(void);
+void apu_set_sampling_speed_multiplier(float speed);
+
+void apu_set_global_sound_level(float);
+
+float apu_get_global_sound_level(void);
+
+void apu_set_samples_ready_callback(void (*samples_ready_callback)(float *audio_buffer));

@@ -3,7 +3,7 @@
 
 #include "utils.h"
 #include "cpu.h"
-#include "mem.h"
+#include "mmu.h"
 
 struct instruction {
     char *name;
@@ -536,13 +536,13 @@ static void push(word_t word) {
     byte_t hi = word >> 8;
     byte_t lo = word & 0xFF;
     registers.sp--;
-    mem_write(registers.sp, hi);
+    mmu_write(registers.sp, hi);
     registers.sp--;
-    mem_write(registers.sp, lo);
+    mmu_write(registers.sp, lo);
 }
 
 static word_t pop(void) {
-    word_t data = mem_read(registers.sp) | mem_read(registers.sp + 1) << 8;
+    word_t data = mmu_read(registers.sp) | mmu_read(registers.sp + 1) << 8;
     registers.sp += 2;
     return data;
 }
@@ -767,7 +767,7 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x06: // RLC (HL)
-        mem_write(registers.hl, rlc(mem_read(registers.hl)));
+        mmu_write(registers.hl, rlc(mmu_read(registers.hl)));
         cycles = 16;
         break;
     case 0x07: // RLC A
@@ -799,7 +799,7 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x0E: // RRC (HL)
-        mem_write(registers.hl, rrc(mem_read(registers.hl)));
+        mmu_write(registers.hl, rrc(mmu_read(registers.hl)));
         cycles = 16;
         break;
     case 0x0F: // RRC A
@@ -831,7 +831,7 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x16: // RL (HL)
-        mem_write(registers.hl, rl(mem_read(registers.hl)));
+        mmu_write(registers.hl, rl(mmu_read(registers.hl)));
         cycles = 16;
         break;
     case 0x17: // RL A
@@ -863,7 +863,7 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x1E: // RR (HL)
-        mem_write(registers.hl, rr(mem_read(registers.hl)));
+        mmu_write(registers.hl, rr(mmu_read(registers.hl)));
         cycles = 16;
         break;
     case 0x1F: // RR A
@@ -895,7 +895,7 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x26: // SLA (HL)
-        mem_write(registers.hl, sla(mem_read(registers.hl)));
+        mmu_write(registers.hl, sla(mmu_read(registers.hl)));
         cycles = 16;
         break;
     case 0x27: // SLA A
@@ -927,7 +927,7 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x2E: // SRA (HL)
-        mem_write(registers.hl, sra(mem_read(registers.hl)));
+        mmu_write(registers.hl, sra(mmu_read(registers.hl)));
         cycles = 16;
         break;
     case 0x2F: // SRA A
@@ -959,7 +959,7 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x36: // SWAP (HL)
-        mem_write(registers.hl, swap(mem_read(registers.hl)));
+        mmu_write(registers.hl, swap(mmu_read(registers.hl)));
         cycles = 16;
         break;
     case 0x37: // SWAP A
@@ -991,7 +991,7 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x3E: // SRL (HL)
-        mem_write(registers.hl, srl(mem_read(registers.hl)));
+        mmu_write(registers.hl, srl(mmu_read(registers.hl)));
         cycles = 16;
         break;
     case 0x3F: // SRL A
@@ -1023,7 +1023,7 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x46: // BIT 0, (HL)
-        bit(mem_read(registers.hl), 0);
+        bit(mmu_read(registers.hl), 0);
         cycles = 12;
         break;
     case 0x47: // BIT 0, A
@@ -1055,7 +1055,7 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x4E: // BIT 1, (HL)
-        bit(mem_read(registers.hl), 1);
+        bit(mmu_read(registers.hl), 1);
         cycles = 12;
         break;
     case 0x4F: // BIT 1, A
@@ -1087,7 +1087,7 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x56: // BIT 2, (HL)
-        bit(mem_read(registers.hl), 2);
+        bit(mmu_read(registers.hl), 2);
         cycles = 12;
         break;
     case 0x57: // BIT 2, A
@@ -1119,7 +1119,7 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x5E: // BIT 3, (HL)
-        bit(mem_read(registers.hl), 3);
+        bit(mmu_read(registers.hl), 3);
         cycles = 12;
         break;
     case 0x5F: // BIT 3, A
@@ -1151,7 +1151,7 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x66: // BIT 4, (HL)
-        bit(mem_read(registers.hl), 4);
+        bit(mmu_read(registers.hl), 4);
         cycles = 12;
         break;
     case 0x67: // BIT 4, A
@@ -1183,7 +1183,7 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x6E: // BIT 5, (HL)
-        bit(mem_read(registers.hl), 5);
+        bit(mmu_read(registers.hl), 5);
         cycles = 12;
         break;
     case 0x6F: // BIT 5, A
@@ -1215,7 +1215,7 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x76: // BIT 6, (HL)
-        bit(mem_read(registers.hl), 6);
+        bit(mmu_read(registers.hl), 6);
         cycles = 12;
         break;
     case 0x77: // BIT 6, A
@@ -1247,7 +1247,7 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x7E: // BIT 7, (HL)
-        bit(mem_read(registers.hl), 7);
+        bit(mmu_read(registers.hl), 7);
         cycles = 12;
         break;
     case 0x7F: // BIT 7, A
@@ -1279,8 +1279,8 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x86: // RES 0, (HL)
-        temp = mem_read(registers.hl);
-        mem_write(registers.hl, RESET_BIT(temp, 0));
+        temp = mmu_read(registers.hl);
+        mmu_write(registers.hl, RESET_BIT(temp, 0));
         cycles = 16;
         break;
     case 0x87: // RES 0, A
@@ -1312,8 +1312,8 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x8E: // RES 1, (HL)
-        temp = mem_read(registers.hl);
-        mem_write(registers.hl, RESET_BIT(temp, 1));
+        temp = mmu_read(registers.hl);
+        mmu_write(registers.hl, RESET_BIT(temp, 1));
         cycles = 16;
         break;
     case 0x8F: // RES 1, A
@@ -1345,8 +1345,8 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x96: // RES 2, (HL)
-        temp = mem_read(registers.hl);
-        mem_write(registers.hl, RESET_BIT(temp, 2));
+        temp = mmu_read(registers.hl);
+        mmu_write(registers.hl, RESET_BIT(temp, 2));
         cycles = 16;
         break;
     case 0x97: // RES 2, A
@@ -1378,8 +1378,8 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0x9E: // RES 3, (HL)
-        temp = mem_read(registers.hl);
-        mem_write(registers.hl, RESET_BIT(temp, 3));
+        temp = mmu_read(registers.hl);
+        mmu_write(registers.hl, RESET_BIT(temp, 3));
         cycles = 16;
         break;
     case 0x9F: // RES 3, A
@@ -1411,8 +1411,8 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0xA6: // RES 4, (HL)
-        temp = mem_read(registers.hl);
-        mem_write(registers.hl, RESET_BIT(temp, 4));
+        temp = mmu_read(registers.hl);
+        mmu_write(registers.hl, RESET_BIT(temp, 4));
         cycles = 16;
         break;
     case 0xA7: // RES 4, A
@@ -1444,8 +1444,8 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0xAE: // RES 5, (HL)
-        temp = mem_read(registers.hl);
-        mem_write(registers.hl, RESET_BIT(temp, 5));
+        temp = mmu_read(registers.hl);
+        mmu_write(registers.hl, RESET_BIT(temp, 5));
         cycles = 16;
         break;
     case 0xAF: // RES 5, A
@@ -1477,8 +1477,8 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0xB6: // RES 6, (HL)
-        temp = mem_read(registers.hl);
-        mem_write(registers.hl, RESET_BIT(temp, 6));
+        temp = mmu_read(registers.hl);
+        mmu_write(registers.hl, RESET_BIT(temp, 6));
         cycles = 16;
         break;
     case 0xB7: // RES 6, A
@@ -1510,8 +1510,8 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0xBE: // RES 7, (HL)
-        temp = mem_read(registers.hl);
-        mem_write(registers.hl, RESET_BIT(temp, 7));
+        temp = mmu_read(registers.hl);
+        mmu_write(registers.hl, RESET_BIT(temp, 7));
         cycles = 16;
         break;
     case 0xBF: // RES 7, A
@@ -1543,8 +1543,8 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0xC6: // SET 0, (HL)
-        temp = mem_read(registers.hl);
-        mem_write(registers.hl, SET_BIT(temp, 0));
+        temp = mmu_read(registers.hl);
+        mmu_write(registers.hl, SET_BIT(temp, 0));
         cycles = 16;
         break;
     case 0xC7: // SET 0, A
@@ -1576,8 +1576,8 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0xCE: // SET 1, (HL)
-        temp = mem_read(registers.hl);
-        mem_write(registers.hl, SET_BIT(temp, 1));
+        temp = mmu_read(registers.hl);
+        mmu_write(registers.hl, SET_BIT(temp, 1));
         cycles = 16;
         break;
     case 0xCF: // SET 1, A
@@ -1609,8 +1609,8 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0xD6: // SET 2, (HL)
-        temp = mem_read(registers.hl);
-        mem_write(registers.hl, SET_BIT(temp, 2));
+        temp = mmu_read(registers.hl);
+        mmu_write(registers.hl, SET_BIT(temp, 2));
         cycles = 16;
         break;
     case 0xD7: // SET 2, A
@@ -1642,8 +1642,8 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0xDE: // SET 3, (HL)
-        temp = mem_read(registers.hl);
-        mem_write(registers.hl, SET_BIT(temp, 3));
+        temp = mmu_read(registers.hl);
+        mmu_write(registers.hl, SET_BIT(temp, 3));
         cycles = 16;
         break;
     case 0xDF: // SET 3, A
@@ -1675,8 +1675,8 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0xE6: // SET 4, (HL)
-        temp = mem_read(registers.hl);
-        mem_write(registers.hl, SET_BIT(temp, 4));
+        temp = mmu_read(registers.hl);
+        mmu_write(registers.hl, SET_BIT(temp, 4));
         cycles = 16;
         break;
     case 0xE7: // SET 4, A
@@ -1708,8 +1708,8 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0xEE: // SET 5, (HL)
-        temp = mem_read(registers.hl);
-        mem_write(registers.hl, SET_BIT(temp, 5));
+        temp = mmu_read(registers.hl);
+        mmu_write(registers.hl, SET_BIT(temp, 5));
         cycles = 16;
         break;
     case 0xEF: // SET 5, A
@@ -1741,8 +1741,8 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0xF6: // SET 6, (HL)
-        temp = mem_read(registers.hl);
-        mem_write(registers.hl, SET_BIT(temp, 6));
+        temp = mmu_read(registers.hl);
+        mmu_write(registers.hl, SET_BIT(temp, 6));
         cycles = 16;
         break;
     case 0xF7: // SET 6, A
@@ -1774,8 +1774,8 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     case 0xFE: // SET 7, (HL)
-        temp = mem_read(registers.hl);
-        mem_write(registers.hl, SET_BIT(temp, 7));
+        temp = mmu_read(registers.hl);
+        mmu_write(registers.hl, SET_BIT(temp, 7));
         cycles = 16;
         break;
     case 0xFF: // SET 7, A
@@ -1804,7 +1804,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 12;
         break;
     case 0x02: // LD (BC),A
-        mem_write(registers.bc, registers.a);
+        mmu_write(registers.bc, registers.a);
         cycles = 8;
         break;
     case 0x03: // INC BC
@@ -1829,8 +1829,8 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0x08: // LD (nn), SP
-        mem_write(operand, registers.sp & 0xFF);
-        mem_write(operand + 1, registers.sp >> 8);
+        mmu_write(operand, registers.sp & 0xFF);
+        mmu_write(operand + 1, registers.sp >> 8);
         cycles = 20;
         break;
     case 0x09: // ADD HL, BC
@@ -1838,7 +1838,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 8;
         break;
     case 0x0A: // LD A,(BC)
-        registers.a = mem_read(registers.bc);
+        registers.a = mmu_read(registers.bc);
         cycles = 8;
         break;
     case 0x0B: // DEC BC
@@ -1871,7 +1871,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 12;
         break;
     case 0x12: // LD (DE),A
-        mem_write(registers.de, registers.a);
+        mmu_write(registers.de, registers.a);
         cycles = 8;
         break;
     case 0x13: // INC DE
@@ -1904,7 +1904,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 8;
         break;
     case 0x1A: // LD A,(DE)
-        registers.a = mem_read(registers.de);
+        registers.a = mmu_read(registers.de);
         cycles = 8;
         break;
     case 0x1B: // DEC DE
@@ -1941,7 +1941,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 12;
         break;
     case 0x22: // LDI (HL), A
-        mem_write(registers.hl, registers.a);
+        mmu_write(registers.hl, registers.a);
         registers.hl++;
         cycles = 8;
         break;
@@ -1994,7 +1994,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 8;
         break;
     case 0x2A: // LDI A, (HL)
-        registers.a = mem_read(registers.hl);
+        registers.a = mmu_read(registers.hl);
         registers.hl++;
         cycles = 8;
         break;
@@ -2032,7 +2032,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 12;
         break;
     case 0x32: // LDD (HL),A
-        mem_write(registers.hl, registers.a);
+        mmu_write(registers.hl, registers.a);
         registers.hl--;
         cycles = 8;
         break;
@@ -2041,15 +2041,15 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 8;
         break;
     case 0x34: // INC (HL)
-        mem_write(registers.hl, inc(mem_read(registers.hl)));
+        mmu_write(registers.hl, inc(mmu_read(registers.hl)));
         cycles = 12;
         break;
     case 0x35: // DEC (HL)
-        mem_write(registers.hl, dec(mem_read(registers.hl)));
+        mmu_write(registers.hl, dec(mmu_read(registers.hl)));
         cycles = 12;
         break;
     case 0x36: // LD (HL),n
-        mem_write(registers.hl, operand);
+        mmu_write(registers.hl, operand);
         cycles = 12;
         break;
     case 0x37: // SCF
@@ -2070,7 +2070,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 8;
         break;
     case 0x3A: // LDD A, (HL)
-        registers.a = mem_read(registers.hl);
+        registers.a = mmu_read(registers.hl);
         registers.hl--;
         cycles = 8;
         break;
@@ -2120,7 +2120,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0x46: // LD B,(HL)
-        registers.b = mem_read(registers.hl);
+        registers.b = mmu_read(registers.hl);
         cycles = 8;
         break;
     case 0x47: // LD B,A
@@ -2152,7 +2152,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0x4E: // LD C,(HL)
-        registers.c = mem_read(registers.hl);
+        registers.c = mmu_read(registers.hl);
         cycles = 8;
         break;
     case 0x4F: // LD C,A
@@ -2184,7 +2184,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0x56: // LD D,(HL)
-        registers.d = mem_read(registers.hl);
+        registers.d = mmu_read(registers.hl);
         cycles = 8;
         break;
     case 0x57: // LD D,A
@@ -2216,7 +2216,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0x5E: // LD E,(HL)
-        registers.e = mem_read(registers.hl);
+        registers.e = mmu_read(registers.hl);
         cycles = 8;
         break;
     case 0x5F: // LD E,A
@@ -2248,7 +2248,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0x66: // LD H,(HL)
-        registers.h = mem_read(registers.hl);
+        registers.h = mmu_read(registers.hl);
         cycles = 8;
         break;
     case 0x67: // LD H,A
@@ -2280,7 +2280,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0x6E: // LD L,(HL)
-        registers.l = mem_read(registers.hl);
+        registers.l = mmu_read(registers.hl);
         cycles = 8;
         break;
     case 0x6F: // LD L,A
@@ -2288,27 +2288,27 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0x70: // LD (HL),B
-        mem_write(registers.hl, registers.b);
+        mmu_write(registers.hl, registers.b);
         cycles = 8;
         break;
     case 0x71: // LD (HL),C
-        mem_write(registers.hl, registers.c);
+        mmu_write(registers.hl, registers.c);
         cycles = 8;
         break;
     case 0x72: // LD (HL),D
-        mem_write(registers.hl, registers.d);
+        mmu_write(registers.hl, registers.d);
         cycles = 8;
         break;
     case 0x73: // LD (HL),E
-        mem_write(registers.hl, registers.e);
+        mmu_write(registers.hl, registers.e);
         cycles = 8;
         break;
     case 0x74: // LD (HL),H
-        mem_write(registers.hl, registers.h);
+        mmu_write(registers.hl, registers.h);
         cycles = 8;
         break;
     case 0x75: // LD (HL),L
-        mem_write(registers.hl, registers.l);
+        mmu_write(registers.hl, registers.l);
         cycles = 8;
         break;
     case 0x76: // HALT
@@ -2316,7 +2316,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0x77: // LD (HL),A
-        mem_write(registers.hl, registers.a);
+        mmu_write(registers.hl, registers.a);
         cycles = 8;
         break;
     case 0x78: // LD A,B
@@ -2344,7 +2344,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0x7E: // LD A,(HL)
-        registers.a = mem_read(registers.hl);
+        registers.a = mmu_read(registers.hl);
         cycles = 8;
         break;
     case 0x7F: // LD A,A
@@ -2376,7 +2376,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0x86: // ADD A, (HL)
-        add8(mem_read(registers.hl));
+        add8(mmu_read(registers.hl));
         cycles = 8;
         break;
     case 0x87: // ADD A, A
@@ -2408,7 +2408,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0x8E: // ADC A, (HL)
-        adc(mem_read(registers.hl));
+        adc(mmu_read(registers.hl));
         cycles = 8;
         break;
     case 0x8F: // ADC A, A
@@ -2440,7 +2440,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0x96: // SUB A, (HL)
-        sub8(mem_read(registers.hl));
+        sub8(mmu_read(registers.hl));
         cycles = 8;
         break;
     case 0x97: // SUB A, A
@@ -2472,7 +2472,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0x9E: // SBC A, (HL)
-        sbc(mem_read(registers.hl));
+        sbc(mmu_read(registers.hl));
         cycles = 8;
         break;
     case 0x9F: // SBC A, A
@@ -2504,7 +2504,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0xA6: // AND (HL)
-        and(mem_read(registers.hl));
+        and(mmu_read(registers.hl));
         cycles = 8;
         break;
     case 0xA7: // AND A
@@ -2536,7 +2536,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0xAE: // XOR (HL)
-        xor(mem_read(registers.hl));
+        xor(mmu_read(registers.hl));
         cycles = 8;
         break;
     case 0xAF: // XOR A
@@ -2568,7 +2568,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0xB6: // OR (HL)
-        or(mem_read(registers.hl));
+        or(mmu_read(registers.hl));
         cycles = 8;
         break;
     case 0xB7: // OR A
@@ -2600,7 +2600,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0xBE: // CP (HL)
-        cp(mem_read(registers.hl));
+        cp(mmu_read(registers.hl));
         cycles = 8;
         break;
     case 0xBF: // CP A
@@ -2780,7 +2780,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 16;
         break;
     case 0xE0: // LD (0xFF00 + n), A
-        mem_write(IO + operand, registers.a);
+        mmu_write(IO + operand, registers.a);
         cycles = 12;
         break;
     case 0xE1: // POP HL
@@ -2788,7 +2788,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 12;
         break;
     case 0xE2: // LD (0xFF00 + C),A
-        mem_write(IO + registers.c, registers.a);
+        mmu_write(IO + registers.c, registers.a);
         cycles = 8;
         break;
     case 0xE5: // PUSH HL
@@ -2817,7 +2817,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0xEA: // LD (nn), A
-        mem_write(operand, registers.a);
+        mmu_write(operand, registers.a);
         cycles = 16;
         break;
     case 0xEE: // XOR n
@@ -2830,7 +2830,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 16;
         break;
     case 0xF0: // LD A, (0xFF00 + n)
-        registers.a = mem_read(IO + operand);
+        registers.a = mmu_read(IO + operand);
         cycles = 12;
         break;
     case 0xF1: // POP AF
@@ -2840,7 +2840,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 12;
         break;
     case 0xF2: // LD A,(0xFF00 + C)
-        registers.a = mem_read(IO + registers.c);
+        registers.a = mmu_read(IO + registers.c);
         cycles = 8;
         break;
     case 0xF3: // DI
@@ -2873,7 +2873,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 8;
         break;
     case 0xFA: // LD A, (nn)
-        registers.a = mem_read(operand);
+        registers.a = mmu_read(operand);
         cycles = 16;
         break;
     case 0xFB: // EI
@@ -2902,8 +2902,8 @@ static int exec_opcode(byte_t opcode, word_t operand) {
 
 #ifdef DEBUG
 static void print_trace(void) {
-    byte_t opcode = mem_read(registers.pc);
-    byte_t operand_size = instructions[mem_read(registers.pc)].operand_size;
+    byte_t opcode = mmu_read(registers.pc);
+    byte_t operand_size = instructions[mmu_read(registers.pc)].operand_size;
     if (operand_size == 0) {
         printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x        %s\n", registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', registers.bc, registers.de, registers.hl, registers.sp, registers.pc, mem[registers.pc], instructions[opcode].name);
     } else if (operand_size == 1) {
@@ -2914,11 +2914,7 @@ static void print_trace(void) {
 }
 #endif
 
-void cpu_request_interrupt(int irq) {
-    SET_BIT(mem[IF], irq);
-}
-
-int cpu_handle_interrupts(void) {
+static int cpu_handle_interrupts(void) {
     // wake cpu if there is one (or more) interrupt
     if (halt && (mem[IE] & mem[IF]))
         halt = 0;
@@ -2953,25 +2949,31 @@ int cpu_handle_interrupts(void) {
     return 0;
 }
 
+void cpu_request_interrupt(int irq) {
+    SET_BIT(mem[IF], irq);
+}
+
 int cpu_step(void) {
-    if (halt) return 4;
+    int interrupts_cycles = cpu_handle_interrupts();
+
+    if (halt) return 4 + interrupts_cycles;
 
     #ifdef DEBUG
     print_trace();
     #endif
 
-    byte_t opcode = mem_read(registers.pc);
+    byte_t opcode = mmu_read(registers.pc);
     registers.pc++;
     word_t operand = 0; // initialize to 0 to shut gcc warnings
     switch (instructions[opcode].operand_size) {
     case 1:
-        operand = mem_read(registers.pc);
+        operand = mmu_read(registers.pc);
         break;
     case 2:
-        operand = mem_read(registers.pc) | mem_read(registers.pc + 1) << 8;
+        operand = mmu_read(registers.pc) | mmu_read(registers.pc + 1) << 8;
         break;
     }
     registers.pc += instructions[opcode].operand_size;
 
-    return exec_opcode(opcode, operand);
+    return exec_opcode(opcode, operand) + interrupts_cycles;
 }

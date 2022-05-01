@@ -2,13 +2,9 @@
 
 #include "types.h"
 
-enum interrupt {
-	IRQ_VBLANK,
-	IRQ_STAT,
-	IRQ_TIMER,
-	IRQ_SERIAL,
-	IRQ_JOYPAD
-};
+#define CPU_FREQ 4194304
+// 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame (the Game Boy runs at approximatively 60 fps)
+#define CPU_CYCLES_PER_FRAME CPU_FREQ / 60
 
 #define FLAG_Z 0x80 // flag zero
 #define FLAG_N 0x40 // flag substraction
@@ -18,6 +14,14 @@ enum interrupt {
 #define SET_FLAG(x) (registers.f |= (x))
 #define CHECK_FLAG(x) (registers.f & (x))
 #define RESET_FLAG(x) (registers.f &= ~(x))
+
+enum interrupt {
+	IRQ_VBLANK,
+	IRQ_STAT,
+	IRQ_TIMER,
+	IRQ_SERIAL,
+	IRQ_JOYPAD
+};
 
 struct registers {
 	union {
@@ -57,7 +61,5 @@ struct registers {
 } extern registers;
 
 void cpu_request_interrupt(int irq);
-
-int cpu_handle_interrupts(void);
 
 int cpu_step(void);

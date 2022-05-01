@@ -1,13 +1,16 @@
-#include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 
 #include "ppu.h"
 #include "utils.h"
 #include "types.h"
-#include "mem.h"
+#include "mmu.h"
 #include "cpu.h"
-#include "config.h"
+
+#define PPU_SET_MODE(m) mem[STAT] = (mem[STAT] & 0xFC) | (m)
+
+#define SET_PIXEL(buf, x, y, color) *(buf + ((y) * 160 * 3) + ((x) * 3)) = color_palettes[current_color_palette][(color)][0]; \
+                            *(buf + ((y) * 160 * 3) + ((x) * 3) + 1) = color_palettes[current_color_palette][(color)][1]; \
+                            *(buf + ((y) * 160 * 3) + ((x) * 3) + 2) = color_palettes[current_color_palette][(color)][2];
 
 byte_t color_palettes[][4][3] = {
     { // grayscale colors
@@ -23,39 +26,14 @@ byte_t color_palettes[][4][3] = {
         { 0x0F, 0x38, 0x0F }
     }
 };
+byte_t current_color_palette = 0;
 
 byte_t pixels[160 * 144 * 3];
 byte_t pixels_cache_color_data[160][144];
 
-#define PPU_SET_MODE(m) mem[STAT] = (mem[STAT] & 0xFC) | (m)
-
 int ppu_cycles = 0;
 
-void ppu_update_pixels_with_palette(byte_t new_palette) {
-    // replace old color values of the pixels with the new ones according to the new palette
-    for (int i = 0; i < 160; i++) {
-        for (int j = 0; j < 144; j++) {
-            byte_t *R = (pixels + ((j) * 160 * 3) + ((i) * 3)) ;
-            byte_t *G = (pixels + ((j) * 160 * 3) + ((i) * 3) + 1);
-            byte_t *B = (pixels + ((j) * 160 * 3) + ((i) * 3) + 2);
-
-            // find which color is at pixel (i,j)
-            color c;
-            for (c = WHITE; c <= BLACK; c++) {
-                if (*R == color_palettes[config.color_palette][c][0] &&
-                    *G == color_palettes[config.color_palette][c][1] &&
-                    *B == color_palettes[config.color_palette][c][2]) {
-                    break;
-                }
-            }
-
-            // replace old color value by the new one according to the new palette
-            *R = color_palettes[new_palette][c][0];
-            *G = color_palettes[new_palette][c][1];
-            *B = color_palettes[new_palette][c][2];
-        }
-    }
-}
+void (*vblank_cb)(byte_t *pixels);
 
 /**
  * @returns color after applying palette.
@@ -270,7 +248,7 @@ static void draw_objects(void) {
     }
 }
 
-int lyc() {
+static int lyc(void) {
     if (mem[LY] == mem[LYC]) { // LY == LYC compare // FIXME BEFORE FIXING EVERYTHING ELSE (this may be the source of a LOT of problems)
         SET_BIT(mem[STAT], 2);
         return CHECK_BIT(mem[STAT], 6);
@@ -285,19 +263,18 @@ int lyc() {
  * TODO if STAT interrupts are a problem, implement these corner cases: http://gameboy.mongenel.com/dmg/istat98.txt
  */
 byte_t ignore = 0;
-byte_t ppu_step(int cycles) {
+void ppu_step(int cycles) {
     if (!CHECK_BIT(mem[LCDC], 7)) { // is LCD disabled?
         // TODO not sure of the handling of LCD disabled
         // TODO LCD disabled should fill screen with a color brighter than WHITE
         PPU_SET_MODE(PPU_HBLANK);
         ppu_cycles = 0;
         mem[LY] = 0;
-        return 0;
+        return;
     }
 
     ppu_cycles += cycles;
     byte_t request_stat_irq = 0;
-    byte_t draw_frame = 0;
     RESET_BIT(mem[STAT], 2);
 
     switch (mem[STAT] & 0x03) { // switch current mode
@@ -327,7 +304,7 @@ byte_t ppu_step(int cycles) {
                 PPU_SET_MODE(PPU_VBLANK);
                 request_stat_irq = CHECK_BIT(mem[STAT], 4);
 
-                draw_frame = 1;
+                vblank_cb(pixels);
                 cpu_request_interrupt(IRQ_VBLANK);
             } else {
                 PPU_SET_MODE(PPU_OAM);
@@ -357,5 +334,51 @@ byte_t ppu_step(int cycles) {
 
     if (request_stat_irq)
         cpu_request_interrupt(IRQ_STAT);
-    return draw_frame;
+}
+
+void ppu_update_pixels_with_palette(byte_t new_palette) {
+    // replace old color values of the pixels with the new ones according to the new palette
+    for (int i = 0; i < 160; i++) {
+        for (int j = 0; j < 144; j++) {
+            byte_t *R = (pixels + ((j) * 160 * 3) + ((i) * 3)) ;
+            byte_t *G = (pixels + ((j) * 160 * 3) + ((i) * 3) + 1);
+            byte_t *B = (pixels + ((j) * 160 * 3) + ((i) * 3) + 2);
+
+            // find which color is at pixel (i,j)
+            color c;
+            for (c = WHITE; c <= BLACK; c++) {
+                if (*R == color_palettes[current_color_palette][c][0] &&
+                    *G == color_palettes[current_color_palette][c][1] &&
+                    *B == color_palettes[current_color_palette][c][2]) {
+                    break;
+                }
+            }
+
+            // replace old color value by the new one according to the new palette
+            *R = color_palettes[new_palette][c][0];
+            *G = color_palettes[new_palette][c][1];
+            *B = color_palettes[new_palette][c][2];
+        }
+    }
+}
+
+byte_t *ppu_get_pixels(void) {
+    return pixels;
+}
+
+byte_t *ppu_get_color_values(enum color color) {
+    return color_palettes[current_color_palette][color];
+}
+
+void ppu_set_color_palette(enum ppu_color_palette palette) {
+    if (palette == PPU_COLOR_PALETTE_GRAY || palette == PPU_COLOR_PALETTE_ORIG)
+        current_color_palette = palette;
+}
+
+byte_t ppu_get_color_palette(void) {
+    return current_color_palette;
+}
+
+void ppu_set_vblank_callback(void (*vblank_callback)(byte_t *pixels)) {
+    vblank_cb = vblank_callback;
 }

@@ -1,6 +1,6 @@
 #include "timer.h"
 #include "utils.h"
-#include "mem.h"
+#include "mmu.h"
 #include "cpu.h"
 
 // TODO timer actual behavior is more subtle: https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html

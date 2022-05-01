@@ -1,15 +1,10 @@
-#include <stdio.h>
-#include <SDL2/SDL.h>
-
 #include "utils.h"
 #include "types.h"
 #include "apu.h"
-#include "mem.h"
-#include "config.h"
+#include "mmu.h"
+#include "cpu.h"
 
 // FIXME audible pops
-
-#define SAMPLE_COUNT 2048
 
 const byte_t duty_cycles[4][8] = {
     { 0, 0, 0, 0, 0, 0, 0, 1 },
@@ -18,13 +13,16 @@ const byte_t duty_cycles[4][8] = {
     { 0, 1, 1, 1, 1, 1, 1, 0 }
 };
 
+float global_sound_level = 1.0f;
+
 byte_t apu_enabled = 0;
 
-SDL_AudioDeviceID device;
 int take_sample_cycles_count = 0;
+float sampling_speed_multiplier = 1.0f;
+void (*samples_ready_cb)(float *audio_buffer);
 
-int audio_buffer_id = 0;
-float audio_buffer[SAMPLE_COUNT];
+int audio_buffer_index = 0;
+float audio_buffer[APU_SAMPLE_COUNT];
 
 byte_t frame_sequencer = 0;
 int frame_sequencer_cycles_count = 0;
@@ -261,7 +259,7 @@ static float channel_dac(channel_t *c) {
     return 0.0f;
 }
 
-void apu_step(int cycles, float speed) {
+void apu_step(int cycles) {
     if (!apu_enabled)
         return;
 
@@ -311,7 +309,7 @@ void apu_step(int cycles, float speed) {
         channel_step(&channel4);
 
         take_sample_cycles_count++;
-        if (take_sample_cycles_count >= 95 * speed) { // 44100 Hz (if speed == 1.0f)
+        if (take_sample_cycles_count >= (CPU_FREQ / APU_SAMPLE_RATE) * sampling_speed_multiplier) { // 44100 Hz (if speed == 1.0f)
             take_sample_cycles_count = 0;
 
             float S01_volume = ((mem[NR50] & 0x07) + 1) / 8.0f; // keep it between 0.0f and 1.0f
@@ -320,28 +318,32 @@ void apu_step(int cycles, float speed) {
             float S02_output = ((CHECK_BIT(mem[NR51], CHANNEL_1 + 4) ? channel_dac(&channel1) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_2 + 4) ? channel_dac(&channel2) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_3 + 4) ? channel_dac(&channel3) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_4 + 4) ? channel_dac(&channel4) : 0.0f)) / 4.0f;
 
             // S02 (left)
-            audio_buffer[audio_buffer_id++] = S02_output * S02_volume * config.sound;
+            audio_buffer[audio_buffer_index++] = S02_output * S02_volume * global_sound_level;
             // S01 (right)
-            audio_buffer[audio_buffer_id++] = S01_output * S01_volume * config.sound;
+            audio_buffer[audio_buffer_index++] = S01_output * S01_volume * global_sound_level;
         }
 
-        if (audio_buffer_id >= SAMPLE_COUNT) {
-            audio_buffer_id = 0;
-            while (SDL_GetQueuedAudioSize(device) > SAMPLE_COUNT * sizeof(float))
-                SDL_Delay(1);
-            SDL_QueueAudio(device, &audio_buffer, sizeof(audio_buffer));
+        if (audio_buffer_index >= APU_SAMPLE_COUNT) {
+            audio_buffer_index = 0;
+            samples_ready_cb(audio_buffer);
         }
     }
 
 }
 
-void apu_init(void) {
-    SDL_AudioSpec AudioSettings = { 0 };
-    AudioSettings.freq = 44100;
-    AudioSettings.format = AUDIO_F32SYS;
-    AudioSettings.channels = 2;
-    AudioSettings.samples = SAMPLE_COUNT;
-    AudioSettings.callback = NULL;
-    device = SDL_OpenAudioDevice(NULL, 0, &AudioSettings, NULL, 0);
-    SDL_PauseAudioDevice(device, 0);
+void apu_set_sampling_speed_multiplier(float speed) {
+    sampling_speed_multiplier = speed;
+}
+
+void apu_set_global_sound_level(float sound) {
+    if (sound >= 0.0f && sound <= 1.0f)
+        global_sound_level = sound;
+}
+
+float apu_get_global_sound_level(void) {
+    return global_sound_level;
+}
+
+void apu_set_samples_ready_callback(void (*samples_ready_callback)(float *audio_buffer)) {
+    samples_ready_cb = samples_ready_callback;
 }

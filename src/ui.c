@@ -4,19 +4,20 @@
 
 #include "types.h"
 #include "gbmulator.h"
-#include "ui.h"
-#include "cpu.h"
-#include "mem.h"
+#include "config.h"
 #include "ppu.h"
+#include "apu.h"
 #include "link.h"
 #include "utils.h"
 
 // TODO fix this file (it's ugly code).
 
-#define SET_PIXEL_RGBA(buf, x, y, color, alpha) *(buf + ((y) * 160 * 4) + ((x) * 4)) = color_palettes[config.color_palette][(color)][0]; \
-                            *(buf + ((y) * 160 * 4) + ((x) * 4) + 1) = color_palettes[config.color_palette][(color)][1]; \
-                            *(buf + ((y) * 160 * 4) + ((x) * 4) + 2) = color_palettes[config.color_palette][(color)][2]; \
-                            *(buf + ((y) * 160 * 4) + ((x) * 4) + 3) = (alpha);
+#define SET_PIXEL_RGBA(buf, x, y, color, alpha) \
+    byte_t *_tmp_color_values = ppu_get_color_values((color)); \
+    *(buf + ((y) * 160 * 4) + ((x) * 4)) = _tmp_color_values[0]; \
+    *(buf + ((y) * 160 * 4) + ((x) * 4) + 1) = _tmp_color_values[1]; \
+    *(buf + ((y) * 160 * 4) + ((x) * 4) + 2) = _tmp_color_values[2]; \
+    *(buf + ((y) * 160 * 4) + ((x) * 4) + 3) = (alpha);
 
 const byte_t font[0x5F][0x8] = {
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
@@ -217,15 +218,16 @@ static void choose_win_scale(menu_entry_t *entry) {
 
 static void choose_speed(menu_entry_t *entry) {
     config.speed = (entry->choices.position * 0.5f) + 1;
+    apu_set_sampling_speed_multiplier(config.speed);
 }
 
 static void choose_sound(menu_entry_t *entry) {
-    config.sound = entry->choices.position * 0.25f;
+    apu_set_global_sound_level(entry->choices.position * 0.25f);
 }
 
 static void choose_color(menu_entry_t *entry) {
     ppu_update_pixels_with_palette(entry->choices.position);
-    config.color_palette = entry->choices.position;
+    ppu_set_color_palette(entry->choices.position);
 }
 
 static void choose_link_mode(menu_entry_t *entry) {
@@ -271,11 +273,11 @@ void ui_back_to_main_menu(void) {
     main_menu.position = 0;
 }
 
-void ui_init(void) {
+byte_t *ui_init(void) {
     options_menu.entries[0].choices.position = config.scale - 1;
     options_menu.entries[1].choices.position = config.speed / 0.5f - 2;
-    options_menu.entries[2].choices.position = config.sound * 4;
-    options_menu.entries[3].choices.position = config.color_palette;
+    options_menu.entries[2].choices.position = apu_get_global_sound_level() * 4;
+    options_menu.entries[3].choices.position = ppu_get_color_palette();
 
     if (!(link_menu.entries[1].user_input.input = malloc(sizeof(char) * 40))) {
         perror("ERROR: ui_init");
@@ -297,6 +299,8 @@ void ui_init(void) {
     link_menu.entries[2].user_input.input = *buf;
     link_menu.entries[2].user_input.max_length = 5;
     link_menu.entries[2].user_input.visible_hi = 5;
+
+    return ui_pixels;
 }
 
 static void print_cursor(int x, int y, color color) {

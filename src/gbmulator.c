@@ -4,7 +4,7 @@
 
 #include "types.h"
 #include "utils.h"
-#include "mem.h"
+#include "mmu.h"
 #include "cpu.h"
 #include "ppu.h"
 #include "timer.h"
@@ -16,17 +16,20 @@
 
 #define WINDOW_TITLE "GBmulator"
 
-// FIXME super mario land no longer works properly --> LY==LYC interrupt fix commit is responsible (check argentum emulator ppu code to see how its handled)
+// FIXME LY==LYC interrupt buggy, in fact most of the ppu is (check argentum emulator ppu code to see how its handled)
 
 // TODO when no argument, show alternative menu with title Insert cartridge, ACTION: zenity open ROM from files, label: Or drag and drop ROM
 
 // TODO fix pause menu when starting game link connexion while pause menu is still active (it's working but weirdly so low priority)
 
-// TODO create subdir containing the emulation files/code and keep main/ui/config/utils separate inside the root src dir
+// TODO create subdir containing the emulation files/code and keep main/ui/config/(utils except bit macros - they stay with emulator code) separate inside the root src dir
 //      separate the emulation code from the main/ui/config/utils by making appropriate getter/setter/etc.
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_FALSE;
+
+SDL_Texture *ppu_texture;
+SDL_AudioDeviceID audio_device;
 
 void gbmulator_exit(void) {
     is_running = SDL_FALSE;
@@ -34,6 +37,37 @@ void gbmulator_exit(void) {
 
 void gbmulator_unpause(void) {
     is_paused = SDL_FALSE;
+}
+
+static void ppu_vblank_cb(byte_t *pixels) {
+    SDL_UpdateTexture(ppu_texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
+}
+
+static void apu_samples_ready_cb(float *audio_buffer) {
+    while (SDL_GetQueuedAudioSize(audio_device) > APU_SAMPLE_COUNT * sizeof(float))
+        SDL_Delay(1);
+    SDL_QueueAudio(audio_device, audio_buffer, sizeof(float) * APU_SAMPLE_COUNT);
+}
+
+/**
+ * Runs the emulator for an ammount of cycles.
+ * @param cycles_limit the ammount of cycles the emulator will run for.
+ */
+static void emulator_run_cycles(int cycles_limit) {
+    int cycles_count = 0;
+    while (cycles_count < cycles_limit) {
+        // TODO make timings accurate by forcing each cpu_step() to take 4 cycles: if it's not enough to finish an instruction,
+        // the next cpu_step() will resume the previous instruction. This will makes the timer "hack" (increment within a loop and not an if)
+        // obsolete while allowing accurate memory timings emulation.
+        int cycles = cpu_step();
+        timer_step(cycles);
+        link_step(cycles);
+        // TODO insert mmu_step(cycles) here to implement OAM DMA transfer delay
+        ppu_step(cycles);
+        apu_step(cycles);
+
+        cycles_count += cycles;
+    }
 }
 
 int main(int argc, char **argv) {
@@ -44,21 +78,17 @@ int main(int argc, char **argv) {
 
     const char *config_path = load_config();
 
-    char *rom_title = mem_load_cartridge(argv[1]);
+    char *rom_title = mmu_load_cartridge(argv[1]);
     char window_title[sizeof(WINDOW_TITLE) + 19];
     snprintf(window_title, sizeof(window_title), WINDOW_TITLE" - %s", rom_title);
     printf("Playing %s\n", rom_title);
 
-    // ALL CPU_INSTR TEST ROMS PASSED
-    // mem_load_cartridge("roms/tests/blargg/cpu_instrs/cpu_instrs.gb");
-    // mem_load_cartridge("roms/tests/blargg/instr_timing/instr_timing.gb");
-
-    // mem_load_cartridge("roms/tests/mooneye/emulator-only/mbc1/bits_mode.gb");
-    // mem_load_cartridge("roms/tests/mooneye/emulator-only/mbc2/bits_romb.gb");
-
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
-    apu_init();
-    ui_init();
+
+    ppu_set_vblank_callback(ppu_vblank_cb);
+    apu_set_samples_ready_callback(apu_samples_ready_cb);
+
+    byte_t *ui_pixels = ui_init();
 
     byte_t scale = config.scale;
 
@@ -67,19 +97,27 @@ int main(int argc, char **argv) {
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         160 * scale,
         144 * scale,
-        SDL_WINDOW_SHOWN /*| SDL_WINDOW_RESIZABLE*/
+        SDL_WINDOW_HIDDEN /*| SDL_WINDOW_RESIZABLE*/
     );
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, 160, 144);
+    SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
+
+    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, 160, 144);
 
     byte_t blank_pixel[3];
     SDL_Texture *blank_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STATIC, 1, 1);
 
-    SDL_Texture *overlay_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, 160, 144);
-    SDL_SetTextureBlendMode(overlay_texture, SDL_BLENDMODE_BLEND);
+    SDL_Texture *ui_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, 160, 144);
+    SDL_SetTextureBlendMode(ui_texture, SDL_BLENDMODE_BLEND);
 
-    // 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame
-    const Uint32 cycles_per_frame = 4194304 / 60;
+    SDL_AudioSpec AudioSettings = { 0 };
+    AudioSettings.freq = APU_SAMPLE_RATE;
+    AudioSettings.format = AUDIO_F32SYS;
+    AudioSettings.channels = 2;
+    AudioSettings.samples = APU_SAMPLE_COUNT;
+    AudioSettings.callback = NULL;
+    audio_device = SDL_OpenAudioDevice(NULL, 0, &AudioSettings, NULL, 0);
+    SDL_PauseAudioDevice(audio_device, 0);
 
     // main gbmulator loop
     while (is_running) {
@@ -126,13 +164,12 @@ int main(int argc, char **argv) {
                 SDL_SetWindowSize(window, 160 * scale, 144 * scale);
             }
 
-            // update main texture to show color palette changes
-            SDL_UpdateTexture(texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
-            SDL_RenderCopy(renderer, texture, NULL, NULL);
+            // update ppu_texture to show color palette changes
+            SDL_UpdateTexture(ppu_texture, NULL, ppu_get_pixels(), 160 * sizeof(byte_t) * 3);
+            SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
 
-            // update overlay (menu) texture
-            SDL_UpdateTexture(overlay_texture, NULL, ui_pixels, 160 * sizeof(byte_t) * 4);
-            SDL_RenderCopy(renderer, overlay_texture, NULL, NULL);
+            SDL_UpdateTexture(ui_texture, NULL, ui_pixels, 160 * sizeof(byte_t) * 4);
+            SDL_RenderCopy(renderer, ui_texture, NULL, NULL);
 
             SDL_RenderPresent(renderer);
             // delay to aim 30 fps (and avoid 100% CPU use) here because the normal delay is done by the sound emulation which is paused
@@ -141,28 +178,18 @@ int main(int argc, char **argv) {
         }
 
         // emulation loop
-        int cycles_count = 0;
-        while (cycles_count < cycles_per_frame * config.speed) {
-            // TODO make timings accurate by forcing each cpu_step() to take 4 cycles: if it's not enough to finish an instruction,
-            // the next cpu_step() will resume the previous instruction. This will makes the timer "hack" (increment within a loop and not an if)
-            // obsolete while allowing accurate memory timings emulation.
-            int cycles = cpu_handle_interrupts();
-            cycles += cpu_step();
-            timer_step(cycles);
-            link_step(cycles);
-            SDL_bool draw_frame = ppu_step(cycles);
-            if (draw_frame)
-                SDL_UpdateTexture(texture, NULL, pixels, 160 * sizeof(byte_t) * 3);
-
-            apu_step(cycles, config.speed);
-            cycles_count += cycles;
-        }
+        emulator_run_cycles(CPU_CYCLES_PER_FRAME * config.speed);
 
         // draw last new frame if it's complete
         if (CHECK_BIT(mem[LCDC], 7)) {
-            SDL_RenderCopy(renderer, texture, NULL, NULL);
+            SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
         } else {
-            SET_PIXEL(blank_pixel, 0, 0, WHITE); // SET_PIXEL here to refresh color in case of emulation color change
+            // refresh blank_pixel's color in case of ppu palette change
+            byte_t *white = ppu_get_color_values(WHITE);
+            blank_pixel[0] = white[0];
+            blank_pixel[1] = white[1];
+            blank_pixel[2] = white[2];
+
             SDL_UpdateTexture(blank_texture, NULL, &blank_pixel, sizeof(byte_t) * 3);
             SDL_RenderCopy(renderer, blank_texture, NULL, NULL);
         }
@@ -171,13 +198,17 @@ int main(int argc, char **argv) {
         // no delay at the end of the loop because it's redundant with vsync and sound emulation
     }
 
-    mem_save_eram();
+    mmu_save_eram();
     link_close_connection();
     
     save_config(config_path);
 
     SDL_DestroyWindow(window);
     SDL_DestroyRenderer(renderer);
+    SDL_DestroyTexture(ppu_texture);
+    SDL_DestroyTexture(ui_texture);
+    SDL_DestroyTexture(blank_texture);
+
     SDL_Quit();
     return EXIT_SUCCESS;
 }

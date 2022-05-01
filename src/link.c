@@ -9,7 +9,7 @@
 
 #include "utils.h"
 #include "cpu.h"
-#include "mem.h"
+#include "mmu.h"
 
 // TODO this is still buggy: tetris works fine, dr mario has glitched game over screen (unrelated?) and pokemon red has glitched fight and trade
 // TODO fix problems when a emulator is paused during a connection
