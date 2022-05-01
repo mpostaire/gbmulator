@@ -221,18 +221,18 @@ static void write_mbc_registers(word_t address, byte_t data) {
         } else if (address < 0x4000) {
             current_rom_bank = data & 0x1F;
             if (current_rom_bank == 0x00)
-                current_rom_bank++;
-            current_rom_bank %= rom_banks;
+                current_rom_bank = 0x01;
+            current_rom_bank &= rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
         } else if (address < 0x6000) {
             if (mbc1_mode) { // ROM mode
                 current_eram_bank = data & 0x03;
-                current_eram_bank %= ram_banks;
+                current_eram_bank &= ram_banks - 1; // in this case, equivalent to current_eram_bank %= ram_banks but avoid division by 0
             } else {
                 current_rom_bank = ((data & 0x03) << 5) | (current_rom_bank & 0x1F);
                 if (current_rom_bank == 0x00 || current_rom_bank == 0x20 || current_rom_bank == 0x40 || current_rom_bank == 0x60)
                     current_rom_bank++;
-                current_rom_bank %= rom_banks;
-                current_eram_bank = 0;
+                current_rom_bank &= rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
+                current_eram_bank = 0x00;
             }
         } else if (address < 0x8000) {
             mbc1_mode = data & 0x01;
@@ -246,7 +246,7 @@ static void write_mbc_registers(word_t address, byte_t data) {
             current_rom_bank = data & 0x0F;
             if (current_rom_bank == 0x00)
                 current_rom_bank = 0x01; // 0x00 not allowed
-            current_rom_bank %= rom_banks;
+            current_rom_bank &= rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
         }
         break;
     case MBC3:
@@ -257,11 +257,11 @@ static void write_mbc_registers(word_t address, byte_t data) {
             current_rom_bank = data & 0x7F;
             if (current_rom_bank == 0x00)
                 current_rom_bank = 0x01; // 0x00 not allowed
-            current_rom_bank %= rom_banks;
+            current_rom_bank &= rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
         } else if (address < 0x6000) {
             if (data <= 0x03) {
                 current_eram_bank = data;
-                current_eram_bank %= ram_banks;
+                current_eram_bank &= ram_banks - 1; // in this case, equivalent to current_eram_bank %= ram_banks but avoid division by 0
             } else if (data >= 0x08 && data <= 0x0C) {
                 rtc_register = data;
                 current_eram_bank = -1;

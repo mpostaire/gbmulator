@@ -8,13 +8,13 @@
 
 #define WINDOW_TITLE "GBmulator"
 
-// FIXME LY==LYC interrupt buggy, in fact most of the ppu is (check argentum emulator ppu code to see how its handled)
+// FIXME LY==LYC interrupt buggy, in fact most of the ppu is (check argentum emulator ppu code to understand how its handled)
 
 // TODO when no argument, show alternative menu with title Insert cartridge, ACTION: zenity open ROM from files, label: Or drag and drop ROM
 
 // TODO fix pause menu when starting game link connexion while pause menu is still active (it's working but weirdly so low priority)
 
-// TODO rechceck mbc1/2/etc tests as i may have fixed some things
+// TODO MBCs are poorly implemented (see https://github.com/drhelius/Gearboy to understand its handled)
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_FALSE;
@@ -96,8 +96,7 @@ int main(int argc, char **argv) {
 
     const char *config_path = load_config();
 
-    // char *rom_title = mmu_load_cartridge(argv[1]);
-    char *rom_title = mmu_load_cartridge("roms/tests/mooneye/emulator-only/mbc1/rom_4Mb.gb"); // floating point exception
+    char *rom_title = mmu_load_cartridge(argv[1]);
     char window_title[sizeof(WINDOW_TITLE) + 19];
     snprintf(window_title, sizeof(window_title), WINDOW_TITLE" - %s", rom_title);
     printf("Playing %s\n", rom_title);
