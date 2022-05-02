@@ -115,11 +115,12 @@ const byte_t font[0x5F][0x8] = {
 
 byte_t ui_pixels[GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 4];
 
-byte_t draw_frames = 0;
+byte_t blink_counter = 0;
 
 enum menu_type {
     ACTION, // do something when A is pressed
     INPUT,  // add char to text input when any key is pressed (except UP/DOWN/LEFT/RIGHT/A/B)
+    KEY_SETTER, // press ACTION key to enter edit mode, accept any unique key as input (swaps value if another KEY_SETTER in the same menu has already the same value), then leave edit mode 
     CHOICE, // change value when LEFT/RIGHT are pressed
     SUBMENU // enter a submenu when A is pressed
 };
@@ -135,6 +136,7 @@ static void choose_link_mode(menu_entry_t *entry);
 static void on_input_link_host(menu_entry_t *entry);
 static void on_input_link_port(menu_entry_t *entry);
 static void start_link();
+static void on_input_set_keybind(menu_entry_t *entry, SDL_Keycode key);
 static void back_to_prev_menu();
 
 struct menu_entry {
@@ -158,6 +160,12 @@ struct menu_entry {
             byte_t visible_lo;
             byte_t visible_hi;
         } user_input;
+        struct {
+            byte_t editing;
+            SDL_Keycode key;
+            char *key_name;
+            void (*on_input)(menu_entry_t *, SDL_Keycode);
+        } setter;
     };
 };
 
@@ -168,22 +176,8 @@ struct menu {
     menu_entry_t entries[];
 };
 
-menu_t options_menu = {
-    .title = "Options",
-    .position = 0,
-    .length = 5,
-    .entries = {
-        { "Scale:      | 1x , 2x , 3x , 4x , 5x ", CHOICE, .choices = { choose_win_scale, 5, 0 } },
-        { "Speed:      |1.0x,1.5x,2.0x,2.5x,3.0x,3.5x,4.0x", CHOICE, .choices = { choose_speed, 7, 0 } },
-        { "Sound:      | OFF, 25%, 50%, 75%,100%", CHOICE, .choices = { choose_sound, 5, 4 } },
-        { "Color:      |gray,orig", CHOICE, .choices = { choose_color, 2, 0 } },
-        { "Back...", ACTION, .action = back_to_prev_menu }
-    }
-};
-
 menu_t link_menu = {
     .title = "Link cable",
-    .position = 0,
     .length = 5,
     .entries = {
         { "Mode:     |server,client", CHOICE, .choices = { choose_link_mode, 2, 0 } },
@@ -194,19 +188,92 @@ menu_t link_menu = {
     }
 };
 
+menu_t options_menu = {
+    .title = "Options",
+    .length = 5,
+    .entries = {
+        { "Scale:      | 1x , 2x , 3x , 4x , 5x ", CHOICE, .choices = { choose_win_scale, 5, 0 } },
+        { "Speed:      |1.0x,1.5x,2.0x,2.5x,3.0x,3.5x,4.0x", CHOICE, .choices = { choose_speed, 7, 0 } },
+        { "Sound:      | OFF, 25%, 50%, 75%,100%", CHOICE, .choices = { choose_sound, 5, 4 } },
+        { "Color:      |gray,orig", CHOICE, .choices = { choose_color, 2, 0 } },
+        { "Back...", ACTION, .action = back_to_prev_menu }
+    }
+};
+
+menu_t keybindings_menu = {
+    .title = "Keybindings",
+    .length = 9,
+    .entries = {
+        { "LEFT:", KEY_SETTER, .setter.on_input = on_input_set_keybind },
+        { "RIGHT:", KEY_SETTER, .setter.on_input = on_input_set_keybind },
+        { "UP:", KEY_SETTER, .setter.on_input = on_input_set_keybind },
+        { "DOWN:", KEY_SETTER, .setter.on_input = on_input_set_keybind },
+        { "A:", KEY_SETTER, .setter.on_input = on_input_set_keybind },
+        { "B:", KEY_SETTER, .setter.on_input = on_input_set_keybind },
+        { "START:", KEY_SETTER, .setter.on_input = on_input_set_keybind },
+        { "SELECT:", KEY_SETTER, .setter.on_input = on_input_set_keybind },
+        { "Back...", ACTION, .action = back_to_prev_menu }
+    }
+};
+
 menu_t main_menu = {
     .title = "GBmulator",
-    .position = 0,
-    .length = 4,
+    .length = 5,
     .entries = {
         { "Resume", ACTION, .action = gbmulator_unpause },
         { "Link cable...", SUBMENU, .submenu = &link_menu },
         { "Options...", SUBMENU, .submenu = &options_menu },
+        { "Keybindings...", SUBMENU, .submenu = &keybindings_menu },
         { "Exit", ACTION, .action = gbmulator_exit }
     }
 };
 
 menu_t *current_menu = &main_menu;
+
+static SDL_Keycode get_config_val(enum joypad_button button) {
+    switch (button) {
+        case JOYPAD_LEFT: return config.left;
+        case JOYPAD_RIGHT: return config.right;
+        case JOYPAD_UP: return config.up;
+        case JOYPAD_DOWN: return config.down;
+        case JOYPAD_A: return config.a;
+        case JOYPAD_B: return config.b;
+        case JOYPAD_START: return config.start;
+        case JOYPAD_SELECT: return config.select;
+        default: return -1;
+    }
+}
+
+static SDL_Keycode *sdl_key_to_config_pointer(SDL_Keycode key) {
+    if (key == config.left) return &config.left;
+    if (key == config.right) return &config.right;
+    if (key == config.up) return &config.up;
+    if (key == config.down) return &config.down;
+    if (key == config.a) return &config.a;
+    if (key == config.b) return &config.b;
+    if (key == config.start) return &config.start;
+    if (key == config.select) return &config.select;
+    return NULL;
+}
+
+static void key_setter_set_key(menu_entry_t *entry, SDL_Keycode key) {
+    for (int i = 0; i < keybindings_menu.length - 1; i++) {
+        if (entry == &keybindings_menu.entries[i]) {
+            SDL_Keycode *config_pointer = sdl_key_to_config_pointer(entry->setter.key);
+            if (config_pointer)
+                *config_pointer = key;
+            break;
+        }
+    }
+
+    entry->setter.key = key;
+    const char *key_name = SDL_GetKeyName(entry->setter.key);
+    int l = strlen(key_name);
+    if (entry->setter.key_name)
+        free(entry->setter.key_name);
+    entry->setter.key_name = malloc(sizeof(char) * (l + 1));
+    snprintf(entry->setter.key_name, l + 1, "%s", key_name);
+}
 
 static void choose_win_scale(menu_entry_t *entry) {
     config.scale = entry->choices.position + 1;
@@ -255,6 +322,21 @@ static void start_link(void) {
     }
 }
 
+static void on_input_set_keybind(menu_entry_t *entry, SDL_Keycode key) {
+    int same = -1;
+    for (int i = 0; i < keybindings_menu.length - 1; i++) {
+        if (keybindings_menu.position != i && keybindings_menu.entries[i].setter.key == key) {
+            same = i;
+            break;
+        }
+    }
+
+    if (same >= 0)
+        key_setter_set_key(&keybindings_menu.entries[same], entry->setter.key);
+
+    key_setter_set_key(entry, key);
+}
+
 static void back_to_prev_menu(void) {
     if (current_menu == &main_menu) {
         main_menu.position = 0;
@@ -285,16 +367,19 @@ byte_t *ui_init(void) {
     link_menu.entries[1].user_input.max_length = 39;
     link_menu.entries[1].user_input.visible_hi = 12;
 
-    char **buf = &link_menu.entries[2].user_input.input;
-    if (!(*buf = malloc(sizeof(char) * 6))) {
+    char **link_port_buf = &link_menu.entries[2].user_input.input;
+    if (!(*link_port_buf = malloc(sizeof(char) * 6))) {
         perror("ERROR: ui_init");
         exit(EXIT_FAILURE);
     }
 
-    link_menu.entries[2].user_input.cursor = snprintf(*buf, sizeof(char) * 6, "%d", config.link_port);
-    link_menu.entries[2].user_input.input = *buf;
+    link_menu.entries[2].user_input.cursor = snprintf(*link_port_buf, sizeof(char) * 6, "%d", config.link_port);
+    link_menu.entries[2].user_input.input = *link_port_buf;
     link_menu.entries[2].user_input.max_length = 5;
     link_menu.entries[2].user_input.visible_hi = 5;
+
+    for (int i = 0; i < keybindings_menu.length - 1; i++)
+        key_setter_set_key(&keybindings_menu.entries[i], get_config_val(i));
 
     return ui_pixels;
 }
@@ -312,7 +397,7 @@ static void print_char(const char c, int x, int y, color color) {
     const byte_t *char_data = font[index];
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
-            if (GET_BIT(char_data[j], abs(i - 7))) {
+            if (GET_BIT(char_data[j], SDL_abs(i - 7))) {
                 SET_PIXEL_RGBA(ui_pixels, x + i, y + j, color, 0xFF);
             }
         }
@@ -355,15 +440,17 @@ static void print_choice(const char *choices, int x, int y, int n, color text_co
 }
 
 void ui_draw_menu(void) {
-    draw_frames++;
-    if (draw_frames > 64)
-        draw_frames = 0;
+    blink_counter++;
+    if (blink_counter > 60)
+        blink_counter = 0;
 
     // clear ui pixels
     ui_clear();
 
     byte_t title_x = 72 - ((strlen(current_menu->title) * 8) / 2);
     byte_t labels_start_y = 72 - ((current_menu->length * 8) / 2);
+    if (labels_start_y < 48)
+        labels_start_y = 48;
 
     print_text(current_menu->title, title_x, 32, WHITE);
     print_text(">", 0, labels_start_y + (8 * current_menu->position), WHITE);
@@ -378,6 +465,12 @@ void ui_draw_menu(void) {
             int delim_index = strcspn(entry->label, "|");
             char *choices = &entry->label[delim_index + 1];
             print_choice(choices, (delim_index * 8) + 8, y, entry->choices.position, text_color, entry->disabled ? DARK_GRAY : LIGHT_GRAY);
+            break;
+        case KEY_SETTER:
+            if (!entry->setter.editing)
+                print_text(entry->setter.key_name, GB_SCREEN_WIDTH - (strlen(entry->setter.key_name) * 8) - 8, y, WHITE);
+            else if (blink_counter > 30)
+                print_text(entry->setter.key_name, GB_SCREEN_WIDTH - (strlen(entry->setter.key_name) * 8) - 8, y, WHITE);
             break;
         case INPUT:
             byte_t x = (strlen(entry->label) * 8) + 8;
@@ -397,9 +490,8 @@ void ui_draw_menu(void) {
             snprintf(visible_input, n, "%s", &entry->user_input.input[entry->user_input.visible_lo]);
 
             print_text(visible_input, x, y, text_color);
-            if (current_menu->position == i && draw_frames < 32) {
+            if (current_menu->position == i && blink_counter < 30)
                 print_cursor(x + ((entry->user_input.cursor - entry->user_input.visible_lo) * 8), y, WHITE);
-            }
             break;
         }
     }
@@ -425,7 +517,24 @@ void ui_press(SDL_Keysym *keysym) {
     int key = sdl_key_to_joypad(keysym->sym);
     int count;
     menu_entry_t *entry = &current_menu->entries[current_menu->position];
-    draw_frames = 0;
+    blink_counter = 0;
+
+    if (entry->type == KEY_SETTER && entry->setter.editing) {
+        switch (keysym->sym) {
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER:
+        case SDLK_DELETE:
+        case SDLK_BACKSPACE:
+        case SDLK_PAUSE:
+        case SDLK_ESCAPE:
+            break;
+        default:
+            entry->setter.on_input(entry, keysym->sym);
+            break;
+        }
+        entry->setter.editing = 0;
+        return;
+    }
 
     switch (key) {
     case JOYPAD_RIGHT:
@@ -476,6 +585,9 @@ void ui_press(SDL_Keysym *keysym) {
         switch (entry->type) {
         case ACTION:
             (entry->action)();
+            break;
+        case KEY_SETTER:
+            entry->setter.editing = 1;
             break;
         case SUBMENU:
             // if I ever decide to add more than 1 level of depth of menus/submenus, make a stack of menus and push here

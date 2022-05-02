@@ -3,14 +3,14 @@
 #include "types.h"
 
 enum joypad_button {
-    JOYPAD_RIGHT,
     JOYPAD_LEFT,
+    JOYPAD_RIGHT,
     JOYPAD_UP,
     JOYPAD_DOWN,
     JOYPAD_A,
     JOYPAD_B,
-    JOYPAD_SELECT,
-    JOYPAD_START
+    JOYPAD_START,
+    JOYPAD_SELECT
 };
 
 byte_t joypad_get_input(void);

@@ -1,7 +1,7 @@
 # GBmulator
 A Game Boy emulator with sound and serial data transfer (link cable) support over tcp.
 
-## Images
+## Screenshots
 
 GBmulator running some games:
 
@@ -34,18 +34,18 @@ gbmulator path/to/rom.gb
 ```
 
 ## Key bindings
-Key bindings are not configurable yet.
-|Key|Action|
+The following table show the default keybindings (they can be changed in GBmulator's menus except those marked with a '*').
+|Action|Key|
 |---|---|
-|Up arrow|UP|
-|Down arrow|DOWN|
-|Left arrow|LEFT|
-|Right arrow|RIGHT|
-|NUMPAD 0|A|
-|NUMPAD period|B|
-|NUMPAD 1|START|
-|NUMPAD 2|SELECT|
-|ESCAPE or PAUSE|Options menu|
+|UP|Up arrow|
+|DOWN|Down arrow|
+|LEFT|Left arrow|
+|RIGHT|Right arrow|
+|A|NUMPAD 0|
+|B|NUMPAD period|
+|START|NUMPAD 1|
+|SELECT|NUMPAD 2|
+|Options menu*|ESCAPE or PAUSE|
 
 ## TODO
 
@@ -53,7 +53,6 @@ Key bindings are not configurable yet.
 - fix ppu
 - GBC mode
 - better mbc support
-- configurable key bindings
 - fix apu bugs
 - savestates
 - Fix buggy serial data transfer

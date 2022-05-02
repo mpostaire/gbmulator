@@ -32,17 +32,15 @@ void gbmulator_unpause(void) {
 }
 
 int sdl_key_to_joypad(SDL_Keycode key) {
-    switch (key) {
-    case SDLK_RIGHT: return JOYPAD_RIGHT;
-    case SDLK_LEFT: return JOYPAD_LEFT;
-    case SDLK_UP: return JOYPAD_UP;
-    case SDLK_DOWN: return JOYPAD_DOWN;
-    case SDLK_KP_0: return JOYPAD_A;
-    case SDLK_KP_PERIOD: return JOYPAD_B;
-    case SDLK_KP_2: return JOYPAD_SELECT;
-    case SDLK_KP_1: return JOYPAD_START;
-    default: return key;
-    }
+    if (key == config.left) return JOYPAD_LEFT;
+    if (key == config.right) return JOYPAD_RIGHT;
+    if (key == config.up) return JOYPAD_UP;
+    if (key == config.down) return JOYPAD_DOWN;
+    if (key == config.a) return JOYPAD_A;
+    if (key == config.b) return JOYPAD_B;
+    if (key == config.start) return JOYPAD_SELECT;
+    if (key == config.select) return JOYPAD_START;
+    return key;
 }
 
 static void ppu_vblank_cb(byte_t *pixels) {
