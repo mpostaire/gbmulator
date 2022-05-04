@@ -23,9 +23,11 @@ void emulator_run_cycles(int cycles_limit) {
     }
 }
 
-char *emulator_init(const char *rom_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer)) {
+char *emulator_init(const char *rom_path, const char *save_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer)) {
     ppu_set_vblank_callback(ppu_vblank_cb);
+    apu_init();
     apu_set_samples_ready_callback(apu_samples_ready_cb);
+    mmu_init(save_path);
     return mmu_load_cartridge(rom_path);
 }
 

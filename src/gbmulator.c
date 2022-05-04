@@ -6,7 +6,7 @@
 #include "config.h"
 #include "emulator/emulator.h"
 
-#define WINDOW_TITLE "GBmulator"
+#define WINDOW_TITLE EMULATOR_NAME
 
 // FIXME LY==LYC interrupt buggy, in fact most of the ppu is (check argentum emulator ppu code to understand how its handled)
 
@@ -15,6 +15,13 @@
 // TODO fix pause menu when starting game link connexion while pause menu is still active (it's working but weirdly so low priority)
 
 // TODO MBCs are poorly implemented (see https://github.com/drhelius/Gearboy to understand its handled)
+
+// TODO compartimentalize everyting (ppu/mmu/etc) in structs with init/free functions to make loading new roms when one is already playing possible
+
+// TODO macros for error (print message and exit) and warning (print message) and macros that handles error return values of functions
+//      type: 'char .*\[.*\]' in search menu to find all variable arrays and replace them by malloc + free
+//      free everything at exit
+
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_FALSE;
@@ -53,6 +60,21 @@ static void apu_samples_ready_cb(float *audio_buffer) {
     SDL_QueueAudio(audio_device, audio_buffer, sizeof(float) * APU_SAMPLE_COUNT);
 }
 
+static char *get_save_filepath(const char *rom_filepath) {
+    size_t len = strlen(rom_filepath);
+    char *buf = malloc(len + 2);
+    if (!buf) {
+        perror("ERROR get_save_filepath");
+        exit(EXIT_FAILURE);
+    }
+
+    char *last_period = strrchr(rom_filepath, '.');
+    int last_period_index = (int) (last_period - rom_filepath);
+    snprintf(buf, len + 2, "%.*s.sav", last_period_index, rom_filepath);
+
+    return buf;
+}
+
 static void handle_input(void) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -72,6 +94,19 @@ static void handle_input(void) {
                 if (is_paused)
                     ui_back_to_main_menu();
                 is_paused = !is_paused;
+                break;
+            case SDLK_F1: case SDLK_F2:
+            case SDLK_F3: case SDLK_F4:
+            case SDLK_F5: case SDLK_F6:
+            case SDLK_F7: case SDLK_F8:
+                // TODO better filename (rom file name + savestate number)
+                if (event.key.keysym.mod & KMOD_SHIFT) {
+                    printf("Loading state %d from %s\n", event.key.keysym.sym - SDLK_F1, "savestate");
+                    emulator_load_state("savestate");
+                } else {
+                    printf("Saving state %d to %s\n", event.key.keysym.sym - SDLK_F1, "savestate");
+                    emulator_save_state("savestate");
+                }
                 break;
             }
             joypad_press(sdl_key_to_joypad(event.key.keysym.sym));
@@ -95,7 +130,8 @@ int main(int argc, char **argv) {
 
     const char *config_path = config_load();
 
-    char *rom_title = emulator_init(argv[1], ppu_vblank_cb, apu_samples_ready_cb);
+    char *save_path = get_save_filepath(argv[1]);
+    char *rom_title = emulator_init(argv[1], save_path, ppu_vblank_cb, apu_samples_ready_cb);
     char window_title[sizeof(WINDOW_TITLE) + 19];
     snprintf(window_title, sizeof(window_title), WINDOW_TITLE" - %s", rom_title);
     printf("Playing %s\n", rom_title);

@@ -4,6 +4,9 @@
 
 extern byte_t cartridge[8000000];
 extern byte_t mem[0x10000];
+extern byte_t eram[0x8000]; // max 4 banks of size 0x2000
+
+extern byte_t mbc;
 
 enum mem_map {
     ROM_BANK0 = 0x0000, // From cartridge, usually a fixed bank.
@@ -71,12 +74,28 @@ enum mem_map {
     WY = 0xFF4A,   // Window Y Position
     WX = 0xFF4B,   // Window X Position + 7
 
+    BANK = 0xFF50,
+
     HRAM = 0xFF80,
     IE = 0xFFFF // Interrupt Enable
 };
 
+enum mbc_type {
+    MBC0,
+    MBC1,
+    MBC2,
+    MBC3,
+    MBC5,
+    MBC6,
+    MBC7
+};
+
+void mmu_init(const char *save_path);
+
+char *mmu_get_rom_title(void);
+
 /**
- * @returns loaded rom title
+ * @returns the loaded rom title
  */
 char *mmu_load_cartridge(const char *filepath);
 

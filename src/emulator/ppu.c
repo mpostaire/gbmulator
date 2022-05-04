@@ -366,7 +366,7 @@ byte_t *ppu_get_pixels(void) {
     return pixels;
 }
 
-byte_t *ppu_get_color_values(enum color color) {
+byte_t *ppu_get_color_values(color color) {
     return color_palettes[current_color_palette][color];
 }
 

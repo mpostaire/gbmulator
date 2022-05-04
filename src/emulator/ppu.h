@@ -28,7 +28,7 @@ void ppu_step(int cycles);
 
 byte_t *ppu_get_pixels(void);
 
-byte_t *ppu_get_color_values(enum color color);
+byte_t *ppu_get_color_values(color color);
 
 void ppu_set_color_palette(enum ppu_color_palette palette);
 

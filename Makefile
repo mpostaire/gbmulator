@@ -1,7 +1,7 @@
 SDIR:=src
 ODIR:=out
 IDIR:=$(SDIR)
-CFLAGS:=-std=gnu99 -Wall -O2 -I$(IDIR)
+CFLAGS:=-std=gnu11 -Wall -O2 -I$(IDIR)
 LDLIBS:=-lSDL2
 CC:=gcc
 EXEC:=gbmulator

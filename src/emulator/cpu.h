@@ -60,6 +60,9 @@ struct registers {
 	word_t pc;
 } extern registers;
 
+extern byte_t cpu_ime; // interrupt master enable
+extern byte_t cpu_halt;
+
 void cpu_request_interrupt(int irq);
 
 int cpu_step(void);

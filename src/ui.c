@@ -271,7 +271,7 @@ static void key_setter_set_key(menu_entry_t *entry, SDL_Keycode key) {
     int l = strlen(key_name);
     if (entry->setter.key_name)
         free(entry->setter.key_name);
-    entry->setter.key_name = malloc(sizeof(char) * (l + 1));
+    entry->setter.key_name = malloc(l + 1);
     snprintf(entry->setter.key_name, l + 1, "%s", key_name);
 }
 
@@ -357,7 +357,7 @@ byte_t *ui_init(void) {
     options_menu.entries[2].choices.position = apu_get_global_sound_level() * 4;
     options_menu.entries[3].choices.position = ppu_get_color_palette();
 
-    if (!(link_menu.entries[1].user_input.input = malloc(sizeof(char) * 40))) {
+    if (!(link_menu.entries[1].user_input.input = malloc(40))) {
         perror("ERROR: ui_init");
         exit(EXIT_FAILURE);
     }
@@ -368,12 +368,12 @@ byte_t *ui_init(void) {
     link_menu.entries[1].user_input.visible_hi = 12;
 
     char **link_port_buf = &link_menu.entries[2].user_input.input;
-    if (!(*link_port_buf = malloc(sizeof(char) * 6))) {
+    if (!(*link_port_buf = malloc(6))) {
         perror("ERROR: ui_init");
         exit(EXIT_FAILURE);
     }
 
-    link_menu.entries[2].user_input.cursor = snprintf(*link_port_buf, sizeof(char) * 6, "%d", config.link_port);
+    link_menu.entries[2].user_input.cursor = snprintf(*link_port_buf, 6, "%d", config.link_port);
     link_menu.entries[2].user_input.input = *link_port_buf;
     link_menu.entries[2].user_input.max_length = 5;
     link_menu.entries[2].user_input.visible_hi = 5;

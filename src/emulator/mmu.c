@@ -11,16 +11,6 @@
 #include "apu.h"
 #include "boot.h"
 
-enum mbc_type {
-    MBC0,
-    MBC1,
-    MBC2,
-    MBC3,
-    MBC5,
-    MBC6,
-    MBC7
-};
-
 struct rtc_counter {
     byte_t s;
     byte_t m;
@@ -47,20 +37,15 @@ byte_t rtc_latch = 0;
 struct rtc_counter rtc;
 
 const char *rom_filepath;
+const char *save_filepath;
+char *rom_title;
 
-static char *get_save_filepath(void) {
-    size_t len = strlen(rom_filepath);
-    char *buf = malloc(sizeof(char) * (len + 2));
-    if (!buf) {
-        perror("ERROR get_save_filepath");
-        exit(EXIT_FAILURE);
-    }
+void mmu_init(const char *save_path) {
+    save_filepath = save_path;
+}
 
-    char *last_period = strrchr(rom_filepath, '.');
-    int last_period_index = (int) (last_period - rom_filepath);
-    snprintf(buf, len + 2, "%.*s.sav", last_period_index, rom_filepath);
-
-    return buf;
+char *mmu_get_rom_title(void) {
+    return rom_title;
 }
 
 char *mmu_load_cartridge(const char *filepath) {
@@ -129,13 +114,13 @@ char *mmu_load_cartridge(const char *filepath) {
     printf("Cartridge using MBC%d with %d ROM banks + %d RAM banks\n", mbc, rom_banks, ram_banks);
 
     // get rom title
-    char *title = malloc(sizeof(char) * 17);
-    if (!title) {
+    rom_title = malloc(17);
+    if (!rom_title) {
         perror("ERROR: mmu_load_cartridge");
         exit(EXIT_FAILURE);
     }
-    strncpy(title, (char *) &cartridge[0x134], 16);
-    title[16] = '\0';
+    strncpy(rom_title, (char *) &cartridge[0x134], 16);
+    rom_title[16] = '\0';
 
     // checksum validation
     int sum = 0;
@@ -153,25 +138,20 @@ char *mmu_load_cartridge(const char *filepath) {
     memcpy(&mem, &dmg_boot, sizeof(dmg_boot));
 
     // load save into ERAM
-    char *save_filepath = get_save_filepath();
     f = fopen(save_filepath, "rb");
-    free(save_filepath);
     // if there is a save file, load it into eram
     if (f) {
         fread(eram, sizeof(eram), 1, f);
         fclose(f);
     }
 
-    return title;
+    return rom_title;
 }
 
 void mmu_save_eram(void) {
     if (!ram_banks) return;
 
-    char *save_filepath = get_save_filepath();
     FILE *f = fopen(save_filepath, "wb");
-    free(save_filepath);
-
     if (!f) {
         perror("ERROR: mmu_save_eram: opening the save file");
         exit(EXIT_FAILURE);
@@ -393,7 +373,7 @@ byte_t mmu_read(word_t address) {
     if (address == NR51)
         return mem[NR51] | 0x00; // useless?
     if (address == NR52)
-        return (apu_enabled << 7) | 0x70 | channel4.enabled << 3 | channel3.enabled << 2 | channel2.enabled << 1 | channel1.enabled;
+        return mem[NR52] | 0x70;
     if (address > NR52 && address < WAVE_RAM)
         return 0xFF;
 
@@ -421,7 +401,7 @@ void mmu_write(word_t address, byte_t data) {
         // TODO this should not be instantaneous (it takes 640 cycles to complete and during that time the cpu can only access HRAM)
         memcpy(&mem[OAM], &mem[data * 0x100], 0xA0 * sizeof(byte_t));
         mem[address] = data;
-    } else if (address == 0xFF50 && data == 1) {
+    } else if (address == BANK && data == 1) {
         // disable boot rom
         memcpy(&mem, &cartridge, 0x100);
         mem[address] = data;
@@ -429,116 +409,116 @@ void mmu_write(word_t address, byte_t data) {
         // prevent writes to the lower nibble of the P1 register (joypad)
         mem[address] = data & 0xF0;
     } else if (address == NR10) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
     } else if (address == NR11) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
         channel1.length_counter = 64 - (data & 0x3F);
     } else if (address == NR12) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
         if (!(data >> 3)) // if dac disabled
-            channel1.enabled = 0;
+            APU_DISABLE_CHANNEL(APU_CHANNEL_1);
     } else if (address == NR13) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
     } else if (address == NR14) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
         if (CHECK_BIT(data, 7) && (data >> 3)) // if trigger requested and dac enabled
             apu_channel_trigger(&channel1);
     } else if (address == NR20) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
     } else if (address == NR21) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
         channel2.length_counter = 64 - (data & 0x3F);
     } else if (address == NR22) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
         if (!(data >> 3)) // if dac disabled
-            channel2.enabled = 0;
+            APU_DISABLE_CHANNEL(APU_CHANNEL_2);
     } else if (address == NR23) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
     } else if (address == NR24) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
         if (CHECK_BIT(data, 7) && (data >> 3)) // if trigger requested and dac enabled
             apu_channel_trigger(&channel2);
     } else if (address == NR30) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
         if (!(data >> 7)) // if dac disabled
-            channel3.enabled = 0;
+            APU_DISABLE_CHANNEL(APU_CHANNEL_3);
     } else if (address == NR31) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
         channel3.length_counter = 256 - data;
     } else if (address == NR32) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
     } else if (address == NR33) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
     } else if (address == NR34) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
         if (CHECK_BIT(data, 7) && (data >> 7)) // if trigger requested and dac enabled
             apu_channel_trigger(&channel3);
     } else if (address == NR40) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
     } else if (address == NR41) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
         channel4.length_counter = 64 - (data & 0x3F);
     } else if (address == NR42) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
         if (!(data >> 3)) // if dac disabled
-            channel4.enabled = 0;
+            APU_DISABLE_CHANNEL(APU_CHANNEL_4);
     } else if (address == NR43) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
     } else if (address == NR44) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
         if (CHECK_BIT(data, 7) && (data >> 3)) // if trigger requested and dac enabled
             apu_channel_trigger(&channel4);
     } else if (address == NR50) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
     } else if (address == NR51) {
-        if (!apu_enabled)
+        if (!IS_APU_ENABLED)
             return;
         mem[address] = data;
     } else if (address == NR52) {
-        apu_enabled = data >> 7;
-        if (!apu_enabled)
+        CHANGE_BIT(mem[NR52], data >> 7, 7);
+        if (!IS_APU_ENABLED)
             memset(&mem[NR10], 0x00, 32 * sizeof(byte_t)); // clear all registers
     } else if (address >= WAVE_RAM && address < LCDC) {
         if (!CHECK_BIT(mem[NR30], 7))

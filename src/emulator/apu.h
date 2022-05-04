@@ -1,13 +1,25 @@
 #pragma once
 
 #include "types.h"
+#include "utils.h"
+#include "mmu.h"
 
 #define APU_SAMPLE_RATE 44100
 #define APU_SAMPLE_COUNT 2048
 
-typedef struct channel {
-    byte_t enabled;
+#define IS_APU_ENABLED CHECK_BIT(mem[NR52], 7)
+#define APU_IS_CHANNEL_ENABLED(channel) CHECK_BIT(mem[NR52], (channel))
+#define APU_ENABLE_CHANNEL(channel) SET_BIT(mem[NR52], (channel))
+#define APU_DISABLE_CHANNEL(channel) RESET_BIT(mem[NR52], (channel))
 
+enum channel_id {
+    APU_CHANNEL_1,
+    APU_CHANNEL_2,
+    APU_CHANNEL_3,
+    APU_CHANNEL_4
+};
+
+typedef struct {
     byte_t wave_position;
     byte_t duty_position;
     byte_t duty;
@@ -35,8 +47,6 @@ extern channel_t channel2;
 extern channel_t channel3;
 extern channel_t channel4;
 
-extern byte_t apu_enabled;
-
 void apu_channel_trigger(channel_t *c);
 
 /**
@@ -51,3 +61,9 @@ void apu_set_global_sound_level(float);
 float apu_get_global_sound_level(void);
 
 void apu_set_samples_ready_callback(void (*samples_ready_callback)(float *audio_buffer));
+
+/**
+ * Initializes the internal state of the ppu.
+ * NOTE: this does not set the samples_ready_callback, sampling_speed_multiplier and global_sound_level.
+ */
+void apu_init(void);

@@ -8,7 +8,7 @@ typedef unsigned short word_t;
 typedef short s_word_t;
 
 // TODO? LCD off special bright white color
-typedef enum color {
+typedef enum {
     WHITE,
     LIGHT_GRAY,
     DARK_GRAY,

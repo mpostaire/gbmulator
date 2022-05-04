@@ -11,8 +11,8 @@ struct instruction {
 };
 
 struct registers registers;
-int ime = 0; // interrupt master enable
-int halt = 0;
+byte_t cpu_ime = 0; // interrupt master enable
+byte_t cpu_halt = 0;
 
 const struct instruction instructions[256] = {
     {"NOP", 0},                   // 0x00
@@ -2312,7 +2312,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 8;
         break;
     case 0x76: // HALT
-        halt = 1;
+        cpu_halt = 1;
         cycles = 4;
         break;
     case 0x77: // LD (HL),A
@@ -2750,7 +2750,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         break;
     case 0xD9: // RETI
         registers.pc = pop();
-        ime = 1;
+        cpu_ime = 1;
         cycles = 16;
         break;
     case 0xDA: // JP C, nn
@@ -2844,7 +2844,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 8;
         break;
     case 0xF3: // DI
-        ime = 0;
+        cpu_ime = 0;
         cycles = 4;
         break;
     case 0xF5: // PUSH AF
@@ -2877,7 +2877,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
         cycles = 16;
         break;
     case 0xFB: // EI
-        ime = 1;
+        cpu_ime = 1;
         cycles = 4;
         break;
     case 0xFE: // CP n
@@ -2916,14 +2916,14 @@ static void print_trace(void) {
 
 static int cpu_handle_interrupts(void) {
     // wake cpu if there is one (or more) interrupt
-    if (halt && (mem[IE] & mem[IF]))
-        halt = 0;
+    if (cpu_halt && (mem[IE] & mem[IF]))
+        cpu_halt = 0;
 
-    // ime is truly enabled when its value is 2 to emulate the EI delay by one instruction
-    if (ime == 1) {
-        ime++;
-    } else if (ime == 2 && (mem[IE] & mem[IF])) { // if ime is enabled and at least 1 interrupt is enabled and fired
-        ime = 0;
+    // cpu_ime is truly enabled when its value is 2 to emulate the EI delay by one instruction
+    if (cpu_ime == 1) {
+        cpu_ime++;
+    } else if (cpu_ime == 2 && (mem[IE] & mem[IF])) { // if cpu_ime is enabled and at least 1 interrupt is enabled and fired
+        cpu_ime = 0;
         push(registers.pc);
 
         if (CHECK_BIT(mem[IF], IRQ_VBLANK)) {
@@ -2956,7 +2956,7 @@ void cpu_request_interrupt(int irq) {
 int cpu_step(void) {
     int interrupts_cycles = cpu_handle_interrupts();
 
-    if (halt) return 4 + interrupts_cycles;
+    if (cpu_halt) return 4 + interrupts_cycles;
 
     #ifdef DEBUG
     print_trace();

@@ -4,7 +4,7 @@
 #include "mmu.h"
 #include "cpu.h"
 
-// FIXME audible pops
+// FIXME rare audible pops
 
 const byte_t duty_cycles[4][8] = {
     { 0, 0, 0, 0, 0, 0, 0, 1 },
@@ -14,8 +14,6 @@ const byte_t duty_cycles[4][8] = {
 };
 
 float global_sound_level = 1.0f;
-
-byte_t apu_enabled = 0;
 
 int take_sample_cycles_count = 0;
 float sampling_speed_multiplier = 1.0f;
@@ -27,78 +25,15 @@ float audio_buffer[APU_SAMPLE_COUNT];
 byte_t frame_sequencer = 0;
 int frame_sequencer_cycles_count = 0;
 
-enum channel_id {
-    CHANNEL_1,
-    CHANNEL_2,
-    CHANNEL_3,
-    CHANNEL_4
-};
-
-channel_t channel1 = {
-    .enabled = 0,
-    .duty_position = 0,
-    .duty = 0,
-    .freq_timer = 0,
-    .length_counter = 0,
-    .envelope_period = 0,
-    .envelope_volume = 0,
-    .sweep_timer = 0,
-    .sweep_freq = 0,
-    .sweep_enabled = 0,
-    .NRx0 = &mem[NR10],
-    .NRx1 = &mem[NR11],
-    .NRx2 = &mem[NR12],
-    .NRx3 = &mem[NR13],
-    .NRx4 = &mem[NR14],
-    .id = CHANNEL_1
-};
-
-channel_t channel2 = { 
-    .enabled = 0,
-    .duty_position = 0,
-    .duty = 0,
-    .freq_timer = 0,
-    .length_counter = 0,
-    .envelope_period = 0,
-    .envelope_volume = 0,
-    .NRx1 = &mem[NR21],
-    .NRx2 = &mem[NR22],
-    .NRx3 = &mem[NR23],
-    .NRx4 = &mem[NR24],
-    .id = CHANNEL_2
-};
-
-channel_t channel3 = {
-    .enabled = 0,
-    .wave_position = 0,
-    .freq_timer = 0,
-    .length_counter = 0,
-    .NRx0 = &mem[NR30],
-    .NRx1 = &mem[NR31],
-    .NRx2 = &mem[NR32],
-    .NRx3 = &mem[NR33],
-    .NRx4 = &mem[NR34],
-    .id = CHANNEL_3
-};
-
-channel_t channel4 = { 
-    .enabled = 0,
-    .freq_timer = 0,
-    .length_counter = 0,
-    .envelope_period = 0,
-    .envelope_volume = 0,
-    .NRx1 = &mem[NR41],
-    .NRx2 = &mem[NR42],
-    .NRx3 = &mem[NR43],
-    .NRx4 = &mem[NR44],
-    .LFSR = 0,
-    .id = CHANNEL_4
-};
+channel_t channel1;
+channel_t channel2;
+channel_t channel3;
+channel_t channel4;
 
 static void channel_step(channel_t *c) {
     c->freq_timer--;
     if (c->freq_timer <= 0) {
-        if (c->id == CHANNEL_4) {
+        if (c->id == APU_CHANNEL_4) {
             byte_t divisor = *c->NRx3 & 0x07;
             c->freq_timer = divisor ? divisor << 4 : 8;
             c->freq_timer <<= (*c->NRx3 >> 4);
@@ -114,7 +49,7 @@ static void channel_step(channel_t *c) {
         }
 
         word_t freq = ((*c->NRx4 & 0x07) << 8) | *c->NRx3;
-        if (c->id == CHANNEL_3) {
+        if (c->id == APU_CHANNEL_3) {
             c->freq_timer = (2048 - freq) * 2;
             c->wave_position = (c->wave_position + 1) % 32;
             return;
@@ -133,7 +68,7 @@ static void channel_length(channel_t *c) {
 
     c->length_counter--;
     if (c->length_counter <= 0)
-        c->enabled = 0;
+        APU_DISABLE_CHANNEL(c->id);
 }
 
 static int calc_sweep_freq(channel_t *c) {
@@ -144,7 +79,7 @@ static int calc_sweep_freq(channel_t *c) {
         freq = c->sweep_freq + freq;
     
     if (freq > 2047)
-        c->enabled = 0;
+        APU_DISABLE_CHANNEL(c->id);
     
     return freq;
 }
@@ -188,9 +123,9 @@ static void channel_envelope(channel_t *c) {
 
 // TODO channel 3 ony enables channel and do nothing else?????
 void apu_channel_trigger(channel_t *c) {
-    c->enabled = 1;
+    APU_ENABLE_CHANNEL(c->id);
     if (c->length_counter <= 0)
-        c->length_counter = c->id == CHANNEL_3 ? 256 : 64;
+        c->length_counter = c->id == APU_CHANNEL_3 ? 256 : 64;
 
     // // TODO find out if this should really be done
     // byte_t freq = ((*c->NRx4 & 0x03) << 8) | *c->NRx3;
@@ -201,12 +136,12 @@ void apu_channel_trigger(channel_t *c) {
     //     c->freq_timer = ((2048 - freq) * 4);
     // }
 
-    if (c->id != CHANNEL_3) {
+    if (c->id != APU_CHANNEL_3) {
         c->envelope_period = *c->NRx2 & 0x07;
         c->envelope_volume = *c->NRx2 >> 4;
     }
 
-    if (c->id == CHANNEL_1) {
+    if (c->id == APU_CHANNEL_1) {
         c->sweep_freq = ((*c->NRx4 & 0x07) << 8) | *c->NRx3;
         byte_t sweep_period = (*c->NRx0 & 0x70) >> 4;
         c->sweep_timer = sweep_period > 0 ? sweep_period : 8;
@@ -217,22 +152,22 @@ void apu_channel_trigger(channel_t *c) {
             calc_sweep_freq(c);
     }
 
-    if (c->id == CHANNEL_4)
+    if (c->id == APU_CHANNEL_4)
         c->LFSR = 0x7FFF;
 
-    if ((c->id == CHANNEL_3 && !CHECK_BIT(*c->NRx0, 7)) || (c->id != CHANNEL_3 && !(*c->NRx2 >> 3)))
-        c->enabled = 0;
+    if ((c->id == APU_CHANNEL_3 && !CHECK_BIT(*c->NRx0, 7)) || (c->id != APU_CHANNEL_3 && !(*c->NRx2 >> 3)))
+        APU_DISABLE_CHANNEL(c->id);
 }
 
 static float channel_dac(channel_t *c) {
     switch (c->id) {
-    case CHANNEL_1:
-    case CHANNEL_2:
-        if ((*c->NRx2 >> 3) && c->enabled) // if dac enabled and channel enabled
+    case APU_CHANNEL_1:
+    case APU_CHANNEL_2:
+        if ((*c->NRx2 >> 3) && APU_IS_CHANNEL_ENABLED(c->id)) // if dac enabled and channel enabled
             return ((c->duty * c->envelope_volume) / 7.5f) - 1.0f;
         break;
-    case CHANNEL_3:
-        if ((*c->NRx0 >> 7) /*&& c->enabled*/) { // if dac enabled and channel enabled -- TODO check why channel 3 enabled flag is not working properly
+    case APU_CHANNEL_3:
+        if ((*c->NRx0 >> 7) /*&& APU_IS_CHANNEL_ENABLED(c->id)*/) { // if dac enabled and channel enabled -- TODO check why channel 3 enabled flag is not working properly
             byte_t sample = mem[WAVE_RAM + (c->wave_position / 2)];
             if (c->wave_position % 2 == 0) // TODO check if this works properly (I think it always reads the 2 nibbles as the same values)
                 sample >>= 4;
@@ -251,8 +186,8 @@ static float channel_dac(channel_t *c) {
             return (sample / 7.5f) - 1.0f; // divide by 7.5 then substract 1.0 to make it between -1.0 and 1.0
         }
         break;
-    case CHANNEL_4: // TODO works but it seems (in Tetris) this channel volume is a bit too loud
-        if ((*c->NRx2 >> 3) && c->enabled) // if dac enabled and channel enabled
+    case APU_CHANNEL_4: // TODO works but it seems (in Tetris) this channel volume is a bit too loud
+        if ((*c->NRx2 >> 3) && APU_IS_CHANNEL_ENABLED(c->id)) // if dac enabled and channel enabled
             return ((!(c->LFSR & 0x01) * c->envelope_volume) / 7.5f) - 1.0f;
         break;
     }
@@ -260,7 +195,7 @@ static float channel_dac(channel_t *c) {
 }
 
 void apu_step(int cycles) {
-    if (!apu_enabled)
+    if (!IS_APU_ENABLED)
         return;
 
     while (cycles-- > 0) {
@@ -314,8 +249,8 @@ void apu_step(int cycles) {
 
             float S01_volume = ((mem[NR50] & 0x07) + 1) / 8.0f; // keep it between 0.0f and 1.0f
             float S02_volume = (((mem[NR50] & 0x70) >> 4) + 1) / 8.0f; // keep it between 0.0f and 1.0f
-            float S01_output = ((CHECK_BIT(mem[NR51], CHANNEL_1) ? channel_dac(&channel1) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_2) ? channel_dac(&channel2) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_3) ? channel_dac(&channel3) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_4) ? channel_dac(&channel4) : 0.0f)) / 4.0f;
-            float S02_output = ((CHECK_BIT(mem[NR51], CHANNEL_1 + 4) ? channel_dac(&channel1) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_2 + 4) ? channel_dac(&channel2) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_3 + 4) ? channel_dac(&channel3) : 0.0f) + (CHECK_BIT(mem[NR51], CHANNEL_4 + 4) ? channel_dac(&channel4) : 0.0f)) / 4.0f;
+            float S01_output = ((CHECK_BIT(mem[NR51], APU_CHANNEL_1) ? channel_dac(&channel1) : 0.0f) + (CHECK_BIT(mem[NR51], APU_CHANNEL_2) ? channel_dac(&channel2) : 0.0f) + (CHECK_BIT(mem[NR51], APU_CHANNEL_3) ? channel_dac(&channel3) : 0.0f) + (CHECK_BIT(mem[NR51], APU_CHANNEL_4) ? channel_dac(&channel4) : 0.0f)) / 4.0f;
+            float S02_output = ((CHECK_BIT(mem[NR51], APU_CHANNEL_1 + 4) ? channel_dac(&channel1) : 0.0f) + (CHECK_BIT(mem[NR51], APU_CHANNEL_2 + 4) ? channel_dac(&channel2) : 0.0f) + (CHECK_BIT(mem[NR51], APU_CHANNEL_3 + 4) ? channel_dac(&channel3) : 0.0f) + (CHECK_BIT(mem[NR51], APU_CHANNEL_4 + 4) ? channel_dac(&channel4) : 0.0f)) / 4.0f;
 
             // S02 (left)
             audio_buffer[audio_buffer_index++] = S02_output * S02_volume * global_sound_level;
@@ -346,4 +281,71 @@ float apu_get_global_sound_level(void) {
 
 void apu_set_samples_ready_callback(void (*samples_ready_callback)(float *audio_buffer)) {
     samples_ready_cb = samples_ready_callback;
+}
+
+void apu_init(void) {
+    take_sample_cycles_count = 0;
+
+    audio_buffer_index = 0;
+    memset(audio_buffer, 0, sizeof(audio_buffer));
+
+    frame_sequencer = 0;
+    frame_sequencer_cycles_count = 0;
+
+    channel1 = (channel_t) {
+        .duty_position = 0,
+        .duty = 0,
+        .freq_timer = 0,
+        .length_counter = 0,
+        .envelope_period = 0,
+        .envelope_volume = 0,
+        .sweep_timer = 0,
+        .sweep_freq = 0,
+        .sweep_enabled = 0,
+        .NRx0 = &mem[NR10],
+        .NRx1 = &mem[NR11],
+        .NRx2 = &mem[NR12],
+        .NRx3 = &mem[NR13],
+        .NRx4 = &mem[NR14],
+        .id = APU_CHANNEL_1
+    };
+
+    channel2 = (channel_t) { 
+        .duty_position = 0,
+        .duty = 0,
+        .freq_timer = 0,
+        .length_counter = 0,
+        .envelope_period = 0,
+        .envelope_volume = 0,
+        .NRx1 = &mem[NR21],
+        .NRx2 = &mem[NR22],
+        .NRx3 = &mem[NR23],
+        .NRx4 = &mem[NR24],
+        .id = APU_CHANNEL_2
+    };
+
+    channel3 = (channel_t) {
+        .wave_position = 0,
+        .freq_timer = 0,
+        .length_counter = 0,
+        .NRx0 = &mem[NR30],
+        .NRx1 = &mem[NR31],
+        .NRx2 = &mem[NR32],
+        .NRx3 = &mem[NR33],
+        .NRx4 = &mem[NR34],
+        .id = APU_CHANNEL_3
+    };
+
+    channel4 = (channel_t) { 
+        .freq_timer = 0,
+        .length_counter = 0,
+        .envelope_period = 0,
+        .envelope_volume = 0,
+        .NRx1 = &mem[NR41],
+        .NRx2 = &mem[NR42],
+        .NRx3 = &mem[NR43],
+        .NRx4 = &mem[NR44],
+        .LFSR = 0,
+        .id = APU_CHANNEL_4
+    };
 }
