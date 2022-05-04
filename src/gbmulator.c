@@ -21,7 +21,8 @@
 // TODO macros for error (print message and exit) and warning (print message) and macros that handles error return values of functions
 //      type: 'char .*\[.*\]' in search menu to find all variable arrays and replace them by malloc + free
 //      free everything at exit
-
+//      after compartimentalization, the internals can be accessed by the emulator, (like the mmu variable which is extern and all its internals
+//      are available outside the emulator. this is bad and we should include in emulator.h only methods needed to be exported outside)
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_FALSE;
@@ -45,8 +46,8 @@ int sdl_key_to_joypad(SDL_Keycode key) {
     if (key == config.down) return JOYPAD_DOWN;
     if (key == config.a) return JOYPAD_A;
     if (key == config.b) return JOYPAD_B;
-    if (key == config.start) return JOYPAD_SELECT;
-    if (key == config.select) return JOYPAD_START;
+    if (key == config.start) return JOYPAD_START;
+    if (key == config.select) return JOYPAD_SELECT;
     return key;
 }
 

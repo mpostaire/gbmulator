@@ -293,15 +293,6 @@ void apu_init(void) {
     frame_sequencer_cycles_count = 0;
 
     channel1 = (channel_t) {
-        .duty_position = 0,
-        .duty = 0,
-        .freq_timer = 0,
-        .length_counter = 0,
-        .envelope_period = 0,
-        .envelope_volume = 0,
-        .sweep_timer = 0,
-        .sweep_freq = 0,
-        .sweep_enabled = 0,
         .NRx0 = &mem[NR10],
         .NRx1 = &mem[NR11],
         .NRx2 = &mem[NR12],
@@ -311,12 +302,6 @@ void apu_init(void) {
     };
 
     channel2 = (channel_t) { 
-        .duty_position = 0,
-        .duty = 0,
-        .freq_timer = 0,
-        .length_counter = 0,
-        .envelope_period = 0,
-        .envelope_volume = 0,
         .NRx1 = &mem[NR21],
         .NRx2 = &mem[NR22],
         .NRx3 = &mem[NR23],
@@ -325,9 +310,6 @@ void apu_init(void) {
     };
 
     channel3 = (channel_t) {
-        .wave_position = 0,
-        .freq_timer = 0,
-        .length_counter = 0,
         .NRx0 = &mem[NR30],
         .NRx1 = &mem[NR31],
         .NRx2 = &mem[NR32],
@@ -337,10 +319,6 @@ void apu_init(void) {
     };
 
     channel4 = (channel_t) { 
-        .freq_timer = 0,
-        .length_counter = 0,
-        .envelope_period = 0,
-        .envelope_volume = 0,
         .NRx1 = &mem[NR41],
         .NRx2 = &mem[NR42],
         .NRx3 = &mem[NR43],

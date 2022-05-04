@@ -2,11 +2,28 @@
 
 #include "types.h"
 
-extern byte_t cartridge[8000000];
-extern byte_t mem[0x10000];
-extern byte_t eram[0x8000]; // max 4 banks of size 0x2000
+typedef struct {
+    byte_t s;
+    byte_t m;
+    byte_t h;
+    byte_t dl;
+    byte_t dh;
+    time_t value_in_seconds; // current rtc counter seconds, minutes, hours and days in seconds (helps with rtc_update())
+    byte_t enabled;
+    byte_t reg; // rtc register
+    byte_t latch;
+} rtc_t;
 
-extern byte_t mbc;
+typedef struct {
+    byte_t mbc;
+    byte_t rom_banks;
+    byte_t ram_banks;
+    byte_t current_rom_bank;
+    s_word_t current_eram_bank;
+    byte_t mbc1_mode;
+    byte_t eram_enabled;
+    rtc_t rtc;
+} mmu_t;
 
 enum mem_map {
     ROM_BANK0 = 0x0000, // From cartridge, usually a fixed bank.
@@ -89,6 +106,12 @@ enum mbc_type {
     MBC6,
     MBC7
 };
+
+extern byte_t cartridge[8000000];
+extern byte_t mem[0x10000];
+extern byte_t eram[0x8000]; // max 4 banks of size 0x2000
+
+extern mmu_t mmu;
 
 void mmu_init(const char *save_path);
 

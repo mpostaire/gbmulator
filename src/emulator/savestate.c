@@ -7,6 +7,8 @@
 #define BESS_VERSION_MAJOR 1
 #define BESS_VERSION_MINOR 1
 
+// TODO code cleaning
+
 // https://github.com/LIJI32/SameBoy/blob/master/BESS.md
 
 typedef struct __attribute__((packed)) {
@@ -104,12 +106,14 @@ int emulator_save_state(const char *path) {
     }
     // TODO fail on any write error
 
+    // NAME block
     BESS_header name_header = { "NAME", sizeof(EMULATOR_NAME" "EMULATOR_VERSION) - 1 };
     BESS_NAME_block name_block = { EMULATOR_NAME" "EMULATOR_VERSION };
     if (!fwrite(&name_header, sizeof(name_header), 1, f) ||
         !fwrite(&name_block, sizeof(name_block), 1, f))
         printf("ERROR: emulator_save_state: writing NAME block to savestate file\n");
 
+    // INFO block
     BESS_header info_header = { "INFO", 0x12 };
     BESS_INFO_block info_block = { .rom_globlal_checksum = cartridge[0x014E] << 8 | cartridge[0x014F] };
     char *rom_title = mmu_get_rom_title();
@@ -117,7 +121,36 @@ int emulator_save_state(const char *path) {
     if (!fwrite(&info_header, sizeof(info_header), 1, f) ||
         !fwrite(&info_block, sizeof(info_block), 1, f))
         printf("ERROR: emulator_save_state: writing INFO block to savestate file\n");
+
+    // MBC block
+    uint32_t mbc_block_length = 0;
+    BESS_header mbc_header;
+    BESS_MBC_block mbc_block;
+    switch (mmu.mbc) {
+    case MBC1:
+        mbc_block_length = 12;
+        mbc_header = (BESS_header) { "MBC ", mbc_block_length };
+        mbc_block = (BESS_MBC_block) {
+            .pairs = (BESS_MBC_pair[4]) {
+                { 0x0000, mmu.eram_enabled ? 0x0A : 0x00 },
+                { 0x2000, mmu.current_rom_bank },
+                { 0x4000, mmu.mbc1_mode ? mmu.current_eram_bank : mmu.current_rom_bank },
+                { 0x6000, mmu.mbc1_mode }
+            }
+        };
+        break;
+    case MBC2:
+        mbc_header = (BESS_header) { "MBC ", mbc_block_length };
+        break;
+    case MBC3:
+        mbc_header = (BESS_header) { "MBC ", mbc_block_length };
+        break;
+    default:
+        printf("ERROR: emulator_save_state: MBC > 3 not supported\n");
+        return 0;
+    }
     
+    // CORE block
     BESS_header core_header = { "CORE", 0xD0 };
     BESS_CORE_block core_block = {
         .major = BESS_VERSION_MAJOR,
@@ -134,13 +167,15 @@ int emulator_save_state(const char *path) {
         .execution_state = cpu_halt, // TODO STOP instruction is not implemented yet so the only possible values are cpu_halt
         .ram_size = ECHO - WRAM_BANK0,
         .vram_size = ERAM - VRAM,
-        .mbc_ram_size = mbc == MBC0 ? 0 : sizeof(eram),
+        .mbc_ram_size = mmu.mbc == MBC0 ? 0 : sizeof(eram),
         .oam_size = UNUSABLE - OAM,
         .hram_size = IE - HRAM,
         .background_palettes_size = OBP0 - BGP,
         .object_palettes_size = WY - OBP0,
     };
     core_block.ram_offset = sizeof(BESS_NAME_block) + sizeof(BESS_INFO_block) + sizeof(BESS_CORE_block) + (4 * sizeof(BESS_header));
+    if (mbc_block_length)
+        core_block.ram_offset += mbc_block_length + sizeof(BESS_header);
     core_block.vram_offset = core_block.ram_offset + core_block.ram_size;
     core_block.mbc_ram_offset = core_block.vram_offset + core_block.vram_size;
     core_block.oam_offset = core_block.mbc_ram_offset + core_block.mbc_ram_size;
@@ -155,28 +190,15 @@ int emulator_save_state(const char *path) {
         return 0;
     }
 
-    // uint32_t mbc_block_length;
-    // BESS_header mbc_header;
-    // switch (mbc) {
-    // case MBC0:
-    //     mbc_block_length = 0;
-    //     break;
-    // case MBC1:
-    //     mbc_header = (BESS_header) { "MBC ", mbc_block_length };
-    //     BESS_MBC_block mbc_block = {
-    //         .
-    //     };
-    //     break;
-    // case MBC2:
-    //     mbc_header = (BESS_header) { "MBC ", mbc_block_length };
-    //     break;
-    // case MBC3:
-    //     mbc_header = (BESS_header) { "MBC ", mbc_block_length };
-    //     break;
-    // default:
-    //     printf("ERROR: emulator_save_state: MBC > 3 not supported\n");
-    //     return 0;
-    // }
+    // write MBC block
+    if (mbc_block_length) {
+        if (!fwrite(&mbc_header, sizeof(mbc_header), 1, f) ||
+            !fwrite(&mbc_block, mbc_block_length, 1, f)) {
+            printf("ERROR: emulator_save_state: writing MBC block to savestate file\n");
+            fclose(f);
+            return 0;
+        }
+    }
 
     // this block is only if using mbc3 with an rtc
     // BESS_header rtc_header = { "RTC ", 0x30 };
@@ -203,7 +225,7 @@ int emulator_save_state(const char *path) {
         fclose(f);
         return 0;
     }
-    if (mbc > MBC0 && !fwrite(&mem[ERAM], core_block.mbc_ram_size, 1, f)) {
+    if (mmu.mbc && !fwrite(&mem[ERAM], core_block.mbc_ram_size, 1, f)) {
         printf("ERROR: emulator_save_state: writing mbc ram to savestate file\n");
         fclose(f);
         return 0;
@@ -272,6 +294,8 @@ int emulator_load_state(const char *path) {
     fseek(f, footer.first_block_offset, SEEK_SET);
 
     BESS_CORE_block core_block;
+    BESS_MBC_block mbc_block;
+    uint32_t mbc_block_length = 0;
     byte_t info_present = 0;
     byte_t core_present = 0;
     byte_t end_block_reached = 0;
@@ -341,7 +365,17 @@ int emulator_load_state(const char *path) {
             // not implemented
             fseek(f, header.length, SEEK_CUR);
         } else if (!strncmp(header.identifier, "MBC ", sizeof(header.identifier))) {
-            // TODO error when not present but rom is using mbc
+            if (!(header.length % sizeof(BESS_MBC_pair)) && mmu.mbc) {
+                if (!fread(&mbc_block, header.length, 1, f)) {
+                    printf("ERROR: emulator_load_state: reading MBC block from savestate file\n");
+                    fclose(f);
+                    return 0;
+                }
+                mbc_block_length = header.length;
+            } else {
+                printf("ERROR: emulator_load_state: invalid MBC block detected in %s\n - skipping", path);
+                fseek(f, header.length, SEEK_CUR);
+            }
         } else if (!strncmp(header.identifier, "RTC ", sizeof(header.identifier))) {
             // TODO error when not present but rom is using mbc3 + rtc
         } else if (!strncmp(header.identifier, "HUC3", sizeof(header.identifier))) {
@@ -386,6 +420,43 @@ int emulator_load_state(const char *path) {
     // resets apu's internal state to prevent glitchy audio if resuming from state without sound playing from state with sound playing
     apu_init();
 
+    if (mbc_block_length) {
+        switch (mmu.mbc) {
+        case MBC1:
+            s_word_t temp = 0;
+            for (int i = 0; i < mbc_block_length / sizeof(BESS_MBC_pair); i++) {
+                switch (mbc_block.pairs[i].address) {
+                case 0x0000:
+                    mmu.eram_enabled = mbc_block.pairs[i].value == 0x0A;
+                    break;
+                case 0x2000:
+                    mmu.current_rom_bank = mbc_block.pairs[i].value;
+                    break;
+                case 0x4000:
+                    temp = mbc_block.pairs[i].value;
+                    break;
+                case 0x6000:
+                    mmu.mbc1_mode = mbc_block.pairs[i].value;
+                    break;
+                }
+            }
+            if (mmu.mbc1_mode)
+                mmu.current_eram_bank = temp;
+            else
+                mmu.current_rom_bank = temp;
+            break;
+        case MBC2:
+            /* code */
+            break;
+        case MBC3:
+            /* code */
+            break;
+        default:
+            printf("ERROR: emulator_load_state: MBC > 3 not supported\n");
+            break;
+        }
+    }
+
     if (mem[BANK])
         memcpy(&mem, &cartridge, 0x100);
     else
@@ -412,7 +483,7 @@ int emulator_load_state(const char *path) {
     free(buf);
 
     if (core_block.mbc_ram_size > 0) {
-        buf = malloc(core_block.ram_size);
+        buf = malloc(core_block.mbc_ram_size);
         fseek(f, core_block.mbc_ram_offset, SEEK_SET);
         if (!fread(buf, core_block.mbc_ram_size, 1, f)) {
             printf("ERROR: emulator_load_state: reading mbc ram from savestate file\n");

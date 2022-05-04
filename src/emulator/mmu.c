@@ -11,30 +11,11 @@
 #include "apu.h"
 #include "boot.h"
 
-struct rtc_counter {
-    byte_t s;
-    byte_t m;
-    byte_t h;
-    byte_t dl;
-    byte_t dh;
-    time_t value_in_seconds; // current rtc counter seconds, minutes, hours and days in seconds (helps with rtc_update())
-};
+mmu_t mmu;
 
 byte_t cartridge[8000000];
 byte_t mem[0x10000];
 byte_t eram[0x8000]; // max 4 banks of size 0x2000
-
-byte_t mbc;
-byte_t rom_banks;
-byte_t ram_banks;
-byte_t current_rom_bank = 1;
-s_word_t current_eram_bank = 0;
-byte_t mbc1_mode = 0;
-byte_t eram_enabled = 0;
-byte_t rtc_enabled = 0;
-byte_t rtc_register = 0;
-byte_t rtc_latch = 0;
-struct rtc_counter rtc;
 
 const char *rom_filepath;
 const char *save_filepath;
@@ -42,6 +23,7 @@ char *rom_title;
 
 void mmu_init(const char *save_path) {
     save_filepath = save_path;
+    mmu = (mmu_t) { .current_rom_bank = 1 };
 }
 
 char *mmu_get_rom_title(void) {
@@ -72,16 +54,16 @@ char *mmu_load_cartridge(const char *filepath) {
 
     switch (cartridge[0x0147]) {
     case 0x00:
-        mbc = MBC0;
+        mmu.mbc = MBC0;
         break;
     case 0x01: case 0x02: case 0x03:
-        mbc = MBC1;
+        mmu.mbc = MBC1;
         break;
     case 0x05: case 0x06:
-        mbc = MBC2;
+        mmu.mbc = MBC2;
         break;
     case 0x0F: case 0x10: case 0x11: case 0x12: case 0x13:
-        mbc = MBC3;
+        mmu.mbc = MBC3;
         break;
     // case 0x19: case 0x1A: case 0x1B: case 0x1C: case 0x1D: case 0x1E:
     //     mbc = MBC5;
@@ -98,20 +80,20 @@ char *mmu_load_cartridge(const char *filepath) {
         break;
     }
 
-    rom_banks = 2 << cartridge[0x0148];
+    mmu.rom_banks = 2 << cartridge[0x0148];
 
     switch (cartridge[0x0149]) {
-    case 0x00: ram_banks = 0; break;
-    case 0x02: ram_banks = 1; break;
-    case 0x03: ram_banks = 4; break;
-    case 0x04: ram_banks = 16; break;
-    case 0x05: ram_banks = 8; break;
+    case 0x00: mmu.ram_banks = 0; break;
+    case 0x02: mmu.ram_banks = 1; break;
+    case 0x03: mmu.ram_banks = 4; break;
+    case 0x04: mmu.ram_banks = 16; break;
+    case 0x05: mmu.ram_banks = 8; break;
     default:
         // TODO handle this case
         break;
     }
 
-    printf("Cartridge using MBC%d with %d ROM banks + %d RAM banks\n", mbc, rom_banks, ram_banks);
+    printf("Cartridge using MBC%d with %d ROM banks + %d RAM banks\n", mmu.mbc, mmu.rom_banks, mmu.ram_banks);
 
     // get rom title
     rom_title = malloc(17);
@@ -149,7 +131,7 @@ char *mmu_load_cartridge(const char *filepath) {
 }
 
 void mmu_save_eram(void) {
-    if (!ram_banks) return;
+    if (!mmu.ram_banks) return;
 
     FILE *f = fopen(save_filepath, "wb");
     if (!f) {
@@ -168,88 +150,88 @@ static void rtc_update(void) {
     time_t current_update_time = time(NULL);
 
     // get time elapsed
-    time_t elapsed = current_update_time - rtc.value_in_seconds;
+    time_t elapsed = current_update_time - mmu.rtc.value_in_seconds;
 
-    rtc.value_in_seconds += elapsed;
+    mmu.rtc.value_in_seconds += elapsed;
 
-    word_t d = rtc.value_in_seconds / 86400;
+    word_t d = mmu.rtc.value_in_seconds / 86400;
     elapsed %= 86400;
     if (d >= 0x0200) { // day overflow
-        SET_BIT(rtc.dh, 7);
+        SET_BIT(mmu.rtc.dh, 7);
         d %= 0x0200;
     }
-    rtc.dh |= (d & 0x01) >> 8;
-    rtc.dl = d & 0xFF;
+    mmu.rtc.dh |= (d & 0x01) >> 8;
+    mmu.rtc.dl = d & 0xFF;
 
-    rtc.h = elapsed / 3600;
+    mmu.rtc.h = elapsed / 3600;
     elapsed %= 3600;
 
-    rtc.m = elapsed / 60;
+    mmu.rtc.m = elapsed / 60;
     elapsed %= 60;
 
-    rtc.s = elapsed;
+    mmu.rtc.s = elapsed;
 }
 
 // TODO MBC1 special cases where rom bank 0 is changed are not implemented
 static void write_mbc_registers(word_t address, byte_t data) {
-    switch (mbc) {
+    switch (mmu.mbc) {
     case MBC0:
         break; // read only, do nothing
     case MBC1: // TODO not all mooneye's MBC tests pass
         if (address < 0x2000) {
-            eram_enabled = (data & 0x0F) == 0x0A;
+            mmu.eram_enabled = (data & 0x0F) == 0x0A;
         } else if (address < 0x4000) {
-            current_rom_bank = data & 0x1F;
-            if (current_rom_bank == 0x00)
-                current_rom_bank = 0x01;
-            current_rom_bank &= rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
+            mmu.current_rom_bank = data & 0x1F;
+            if (mmu.current_rom_bank == 0x00)
+                mmu.current_rom_bank = 0x01;
+            mmu.current_rom_bank &= mmu.rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
         } else if (address < 0x6000) {
-            if (mbc1_mode) { // ROM mode
-                current_eram_bank = data & 0x03;
-                current_eram_bank &= ram_banks - 1; // in this case, equivalent to current_eram_bank %= ram_banks but avoid division by 0
+            if (mmu.mbc1_mode) { // ROM mode
+                mmu.current_eram_bank = data & 0x03;
+                mmu.current_eram_bank &= mmu.ram_banks - 1; // in this case, equivalent to current_eram_bank %= ram_banks but avoid division by 0
             } else {
-                current_rom_bank = ((data & 0x03) << 5) | (current_rom_bank & 0x1F);
-                if (current_rom_bank == 0x00 || current_rom_bank == 0x20 || current_rom_bank == 0x40 || current_rom_bank == 0x60)
-                    current_rom_bank++;
-                current_rom_bank &= rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
-                current_eram_bank = 0x00;
+                mmu.current_rom_bank = ((data & 0x03) << 5) | (mmu.current_rom_bank & 0x1F);
+                if (mmu.current_rom_bank == 0x00 || mmu.current_rom_bank == 0x20 || mmu.current_rom_bank == 0x40 || mmu.current_rom_bank == 0x60)
+                    mmu.current_rom_bank++;
+                mmu.current_rom_bank &= mmu.rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
+                mmu.current_eram_bank = 0x00;
             }
         } else if (address < 0x8000) {
-            mbc1_mode = data & 0x01;
+            mmu.mbc1_mode = data & 0x01;
         }
         break;
     case MBC2: // TODO not all mooneye's MBC tests pass
         if (address < 0x2000) {
             if (!CHECK_BIT(address, 8))
-                eram_enabled = (data & 0x0F) == 0x0A;
+                mmu.eram_enabled = (data & 0x0F) == 0x0A;
         } else if (address < 0x4000) {
-            current_rom_bank = data & 0x0F;
-            if (current_rom_bank == 0x00)
-                current_rom_bank = 0x01; // 0x00 not allowed
-            current_rom_bank &= rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
+            mmu.current_rom_bank = data & 0x0F;
+            if (mmu.current_rom_bank == 0x00)
+                mmu.current_rom_bank = 0x01; // 0x00 not allowed
+            mmu.current_rom_bank &= mmu.rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
         }
         break;
     case MBC3:
         if (address < 0x2000) {
-            eram_enabled = (data & 0x0F) == 0x0A;
-            rtc_enabled = (data & 0x0F) == 0x0A;
+            mmu.eram_enabled = (data & 0x0F) == 0x0A;
+            mmu.rtc.enabled = (data & 0x0F) == 0x0A;
         } else if (address < 0x4000) {
-            current_rom_bank = data & 0x7F;
-            if (current_rom_bank == 0x00)
-                current_rom_bank = 0x01; // 0x00 not allowed
-            current_rom_bank &= rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
+            mmu.current_rom_bank = data & 0x7F;
+            if (mmu.current_rom_bank == 0x00)
+                mmu.current_rom_bank = 0x01; // 0x00 not allowed
+            mmu.current_rom_bank &= mmu.rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
         } else if (address < 0x6000) {
             if (data <= 0x03) {
-                current_eram_bank = data;
-                current_eram_bank &= ram_banks - 1; // in this case, equivalent to current_eram_bank %= ram_banks but avoid division by 0
+                mmu.current_eram_bank = data;
+                mmu.current_eram_bank &= mmu.ram_banks - 1; // in this case, equivalent to current_eram_bank %= ram_banks but avoid division by 0
             } else if (data >= 0x08 && data <= 0x0C) {
-                rtc_register = data;
-                current_eram_bank = -1;
+                mmu.rtc.reg = data;
+                mmu.current_eram_bank = -1;
             }
         } else if (address < 0x8000) {
-            if (rtc_latch == 0x00 && data == 0x01 && !CHECK_BIT(rtc.dh, 6))
+            if (mmu.rtc.latch == 0x00 && data == 0x01 && !CHECK_BIT(mmu.rtc.dh, 6))
                 rtc_update();
-            rtc_latch = data;
+            mmu.rtc.latch = data;
         }
         break;
     default:
@@ -259,25 +241,25 @@ static void write_mbc_registers(word_t address, byte_t data) {
 
 // TODO not all mooneye's MBC tests pass
 static void write_mbc_eram(word_t address, byte_t data) {
-    switch (mbc) {
+    switch (mmu.mbc) {
     case MBC1:
-        if (eram_enabled)
-            eram[(address - 0xA000) + (current_eram_bank * 0x2000)] = data;
+        if (mmu.eram_enabled)
+            eram[(address - 0xA000) + (mmu.current_eram_bank * 0x2000)] = data;
         break;
     case MBC2:
-        if (eram_enabled)
-            eram[(address - 0xA000) + (current_eram_bank * 0x2000)] = data & 0x0F;
+        if (mmu.eram_enabled)
+            eram[(address - 0xA000) + (mmu.current_eram_bank * 0x2000)] = data & 0x0F;
         break;
     case MBC3:
-        if (eram_enabled && current_eram_bank >= 0) {
-            eram[(address - 0xA000) + (current_eram_bank * 0x2000)] = data;
-        } else if (rtc_enabled) {
-            switch (rtc_register) {
-            case 0x08: rtc.s = data; break;
-            case 0x09: rtc.m = data; break;
-            case 0x0A: rtc.h = data; break;
-            case 0x0B: rtc.dl = data; break;
-            case 0x0C: rtc.dh = data; break;
+        if (mmu.eram_enabled && mmu.current_eram_bank >= 0) {
+            eram[(address - 0xA000) + (mmu.current_eram_bank * 0x2000)] = data;
+        } else if (mmu.rtc.enabled) {
+            switch (mmu.rtc.reg) {
+            case 0x08: mmu.rtc.s = data; break;
+            case 0x09: mmu.rtc.m = data; break;
+            case 0x0A: mmu.rtc.h = data; break;
+            case 0x0B: mmu.rtc.dl = data; break;
+            case 0x0C: mmu.rtc.dh = data; break;
             default: break;
             }
         }
@@ -288,23 +270,23 @@ static void write_mbc_eram(word_t address, byte_t data) {
 }
 
 byte_t mmu_read(word_t address) {
-    if (mbc == MBC1 || mbc == MBC2 || mbc == MBC3) { // TODO not all mooneye's MBC tests pass
+    if (mmu.mbc == MBC1 || mmu.mbc == MBC2 || mmu.mbc == MBC3) { // TODO not all mooneye's MBC tests pass
         if (address >= 0x4000 && address < 0x8000) // ROM_BANKN
-            return cartridge[(address - 0x4000) + (current_rom_bank * 0x4000)];
+            return cartridge[(address - 0x4000) + (mmu.current_rom_bank * 0x4000)];
 
         if (address >= 0xA000 && address < 0xC000) { // ERAM
-            if (rtc_enabled) { // implies mbc == MBC3 because rtc_enabled is set to 0 by default
-                switch (rtc_register) {
-                case 0x08: return rtc.s;
-                case 0x09: return rtc.m;
-                case 0x0A: return rtc.h;
-                case 0x0B: return rtc.dl;
-                case 0x0C: return rtc.dh;
+            if (mmu.rtc.enabled) { // implies mbc == MBC3 because rtc_enabled is set to 0 by default
+                switch (mmu.rtc.reg) {
+                case 0x08: return mmu.rtc.s;
+                case 0x09: return mmu.rtc.m;
+                case 0x0A: return mmu.rtc.h;
+                case 0x0B: return mmu.rtc.dl;
+                case 0x0C: return mmu.rtc.dh;
                 default: break; // break, not return because we want to access eram (if enabled) in this case
                 }
             }
 
-            return eram_enabled ? eram[(address - 0xA000) + (current_eram_bank * 0x2000)] : 0xFF;
+            return mmu.eram_enabled ? eram[(address - 0xA000) + (mmu.current_eram_bank * 0x2000)] : 0xFF;
         }
     }
 
