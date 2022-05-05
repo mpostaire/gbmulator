@@ -1781,7 +1781,7 @@ static int exec_extended_opcode(byte_t opcode) {
         cycles = 8;
         break;
     default:
-        printf("ERROR: opcode CB %02X: %s\n", opcode, extended_instructions[opcode].name);
+        eprintf("opcode CB %02X: %s\n", opcode, extended_instructions[opcode].name);
         exit(EXIT_FAILURE);
         break;
     }
@@ -2890,7 +2890,7 @@ static int exec_opcode(byte_t opcode, word_t operand) {
     default:;
         char buf[32];
         snprintf(buf, sizeof(buf), instructions[opcode].name, operand);
-        printf("ERROR: opcode %02X: %s\n", opcode, buf);
+        eprintf("opcode %02X: %s\n", opcode, buf);
         exit(EXIT_FAILURE);
         break;
     }

@@ -37,7 +37,7 @@ int emulator_link_start_server(const int port) {
 
     serial_link.sfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (serial_link.sfd == -1) {
-        perror("socket");
+        errnoprintf("socket");
         return 0;
     }
     int option = 1;
@@ -49,14 +49,14 @@ int emulator_link_start_server(const int port) {
     addr.sin_port = htons(port);
 
     if (bind(serial_link.sfd, (struct sockaddr *) &addr, sizeof(addr)) == -1) {
-        perror("bind");
+        errnoprintf("bind");
         close(serial_link.sfd);
         serial_link.sfd = -1;
         return 0;
     }
 
     if (listen(serial_link.sfd, 1) == -1) {
-        perror("listen");
+        errnoprintf("listen");
         close(serial_link.sfd);
         serial_link.sfd = -1;
         return 0;
@@ -75,7 +75,7 @@ int emulator_link_connect_to_server(const char* address, const int port) {
 
     serial_link.other_sfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (serial_link.other_sfd == -1) {
-        perror("socket");
+        errnoprintf("socket");
         return 0;
     }
 
@@ -85,7 +85,7 @@ int emulator_link_connect_to_server(const char* address, const int port) {
 
     int ret = connect(serial_link.other_sfd, (struct sockaddr *) &serial_link.other_addr, sizeof(serial_link.other_addr));
     if (ret == -1 && errno != EINPROGRESS) {
-        perror("connect");
+        errnoprintf("connect");
         close(serial_link.other_sfd);
         serial_link.other_sfd = -1;
         return 0;
@@ -113,7 +113,7 @@ static void complete_connection(void) {
         serial_link.other_sfd = accept(serial_link.sfd, (struct sockaddr *) &serial_link.other_addr, &other_addr_len);
         if (serial_link.other_sfd == -1) {
             if (errno != EAGAIN)
-                perror("accept");
+                errnoprintf("accept");
             return;
         }
         fcntl(serial_link.other_sfd, F_SETFL, 0); // make other_sfd blocking
@@ -132,7 +132,7 @@ static void complete_connection(void) {
             } else {
                 close(serial_link.other_sfd);
                 serial_link.other_sfd = -1;
-                perror("Could not make a connection");
+                errnoprintf("could not make a connection");
             }
         }
     }

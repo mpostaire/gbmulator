@@ -1,6 +1,8 @@
 #include <string.h>
+#include <errno.h>
 
 #include "emulator.h"
+#include "utils.h"
 #include "cpu.h"
 #include "boot.h"
 #include "timer.h"
@@ -15,7 +17,7 @@ typedef struct __attribute__((packed)) {
 int emulator_save_state(const char *path) {
     FILE *f = fopen(path, "wb");
     if (!f) {
-        perror("ERROR: emulator_save_state: opening the savestate file");
+        errnoprintf("opening %s", path);
         return 0;
     }
 
@@ -23,25 +25,25 @@ int emulator_save_state(const char *path) {
     memcpy(header.rom_title, mmu.rom_title, sizeof(header.rom_title));
 
     if (!fwrite(&header, sizeof(header), 1, f)) {
-        printf("ERROR: emulator_save_state: writing header to savestate file\n");
+        eprintf("writing header to %s\n", path);
         fclose(f);
         return 0;
     }
 
     if (!fwrite(&cpu, sizeof(cpu), 1, f)) {
-        printf("ERROR: emulator_save_state: writing cpu to savestate file\n");
+        eprintf("writing cpu to %s\n", path);
         fclose(f);
         return 0;
     }
 
     if (!fwrite(&mmu.mem, sizeof(mmu) - offsetof(mmu_t, mem), 1, f)) {
-        printf("ERROR: emulator_save_state: writing mmu to savestate file\n");
+        eprintf("writing mmu to %s\n", path);
         fclose(f);
         return 0;
     }
 
     if (!fwrite(&timer, sizeof(timer), 1, f)) {
-        printf("ERROR: emulator_save_state: writing timer to file\n");
+        eprintf("timer to %s\n", path);
         fclose(f);
         return 0;
     }
@@ -53,30 +55,30 @@ int emulator_save_state(const char *path) {
 int emulator_load_state(const char *path) {
     FILE *f = fopen(path, "rb");
     if (!f) {
-        perror("ERROR: emulator_load_state: opening the savestate file");
+        errnoprintf("opening %s", path);
         return 0;
     }
 
     save_header_t header;
     if (!fread(&header, sizeof(header), 1, f)) {
-        printf("ERROR: emulator_load_state: reading header from savestate file\n");
+        eprintf("reading header from %s\n", path);
         fclose(f);
         return 0;
     }
     if (strncmp(header.identifier, FORMAT_STRING, sizeof(FORMAT_STRING))) {
-        printf("ERROR: emulator_load_state: invalid file format\n");
+        eprintf("invalid file format %s\n", path);
         fclose(f);
         return 0;
     }
 
     if (!fread(&cpu, sizeof(cpu), 1, f)) {
-        printf("ERROR: emulator_load_state: reading cpu from savestate file\n");
+        eprintf("reading cpu from %s\n", path);
         fclose(f);
         return 0;
     }
 
     if (!fread(&mmu.mem, sizeof(mmu) - offsetof(mmu_t, mem), 1, f)) {
-        printf("ERROR: emulator_load_state: reading mmu from savestate file\n");
+        eprintf("reading mmu from %s\n", path);
         fclose(f);
         return 0;
     }
@@ -85,7 +87,7 @@ int emulator_load_state(const char *path) {
     apu_init(apu.global_sound_level, apu.sampling_freq_multiplier, apu.samples_ready_cb);
 
     if (!fread(&timer, sizeof(timer), 1, f)) {
-        printf("ERROR: emulator_load_state: reading timer from savestate file\n");
+        eprintf("reading timer from %s\n", path);
         fclose(f);
         return 0;
     }

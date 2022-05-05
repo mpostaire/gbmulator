@@ -16,7 +16,7 @@
 
 // TODO MBCs are poorly implemented (see https://github.com/drhelius/Gearboy to understand its handled)
 
-// TODO compartimentalize everyting (ppu/mmu/etc) in structs with init/free functions to make loading new roms when one is already playing possible
+// TODO compartimentalize everyting (and replace all the extern variables by something not accessible) to make loading new roms when one is already playing possible
 
 // TODO macros for error (print message and exit) and warning (print message) and macros that handles error return values of functions
 //      type: 'char .*\[.*\]' in search menu to find all variable arrays and replace them by malloc + free
@@ -65,7 +65,7 @@ static char *get_save_filepath(const char *rom_filepath) {
     size_t len = strlen(rom_filepath);
     char *buf = malloc(len + 2);
     if (!buf) {
-        perror("ERROR get_save_filepath");
+        errnoprint();
         exit(EXIT_FAILURE);
     }
 

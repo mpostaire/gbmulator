@@ -1,9 +1,7 @@
 #include <stdlib.h>
-#include <stdio.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
-#include <errno.h>
 #include <string.h>
 
 #include "config.h"
@@ -33,7 +31,7 @@ static int dir_exists(const char *directory_path) {
 	if (dir == NULL) {
 		if (errno == ENOENT)
 			return 0;
-		perror("ERROR: directory_exists");
+		errnoprint();
         exit(EXIT_FAILURE);
 	}
 	closedir(dir);
@@ -55,7 +53,7 @@ static void mkdirp(const char *directory_path) {
         if (*p == '/') {
             *p = 0;
             if (mkdir(buf, S_IRWXU | S_IRGRP | S_IROTH) && errno != EEXIST) {
-                perror("ERROR: mkdirp");
+                errnoprint();
                 exit(EXIT_FAILURE);
             }
             *p = '/';
@@ -63,7 +61,7 @@ static void mkdirp(const char *directory_path) {
     }
 
     if (mkdir(buf, S_IRWXU | S_IRGRP | S_IROTH) && errno != EEXIST) {
-        perror("ERROR: mkdirp");
+        errnoprint();
         exit(EXIT_FAILURE);
     }
 }
@@ -154,7 +152,7 @@ void config_save(const char* config_path) {
 
     FILE *f = fopen(config_path, "w");
     if (!f) {
-        perror("ERROR: save_config");
+        errnoprint();
         return;
     }
 

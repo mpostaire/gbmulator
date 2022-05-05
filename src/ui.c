@@ -1,5 +1,4 @@
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 
 #include "gbmulator.h"
@@ -359,7 +358,7 @@ byte_t *ui_init(void) {
     options_menu.entries[3].choices.position = emulator_get_ppu_color_palette();
 
     if (!(link_menu.entries[1].user_input.input = malloc(40))) {
-        perror("ERROR: ui_init");
+        errnoprint();
         exit(EXIT_FAILURE);
     }
     snprintf(link_menu.entries[1].user_input.input, sizeof(config.link_host), "%s", config.link_host);
@@ -370,7 +369,7 @@ byte_t *ui_init(void) {
 
     char **link_port_buf = &link_menu.entries[2].user_input.input;
     if (!(*link_port_buf = malloc(6))) {
-        perror("ERROR: ui_init");
+        errnoprint();
         exit(EXIT_FAILURE);
     }
 

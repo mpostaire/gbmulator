@@ -30,7 +30,7 @@ void mmu_load_cartridge(const char *filepath) {
 
     FILE *f = fopen(filepath, "rb");
     if (!f) {
-        perror("ERROR: mmu_load_cartridge");
+        errnoprint();
         exit(EXIT_FAILURE);
     }
     fread(mmu.cartridge, sizeof(mmu.cartridge), 1, f);
@@ -38,7 +38,7 @@ void mmu_load_cartridge(const char *filepath) {
     fclose(f);
 
     if (mmu.cartridge[0x0143] == 0xC0) {
-        printf("ERROR: mmu_load_cartridge: CGB only rom - this emulator does not support CGB games yet\n");
+        eprintf("CGB only rom: this emulator does not support CGB games yet\n");
         exit(EXIT_FAILURE);
     }
 
@@ -65,7 +65,7 @@ void mmu_load_cartridge(const char *filepath) {
     //     mbc = MBC7;
     //     break;
     default:
-        printf("ERROR: mmu_load_cartridge: MBC byte %02X not supported\n", mmu.cartridge[0x0147]);
+        eprintf("MBC byte %02X not supported\n", mmu.cartridge[0x0147]);
         exit(EXIT_FAILURE);
         break;
     }
@@ -88,7 +88,7 @@ void mmu_load_cartridge(const char *filepath) {
     // get rom title
     mmu.rom_title = malloc(17);
     if (!mmu.rom_title) {
-        perror("ERROR: mmu_load_cartridge");
+        errnoprint();
         exit(EXIT_FAILURE);
     }
     strncpy(mmu.rom_title, (char *) &mmu.cartridge[0x134], 16);
@@ -99,7 +99,7 @@ void mmu_load_cartridge(const char *filepath) {
     for (int i = 0x0134; i <= 0x014C; i++)
         sum = sum - mmu.cartridge[i] - 1;
     if (((byte_t) (sum & 0xFF)) != mmu.cartridge[0x014D]) {
-        printf("ERROR: mmu_load_cartridge: invalid checksum\n");
+        eprintf("invalid checksum\n");
         exit(EXIT_FAILURE);
     }
 
@@ -123,11 +123,11 @@ void mmu_save_eram(void) {
 
     FILE *f = fopen(mmu.save_filepath, "wb");
     if (!f) {
-        perror("ERROR: mmu_save_eram: opening the save file");
+        errnoprintf("opening the save file");
         exit(EXIT_FAILURE);
     }
     if (!fwrite(mmu.eram, sizeof(mmu.eram), 1, f)) {
-        printf("ERROR: mmu_save_eram: writing to save file\n");
+        eprintf("writing to save file\n");
         exit(EXIT_FAILURE);
     }
     fclose(f);
