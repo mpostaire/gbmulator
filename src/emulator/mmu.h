@@ -15,6 +15,16 @@ typedef struct {
 } rtc_t;
 
 typedef struct {
+    const char *rom_filepath;
+    const char *save_filepath;
+    char *rom_title;
+
+    byte_t cartridge[8000000];
+    // do not move the 'mem' member (savestate.c uses offsetof mem on this struct)
+    // everything that is below this line will be saved in the savestates
+    byte_t mem[0x10000];
+    byte_t eram[0x8000]; // max 4 banks of size 0x2000
+
     byte_t mbc;
     byte_t rom_banks;
     byte_t ram_banks;
@@ -107,20 +117,11 @@ enum mbc_type {
     MBC7
 };
 
-extern byte_t cartridge[8000000];
-extern byte_t mem[0x10000];
-extern byte_t eram[0x8000]; // max 4 banks of size 0x2000
-
 extern mmu_t mmu;
 
 void mmu_init(const char *save_path);
 
-char *mmu_get_rom_title(void);
-
-/**
- * @returns the loaded rom title
- */
-char *mmu_load_cartridge(const char *filepath);
+void mmu_load_cartridge(const char *filepath);
 
 void mmu_save_eram(void);
 

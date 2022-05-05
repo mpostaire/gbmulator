@@ -100,14 +100,12 @@ static void handle_input(void) {
             case SDLK_F3: case SDLK_F4:
             case SDLK_F5: case SDLK_F6:
             case SDLK_F7: case SDLK_F8:
-                // TODO better filename (rom file name + savestate number)
-                if (event.key.keysym.mod & KMOD_SHIFT) {
-                    printf("Loading state %d from %s\n", event.key.keysym.sym - SDLK_F1, "savestate");
-                    emulator_load_state("savestate");
-                } else {
-                    printf("Saving state %d to %s\n", event.key.keysym.sym - SDLK_F1, "savestate");
-                    emulator_save_state("savestate");
-                }
+                char buf[256];
+                snprintf(buf, sizeof(buf), "%s-%d.gbstate", emulator_get_rom_path(), event.key.keysym.sym - SDLK_F1);
+                if (event.key.keysym.mod & KMOD_SHIFT)
+                    emulator_load_state(buf);
+                else
+                    emulator_save_state(buf);
                 break;
             }
             joypad_press(sdl_key_to_joypad(event.key.keysym.sym));
@@ -132,7 +130,10 @@ int main(int argc, char **argv) {
     const char *config_path = config_load();
 
     char *save_path = get_save_filepath(argv[1]);
-    char *rom_title = emulator_init(argv[1], save_path, ppu_vblank_cb, apu_samples_ready_cb);
+    emulator_init(argv[1], save_path, ppu_vblank_cb, apu_samples_ready_cb);
+    emulator_set_apu_sound_level(config.sound);
+    emulator_set_apu_sampling_freq_multiplier(config.speed);
+    char *rom_title = emulator_get_rom_title();
     char window_title[sizeof(WINDOW_TITLE) + 19];
     snprintf(window_title, sizeof(window_title), WINDOW_TITLE" - %s", rom_title);
     printf("Playing %s\n", rom_title);
@@ -185,7 +186,7 @@ int main(int argc, char **argv) {
             }
 
             // update ppu_texture to show color palette changes
-            SDL_UpdateTexture(ppu_texture, NULL, ppu_get_pixels(), ppu_texture_pitch);
+            SDL_UpdateTexture(ppu_texture, NULL, emulator_ppu_get_pixels(), ppu_texture_pitch);
             SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
 
             SDL_UpdateTexture(ui_texture, NULL, ui_pixels, ui_texture_pitch);
@@ -201,11 +202,11 @@ int main(int argc, char **argv) {
         emulator_run_cycles(CPU_CYCLES_PER_FRAME * config.speed);
 
         // draw last new frame if it's complete
-        if (CHECK_BIT(mem[LCDC], 7)) {
+        if (CHECK_BIT(mmu.mem[LCDC], 7)) {
             SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
         } else {
             // refresh blank_pixel's color in case of ppu palette change
-            byte_t *white = ppu_get_color_values(WHITE);
+            byte_t *white = emulator_ppu_get_color_values(WHITE);
             blank_pixel[0] = white[0];
             blank_pixel[1] = white[1];
             blank_pixel[2] = white[2];

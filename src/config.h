@@ -5,6 +5,7 @@
 struct config {
     byte_t scale;
     float speed;
+    float sound;
     char link_host[40];
     int link_port;
 

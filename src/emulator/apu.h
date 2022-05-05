@@ -7,10 +7,10 @@
 #define APU_SAMPLE_RATE 44100
 #define APU_SAMPLE_COUNT 2048
 
-#define IS_APU_ENABLED CHECK_BIT(mem[NR52], 7)
-#define APU_IS_CHANNEL_ENABLED(channel) CHECK_BIT(mem[NR52], (channel))
-#define APU_ENABLE_CHANNEL(channel) SET_BIT(mem[NR52], (channel))
-#define APU_DISABLE_CHANNEL(channel) RESET_BIT(mem[NR52], (channel))
+#define IS_APU_ENABLED CHECK_BIT(mmu.mem[NR52], 7)
+#define APU_IS_CHANNEL_ENABLED(channel) CHECK_BIT(mmu.mem[NR52], (channel))
+#define APU_ENABLE_CHANNEL(channel) SET_BIT(mmu.mem[NR52], (channel))
+#define APU_DISABLE_CHANNEL(channel) RESET_BIT(mmu.mem[NR52], (channel))
 
 enum channel_id {
     APU_CHANNEL_1,
@@ -42,10 +42,26 @@ typedef struct {
     byte_t id;
 } channel_t;
 
-extern channel_t channel1;
-extern channel_t channel2;
-extern channel_t channel3;
-extern channel_t channel4;
+typedef struct {
+    float global_sound_level;
+
+    int take_sample_cycles_count;
+    float sampling_freq_multiplier;
+    void (*samples_ready_cb)(float *audio_buffer);
+
+    int audio_buffer_index;
+    float audio_buffer[APU_SAMPLE_COUNT];
+
+    byte_t frame_sequencer;
+    int frame_sequencer_cycles_count;
+
+    channel_t channel1;
+    channel_t channel2;
+    channel_t channel3;
+    channel_t channel4;
+} apu_t;
+
+extern apu_t apu;
 
 void apu_channel_trigger(channel_t *c);
 
@@ -54,16 +70,10 @@ void apu_channel_trigger(channel_t *c);
  */
 void apu_step(int cycles);
 
-void apu_set_sampling_speed_multiplier(float speed);
-
-void apu_set_global_sound_level(float);
-
-float apu_get_global_sound_level(void);
-
-void apu_set_samples_ready_callback(void (*samples_ready_callback)(float *audio_buffer));
-
 /**
  * Initializes the internal state of the ppu.
- * NOTE: this does not set the samples_ready_callback, sampling_speed_multiplier and global_sound_level.
+ * @param global_sound_level the configurable sound output multiplier applied to all channels in stereo
+ * @param sampling_freq_multiplier the configurable multiplier to increase the sampling frequency (should be the same as the emulation speed multiplier)
+ * @param samples_ready_cb the function called whenever the samples buffer is full
  */
-void apu_init(void);
+void apu_init(float global_sound_level, float sampling_freq_multiplier, void (*samples_ready_cb)(float *audio_buffer));

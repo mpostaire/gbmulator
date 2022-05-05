@@ -23,15 +23,50 @@ void emulator_run_cycles(int cycles_limit) {
     }
 }
 
-char *emulator_init(const char *rom_path, const char *save_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer)) {
-    ppu_set_vblank_callback(ppu_vblank_cb);
-    apu_init();
-    apu_set_samples_ready_callback(apu_samples_ready_cb);
+void emulator_init(const char *rom_path, const char *save_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer)) {
+    cpu_init();
+    timer_init();
+    joypad_init();
+    link_init();
+    ppu_init(ppu_vblank_cb);
+    apu_init(1.0f, 1.0f, apu_samples_ready_cb);
     mmu_init(save_path);
-    return mmu_load_cartridge(rom_path);
+    mmu_load_cartridge(rom_path);
 }
 
 void emulator_quit(void) {
     mmu_save_eram();
     link_close_connection();
+}
+
+char *emulator_get_rom_title(void) {
+    return mmu.rom_title;
+}
+
+const char *emulator_get_rom_path(void) {
+    return mmu.rom_filepath;
+}
+
+byte_t emulator_get_ppu_color_palette(void) {
+    return ppu.current_color_palette;
+}
+
+void emulator_set_ppu_color_palette(ppu_color_palette palette) {
+    ppu.current_color_palette = palette;
+}
+
+byte_t *emulator_ppu_get_pixels(void) {
+    return ppu.pixels;
+}
+
+byte_t *emulator_ppu_get_color_values(color color) {
+    return ppu.color_palettes[ppu.current_color_palette][color];
+}
+
+void emulator_set_apu_sampling_freq_multiplier(float speed) {
+    apu.sampling_freq_multiplier = speed;
+}
+
+void emulator_set_apu_sound_level(float level) {
+    apu.global_sound_level = CLAMP(level, 0.0f, 1.0f);
 }

@@ -104,16 +104,15 @@ const char *config_load(void) {
                     speed == 4.0f) {
 
                     config.speed = speed;
-                    apu_set_sampling_speed_multiplier(speed);
                 }
             } else if (sscanf(buf, "sound=%f", &sound)) {
                 if (sound == 0.0f || sound == 0.25f || sound == 0.5f ||
                     sound == 0.75f || sound == 1.0f) {
 
-                    apu_set_global_sound_level(sound);
+                    config.sound = sound;
                 }
             } else if (sscanf(buf, "color_palette=%hhu", &color_palette)) {
-                ppu_set_color_palette(color_palette);
+                emulator_set_ppu_color_palette(color_palette);
             } else if (sscanf(buf, "link_host=%39s", link_host)) {
                 strncpy(config.link_host, link_host, 40);
             } else if (sscanf(buf, "link_port=%d", &link_port)) {
@@ -164,8 +163,8 @@ void config_save(const char* config_path) {
         "left=%s\nright=%s\nup=%s\ndown=%s\na=%s\nb=%s\nstart=%s\nselect=%s\n",
         config.scale,
         config.speed,
-        apu_get_global_sound_level(),
-        ppu_get_color_palette(),
+        config.sound,
+        emulator_get_ppu_color_palette(),
         config.link_host,
         config.link_port,
         SDL_GetKeyName(config.left),

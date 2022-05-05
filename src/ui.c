@@ -9,7 +9,7 @@
 // TODO fix this file (it's ugly code).
 
 #define SET_PIXEL_RGBA(buf, x, y, color, alpha) \
-    byte_t *_tmp_color_values = ppu_get_color_values((color)); \
+    byte_t *_tmp_color_values = emulator_ppu_get_color_values((color)); \
     *(buf + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)) = _tmp_color_values[0]; \
     *(buf + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1) = _tmp_color_values[1]; \
     *(buf + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2) = _tmp_color_values[2]; \
@@ -281,16 +281,17 @@ static void choose_win_scale(menu_entry_t *entry) {
 
 static void choose_speed(menu_entry_t *entry) {
     config.speed = (entry->choices.position * 0.5f) + 1;
-    apu_set_sampling_speed_multiplier(config.speed);
+    emulator_set_apu_sampling_freq_multiplier(config.speed);
 }
 
 static void choose_sound(menu_entry_t *entry) {
-    apu_set_global_sound_level(entry->choices.position * 0.25f);
+    config.sound = entry->choices.position * 0.25f;
+    emulator_set_apu_sound_level(config.sound);
 }
 
 static void choose_color(menu_entry_t *entry) {
     ppu_update_pixels_with_palette(entry->choices.position);
-    ppu_set_color_palette(entry->choices.position);
+    emulator_set_ppu_color_palette(entry->choices.position);
 }
 
 static void choose_link_mode(menu_entry_t *entry) {
@@ -309,9 +310,9 @@ static void on_input_link_port(menu_entry_t *entry) {
 static void start_link(void) {
     int success;
     if (link_menu.entries[0].choices.position)
-        success = link_connect_to_server(config.link_host, config.link_port);
+        success = emulator_link_connect_to_server(config.link_host, config.link_port);
     else
-        success = link_start_server(config.link_port);
+        success = emulator_link_start_server(config.link_port);
     
     if (success){
         link_menu.entries[0].disabled = 1;
@@ -354,8 +355,8 @@ void ui_back_to_main_menu(void) {
 byte_t *ui_init(void) {
     options_menu.entries[0].choices.position = config.scale - 1;
     options_menu.entries[1].choices.position = config.speed / 0.5f - 2;
-    options_menu.entries[2].choices.position = apu_get_global_sound_level() * 4;
-    options_menu.entries[3].choices.position = ppu_get_color_palette();
+    options_menu.entries[2].choices.position = config.sound * 4;
+    options_menu.entries[3].choices.position = emulator_get_ppu_color_palette();
 
     if (!(link_menu.entries[1].user_input.input = malloc(40))) {
         perror("ERROR: ui_init");

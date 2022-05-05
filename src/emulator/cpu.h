@@ -11,9 +11,9 @@
 #define FLAG_H 0x20 // flag half carry
 #define FLAG_C 0x10 // flag carry
 
-#define SET_FLAG(x) (registers.f |= (x))
-#define CHECK_FLAG(x) (registers.f & (x))
-#define RESET_FLAG(x) (registers.f &= ~(x))
+#define SET_FLAG(x) (cpu.registers.f |= (x))
+#define CHECK_FLAG(x) (cpu.registers.f & (x))
+#define RESET_FLAG(x) (cpu.registers.f &= ~(x))
 
 enum interrupt {
 	IRQ_VBLANK,
@@ -23,7 +23,7 @@ enum interrupt {
 	IRQ_JOYPAD
 };
 
-struct registers {
+typedef struct {
 	union {
 		struct {
 			byte_t f;
@@ -58,11 +58,18 @@ struct registers {
 
 	word_t sp;
 	word_t pc;
-} extern registers;
+} registers_t;
 
-extern byte_t cpu_ime; // interrupt master enable
-extern byte_t cpu_halt;
+typedef struct {
+	registers_t registers;
+	byte_t ime; // interrupt master enable
+	byte_t halt;
+} cpu_t;
+
+extern cpu_t cpu;
 
 void cpu_request_interrupt(int irq);
 
 int cpu_step(void);
+
+void cpu_init(void);

@@ -13,46 +13,36 @@
 
 mmu_t mmu;
 
-byte_t cartridge[8000000];
-byte_t mem[0x10000];
-byte_t eram[0x8000]; // max 4 banks of size 0x2000
-
-const char *rom_filepath;
-const char *save_filepath;
-char *rom_title;
-
 void mmu_init(const char *save_path) {
-    save_filepath = save_path;
-    mmu = (mmu_t) { .current_rom_bank = 1 };
+    mmu = (mmu_t) {
+        .save_filepath = save_path,
+        .current_rom_bank = 1
+    };
 }
 
-char *mmu_get_rom_title(void) {
-    return rom_title;
-}
-
-char *mmu_load_cartridge(const char *filepath) {
-    rom_filepath = filepath;
+void mmu_load_cartridge(const char *filepath) {
+    mmu.rom_filepath = filepath;
 
     // clear memory
-    memset(&mem, 0, sizeof(mem));
+    memset(&mmu.mem, 0, sizeof(mmu.mem));
     // clear eram
-    memset(&eram, 0, sizeof(eram));
+    memset(&mmu.eram, 0, sizeof(mmu.eram));
 
     FILE *f = fopen(filepath, "rb");
     if (!f) {
         perror("ERROR: mmu_load_cartridge");
         exit(EXIT_FAILURE);
     }
-    fread(cartridge, sizeof(cartridge), 1, f);
+    fread(mmu.cartridge, sizeof(mmu.cartridge), 1, f);
 
     fclose(f);
 
-    if (cartridge[0x0143] == 0xC0) {
+    if (mmu.cartridge[0x0143] == 0xC0) {
         printf("ERROR: mmu_load_cartridge: CGB only rom - this emulator does not support CGB games yet\n");
         exit(EXIT_FAILURE);
     }
 
-    switch (cartridge[0x0147]) {
+    switch (mmu.cartridge[0x0147]) {
     case 0x00:
         mmu.mbc = MBC0;
         break;
@@ -75,14 +65,14 @@ char *mmu_load_cartridge(const char *filepath) {
     //     mbc = MBC7;
     //     break;
     default:
-        printf("ERROR: mmu_load_cartridge: MBC byte %02X not supported\n", cartridge[0x0147]);
+        printf("ERROR: mmu_load_cartridge: MBC byte %02X not supported\n", mmu.cartridge[0x0147]);
         exit(EXIT_FAILURE);
         break;
     }
 
-    mmu.rom_banks = 2 << cartridge[0x0148];
+    mmu.rom_banks = 2 << mmu.cartridge[0x0148];
 
-    switch (cartridge[0x0149]) {
+    switch (mmu.cartridge[0x0149]) {
     case 0x00: mmu.ram_banks = 0; break;
     case 0x02: mmu.ram_banks = 1; break;
     case 0x03: mmu.ram_banks = 4; break;
@@ -96,49 +86,47 @@ char *mmu_load_cartridge(const char *filepath) {
     printf("Cartridge using MBC%d with %d ROM banks + %d RAM banks\n", mmu.mbc, mmu.rom_banks, mmu.ram_banks);
 
     // get rom title
-    rom_title = malloc(17);
-    if (!rom_title) {
+    mmu.rom_title = malloc(17);
+    if (!mmu.rom_title) {
         perror("ERROR: mmu_load_cartridge");
         exit(EXIT_FAILURE);
     }
-    strncpy(rom_title, (char *) &cartridge[0x134], 16);
-    rom_title[16] = '\0';
+    strncpy(mmu.rom_title, (char *) &mmu.cartridge[0x134], 16);
+    mmu.rom_title[16] = '\0';
 
     // checksum validation
     int sum = 0;
     for (int i = 0x0134; i <= 0x014C; i++)
-        sum = sum - cartridge[i] - 1;
-    if (((byte_t) (sum & 0xFF)) != cartridge[0x014D]) {
+        sum = sum - mmu.cartridge[i] - 1;
+    if (((byte_t) (sum & 0xFF)) != mmu.cartridge[0x014D]) {
         printf("ERROR: mmu_load_cartridge: invalid checksum\n");
         exit(EXIT_FAILURE);
     }
 
     // load cartridge into rom banks (everything before VRAM (0x8000))
-    memcpy(&mem, &cartridge, VRAM);
+    memcpy(&mmu.mem, &mmu.cartridge, VRAM);
 
     // Load bios after cartridge to overwrite first 0x100 bytes.
-    memcpy(&mem, &dmg_boot, sizeof(dmg_boot));
+    memcpy(&mmu.mem, &dmg_boot, sizeof(dmg_boot));
 
     // load save into ERAM
-    f = fopen(save_filepath, "rb");
+    f = fopen(mmu.save_filepath, "rb");
     // if there is a save file, load it into eram
     if (f) {
-        fread(eram, sizeof(eram), 1, f);
+        fread(mmu.eram, sizeof(mmu.eram), 1, f);
         fclose(f);
     }
-
-    return rom_title;
 }
 
 void mmu_save_eram(void) {
     if (!mmu.ram_banks) return;
 
-    FILE *f = fopen(save_filepath, "wb");
+    FILE *f = fopen(mmu.save_filepath, "wb");
     if (!f) {
         perror("ERROR: mmu_save_eram: opening the save file");
         exit(EXIT_FAILURE);
     }
-    if (!fwrite(eram, sizeof(eram), 1, f)) {
+    if (!fwrite(mmu.eram, sizeof(mmu.eram), 1, f)) {
         printf("ERROR: mmu_save_eram: writing to save file\n");
         exit(EXIT_FAILURE);
     }
@@ -173,6 +161,7 @@ static void rtc_update(void) {
 }
 
 // TODO MBC1 special cases where rom bank 0 is changed are not implemented
+// TODO rewrite mbc to use true registers
 static void write_mbc_registers(word_t address, byte_t data) {
     switch (mmu.mbc) {
     case MBC0:
@@ -244,15 +233,15 @@ static void write_mbc_eram(word_t address, byte_t data) {
     switch (mmu.mbc) {
     case MBC1:
         if (mmu.eram_enabled)
-            eram[(address - 0xA000) + (mmu.current_eram_bank * 0x2000)] = data;
+            mmu.eram[(address - 0xA000) + (mmu.current_eram_bank * 0x2000)] = data;
         break;
     case MBC2:
         if (mmu.eram_enabled)
-            eram[(address - 0xA000) + (mmu.current_eram_bank * 0x2000)] = data & 0x0F;
+            mmu.eram[(address - 0xA000) + (mmu.current_eram_bank * 0x2000)] = data & 0x0F;
         break;
     case MBC3:
         if (mmu.eram_enabled && mmu.current_eram_bank >= 0) {
-            eram[(address - 0xA000) + (mmu.current_eram_bank * 0x2000)] = data;
+            mmu.eram[(address - 0xA000) + (mmu.current_eram_bank * 0x2000)] = data;
         } else if (mmu.rtc.enabled) {
             switch (mmu.rtc.reg) {
             case 0x08: mmu.rtc.s = data; break;
@@ -272,7 +261,7 @@ static void write_mbc_eram(word_t address, byte_t data) {
 byte_t mmu_read(word_t address) {
     if (mmu.mbc == MBC1 || mmu.mbc == MBC2 || mmu.mbc == MBC3) { // TODO not all mooneye's MBC tests pass
         if (address >= 0x4000 && address < 0x8000) // ROM_BANKN
-            return cartridge[(address - 0x4000) + (mmu.current_rom_bank * 0x4000)];
+            return mmu.cartridge[(address - 0x4000) + (mmu.current_rom_bank * 0x4000)];
 
         if (address >= 0xA000 && address < 0xC000) { // ERAM
             if (mmu.rtc.enabled) { // implies mbc == MBC3 because rtc_enabled is set to 0 by default
@@ -286,16 +275,16 @@ byte_t mmu_read(word_t address) {
                 }
             }
 
-            return mmu.eram_enabled ? eram[(address - 0xA000) + (mmu.current_eram_bank * 0x2000)] : 0xFF;
+            return mmu.eram_enabled ? mmu.eram[(address - 0xA000) + (mmu.current_eram_bank * 0x2000)] : 0xFF;
         }
     }
 
     // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
-    if (address >= OAM && address < UNUSABLE && CHECK_BIT(mem[LCDC], 7) && ((PPU_IS_MODE(PPU_OAM) || PPU_IS_MODE(PPU_DRAWING))))
+    if (address >= OAM && address < UNUSABLE && CHECK_BIT(mmu.mem[LCDC], 7) && ((PPU_IS_MODE(PPU_OAM) || PPU_IS_MODE(PPU_DRAWING))))
         return 0xFF;
 
     // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
-    if ((address >= VRAM && address < ERAM) && CHECK_BIT(mem[LCDC], 7) && PPU_IS_MODE(PPU_DRAWING))
+    if ((address >= VRAM && address < ERAM) && CHECK_BIT(mmu.mem[LCDC], 7) && PPU_IS_MODE(PPU_DRAWING))
         return 0xFF;
 
     // UNUSABLE memory is unusable
@@ -307,59 +296,59 @@ byte_t mmu_read(word_t address) {
         return joypad_get_input();
     
     if (address == NR10)
-        return mem[NR10] | 0x80;
+        return mmu.mem[NR10] | 0x80;
     if (address == NR11)
-        return mem[NR11] | 0x3F;
+        return mmu.mem[NR11] | 0x3F;
     if (address == NR12)
-        return mem[NR12] | 0x00; // useless?
+        return mmu.mem[NR12] | 0x00; // useless?
     if (address == NR13)
         return 0xFF;
     if (address == NR14)
-        return mem[NR14] | 0xBF;
+        return mmu.mem[NR14] | 0xBF;
 
     if (address == NR20)
         return 0xFF;
     if (address == NR21)
-        return mem[NR21] | 0x3F;
+        return mmu.mem[NR21] | 0x3F;
     if (address == NR22)
-        return mem[NR22] | 0x00; // useless?
+        return mmu.mem[NR22] | 0x00; // useless?
     if (address == NR23)
         return 0xFF;
     if (address == NR24)
-        return mem[NR24] | 0xBF;
+        return mmu.mem[NR24] | 0xBF;
 
     if (address == NR30)
-        return mem[NR30] | 0x7F;
+        return mmu.mem[NR30] | 0x7F;
     if (address == NR31)
         return 0xFF;
     if (address == NR32)
-        return mem[NR32] | 0x9F;
+        return mmu.mem[NR32] | 0x9F;
     if (address == NR33)
         return 0xFF;
     if (address == NR34)
-        return mem[NR34] | 0xBF;
+        return mmu.mem[NR34] | 0xBF;
 
     if (address == NR40)
         return 0xFF;
     if (address == NR41)
         return 0xFF;
     if (address == NR42)
-        return mem[NR42] | 0x00; // useless?
+        return mmu.mem[NR42] | 0x00; // useless?
     if (address == NR43)
-        return mem[NR43] | 0x00; // useless?
+        return mmu.mem[NR43] | 0x00; // useless?
     if (address == NR44)
-        return mem[NR44] | 0xBF;
+        return mmu.mem[NR44] | 0xBF;
 
     if (address == NR50)
-        return mem[NR50] | 0x00; // useless?
+        return mmu.mem[NR50] | 0x00; // useless?
     if (address == NR51)
-        return mem[NR51] | 0x00; // useless?
+        return mmu.mem[NR51] | 0x00; // useless?
     if (address == NR52)
-        return mem[NR52] | 0x70;
+        return mmu.mem[NR52] | 0x70;
     if (address > NR52 && address < WAVE_RAM)
         return 0xFF;
 
-    return mem[address];
+    return mmu.mem[address];
 }
 
 void mmu_write(word_t address, byte_t data) {
@@ -369,10 +358,10 @@ void mmu_write(word_t address, byte_t data) {
         write_mbc_eram(address, data);
     } else if (address == DIV) {
         // writing to DIV resets it to 0
-        mem[address] = 0;
-    } else if ((address >= OAM && address < UNUSABLE) && ((PPU_IS_MODE(PPU_OAM) || PPU_IS_MODE(PPU_DRAWING)) && CHECK_BIT(mem[LCDC], 7))) {
+        mmu.mem[address] = 0;
+    } else if ((address >= OAM && address < UNUSABLE) && ((PPU_IS_MODE(PPU_OAM) || PPU_IS_MODE(PPU_DRAWING)) && CHECK_BIT(mmu.mem[LCDC], 7))) {
         // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD enabled
-    } else if ((address >= VRAM && address < ERAM) && (PPU_IS_MODE(PPU_DRAWING) && CHECK_BIT(mem[LCDC], 7))) {
+    } else if ((address >= VRAM && address < ERAM) && (PPU_IS_MODE(PPU_DRAWING) && CHECK_BIT(mmu.mem[LCDC], 7))) {
         // VRAM inaccessible by cpu while ppu in mode 3 and LCD enabled
     } else if (address >= UNUSABLE && address < IO) {
         // UNUSABLE memory is unusable
@@ -381,133 +370,133 @@ void mmu_write(word_t address, byte_t data) {
     } else if (address == DMA) {
         // OAM DMA transfer
         // TODO this should not be instantaneous (it takes 640 cycles to complete and during that time the cpu can only access HRAM)
-        memcpy(&mem[OAM], &mem[data * 0x100], 0xA0 * sizeof(byte_t));
-        mem[address] = data;
+        memcpy(&mmu.mem[OAM], &mmu.mem[data * 0x100], 0xA0 * sizeof(byte_t));
+        mmu.mem[address] = data;
     } else if (address == BANK && data == 1) {
         // disable boot rom
-        memcpy(&mem, &cartridge, 0x100);
-        mem[address] = data;
+        memcpy(&mmu.mem, &mmu.cartridge, 0x100);
+        mmu.mem[address] = data;
     } else if (address == P1) {
         // prevent writes to the lower nibble of the P1 register (joypad)
-        mem[address] = data & 0xF0;
+        mmu.mem[address] = data & 0xF0;
     } else if (address == NR10) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
+        mmu.mem[address] = data;
     } else if (address == NR11) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
-        channel1.length_counter = 64 - (data & 0x3F);
+        mmu.mem[address] = data;
+        apu.channel1.length_counter = 64 - (data & 0x3F);
     } else if (address == NR12) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
+        mmu.mem[address] = data;
         if (!(data >> 3)) // if dac disabled
             APU_DISABLE_CHANNEL(APU_CHANNEL_1);
     } else if (address == NR13) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
+        mmu.mem[address] = data;
     } else if (address == NR14) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
+        mmu.mem[address] = data;
         if (CHECK_BIT(data, 7) && (data >> 3)) // if trigger requested and dac enabled
-            apu_channel_trigger(&channel1);
+            apu_channel_trigger(&apu.channel1);
     } else if (address == NR20) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
+        mmu.mem[address] = data;
     } else if (address == NR21) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
-        channel2.length_counter = 64 - (data & 0x3F);
+        mmu.mem[address] = data;
+        apu.channel2.length_counter = 64 - (data & 0x3F);
     } else if (address == NR22) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
+        mmu.mem[address] = data;
         if (!(data >> 3)) // if dac disabled
             APU_DISABLE_CHANNEL(APU_CHANNEL_2);
     } else if (address == NR23) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
+        mmu.mem[address] = data;
     } else if (address == NR24) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
+        mmu.mem[address] = data;
         if (CHECK_BIT(data, 7) && (data >> 3)) // if trigger requested and dac enabled
-            apu_channel_trigger(&channel2);
+            apu_channel_trigger(&apu.channel2);
     } else if (address == NR30) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
+        mmu.mem[address] = data;
         if (!(data >> 7)) // if dac disabled
             APU_DISABLE_CHANNEL(APU_CHANNEL_3);
     } else if (address == NR31) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
-        channel3.length_counter = 256 - data;
+        mmu.mem[address] = data;
+        apu.channel3.length_counter = 256 - data;
     } else if (address == NR32) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
+        mmu.mem[address] = data;
     } else if (address == NR33) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
+        mmu.mem[address] = data;
     } else if (address == NR34) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
+        mmu.mem[address] = data;
         if (CHECK_BIT(data, 7) && (data >> 7)) // if trigger requested and dac enabled
-            apu_channel_trigger(&channel3);
+            apu_channel_trigger(&apu.channel3);
     } else if (address == NR40) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
+        mmu.mem[address] = data;
     } else if (address == NR41) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
-        channel4.length_counter = 64 - (data & 0x3F);
+        mmu.mem[address] = data;
+        apu.channel4.length_counter = 64 - (data & 0x3F);
     } else if (address == NR42) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
+        mmu.mem[address] = data;
         if (!(data >> 3)) // if dac disabled
             APU_DISABLE_CHANNEL(APU_CHANNEL_4);
     } else if (address == NR43) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
+        mmu.mem[address] = data;
     } else if (address == NR44) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
+        mmu.mem[address] = data;
         if (CHECK_BIT(data, 7) && (data >> 3)) // if trigger requested and dac enabled
-            apu_channel_trigger(&channel4);
+            apu_channel_trigger(&apu.channel4);
     } else if (address == NR50) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
+        mmu.mem[address] = data;
     } else if (address == NR51) {
         if (!IS_APU_ENABLED)
             return;
-        mem[address] = data;
+        mmu.mem[address] = data;
     } else if (address == NR52) {
-        CHANGE_BIT(mem[NR52], data >> 7, 7);
+        CHANGE_BIT(mmu.mem[NR52], data >> 7, 7);
         if (!IS_APU_ENABLED)
-            memset(&mem[NR10], 0x00, 32 * sizeof(byte_t)); // clear all registers
+            memset(&mmu.mem[NR10], 0x00, 32 * sizeof(byte_t)); // clear all registers
     } else if (address >= WAVE_RAM && address < LCDC) {
-        if (!CHECK_BIT(mem[NR30], 7))
-            mem[address] = data;
+        if (!CHECK_BIT(mmu.mem[NR30], 7))
+            mmu.mem[address] = data;
     } else if (address == STAT) {
-        mem[address] = 0x80 | (data & 0x78) | (mem[address] & 0x07);
+        mmu.mem[address] = 0x80 | (data & 0x78) | (mmu.mem[address] & 0x07);
     } else {
-        mem[address] = data;
+        mmu.mem[address] = data;
     }
 }
