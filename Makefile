@@ -4,7 +4,8 @@ IDIR:=$(SDIR)
 CFLAGS:=-std=gnu11 -Wall -O2 -I$(IDIR)
 LDLIBS:=-lSDL2
 CC:=gcc
-EXEC:=gbmulator
+MAIN:=gbmulator
+EXEC:=$(MAIN)
 
 # recusive wildcard that goes into all subdirectories
 rwildcard=$(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
@@ -17,13 +18,13 @@ HEADERS:=$(HEADERS:$(IDIR)/%=$(ODIR)/%)
 # ODIR and its subdirectories structure to mkdir if they don't exist
 ODIR_STRUCTURE:=$(sort $(foreach d,$(OBJ) $(HEADERS),$(subst /$(lastword $(subst /, ,$d)),,$d)))
 
-all: $(ODIR_STRUCTURE) $(EXEC)
+all: $(ODIR_STRUCTURE) $(MAIN)
 
 debug: CFLAGS+=-g -Og -DDEBUG
 debug: all
 
-$(EXEC): $(OBJ)
-	$(CC) -o $@ $^ $(CFLAGS) $(LDLIBS)
+$(MAIN): $(OBJ)
+	$(CC) -o $(EXEC) $^ $(CFLAGS) $(LDLIBS)
 
 $(ODIR)/%.o: $(SDIR)/%.c
 	$(CC) -o $@ $< $(CFLAGS) -c -MMD
