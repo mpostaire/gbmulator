@@ -77,7 +77,7 @@ const char *config_load(void) {
         prefix = default_prefix;
     }
 
-    char *config_path = malloc(strlen(prefix) + 27);
+    char *config_path = xmalloc(strlen(prefix) + 27);
     snprintf(config_path, strlen(prefix) + 26, "%s%s", prefix, "/gbmulator/gbmulator.conf");
 
     FILE *f = fopen(config_path, "r");

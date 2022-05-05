@@ -270,7 +270,7 @@ static void key_setter_set_key(menu_entry_t *entry, SDL_Keycode key) {
     int l = strlen(key_name);
     if (entry->setter.key_name)
         free(entry->setter.key_name);
-    entry->setter.key_name = malloc(l + 1);
+    entry->setter.key_name = xmalloc(l + 1);
     snprintf(entry->setter.key_name, l + 1, "%s", key_name);
 }
 
@@ -357,10 +357,7 @@ byte_t *ui_init(void) {
     options_menu.entries[2].choices.position = config.sound * 4;
     options_menu.entries[3].choices.position = emulator_get_ppu_color_palette();
 
-    if (!(link_menu.entries[1].user_input.input = malloc(40))) {
-        errnoprint();
-        exit(EXIT_FAILURE);
-    }
+    link_menu.entries[1].user_input.input = xmalloc(40);
     snprintf(link_menu.entries[1].user_input.input, sizeof(config.link_host), "%s", config.link_host);
 
     link_menu.entries[1].user_input.cursor = strlen(config.link_host);
@@ -368,10 +365,7 @@ byte_t *ui_init(void) {
     link_menu.entries[1].user_input.visible_hi = 12;
 
     char **link_port_buf = &link_menu.entries[2].user_input.input;
-    if (!(*link_port_buf = malloc(6))) {
-        errnoprint();
-        exit(EXIT_FAILURE);
-    }
+    *link_port_buf = xmalloc(6);
 
     link_menu.entries[2].user_input.cursor = snprintf(*link_port_buf, 6, "%d", config.link_port);
     link_menu.entries[2].user_input.input = *link_port_buf;

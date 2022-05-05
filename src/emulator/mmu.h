@@ -17,7 +17,7 @@ typedef struct {
 typedef struct {
     const char *rom_filepath;
     const char *save_filepath;
-    char *rom_title;
+    char rom_title[17];
 
     byte_t cartridge[8000000];
     // do not move the 'mem' member (savestate.c uses offsetof mem on this struct)

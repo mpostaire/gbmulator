@@ -63,11 +63,7 @@ static void apu_samples_ready_cb(float *audio_buffer) {
 
 static char *get_save_filepath(const char *rom_filepath) {
     size_t len = strlen(rom_filepath);
-    char *buf = malloc(len + 2);
-    if (!buf) {
-        errnoprint();
-        exit(EXIT_FAILURE);
-    }
+    char *buf = xmalloc(len + 2);
 
     char *last_period = strrchr(rom_filepath, '.');
     int last_period_index = (int) (last_period - rom_filepath);

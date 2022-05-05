@@ -86,12 +86,7 @@ void mmu_load_cartridge(const char *filepath) {
     printf("Cartridge using MBC%d with %d ROM banks + %d RAM banks\n", mmu.mbc, mmu.rom_banks, mmu.ram_banks);
 
     // get rom title
-    mmu.rom_title = malloc(17);
-    if (!mmu.rom_title) {
-        errnoprint();
-        exit(EXIT_FAILURE);
-    }
-    strncpy(mmu.rom_title, (char *) &mmu.cartridge[0x134], 16);
+    memcpy(&mmu.rom_title, (char *) &mmu.cartridge[0x134], 16);
     mmu.rom_title[16] = '\0';
 
     // checksum validation
@@ -128,6 +123,7 @@ void mmu_save_eram(void) {
     }
     if (!fwrite(mmu.eram, sizeof(mmu.eram), 1, f)) {
         eprintf("writing to save file\n");
+        fclose(f);
         exit(EXIT_FAILURE);
     }
     fclose(f);
