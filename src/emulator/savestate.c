@@ -6,6 +6,9 @@
 #include "cpu.h"
 #include "boot.h"
 #include "timer.h"
+#include "mmu.h"
+#include "cpu.h"
+#include "apu.h"
 
 #define FORMAT_STRING EMULATOR_NAME"-sav"
 

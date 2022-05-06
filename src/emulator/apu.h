@@ -5,7 +5,9 @@
 #include "mmu.h"
 
 #define APU_SAMPLE_RATE 44100
-#define APU_SAMPLE_COUNT 2048
+// Higher ample count means higher sound quality but lower emulation smoothness.
+// 256 seems to be the safe minimum
+#define APU_SAMPLE_COUNT 256
 
 #define IS_APU_ENABLED CHECK_BIT(mmu.mem[NR52], 7)
 #define APU_IS_CHANNEL_ENABLED(channel) CHECK_BIT(mmu.mem[NR52], (channel))
@@ -47,7 +49,7 @@ typedef struct {
 
     int take_sample_cycles_count;
     float sampling_freq_multiplier;
-    void (*samples_ready_cb)(float *audio_buffer);
+    void (*samples_ready_cb)(float *audio_buffer, int audio_buffer_size);
 
     int audio_buffer_index;
     float audio_buffer[APU_SAMPLE_COUNT];
@@ -76,4 +78,4 @@ void apu_step(int cycles);
  * @param sampling_freq_multiplier the configurable multiplier to increase the sampling frequency (should be the same as the emulation speed multiplier)
  * @param samples_ready_cb the function called whenever the samples buffer is full
  */
-void apu_init(float global_sound_level, float sampling_freq_multiplier, void (*samples_ready_cb)(float *audio_buffer));
+void apu_init(float global_sound_level, float sampling_freq_multiplier, void (*samples_ready_cb)(float *audio_buffer, int audio_buffer_size));

@@ -31,7 +31,7 @@ static int dir_exists(const char *directory_path) {
 	if (dir == NULL) {
 		if (errno == ENOENT)
 			return 0;
-		errnoprint();
+		errnoprintf("opendir");
         exit(EXIT_FAILURE);
 	}
 	closedir(dir);
@@ -53,7 +53,7 @@ static void mkdirp(const char *directory_path) {
         if (*p == '/') {
             *p = 0;
             if (mkdir(buf, S_IRWXU | S_IRGRP | S_IROTH) && errno != EEXIST) {
-                errnoprint();
+                errnoprintf("mkdir");
                 exit(EXIT_FAILURE);
             }
             *p = '/';
@@ -61,7 +61,7 @@ static void mkdirp(const char *directory_path) {
     }
 
     if (mkdir(buf, S_IRWXU | S_IRGRP | S_IROTH) && errno != EEXIST) {
-        errnoprint();
+        errnoprintf("mkdir");
         exit(EXIT_FAILURE);
     }
 }
@@ -108,6 +108,7 @@ const char *config_load(void) {
                     sound == 0.75f || sound == 1.0f) {
 
                     config.sound = sound;
+                    emulator_set_apu_sound_level(sound);
                 }
             } else if (sscanf(buf, "color_palette=%hhu", &color_palette)) {
                 emulator_set_ppu_color_palette(color_palette);
@@ -152,7 +153,7 @@ void config_save(const char* config_path) {
 
     FILE *f = fopen(config_path, "w");
     if (!f) {
-        errnoprint();
+        errnoprintf("opening file");
         return;
     }
 

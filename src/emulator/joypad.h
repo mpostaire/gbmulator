@@ -2,14 +2,7 @@
 
 #include "types.h"
 
-typedef struct {
-    byte_t joypad_action;
-    byte_t joypad_direction;
-} joypad_t;
-
-extern joypad_t joypad;
-
-enum joypad_button {
+typedef enum {
     JOYPAD_LEFT,
     JOYPAD_RIGHT,
     JOYPAD_UP,
@@ -18,12 +11,12 @@ enum joypad_button {
     JOYPAD_B,
     JOYPAD_START,
     JOYPAD_SELECT
-};
+} joypad_button_t;
 
 void joypad_init(void);
 
 byte_t joypad_get_input(void);
 
-void joypad_press(enum joypad_button key);
+void joypad_press(joypad_button_t key);
 
-void joypad_release(enum joypad_button key);
+void joypad_release(joypad_button_t key);

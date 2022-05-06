@@ -13,14 +13,7 @@
 
 mmu_t mmu;
 
-void mmu_init(const char *save_path) {
-    mmu = (mmu_t) {
-        .save_filepath = save_path,
-        .current_rom_bank = 1
-    };
-}
-
-void mmu_load_cartridge(const char *filepath) {
+static void load_cartridge(const char *filepath) {
     mmu.rom_filepath = filepath;
 
     // clear memory
@@ -30,7 +23,7 @@ void mmu_load_cartridge(const char *filepath) {
 
     FILE *f = fopen(filepath, "rb");
     if (!f) {
-        errnoprint();
+        errnoprintf("opening file");
         exit(EXIT_FAILURE);
     }
     fread(mmu.cartridge, sizeof(mmu.cartridge), 1, f);
@@ -111,6 +104,14 @@ void mmu_load_cartridge(const char *filepath) {
         fread(mmu.eram, sizeof(mmu.eram), 1, f);
         fclose(f);
     }
+}
+
+void mmu_init(const char *rom_path, const char *save_path) {
+    mmu = (mmu_t) {
+        .save_filepath = save_path,
+        .current_rom_bank = 1
+    };
+    load_cartridge(rom_path);
 }
 
 void mmu_save_eram(void) {

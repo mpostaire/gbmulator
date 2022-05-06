@@ -17,15 +17,23 @@
 // TODO handle disconnection
 // TODO this may cause glitches in sound emulation due to the blocking send and recv (investigate when sound is implemented)
 
+struct link_t {
+    int cycles_counter;
+    int bit_counter;
+    int sfd; // server's socket used only by the server
+    int is_server;
+    int other_sfd;
+    int connected;
+    struct sockaddr_in other_addr;
+} serial_link;
+
 typedef struct {
     byte_t data;
     byte_t transfer;
 } pkt_t;
 
-link_t serial_link;
-
 void link_init(void) {
-    serial_link = (link_t) {
+    serial_link = (struct link_t) {
         .other_sfd = -1,
         .sfd = -1
     };

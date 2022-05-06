@@ -2,9 +2,9 @@
 
 #include "types.h"
 
-#define CPU_FREQ 4194304
+#define GB_CPU_FREQ 4194304
 // 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame (the Game Boy runs at approximatively 60 fps)
-#define CPU_CYCLES_PER_FRAME CPU_FREQ / 60
+#define GB_CPU_CYCLES_PER_FRAME GB_CPU_FREQ / 60
 
 #define FLAG_Z 0x80 // flag zero
 #define FLAG_N 0x40 // flag substraction

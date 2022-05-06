@@ -17,6 +17,5 @@
 
 #define eprintf(format, ...) fprintf(stderr, "ERROR - %s() - "format, __func__, ##__VA_ARGS__)
 #define errnoprintf(format, ...) eprintf(format": %s\n", ##__VA_ARGS__, strerror(errno));
-#define errnoprint() fprintf(stderr, "ERROR - %s() - %s\n", __func__, strerror(errno))
 
 void *xmalloc(size_t size);

@@ -4,10 +4,13 @@
 #include "utils.h"
 #include "types.h"
 
-joypad_t joypad;
+struct joypad_t {
+    byte_t joypad_action;
+    byte_t joypad_direction;
+} joypad;
 
 void joypad_init(void) {
-    joypad = (joypad_t) {
+    joypad = (struct joypad_t) {
         .joypad_action = 0xCF,
         .joypad_direction = 0xCF,
     };
@@ -24,7 +27,7 @@ byte_t joypad_get_input(void) {
         return 0xFF;
 }
 
-void joypad_press(enum joypad_button key) {
+void joypad_press(joypad_button_t key) {
     switch (key) {
     case JOYPAD_RIGHT:
         RESET_BIT(joypad.joypad_direction, 0);
@@ -69,7 +72,7 @@ void joypad_press(enum joypad_button key) {
     }
 }
 
-void joypad_release(enum joypad_button key) {
+void joypad_release(joypad_button_t key) {
     switch (key) {
     case JOYPAD_RIGHT:
         SET_BIT(joypad.joypad_direction, 0);

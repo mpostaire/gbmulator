@@ -13,4 +13,10 @@ typedef enum {
     LIGHT_GRAY,
     DARK_GRAY,
     BLACK
-} color;
+} color_t;
+
+typedef enum {
+    PPU_COLOR_PALETTE_GRAY,
+    PPU_COLOR_PALETTE_ORIG,
+    PPU_COLOR_PALETTE_MAX // keep at the end
+} color_palette_t;

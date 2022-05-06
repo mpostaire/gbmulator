@@ -119,9 +119,7 @@ enum mbc_type {
 
 extern mmu_t mmu;
 
-void mmu_init(const char *save_path);
-
-void mmu_load_cartridge(const char *filepath);
+void mmu_init(const char *rom_path, const char *save_path);
 
 void mmu_save_eram(void);
 

@@ -229,7 +229,7 @@ menu_t main_menu = {
 
 menu_t *current_menu = &main_menu;
 
-static SDL_Keycode get_config_val(enum joypad_button button) {
+static SDL_Keycode get_config_val(joypad_button_t button) {
     switch (button) {
         case JOYPAD_LEFT: return config.left;
         case JOYPAD_RIGHT: return config.right;
@@ -378,13 +378,13 @@ byte_t *ui_init(void) {
     return ui_pixels;
 }
 
-static void print_cursor(int x, int y, color color) {
+static void print_cursor(int x, int y, color_t color) {
     for (int i = 0; i < 8; i++) {
         SET_PIXEL_RGBA(ui_pixels, x, y + i, color, 0xFF);
     }
 }
 
-static void print_char(const char c, int x, int y, color color) {
+static void print_char(const char c, int x, int y, color_t color) {
     int index = c - 32;
     if (index < 0 || index >= 0x5F) return;
     
@@ -398,7 +398,7 @@ static void print_char(const char c, int x, int y, color color) {
     }
 }
 
-static void print_text(const char *text, int x, int y, color color) {
+static void print_text(const char *text, int x, int y, color_t color) {
     for (int i = 0; text[i]; i++) {
         if (text[i] == '|')
             return;
@@ -414,7 +414,7 @@ static void ui_clear(void) {
     }
 }
 
-static void print_choice(const char *choices, int x, int y, int n, color text_color, color arrow_color) {
+static void print_choice(const char *choices, int x, int y, int n, color_t text_color, color_t arrow_color) {
     int delim_count = 0;
     int printed_char_count = 1;
     print_char('<', x, y, arrow_color);
@@ -451,7 +451,7 @@ void ui_draw_menu(void) {
     for (byte_t i = 0; i < current_menu->length; i++) {
         menu_entry_t *entry = &current_menu->entries[i];
         byte_t y = labels_start_y + (i * 8);
-        color text_color = entry->disabled ? DARK_GRAY : WHITE;
+        color_t text_color = entry->disabled ? DARK_GRAY : WHITE;
         print_text(entry->label, 8, y, text_color);
 
         switch (entry->type) {

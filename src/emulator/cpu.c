@@ -2903,11 +2903,11 @@ static void print_trace(void) {
     byte_t opcode = mmu_read(cpu.registers.pc);
     byte_t operand_size = instructions[mmu_read(cpu.registers.pc)].operand_size;
     if (operand_size == 0) {
-        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x        %s\n", cpu.registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', cpu.registers.bc, cpu.registers.de, cpu.registers.hl, cpu.registers.sp, cpu.registers.pc, mem[cpu.registers.pc], instructions[opcode].name);
+        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x        %s\n", cpu.registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', cpu.registers.bc, cpu.registers.de, cpu.registers.hl, cpu.registers.sp, cpu.registers.pc, mmu.mem[cpu.registers.pc], instructions[opcode].name);
     } else if (operand_size == 1) {
-        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x     %s\n", cpu.registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', cpu.registers.bc, cpu.registers.de, cpu.registers.hl, cpu.registers.sp, cpu.registers.pc, mem[cpu.registers.pc], mem[cpu.registers.pc + 1], instructions[opcode].name);
+        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x     %s\n", cpu.registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', cpu.registers.bc, cpu.registers.de, cpu.registers.hl, cpu.registers.sp, cpu.registers.pc, mmu.mem[cpu.registers.pc], mmu.mem[cpu.registers.pc + 1], instructions[opcode].name);
     } else {
-        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x %02x  %s\n", cpu.registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', cpu.registers.bc, cpu.registers.de, cpu.registers.hl, cpu.registers.sp, cpu.registers.pc, mem[cpu.registers.pc], mem[cpu.registers.pc + 1], mem[cpu.registers.pc + 2], instructions[opcode].name);
+        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x %02x  %s\n", cpu.registers.a, CHECK_FLAG(FLAG_Z) ? 'Z' : '-', CHECK_FLAG(FLAG_N) ? 'N' : '-', CHECK_FLAG(FLAG_H) ? 'H' : '-', CHECK_FLAG(FLAG_C) ? 'C' : '-', cpu.registers.bc, cpu.registers.de, cpu.registers.hl, cpu.registers.sp, cpu.registers.pc, mmu.mem[cpu.registers.pc], mmu.mem[cpu.registers.pc + 1], mmu.mem[cpu.registers.pc + 2], instructions[opcode].name);
     }
 }
 #endif

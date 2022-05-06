@@ -14,10 +14,18 @@
 
 ppu_t ppu;
 
+static void update_blank_screen_color(void) {
+    for (int i = 0; i < GB_SCREEN_WIDTH; i++) {
+        for (int j = 0; j < GB_SCREEN_HEIGHT; j++) {
+            SET_PIXEL(ppu.blank_pixels, i, j, WHITE);
+        }
+    }
+}
+
 /**
  * @returns color after applying palette.
  */
-static color get_color(byte_t color_data, word_t palette_address) {
+static color_t get_color(byte_t color_data, word_t palette_address) {
     // get relevant bits of the color palette the color_data maps to
     byte_t filter = 0; // initialize to 0 to shut gcc warnings
     switch (color_data) {
@@ -242,30 +250,38 @@ static int lyc(void) {
  * TODO if STAT interrupts are a problem, implement these corner cases: http://gameboy.mongenel.com/dmg/istat98.txt
  */
 byte_t ignore = 0;
+byte_t sent_blank_pixels = 0;
 void ppu_step(int cycles) {
     if (!CHECK_BIT(mmu.mem[LCDC], 7)) { // is LCD disabled?
         // TODO not sure of the handling of LCD disabled
         // TODO LCD disabled should fill screen with a color brighter than WHITE
+
+        if (!sent_blank_pixels) {
+            update_blank_screen_color();
+            ppu.new_frame_cb(ppu.blank_pixels);
+            sent_blank_pixels = 1;
+        }
         PPU_SET_MODE(PPU_HBLANK);
-        ppu.ppu_cycles = 0;
+        ppu.cycles = 0;
         mmu.mem[LY] = 0;
         return;
     }
+    sent_blank_pixels = 0;
 
-    ppu.ppu_cycles += cycles;
+    ppu.cycles += cycles;
     byte_t request_stat_irq = 0;
     RESET_BIT(mmu.mem[STAT], 2);
 
     switch (mmu.mem[STAT] & 0x03) { // switch current mode
     case PPU_OAM:
-        if (ppu.ppu_cycles >= 80) {
-            ppu.ppu_cycles -= 80;
+        if (ppu.cycles >= 80) {
+            ppu.cycles -= 80;
             PPU_SET_MODE(PPU_DRAWING);
         }
         break;
     case PPU_DRAWING:
-        if (ppu.ppu_cycles >= 172) {
-            ppu.ppu_cycles -= 172;
+        if (ppu.cycles >= 172) {
+            ppu.cycles -= 172;
             PPU_SET_MODE(PPU_HBLANK);
             request_stat_irq = CHECK_BIT(mmu.mem[STAT], 3);
 
@@ -274,8 +290,8 @@ void ppu_step(int cycles) {
         }
         break;
     case PPU_HBLANK:
-        if (ppu.ppu_cycles >= 204) {
-            ppu.ppu_cycles -= 204;
+        if (ppu.cycles >= 204) {
+            ppu.cycles -= 204;
             mmu.mem[LY] += 1;
             ignore = 0;
 
@@ -283,9 +299,9 @@ void ppu_step(int cycles) {
                 PPU_SET_MODE(PPU_VBLANK);
                 request_stat_irq = CHECK_BIT(mmu.mem[STAT], 4);
 
-                if (ppu.vblank_cb)
-                    ppu.vblank_cb(ppu.pixels);
                 cpu_request_interrupt(IRQ_VBLANK);
+                if (ppu.new_frame_cb)
+                    ppu.new_frame_cb(ppu.pixels);
             } else {
                 PPU_SET_MODE(PPU_OAM);
                 request_stat_irq = CHECK_BIT(mmu.mem[STAT], 5);
@@ -293,8 +309,8 @@ void ppu_step(int cycles) {
         }
         break;
     case PPU_VBLANK:
-        if (ppu.ppu_cycles >= 456) {
-            ppu.ppu_cycles -= 456;
+        if (ppu.cycles >= 456) {
+            ppu.cycles -= 456;
             mmu.mem[LY] += 1;
             ignore = 0;
 
@@ -325,8 +341,7 @@ void ppu_update_pixels_with_palette(byte_t new_palette) {
             byte_t *B = (ppu.pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3) + 2);
 
             // find which color is at pixel (i,j)
-            color c;
-            for (c = WHITE; c <= BLACK; c++) {
+            for (color_t c = WHITE; c <= BLACK; c++) {
                 if (*R == ppu.color_palettes[ppu.current_color_palette][c][0] &&
                     *G == ppu.color_palettes[ppu.current_color_palette][c][1] &&
                     *B == ppu.color_palettes[ppu.current_color_palette][c][2]) {
@@ -342,9 +357,9 @@ void ppu_update_pixels_with_palette(byte_t new_palette) {
     }
 }
 
-void ppu_init(void (*vblank_callback)(byte_t *pixels)) {
+void ppu_init(void (*new_frame_cb)(byte_t *pixels)) {
     ppu = (ppu_t) {
-        .vblank_cb = vblank_callback,
+        .new_frame_cb = new_frame_cb,
         .color_palettes = {
             { // grayscale colors
                 { 0xFF, 0xFF, 0xFF },

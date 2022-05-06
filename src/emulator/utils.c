@@ -5,7 +5,7 @@
 void *xmalloc(size_t size) {
     char *ptr;
     if (!(ptr = malloc(size))) {
-        errnoprint();
+        errnoprintf("malloc");
         exit(EXIT_FAILURE);
     }
     return ptr;
