@@ -69,10 +69,10 @@ static char *get_save_path(const char *rom_filepath) {
     char *xdg_data = get_xdg_path("XDG_DATA_HOME", ".local/share");
 
     char *last_slash = strrchr(rom_filepath, '/');
-    char *last_period = strrchr(last_slash, '.');
-    int last_period_index = (int) (last_period - last_slash);
+    char *last_period = strrchr(last_slash ? last_slash : rom_filepath, '.');
+    int last_period_index = last_period ? (int) (last_period - last_slash) : strlen(rom_filepath);
 
-    size_t len = strlen(xdg_data) + strlen(last_slash);
+    size_t len = strlen(xdg_data) + strlen(last_slash ? last_slash : rom_filepath);
     char *save_path = xmalloc(len + 13);
     snprintf(save_path, len + 12, "%s/gbmulator%.*s.sav", xdg_data, last_period_index, last_slash);
 
