@@ -50,3 +50,16 @@ void mkdirp(const char *directory_path) {
         exit(EXIT_FAILURE);
     }
 }
+
+void make_parent_dirs(const char *filepath) {
+    char *last_slash = strrchr(filepath, '/');
+    int last_slash_index = last_slash ? (int) (last_slash - filepath) : -1;
+
+    if (last_slash_index != -1) {
+        char directory_path[last_slash_index + 1];
+        snprintf(directory_path, last_slash_index + 1, "%s", filepath);
+
+        if (!dir_exists(directory_path))
+            mkdirp(directory_path);
+    }
+}

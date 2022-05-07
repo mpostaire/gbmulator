@@ -82,14 +82,7 @@ void config_load(const char* config_path) {
 }
 
 void config_save(const char* config_path) {
-    char *last_slash = strrchr(config_path, '/');
-    int last_slash_index = (int) (last_slash - config_path);
-
-    char directory_path[last_slash_index + 1];
-    snprintf(directory_path, last_slash_index + 1, "%s", config_path);
-
-    if (!dir_exists(directory_path))
-        mkdirp(directory_path);
+    make_parent_dirs(config_path);
 
     FILE *f = fopen(config_path, "w");
     if (!f) {

@@ -117,14 +117,7 @@ void mmu_init(const char *rom_path, const char *save_path) {
 void mmu_save_eram(void) {
     if (!mmu.ram_banks) return;
 
-    char *last_slash = strrchr(mmu.save_filepath, '/');
-    int last_slash_index = (int) (last_slash - mmu.save_filepath);
-
-    char directory_path[last_slash_index + 1];
-    snprintf(directory_path, last_slash_index + 1, "%s", mmu.save_filepath);
-
-    if (!dir_exists(directory_path))
-        mkdirp(directory_path);
+    make_parent_dirs(mmu.rom_filepath);
 
     FILE *f = fopen(mmu.save_filepath, "wb");
     if (!f) {

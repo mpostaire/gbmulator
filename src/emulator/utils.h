@@ -29,3 +29,8 @@ int dir_exists(const char *directory_path);
  * Creates directory_path and its parents if they don't exist.
  */
 void mkdirp(const char *directory_path);
+
+/**
+ * Makes all parent dirs of filepath if necessary
+ */
+void make_parent_dirs(const char *filepath);

@@ -84,8 +84,8 @@ static char *get_savestate_path(const char *rom_filepath, int slot) {
     char *xdg_data = get_xdg_path("XDG_DATA_HOME", ".local/share");
 
     char *last_slash = strrchr(rom_filepath, '/');
-    char *last_period = strrchr(last_slash, '.');
-    int last_period_index = (int) (last_period - last_slash);
+    char *last_period = strrchr(last_slash ? last_slash : rom_filepath, '.');
+    int last_period_index = last_period ? (int) (last_period - last_slash) : strlen(rom_filepath);
 
     size_t len = strlen(xdg_data) + strlen(last_slash);
     char *save_path = xmalloc(len + 33);
