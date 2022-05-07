@@ -8,7 +8,7 @@
 // TODO fix this file (it's ugly code).
 
 #define SET_PIXEL_RGBA(buf, x, y, color, alpha) \
-    byte_t *_tmp_color_values = emulator_ppu_get_color_values((color)); \
+    byte_t *_tmp_color_values = emulator_get_color_values((color)); \
     *(buf + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)) = _tmp_color_values[0]; \
     *(buf + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1) = _tmp_color_values[1]; \
     *(buf + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2) = _tmp_color_values[2]; \
@@ -289,8 +289,8 @@ static void choose_sound(menu_entry_t *entry) {
 }
 
 static void choose_color(menu_entry_t *entry) {
-    ppu_update_pixels_with_palette(entry->choices.position);
-    emulator_set_ppu_color_palette(entry->choices.position);
+    emulator_update_pixels_with_palette(entry->choices.position);
+    emulator_set_color_palette(entry->choices.position);
 }
 
 static void choose_link_mode(menu_entry_t *entry) {
@@ -309,9 +309,9 @@ static void on_input_link_port(menu_entry_t *entry) {
 static void start_link(void) {
     int success;
     if (link_menu.entries[0].choices.position)
-        success = emulator_link_connect_to_server(config.link_host, config.link_port);
+        success = emulator_connect_to_link(config.link_host, config.link_port);
     else
-        success = emulator_link_start_server(config.link_port);
+        success = emulator_start_link(config.link_port);
     
     if (success){
         link_menu.entries[0].disabled = 1;
@@ -355,7 +355,7 @@ byte_t *ui_init(void) {
     options_menu.entries[0].choices.position = config.scale - 1;
     options_menu.entries[1].choices.position = config.speed / 0.5f - 2;
     options_menu.entries[2].choices.position = config.sound * 4;
-    options_menu.entries[3].choices.position = emulator_get_ppu_color_palette();
+    options_menu.entries[3].choices.position = emulator_get_color_palette();
 
     link_menu.entries[1].user_input.input = xmalloc(40);
     snprintf(link_menu.entries[1].user_input.input, sizeof(config.link_host), "%s", config.link_host);
@@ -454,9 +454,11 @@ void ui_draw_menu(void) {
         color_t text_color = entry->disabled ? DARK_GRAY : WHITE;
         print_text(entry->label, 8, y, text_color);
 
+        int delim_index;
+        byte_t x;
         switch (entry->type) {
         case CHOICE:
-            int delim_index = strcspn(entry->label, "|");
+            delim_index = strcspn(entry->label, "|");
             char *choices = &entry->label[delim_index + 1];
             print_choice(choices, (delim_index * 8) + 8, y, entry->choices.position, text_color, entry->disabled ? DARK_GRAY : LIGHT_GRAY);
             break;
@@ -467,7 +469,7 @@ void ui_draw_menu(void) {
                 print_text(entry->setter.key_name, GB_SCREEN_WIDTH - (strlen(entry->setter.key_name) * 8) - 8, y, WHITE);
             break;
         case INPUT:
-            byte_t x = (strlen(entry->label) * 8) + 8;
+            x = (strlen(entry->label) * 8) + 8;
 
             if (entry->user_input.cursor > entry->user_input.visible_hi) {
                 byte_t diff = entry->user_input.cursor - entry->user_input.visible_hi;
@@ -530,12 +532,13 @@ void ui_press(SDL_Keysym *keysym) {
         return;
     }
 
+    int new_pos, new_cursor, len;
     switch (key) {
     case JOYPAD_RIGHT:
     case JOYPAD_LEFT:
         switch (current_menu->entries[current_menu->position].type) {
         case CHOICE:
-            int new_pos = key == JOYPAD_RIGHT ? entry->choices.position + 1 : entry->choices.position - 1;
+            new_pos = key == JOYPAD_RIGHT ? entry->choices.position + 1 : entry->choices.position - 1;
             if (new_pos < 0)
                 new_pos = entry->choices.length - 1;
             else if (new_pos > entry->choices.length - 1)
@@ -544,8 +547,8 @@ void ui_press(SDL_Keysym *keysym) {
             (entry->choices.choose)(entry);
             break;
         case INPUT:
-            int new_cursor = entry->user_input.cursor + (key == JOYPAD_RIGHT ? 1 : -1);
-            int len = strlen(entry->user_input.input);
+            new_cursor = entry->user_input.cursor + (key == JOYPAD_RIGHT ? 1 : -1);
+            len = strlen(entry->user_input.input);
             if (new_cursor > len)
                 new_cursor = len;
             else if (new_cursor < 0)
@@ -610,7 +613,7 @@ void ui_press(SDL_Keysym *keysym) {
                 entry->user_input.visible_hi -= 1;
             }
         } else if (key == SDLK_BACKSPACE) {
-            int new_cursor = entry->user_input.cursor - 1;
+            new_cursor = entry->user_input.cursor - 1;
             delete_char_at(&entry->user_input.input, new_cursor);
             entry->user_input.on_input(entry);
 

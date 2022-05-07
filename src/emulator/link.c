@@ -39,7 +39,7 @@ void link_init(void) {
     };
 }
 
-int emulator_link_start_server(const int port) {
+int link_start_server(const int port) {
     if (serial_link.sfd != -1 || serial_link.is_server)
         return 0;
 
@@ -77,7 +77,7 @@ int emulator_link_start_server(const int port) {
     return 1;
 }
 
-int emulator_link_connect_to_server(const char* address, const int port) {
+int link_connect_to_server(const char* address, const int port) {
     if (serial_link.other_sfd != -1 || serial_link.is_server)
         return 0;
 

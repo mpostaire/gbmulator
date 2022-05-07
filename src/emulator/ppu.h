@@ -1,9 +1,7 @@
 #pragma once
 
+#include "emulator.h"
 #include "types.h"
-
-#define GB_SCREEN_WIDTH 160
-#define GB_SCREEN_HEIGHT 144
 
 #define PPU_IS_MODE(m) ((mmu.mem[STAT] & 0x03) == (m))
 
@@ -29,11 +27,6 @@ typedef struct {
 } ppu_t;
 
 extern ppu_t ppu;
-
-/**
- * convert the pixels buffer from the color values of the old emulation palette to the new color values of the new palette
- */
-void ppu_update_pixels_with_palette(byte_t palette);
 
 void ppu_step(int cycles);
 

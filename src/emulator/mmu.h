@@ -35,7 +35,7 @@ typedef struct {
     rtc_t rtc;
 } mmu_t;
 
-enum mem_map {
+typedef enum {
     ROM_BANK0 = 0x0000, // From cartridge, usually a fixed bank.
     ROM_BANKN = 0x4000, // From cartridge, switchable bank via MBC (if any).
     VRAM = 0x8000,      // Only bank 0 in Non-CGB mode. Switchable bank 0/1 in CGB mode.
@@ -105,9 +105,9 @@ enum mem_map {
 
     HRAM = 0xFF80,
     IE = 0xFFFF // Interrupt Enable
-};
+} mem_map_t;
 
-enum mbc_type {
+typedef enum {
     MBC0,
     MBC1,
     MBC2,
@@ -115,7 +115,7 @@ enum mbc_type {
     MBC5,
     MBC6,
     MBC7
-};
+} mbc_type_t;
 
 extern mmu_t mmu;
 

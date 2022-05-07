@@ -14,14 +14,14 @@
 
 // TODO MBCs are poorly implemented (see https://github.com/drhelius/Gearboy to understand its handled)
 
-// TODO compartimentalize everyting (and replace all the extern variables by something not accessible) to make loading new roms when one is already playing possible
-
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_FALSE;
 
 SDL_Texture *ppu_texture;
 int ppu_texture_pitch;
 SDL_AudioDeviceID audio_device;
+
+char *rom_path;
 
 void gbmulator_exit(void) {
     is_running = SDL_FALSE;
@@ -97,6 +97,7 @@ static char *get_savestate_path(const char *rom_filepath, int slot) {
 
 static void handle_input(void) {
     SDL_Event event;
+    char *savestate_path;
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
         case SDL_TEXTINPUT:
@@ -119,7 +120,7 @@ static void handle_input(void) {
             case SDLK_F3: case SDLK_F4:
             case SDLK_F5: case SDLK_F6:
             case SDLK_F7: case SDLK_F8:
-                char *savestate_path = get_savestate_path(emulator_get_rom_path(), event.key.keysym.sym - SDLK_F1);
+                savestate_path = get_savestate_path(rom_path, event.key.keysym.sym - SDLK_F1);
                 if (event.key.keysym.mod & KMOD_SHIFT)
                     emulator_load_state(savestate_path);
                 else
@@ -127,11 +128,11 @@ static void handle_input(void) {
                 free(savestate_path);
                 break;
             }
-            joypad_press(sdl_key_to_joypad(event.key.keysym.sym));
+            emulator_joypad_press(sdl_key_to_joypad(event.key.keysym.sym));
             break;
         case SDL_KEYUP:
             if (!event.key.repeat)
-                joypad_release(sdl_key_to_joypad(event.key.keysym.sym));
+                emulator_joypad_release(sdl_key_to_joypad(event.key.keysym.sym));
             break;
         case SDL_QUIT:
             is_running = SDL_FALSE;
@@ -156,8 +157,10 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
+    rom_path = argv[1];
+
     char *save_path = get_save_path(argv[1]);
-    emulator_init(argv[1], save_path, ppu_vblank_cb, apu_samples_ready_cb);
+    emulator_init(rom_path, save_path, ppu_vblank_cb, apu_samples_ready_cb);
     emulator_set_apu_sound_level(config.sound);
     emulator_set_apu_sampling_freq_multiplier(config.speed);
     char *rom_title = emulator_get_rom_title();
@@ -193,10 +196,10 @@ int main(int argc, char **argv) {
     SDL_SetTextureBlendMode(ui_texture, SDL_BLENDMODE_BLEND);
 
     SDL_AudioSpec audio_settings = {
-        .freq = APU_SAMPLE_RATE,
+        .freq = GB_APU_SAMPLE_RATE,
         .format = AUDIO_F32SYS,
         .channels = 2,
-        .samples = APU_SAMPLE_COUNT
+        .samples = GB_APU_SAMPLE_COUNT
     };
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
     SDL_PauseAudioDevice(audio_device, 0);
@@ -217,7 +220,7 @@ int main(int argc, char **argv) {
             }
 
             // update ppu_texture to show color palette changes behind the menu
-            SDL_UpdateTexture(ppu_texture, NULL, emulator_ppu_get_pixels(), ppu_texture_pitch);
+            SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(), ppu_texture_pitch);
             SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
 
             SDL_UpdateTexture(ui_texture, NULL, ui_pixels, ui_texture_pitch);

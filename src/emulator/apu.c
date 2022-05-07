@@ -1,5 +1,4 @@
-#include "utils.h"
-#include "types.h"
+#include "emulator.h"
 #include "apu.h"
 #include "mmu.h"
 #include "cpu.h"
@@ -229,7 +228,7 @@ void apu_step(int cycles) {
         channel_step(&apu.channel4);
 
         apu.take_sample_cycles_count++;
-        if (apu.take_sample_cycles_count >= (GB_CPU_FREQ / APU_SAMPLE_RATE) * apu.sampling_freq_multiplier) { // 44100 Hz (if speed == 1.0f)
+        if (apu.take_sample_cycles_count >= (GB_CPU_FREQ / GB_APU_SAMPLE_RATE) * apu.sampling_freq_multiplier) { // 44100 Hz (if speed == 1.0f)
             apu.take_sample_cycles_count = 0;
 
             float S01_volume = ((mmu.mem[NR50] & 0x07) + 1) / 8.0f; // keep it between 0.0f and 1.0f
@@ -249,7 +248,7 @@ void apu_step(int cycles) {
             apu.audio_buffer[apu.audio_buffer_index++] = S01_output * S01_volume * apu.global_sound_level;
         }
 
-        if (apu.audio_buffer_index >= APU_SAMPLE_COUNT) {
+        if (apu.audio_buffer_index >= GB_APU_SAMPLE_COUNT) {
             apu.audio_buffer_index = 0;
             if (apu.samples_ready_cb)
                 apu.samples_ready_cb(apu.audio_buffer, sizeof(apu.audio_buffer));

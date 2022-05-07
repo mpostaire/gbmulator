@@ -4,22 +4,17 @@
 #include "utils.h"
 #include "mmu.h"
 
-#define APU_SAMPLE_RATE 44100
-// Higher ample count means higher sound quality but lower emulation smoothness.
-// 256 seems to be the safe minimum
-#define APU_SAMPLE_COUNT 256
-
 #define IS_APU_ENABLED CHECK_BIT(mmu.mem[NR52], 7)
 #define APU_IS_CHANNEL_ENABLED(channel) CHECK_BIT(mmu.mem[NR52], (channel))
 #define APU_ENABLE_CHANNEL(channel) SET_BIT(mmu.mem[NR52], (channel))
 #define APU_DISABLE_CHANNEL(channel) RESET_BIT(mmu.mem[NR52], (channel))
 
-enum channel_id {
+typedef enum {
     APU_CHANNEL_1,
     APU_CHANNEL_2,
     APU_CHANNEL_3,
     APU_CHANNEL_4
-};
+} channel_id_t;
 
 typedef struct {
     byte_t wave_position;
@@ -52,7 +47,7 @@ typedef struct {
     void (*samples_ready_cb)(float *audio_buffer, int audio_buffer_size);
 
     int audio_buffer_index;
-    float audio_buffer[APU_SAMPLE_COUNT];
+    float audio_buffer[GB_APU_SAMPLE_COUNT];
 
     byte_t frame_sequencer;
     int frame_sequencer_cycles_count;

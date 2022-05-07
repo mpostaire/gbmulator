@@ -1,15 +1,23 @@
 #pragma once
 
-#include "apu.h"
-#include "cpu.h"
-#include "joypad.h"
-#include "link.h"
-#include "ppu.h"
 #include "types.h"
 #include "utils.h"
 #include "savestate.h"
 
 #define EMULATOR_NAME "GBmulator"
+
+#define GB_SCREEN_WIDTH 160
+#define GB_SCREEN_HEIGHT 144
+
+#define GB_CPU_FREQ 4194304
+// 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame (the Game Boy runs at approximatively 60 fps)
+#define GB_CPU_CYCLES_PER_FRAME GB_CPU_FREQ / 60
+
+// TODO make both these values configurable in emulator_init()?
+#define GB_APU_SAMPLE_RATE 44100
+// Higher ample count means higher sound quality but lower emulation smoothness.
+// 256 seems to be the safe minimum
+#define GB_APU_SAMPLE_COUNT 256
 
 /**
  * Runs the emulator for one cpu step.
@@ -37,17 +45,28 @@ void emulator_init(const char *rom_path, const char *save_path, void (*new_frame
  */
 void emulator_quit(void);
 
+int emulator_start_link(const int port);
+
+int emulator_connect_to_link(const char* address, const int port);
+
+void emulator_joypad_press(joypad_button_t key);
+
+void emulator_joypad_release(joypad_button_t key);
+
 char *emulator_get_rom_title(void);
 
-const char *emulator_get_rom_path(void);
+/**
+ * convert the pixels buffer from the color values of the old emulation palette to the new color values of the new palette
+ */
+void emulator_update_pixels_with_palette(byte_t new_palette);
 
-byte_t emulator_get_ppu_color_palette(void);
+byte_t emulator_get_color_palette(void);
 
-void emulator_set_ppu_color_palette(color_palette_t palette);
+void emulator_set_color_palette(color_palette_t palette);
 
-byte_t *emulator_ppu_get_pixels(void);
+byte_t *emulator_get_color_values(color_t color);
 
-byte_t *emulator_ppu_get_color_values(color_t color);
+byte_t *emulator_get_pixels(void);
 
 void emulator_set_apu_sampling_freq_multiplier(float speed);
 

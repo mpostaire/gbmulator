@@ -40,28 +40,65 @@ void emulator_quit(void) {
     link_close_connection();
 }
 
+int emulator_start_link(const int port) {
+    return link_start_server(port);
+}
+
+int emulator_connect_to_link(const char* address, const int port) {
+    return link_connect_to_server(address, port);
+}
+
+void emulator_joypad_press(joypad_button_t key) {
+    joypad_press(key);
+}
+
+void emulator_joypad_release(joypad_button_t key) {
+    joypad_release(key);
+}
+
 char *emulator_get_rom_title(void) {
     return mmu.rom_title;
 }
 
-const char *emulator_get_rom_path(void) {
-    return mmu.rom_filepath;
+void emulator_update_pixels_with_palette(byte_t new_palette) {
+    // replace old color values of the pixels with the new ones according to the new palette
+    for (int i = 0; i < GB_SCREEN_WIDTH; i++) {
+        for (int j = 0; j < GB_SCREEN_HEIGHT; j++) {
+            byte_t *R = (ppu.pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3)) ;
+            byte_t *G = (ppu.pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3) + 1);
+            byte_t *B = (ppu.pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3) + 2);
+
+            // find which color is at pixel (i,j)
+            for (color_t c = WHITE; c <= BLACK; c++) {
+                if (*R == ppu.color_palettes[ppu.current_color_palette][c][0] &&
+                    *G == ppu.color_palettes[ppu.current_color_palette][c][1] &&
+                    *B == ppu.color_palettes[ppu.current_color_palette][c][2]) {
+
+                    // replace old color value by the new one according to the new palette
+                    *R = ppu.color_palettes[new_palette][c][0];
+                    *G = ppu.color_palettes[new_palette][c][1];
+                    *B = ppu.color_palettes[new_palette][c][2];
+                    break;
+                }
+            }
+        }
+    }
 }
 
-byte_t emulator_get_ppu_color_palette(void) {
+byte_t emulator_get_color_palette(void) {
     return ppu.current_color_palette;
 }
 
-void emulator_set_ppu_color_palette(color_palette_t palette) {
+void emulator_set_color_palette(color_palette_t palette) {
     ppu.current_color_palette = palette;
 }
 
-byte_t *emulator_ppu_get_pixels(void) {
-    return ppu.pixels;
+byte_t *emulator_get_color_values(color_t color) {
+    return ppu.color_palettes[ppu.current_color_palette][color];
 }
 
-byte_t *emulator_ppu_get_color_values(color_t color) {
-    return ppu.color_palettes[ppu.current_color_palette][color];
+byte_t *emulator_get_pixels(void) {
+    return ppu.pixels;
 }
 
 void emulator_set_apu_sampling_freq_multiplier(float speed) {

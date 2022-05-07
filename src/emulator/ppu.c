@@ -332,31 +332,6 @@ void ppu_step(int cycles) {
         cpu_request_interrupt(IRQ_STAT);
 }
 
-void ppu_update_pixels_with_palette(byte_t new_palette) {
-    // replace old color values of the pixels with the new ones according to the new palette
-    for (int i = 0; i < GB_SCREEN_WIDTH; i++) {
-        for (int j = 0; j < GB_SCREEN_HEIGHT; j++) {
-            byte_t *R = (ppu.pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3)) ;
-            byte_t *G = (ppu.pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3) + 1);
-            byte_t *B = (ppu.pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3) + 2);
-
-            // find which color is at pixel (i,j)
-            for (color_t c = WHITE; c <= BLACK; c++) {
-                if (*R == ppu.color_palettes[ppu.current_color_palette][c][0] &&
-                    *G == ppu.color_palettes[ppu.current_color_palette][c][1] &&
-                    *B == ppu.color_palettes[ppu.current_color_palette][c][2]) {
-
-                    // replace old color value by the new one according to the new palette
-                    *R = ppu.color_palettes[new_palette][c][0];
-                    *G = ppu.color_palettes[new_palette][c][1];
-                    *B = ppu.color_palettes[new_palette][c][2];
-                    break;
-                }
-            }
-        }
-    }
-}
-
 void ppu_init(void (*new_frame_cb)(byte_t *pixels)) {
     ppu = (ppu_t) {
         .new_frame_cb = new_frame_cb,

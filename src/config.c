@@ -53,7 +53,7 @@ void config_load(const char* config_path) {
                     emulator_set_apu_sound_level(sound);
                 }
             } else if (sscanf(buf, "color_palette=%hhu", &color_palette)) {
-                emulator_set_ppu_color_palette(color_palette);
+                emulator_set_color_palette(color_palette);
             } else if (sscanf(buf, "link_host=%39s", link_host)) {
                 strncpy(config.link_host, link_host, 40);
             } else if (sscanf(buf, "link_port=%d", &link_port)) {
@@ -103,7 +103,7 @@ void config_save(const char* config_path) {
         config.scale,
         config.speed,
         config.sound,
-        emulator_get_ppu_color_palette(),
+        emulator_get_color_palette(),
         config.link_host,
         config.link_port,
         SDL_GetKeyName(config.left),

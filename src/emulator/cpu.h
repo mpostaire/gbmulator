@@ -2,10 +2,6 @@
 
 #include "types.h"
 
-#define GB_CPU_FREQ 4194304
-// 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame (the Game Boy runs at approximatively 60 fps)
-#define GB_CPU_CYCLES_PER_FRAME GB_CPU_FREQ / 60
-
 #define FLAG_Z 0x80 // flag zero
 #define FLAG_N 0x40 // flag substraction
 #define FLAG_H 0x20 // flag half carry
@@ -15,13 +11,13 @@
 #define CHECK_FLAG(x) (cpu.registers.f & (x))
 #define RESET_FLAG(x) (cpu.registers.f &= ~(x))
 
-enum interrupt {
+typedef enum {
 	IRQ_VBLANK,
 	IRQ_STAT,
 	IRQ_TIMER,
 	IRQ_SERIAL,
 	IRQ_JOYPAD
-};
+} interrupt_t;
 
 typedef struct {
 	union {

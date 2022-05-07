@@ -20,3 +20,14 @@ typedef enum {
     PPU_COLOR_PALETTE_ORIG,
     PPU_COLOR_PALETTE_MAX // keep at the end
 } color_palette_t;
+
+typedef enum {
+    JOYPAD_LEFT,
+    JOYPAD_RIGHT,
+    JOYPAD_UP,
+    JOYPAD_DOWN,
+    JOYPAD_A,
+    JOYPAD_B,
+    JOYPAD_START,
+    JOYPAD_SELECT
+} joypad_button_t;
