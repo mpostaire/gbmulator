@@ -18,6 +18,15 @@ typedef struct __attribute__((packed)) {
 } save_header_t;
 
 int emulator_save_state(const char *path) {
+    char *last_slash = strrchr(path, '/');
+    int last_slash_index = (int) (last_slash - path);
+
+    char directory_path[last_slash_index + 1];
+    snprintf(directory_path, last_slash_index + 1, "%s", path);
+
+    if (!dir_exists(directory_path))
+        mkdirp(directory_path);
+
     FILE *f = fopen(path, "wb");
     if (!f) {
         errnoprintf("opening %s", path);

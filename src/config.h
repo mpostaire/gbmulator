@@ -19,6 +19,6 @@ struct config {
     SDL_Keycode select;
 } extern config;
 
-const char *config_load(void);
+void config_load(const char* config_path);
 
 void config_save(const char* config_path);

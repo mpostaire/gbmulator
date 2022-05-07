@@ -1,7 +1,4 @@
 #include <stdlib.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <dirent.h>
 #include <string.h>
 
 #include "config.h"
@@ -10,6 +7,7 @@
 struct config config = {
     .scale = 3,
     .speed = 1.0f,
+    .sound = 0.5f,
     .link_host = "127.0.0.1",
     .link_port = 7777,
 
@@ -23,63 +21,7 @@ struct config config = {
     .select = SDLK_KP_2
 };
 
-/**
- * @returns 1 if directory_path is a directory, 0 otherwise.
- */
-static int dir_exists(const char *directory_path) {
-    DIR *dir = opendir(directory_path);
-	if (dir == NULL) {
-		if (errno == ENOENT)
-			return 0;
-		errnoprintf("opendir");
-        exit(EXIT_FAILURE);
-	}
-	closedir(dir);
-	return 1;
-}
-
-/**
- * Creates directory_path and its parents if they don't exist.
- */
-static void mkdirp(const char *directory_path) {
-    char buf[256];
-    snprintf(buf, sizeof(buf), "%s", directory_path);
-    size_t len = strlen(buf);
-
-    if (buf[len - 1] == '/')
-        buf[len - 1] = 0;
-
-    for (char *p = buf + 1; *p; p++) {
-        if (*p == '/') {
-            *p = 0;
-            if (mkdir(buf, S_IRWXU | S_IRGRP | S_IROTH) && errno != EEXIST) {
-                errnoprintf("mkdir");
-                exit(EXIT_FAILURE);
-            }
-            *p = '/';
-        }
-    }
-
-    if (mkdir(buf, S_IRWXU | S_IRGRP | S_IROTH) && errno != EEXIST) {
-        errnoprintf("mkdir");
-        exit(EXIT_FAILURE);
-    }
-}
-
-const char *config_load(void) {
-    char *xdg_config_home = getenv("XDG_CONFIG_HOME");
-    char *prefix = xdg_config_home;
-    char *home = getenv("HOME");
-    char default_prefix[strlen(home) + 10];
-
-    if (!prefix) {
-        snprintf(default_prefix, strlen(home) + 9, "%s%s", home, "/.config");
-        prefix = default_prefix;
-    }
-
-    char *config_path = xmalloc(strlen(prefix) + 27);
-    snprintf(config_path, strlen(prefix) + 26, "%s%s", prefix, "/gbmulator/gbmulator.conf");
-
+void config_load(const char* config_path) {
     FILE *f = fopen(config_path, "r");
     if (f) {
         printf("Loading config from %s\n", config_path);
@@ -135,10 +77,8 @@ const char *config_load(void) {
             }
         }
 
-        fclose (f);
+        fclose(f);
     }
-
-    return config_path;
 }
 
 void config_save(const char* config_path) {

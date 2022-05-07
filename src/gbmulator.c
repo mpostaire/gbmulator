@@ -19,8 +19,6 @@
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_FALSE;
 
-SDL_Renderer *renderer;
-
 SDL_Texture *ppu_texture;
 int ppu_texture_pitch;
 SDL_AudioDeviceID audio_device;
@@ -43,6 +41,58 @@ int sdl_key_to_joypad(SDL_Keycode key) {
     if (key == config.start) return JOYPAD_START;
     if (key == config.select) return JOYPAD_SELECT;
     return key;
+}
+
+static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
+    char *xdg = getenv(xdg_variable);
+    if (xdg) return xdg;
+
+    char *home = getenv("HOME");
+    size_t home_len = strlen(home);
+    size_t fallback_len = strlen(fallback);
+    char *buf = xmalloc(home_len + fallback_len + 3);
+    snprintf(buf, home_len + fallback_len + 2, "%s/%s", home, fallback);
+    return buf;
+}
+
+static const char *get_config_path(void) {
+    char *xdg_config = get_xdg_path("XDG_CONFIG_HOME", ".config");
+
+    char *config_path = xmalloc(strlen(xdg_config) + 27);
+    snprintf(config_path, strlen(xdg_config) + 26, "%s%s", xdg_config, "/gbmulator/gbmulator.conf");
+
+    free(xdg_config);
+    return config_path;
+}
+
+static char *get_save_path(const char *rom_filepath) {
+    char *xdg_data = get_xdg_path("XDG_DATA_HOME", ".local/share");
+
+    char *last_slash = strrchr(rom_filepath, '/');
+    char *last_period = strrchr(last_slash, '.');
+    int last_period_index = (int) (last_period - last_slash);
+
+    size_t len = strlen(xdg_data) + strlen(last_slash);
+    char *save_path = xmalloc(len + 13);
+    snprintf(save_path, len + 12, "%s/gbmulator%.*s.sav", xdg_data, last_period_index, last_slash);
+
+    free(xdg_data);
+    return save_path;
+}
+
+static char *get_savestate_path(const char *rom_filepath, int slot) {
+    char *xdg_data = get_xdg_path("XDG_DATA_HOME", ".local/share");
+
+    char *last_slash = strrchr(rom_filepath, '/');
+    char *last_period = strrchr(last_slash, '.');
+    int last_period_index = (int) (last_period - last_slash);
+
+    size_t len = strlen(xdg_data) + strlen(last_slash);
+    char *save_path = xmalloc(len + 33);
+    snprintf(save_path, len + 32, "%s/gbmulator/savestates%.*s-%d.gbstate", xdg_data, last_period_index, last_slash, slot);
+
+    free(xdg_data);
+    return save_path;
 }
 
 static void handle_input(void) {
@@ -69,12 +119,12 @@ static void handle_input(void) {
             case SDLK_F3: case SDLK_F4:
             case SDLK_F5: case SDLK_F6:
             case SDLK_F7: case SDLK_F8:
-                char buf[256];
-                snprintf(buf, sizeof(buf), "%s-%d.gbstate", emulator_get_rom_path(), event.key.keysym.sym - SDLK_F1);
+                char *savestate_path = get_savestate_path(emulator_get_rom_path(), event.key.keysym.sym - SDLK_F1);
                 if (event.key.keysym.mod & KMOD_SHIFT)
-                    emulator_load_state(buf);
+                    emulator_load_state(savestate_path);
                 else
-                    emulator_save_state(buf);
+                    emulator_save_state(savestate_path);
+                free(savestate_path);
                 break;
             }
             joypad_press(sdl_key_to_joypad(event.key.keysym.sym));
@@ -88,17 +138,6 @@ static void handle_input(void) {
             break;
         }
     }
-}
-
-static char *get_save_filepath(const char *rom_filepath) {
-    size_t len = strlen(rom_filepath);
-    char *buf = xmalloc(len + 2);
-
-    char *last_period = strrchr(rom_filepath, '.');
-    int last_period_index = (int) (last_period - rom_filepath);
-    snprintf(buf, len + 2, "%.*s.sav", last_period_index, rom_filepath);
-
-    return buf;
 }
 
 static void ppu_vblank_cb(byte_t *pixels) {
@@ -117,7 +156,7 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    char *save_path = get_save_filepath(argv[1]);
+    char *save_path = get_save_path(argv[1]);
     emulator_init(argv[1], save_path, ppu_vblank_cb, apu_samples_ready_cb);
     emulator_set_apu_sound_level(config.sound);
     emulator_set_apu_sampling_freq_multiplier(config.speed);
@@ -128,7 +167,8 @@ int main(int argc, char **argv) {
 
     // must be called after emulator_init because otherwise emualtor_init would overwrite some of the config
     // like palette, sound, etc.
-    const char *config_path = config_load();
+    const char *config_path = get_config_path();
+    config_load(config_path);
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
 
@@ -143,7 +183,7 @@ int main(int argc, char **argv) {
         GB_SCREEN_HEIGHT * scale,
         SDL_WINDOW_HIDDEN /*| SDL_WINDOW_RESIZABLE*/
     );
-    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
 
     ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
