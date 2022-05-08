@@ -5,6 +5,7 @@
 #include "emulator/emulator.h"
 
 struct config config = {
+    .color_palette = PPU_COLOR_PALETTE_GRAY,
     .scale = 3,
     .speed = 1.0f,
     .sound = 0.5f,
@@ -48,17 +49,15 @@ void config_load(const char* config_path) {
                     speed == 4.0f) {
 
                     config.speed = speed;
-                    emulator_set_apu_sampling_freq_multiplier(speed);
                 }
             } else if (sscanf(buf, "sound=%f", &sound)) {
                 if (sound == 0.0f || sound == 0.25f || sound == 0.5f ||
                     sound == 0.75f || sound == 1.0f) {
 
                     config.sound = sound;
-                    emulator_set_apu_sound_level(sound);
                 }
             } else if (sscanf(buf, "color_palette=%hhu", &color_palette)) {
-                emulator_set_color_palette(color_palette);
+                config.color_palette = color_palette;
             } else if (sscanf(buf, "link_host=%39s", link_host)) {
                 strncpy(config.link_host, link_host, 40);
             } else if (sscanf(buf, "link_port=%d", &link_port)) {

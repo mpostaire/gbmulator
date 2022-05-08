@@ -294,8 +294,9 @@ static void choose_sound(menu_entry_t *entry) {
 }
 
 static void choose_color(menu_entry_t *entry) {
-    emulator_update_pixels_with_palette(entry->choices.position);
-    emulator_set_color_palette(entry->choices.position);
+    config.color_palette = entry->choices.position;
+    emulator_update_pixels_with_palette(config.color_palette);
+    emulator_set_color_palette(config.color_palette);
 }
 
 static void choose_link_mode(menu_entry_t *entry) {
@@ -337,8 +338,15 @@ static void open_rom(void) {
         file_selector.click();
     );
     #else
-    // TODO
-    printf("Open rom not implemented yet -- use command line argument instead\n");
+    char filepath[1024];
+    FILE *f = popen("zenity --file-selection", "r");
+    if (!f) {
+        errnoprintf("zenity");
+        return;
+    }
+    fgets(filepath, 1024, f);
+    filepath[strcspn(filepath, "\r\n")] = '\0';
+    gbmulator_load_cartridge(filepath);
     #endif
 }
 

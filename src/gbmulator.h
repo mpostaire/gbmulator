@@ -7,3 +7,5 @@ void gbmulator_exit(void);
 void gbmulator_unpause(void);
 
 int sdl_key_to_joypad(SDL_Keycode key);
+
+void gbmulator_load_cartridge(const char *path);

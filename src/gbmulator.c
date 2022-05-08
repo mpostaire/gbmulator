@@ -170,7 +170,21 @@ static void handle_input(void) {
     }
 }
 
-static void load_cartridge(const char *path) {
+static void finish_load_cartridge(void) {
+    emulator_set_apu_sampling_freq_multiplier(config.speed);
+    emulator_set_apu_sound_level(config.sound);
+    emulator_set_color_palette(config.color_palette);
+    char *rom_title = emulator_get_rom_title();
+    snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
+    SDL_SetWindowTitle(window, window_title);
+    is_rom_loaded = SDL_TRUE;
+    ui_back_to_main_menu();
+    is_paused = SDL_FALSE;
+}
+
+void gbmulator_load_cartridge(const char *path) {
+    emulator_quit();
+
     if (rom_path)
         free(rom_path);
 
@@ -180,32 +194,21 @@ static void load_cartridge(const char *path) {
 
     char *save_path = get_save_path(rom_path);
     emulator_init(rom_path, save_path, ppu_vblank_cb, apu_samples_ready_cb);
-    char *rom_title = emulator_get_rom_title();
-    snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
-    SDL_SetWindowTitle(window, window_title);
-    is_rom_loaded = SDL_TRUE;
-    ui_back_to_main_menu();
-    is_paused = SDL_FALSE;
+    finish_load_cartridge();
 }
 
-static void load_cartridge_from_data(const byte_t *data, size_t size) {
+#ifdef __EMSCRIPTEN__
+EMSCRIPTEN_KEEPALIVE int load_cartridge_from_data(uint8_t *data, size_t size) {
+    // Load a file - this function is called from javascript when the file upload is activated
+    emulator_quit();
+
     if (rom_path)
         free(rom_path);
 
     emulator_init_from_data(data, size, ppu_vblank_cb, apu_samples_ready_cb);
-    char *rom_title = emulator_get_rom_title();
-    snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
-    SDL_SetWindowTitle(window, window_title);
-    is_rom_loaded = SDL_TRUE;
-    ui_back_to_main_menu();
-    is_paused = SDL_FALSE;
-}
+    finish_load_cartridge();
 
-#ifdef __EMSCRIPTEN__
-EMSCRIPTEN_KEEPALIVE int load_file(uint8_t *buffer, size_t size) {
-    // Load a file - this function is called from javascript when the file upload is activated
-    load_cartridge_from_data((byte_t *) buffer, size);
-    free(buffer);
+    free(data);
     return 1;
 }
 
@@ -245,7 +248,7 @@ void loop(void) {
 
 int main(int argc, char **argv) {
     if (argc == 2)
-        load_cartridge(argv[1]);
+        gbmulator_load_cartridge(argv[1]);
 
     // must be called after emulator_init because otherwise emualtor_init would overwrite some of the config
     // like palette, sound, etc.
