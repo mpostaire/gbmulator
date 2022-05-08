@@ -219,7 +219,7 @@ typedef enum {
 
 sync_status_t fs_mounted = READY;
 sync_status_t config_loaded = READY;
-sync_status_t config_saved = READY;
+sync_status_t config_saved = ENDED;
 
 EMSCRIPTEN_KEEPALIVE int load_cartridge_from_data(uint8_t *data, size_t size) {
     // Load a file - this function is called from javascript when the file upload is activated
