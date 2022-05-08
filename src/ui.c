@@ -1,5 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 #include "gbmulator.h"
 #include "config.h"
@@ -134,9 +137,10 @@ static void choose_color(menu_entry_t *entry);
 static void choose_link_mode(menu_entry_t *entry);
 static void on_input_link_host(menu_entry_t *entry);
 static void on_input_link_port(menu_entry_t *entry);
-static void start_link();
+static void start_link(void);
+static void open_rom(void);
 static void on_input_set_keybind(menu_entry_t *entry, SDL_Keycode key);
-static void back_to_prev_menu();
+static void back_to_prev_menu(void);
 
 struct menu_entry {
     char *label;
@@ -217,9 +221,10 @@ menu_t keybindings_menu = {
 
 menu_t main_menu = {
     .title = "GBmulator",
-    .length = 5,
+    .length = 6,
     .entries = {
         { "Resume", ACTION, .action = gbmulator_unpause },
+        { "Open ROM...", ACTION, .action = open_rom },
         { "Link cable...", SUBMENU, .submenu = &link_menu },
         { "Options...", SUBMENU, .submenu = &options_menu },
         { "Keybindings...", SUBMENU, .submenu = &keybindings_menu },
@@ -322,6 +327,21 @@ static void start_link(void) {
     }
 }
 
+static void open_rom(void) {
+    #ifdef __EMSCRIPTEN__
+    EM_ASM(
+        var file_selector = document.createElement('input');
+        file_selector.setAttribute('type', 'file');
+        file_selector.setAttribute('onchange','open_file(event)');
+        file_selector.setAttribute('accept','.gb,.gbc'); // optional - limit accepted file types 
+        file_selector.click();
+    );
+    #else
+    // TODO
+    printf("Open rom not implemented yet -- use command line argument instead\n");
+    #endif
+}
+
 static void on_input_set_keybind(menu_entry_t *entry, SDL_Keycode key) {
     int same = -1;
     for (int i = 0; i < keybindings_menu.length - 1; i++) {
@@ -384,7 +404,7 @@ static void print_cursor(int x, int y, color_t color) {
     }
 }
 
-static void print_char(const char c, int x, int y, color_t color) {
+void print_char(const char c, int x, int y, color_t color) {
     int index = c - 32;
     if (index < 0 || index >= 0x5F) return;
     
@@ -398,7 +418,7 @@ static void print_char(const char c, int x, int y, color_t color) {
     }
 }
 
-static void print_text(const char *text, int x, int y, color_t color) {
+void print_text(const char *text, int x, int y, color_t color) {
     for (int i = 0; text[i]; i++) {
         if (text[i] == '|')
             return;

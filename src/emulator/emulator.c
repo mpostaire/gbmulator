@@ -21,14 +21,24 @@ int emulator_step(void) {
     return cycles;
 }
 
-// void emulator_run_cycles(int cycles_limit) {
-//     for (int cycles_count = 0; cycles_count < cycles_limit; cycles_count += emulator_step());
-// }
+void emulator_run_cycles(int cycles_limit) {
+    for (int cycles_count = 0; cycles_count < cycles_limit; cycles_count += emulator_step());
+}
 
 void emulator_init(const char *rom_path, const char *save_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
     cpu_init();
     apu_init(1.0f, 1.0f, apu_samples_ready_cb);
     mmu_init(rom_path, save_path);
+    ppu_init(ppu_vblank_cb);
+    timer_init();
+    link_init();
+    joypad_init();
+}
+
+void emulator_init_from_data(const byte_t *rom_data, size_t size, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
+    cpu_init();
+    apu_init(1.0f, 1.0f, apu_samples_ready_cb);
+    mmu_init_from_data(rom_data, size);
     ppu_init(ppu_vblank_cb);
     timer_init();
     link_init();
@@ -70,14 +80,14 @@ void emulator_update_pixels_with_palette(byte_t new_palette) {
 
             // find which color is at pixel (i,j)
             for (color_t c = WHITE; c <= BLACK; c++) {
-                if (*R == ppu.color_palettes[ppu.current_color_palette][c][0] &&
-                    *G == ppu.color_palettes[ppu.current_color_palette][c][1] &&
-                    *B == ppu.color_palettes[ppu.current_color_palette][c][2]) {
+                if (*R == ppu_color_palettes[ppu.current_color_palette][c][0] &&
+                    *G == ppu_color_palettes[ppu.current_color_palette][c][1] &&
+                    *B == ppu_color_palettes[ppu.current_color_palette][c][2]) {
 
                     // replace old color value by the new one according to the new palette
-                    *R = ppu.color_palettes[new_palette][c][0];
-                    *G = ppu.color_palettes[new_palette][c][1];
-                    *B = ppu.color_palettes[new_palette][c][2];
+                    *R = ppu_color_palettes[new_palette][c][0];
+                    *G = ppu_color_palettes[new_palette][c][1];
+                    *B = ppu_color_palettes[new_palette][c][2];
                     break;
                 }
             }
@@ -94,7 +104,7 @@ void emulator_set_color_palette(color_palette_t palette) {
 }
 
 byte_t *emulator_get_color_values(color_t color) {
-    return ppu.color_palettes[ppu.current_color_palette][color];
+    return ppu_color_palettes[ppu.current_color_palette][color];
 }
 
 byte_t *emulator_get_pixels(void) {

@@ -8,9 +8,24 @@
 
 #define PPU_SET_MODE(m) mmu.mem[STAT] = (mmu.mem[STAT] & 0xFC) | (m)
 
-#define SET_PIXEL(buf, x, y, color) *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = ppu.color_palettes[ppu.current_color_palette][(color)][0]; \
-                            *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 1) = ppu.color_palettes[ppu.current_color_palette][(color)][1]; \
-                            *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 2) = ppu.color_palettes[ppu.current_color_palette][(color)][2];
+#define SET_PIXEL(buf, x, y, color) *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = ppu_color_palettes[ppu.current_color_palette][(color)][0]; \
+                            *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 1) = ppu_color_palettes[ppu.current_color_palette][(color)][1]; \
+                            *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 2) = ppu_color_palettes[ppu.current_color_palette][(color)][2];
+
+byte_t ppu_color_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
+    { // grayscale colors
+        { 0xFF, 0xFF, 0xFF },
+        { 0xCC, 0xCC, 0xCC },
+        { 0x77, 0x77, 0x77 },
+        { 0x00, 0x00, 0x00 }
+    },
+    { // green colors (original)
+        { 0x9B, 0xBC, 0x0F },
+        { 0x8B, 0xAC, 0x0F },
+        { 0x30, 0x62, 0x30 },
+        { 0x0F, 0x38, 0x0F }
+    }
+};
 
 ppu_t ppu;
 
@@ -333,21 +348,5 @@ void ppu_step(int cycles) {
 }
 
 void ppu_init(void (*new_frame_cb)(byte_t *pixels)) {
-    ppu = (ppu_t) {
-        .new_frame_cb = new_frame_cb,
-        .color_palettes = {
-            { // grayscale colors
-                { 0xFF, 0xFF, 0xFF },
-                { 0xCC, 0xCC, 0xCC },
-                { 0x77, 0x77, 0x77 },
-                { 0x00, 0x00, 0x00 }
-            },
-            { // green colors (original)
-                { 0x9B, 0xBC, 0x0F },
-                { 0x8B, 0xAC, 0x0F },
-                { 0x30, 0x62, 0x30 },
-                { 0x0F, 0x38, 0x0F }
-            }
-        }
-    };
+    ppu = (ppu_t) { .new_frame_cb = new_frame_cb };
 }

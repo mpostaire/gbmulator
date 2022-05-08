@@ -1,6 +1,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <SDL2/SDL.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 #include "ui.h"
 #include "config.h"
@@ -8,27 +11,38 @@
 
 // FIXME LY==LYC interrupt buggy, in fact most of the ppu is (check argentum emulator ppu code to understand how its handled)
 
-// TODO when no argument, show alternative menu with title Insert cartridge, ACTION: zenity open ROM from files, label: Or drag and drop ROM
-
 // TODO fix pause menu when starting game link connexion while pause menu is still active (it's working but weirdly so low priority)
 
 // TODO MBCs are poorly implemented (see https://github.com/drhelius/Gearboy to understand its handled)
 
 SDL_bool is_running = SDL_TRUE;
-SDL_bool is_paused = SDL_FALSE;
+SDL_bool is_paused = SDL_TRUE;
+SDL_bool is_rom_loaded = SDL_FALSE;
+
+SDL_Renderer *renderer;
+SDL_Window *window;
 
 SDL_Texture *ppu_texture;
 int ppu_texture_pitch;
+
+byte_t *ui_pixels_buffer;
+SDL_Texture *ui_texture;
+int ui_texture_pitch;
+
 SDL_AudioDeviceID audio_device;
 
 char *rom_path;
+byte_t scale;
+
+char window_title[sizeof(EMULATOR_NAME) + 19];
 
 void gbmulator_exit(void) {
     is_running = SDL_FALSE;
 }
 
 void gbmulator_unpause(void) {
-    is_paused = SDL_FALSE;
+    if (is_rom_loaded)
+        is_paused = SDL_FALSE;
 }
 
 int sdl_key_to_joypad(SDL_Keycode key) {
@@ -41,6 +55,16 @@ int sdl_key_to_joypad(SDL_Keycode key) {
     if (key == config.start) return JOYPAD_START;
     if (key == config.select) return JOYPAD_SELECT;
     return key;
+}
+
+static void ppu_vblank_cb(byte_t *pixels) {
+    SDL_UpdateTexture(ppu_texture, NULL, pixels, ppu_texture_pitch);
+}
+
+static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
+    while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size)
+        SDL_Delay(1);
+    SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
 
 static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
@@ -114,7 +138,10 @@ static void handle_input(void) {
             case SDLK_ESCAPE:
                 if (is_paused)
                     ui_back_to_main_menu();
-                is_paused = !is_paused;
+                if (is_paused && !is_rom_loaded)
+                    is_paused = SDL_TRUE;
+                else
+                    is_paused = !is_paused;
                 break;
             case SDLK_F1: case SDLK_F2:
             case SDLK_F3: case SDLK_F4:
@@ -141,58 +168,114 @@ static void handle_input(void) {
     }
 }
 
-static void ppu_vblank_cb(byte_t *pixels) {
-    SDL_UpdateTexture(ppu_texture, NULL, pixels, ppu_texture_pitch);
+static void load_cartridge(const char *path) {
+    if (rom_path)
+        free(rom_path);
+
+    size_t len = strlen(path);
+    rom_path = xmalloc(len + 2);
+    snprintf(rom_path, len + 1, "%s", path);
+
+    char *save_path = get_save_path(rom_path);
+    emulator_init(rom_path, save_path, ppu_vblank_cb, apu_samples_ready_cb);
+    char *rom_title = emulator_get_rom_title();
+    snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
+    SDL_SetWindowTitle(window, window_title);
+    printf("Playing %s\n", rom_title);
+    is_rom_loaded = SDL_TRUE;
+    ui_back_to_main_menu();
+    is_paused = SDL_FALSE;
 }
 
-static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
-    while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size)
-        SDL_Delay(1);
-    SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
+static void load_cartridge_from_data(const byte_t *data, size_t size) {
+    if (rom_path)
+        free(rom_path);
+
+    emulator_init_from_data(data, size, ppu_vblank_cb, apu_samples_ready_cb);
+    char *rom_title = emulator_get_rom_title();
+    snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
+    SDL_SetWindowTitle(window, window_title);
+    printf("Playing %s\n", rom_title);
+    is_rom_loaded = SDL_TRUE;
+    ui_back_to_main_menu();
+    is_paused = SDL_FALSE;
 }
 
-int main(int argc, char **argv) {
-    if (argc != 2) {
-        printf("Usage: %s path/to/rom.gb\n", argv[0]);
-        exit(EXIT_FAILURE);
+#ifdef __EMSCRIPTEN__
+EMSCRIPTEN_KEEPALIVE int load_file(uint8_t *buffer, size_t size) {
+    // Load a file - this function is called from javascript when the file upload is activated
+    load_cartridge_from_data((byte_t *) buffer, size);
+    free(buffer);
+    return 1;
+}
+
+void loop(void) {
+    if (is_paused) {
+        handle_input();
+
+        // display menu
+        ui_draw_menu();
+
+        if (scale != config.scale) {
+            scale = config.scale;
+            SDL_SetWindowSize(window, GB_SCREEN_WIDTH * scale, GB_SCREEN_HEIGHT * scale);
+        }
+
+        // update ppu_texture to show color palette changes behind the menu
+        if (is_rom_loaded) {
+            SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(), ppu_texture_pitch);
+            SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
+        }
+
+        SDL_UpdateTexture(ui_texture, NULL, ui_pixels_buffer, ui_texture_pitch);
+        SDL_RenderCopy(renderer, ui_texture, NULL, NULL);
+
+        SDL_RenderPresent(renderer);
+        return;
     }
 
-    rom_path = argv[1];
+    SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
+    SDL_RenderPresent(renderer);
+    handle_input(); // keep this the closest possible before emulator_step() to reduce input inaccuracies
 
-    char *save_path = get_save_path(argv[1]);
-    emulator_init(rom_path, save_path, ppu_vblank_cb, apu_samples_ready_cb);
-    emulator_set_apu_sound_level(config.sound);
-    emulator_set_apu_sampling_freq_multiplier(config.speed);
-    char *rom_title = emulator_get_rom_title();
-    char window_title[sizeof(EMULATOR_NAME) + 19];
-    snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
-    printf("Playing %s\n", rom_title);
+    // run the emulator for the approximate number of cycles it takes for the ppu to render a frame
+    emulator_run_cycles(GB_CPU_CYCLES_PER_FRAME * config.speed);
+}
+#endif
+
+int main(int argc, char **argv) {
+    if (argc == 2)
+        load_cartridge(argv[1]);
 
     // must be called after emulator_init because otherwise emualtor_init would overwrite some of the config
     // like palette, sound, etc.
     const char *config_path = get_config_path();
     config_load(config_path);
 
+    #ifdef __EMSCRIPTEN__
+    SDL_Init(SDL_INIT_VIDEO/* | SDL_INIT_AUDIO*/);
+    #else
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
+    #endif
 
-    byte_t *ui_pixels = ui_init();
+    ui_pixels_buffer = ui_init();
 
-    byte_t scale = config.scale;
+    scale = config.scale;
 
-    SDL_Window *window = SDL_CreateWindow(
-        window_title,
+    window = SDL_CreateWindow(
+        EMULATOR_NAME,
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         GB_SCREEN_WIDTH * scale,
         GB_SCREEN_HEIGHT * scale,
         SDL_WINDOW_HIDDEN /*| SDL_WINDOW_RESIZABLE*/
     );
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
 
     ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
     ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 3;
-    SDL_Texture *ui_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    int ui_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
+    ui_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    ui_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
     SDL_SetTextureBlendMode(ui_texture, SDL_BLENDMODE_BLEND);
 
     SDL_AudioSpec audio_settings = {
@@ -204,6 +287,9 @@ int main(int argc, char **argv) {
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
     SDL_PauseAudioDevice(audio_device, 0);
 
+    #ifdef __EMSCRIPTEN__
+    emscripten_set_main_loop(loop, 60, 1);
+    #else
     // main gbmulator loop
     int cycles = 0;
     while (is_running) {
@@ -220,15 +306,17 @@ int main(int argc, char **argv) {
             }
 
             // update ppu_texture to show color palette changes behind the menu
-            SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(), ppu_texture_pitch);
-            SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
+            if (is_rom_loaded) {
+                SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(), ppu_texture_pitch);
+                SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
+            }
 
-            SDL_UpdateTexture(ui_texture, NULL, ui_pixels, ui_texture_pitch);
+            SDL_UpdateTexture(ui_texture, NULL, ui_pixels_buffer, ui_texture_pitch);
             SDL_RenderCopy(renderer, ui_texture, NULL, NULL);
 
             SDL_RenderPresent(renderer);
             // delay to aim 30 fps (and avoid 100% CPU use) here because the normal delay is done by the sound emulation which is paused
-            SDL_Delay(1 / 30.0);
+            SDL_Delay(1.0f / 30.0f);
             continue;
         }
 
@@ -245,6 +333,7 @@ int main(int argc, char **argv) {
 
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).
     }
+    #endif
 
     emulator_quit();
 

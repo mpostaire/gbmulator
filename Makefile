@@ -7,7 +7,7 @@ CC:=gcc
 MAIN:=gbmulator
 EXEC:=$(MAIN)
 
-# recusive wildcard that goes into all subdirectories
+# recursive wildcard that goes into all subdirectories
 rwildcard=$(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
 
 SRC:=$(call rwildcard,$(SDIR),*.c)
@@ -22,6 +22,15 @@ all: $(ODIR_STRUCTURE) $(MAIN)
 
 debug: CFLAGS+=-g -Og -DDEBUG
 debug: all
+
+wasm: CC:=/usr/lib/emscripten/emcc
+wasm: CFLAGS+=-sWASM=1 -sEXPORTED_RUNTIME_METHODS=[ccall] --shell-file template.html
+wasm: $(ODIR_STRUCTURE) index.html
+debug_wasm: wasm
+debug_wasm: CFLAGS+=-sSINGLE_FILE
+
+index.html: $(OBJ)
+	$(CC) -o $@ $^ $(CFLAGS) $(LDLIBS)
 
 $(MAIN): $(OBJ)
 	$(CC) -o $(EXEC) $^ $(CFLAGS) $(LDLIBS)
@@ -40,7 +49,7 @@ check: $(SDIR)/*.c
 	cppcheck --enable=all --suppress=missingIncludeSystem $(SDIR)
 
 clean:
-	rm -rf $(ODIR)
+	rm -rf $(ODIR) index.{html,js,wasm}
 
 cleaner: clean
 	rm -f $(EXEC)

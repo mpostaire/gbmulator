@@ -13,22 +13,13 @@
 
 mmu_t mmu;
 
-static void load_cartridge(const char *filepath) {
-    mmu.rom_filepath = filepath;
-
+static void load_cartridge(const byte_t *data, size_t size) {
     // clear memory
     memset(&mmu.mem, 0, sizeof(mmu.mem));
     // clear eram
     memset(&mmu.eram, 0, sizeof(mmu.eram));
 
-    FILE *f = fopen(filepath, "rb");
-    if (!f) {
-        errnoprintf("opening file");
-        exit(EXIT_FAILURE);
-    }
-    fread(mmu.cartridge, sizeof(mmu.cartridge), 1, f);
-
-    fclose(f);
+    memcpy(mmu.cartridge, data, size);
 
     if (mmu.cartridge[0x0143] == 0xC0) {
         eprintf("CGB only rom: this emulator does not support CGB games yet\n");
@@ -96,9 +87,11 @@ static void load_cartridge(const char *filepath) {
 
     // Load bios after cartridge to overwrite first 0x100 bytes.
     memcpy(&mmu.mem, &dmg_boot, sizeof(dmg_boot));
+}
 
+static void load_save(void) {
     // load save into ERAM
-    f = fopen(mmu.save_filepath, "rb");
+    FILE *f = fopen(mmu.save_filepath, "rb");
     // if there is a save file, load it into eram
     if (f) {
         fread(mmu.eram, sizeof(mmu.eram), 1, f);
@@ -111,7 +104,29 @@ void mmu_init(const char *rom_path, const char *save_path) {
         .save_filepath = save_path,
         .current_rom_bank = 1
     };
-    load_cartridge(rom_path);
+
+    FILE *f = fopen(rom_path, "rb");
+    if (!f) {
+        errnoprintf("opening file");
+        exit(EXIT_FAILURE);
+    }
+
+    byte_t *rom_data = xmalloc(sizeof(mmu.cartridge));
+    size_t size = fread(mmu.cartridge, sizeof(mmu.cartridge), 1, f);
+
+    fclose(f);
+
+    load_cartridge(rom_data, size);
+    mmu.rom_filepath = rom_path;
+    load_save();
+    free(rom_data);
+}
+
+void mmu_init_from_data(const byte_t *rom_data, size_t size) {
+    mmu = (mmu_t) {
+        .current_rom_bank = 1
+    };
+    load_cartridge(rom_data, size);
 }
 
 void mmu_save_eram(void) {

@@ -121,6 +121,8 @@ extern mmu_t mmu;
 
 void mmu_init(const char *rom_path, const char *save_path);
 
+void mmu_init_from_data(const byte_t *rom_data, size_t size);
+
 void mmu_save_eram(void);
 
 /**

@@ -16,7 +16,11 @@ struct config config = {
     .up = SDLK_UP,
     .down = SDLK_DOWN,
     .a = SDLK_KP_0,
+    #ifdef __EMSCRIPTEN__
+    .b = SDLK_PERIOD,
+    #else
     .b = SDLK_KP_PERIOD,
+    #endif
     .start = SDLK_KP_1,
     .select = SDLK_KP_2
 };
@@ -44,6 +48,7 @@ void config_load(const char* config_path) {
                     speed == 4.0f) {
 
                     config.speed = speed;
+                    emulator_set_apu_sampling_freq_multiplier(speed);
                 }
             } else if (sscanf(buf, "sound=%f", &sound)) {
                 if (sound == 0.0f || sound == 0.25f || sound == 0.5f ||

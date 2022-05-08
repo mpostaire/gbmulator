@@ -16,8 +16,6 @@ typedef struct {
     void (*new_frame_cb)(byte_t *pixels);
     byte_t current_color_palette;
 
-    byte_t color_palettes[PPU_COLOR_PALETTE_MAX][4][3];
-
     byte_t pixels[GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 3];
     byte_t pixels_cache_color_data[GB_SCREEN_WIDTH][GB_SCREEN_HEIGHT];
 
@@ -25,6 +23,8 @@ typedef struct {
 
     int cycles;
 } ppu_t;
+
+extern byte_t ppu_color_palettes[PPU_COLOR_PALETTE_MAX][4][3];
 
 extern ppu_t ppu;
 

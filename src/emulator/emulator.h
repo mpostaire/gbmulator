@@ -40,6 +40,8 @@ void emulator_run_cycles(int cycles_limit);
  */
 void emulator_init(const char *rom_path, const char *save_path, void (*new_frame_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
 
+void emulator_init_from_data(const byte_t *rom_data, size_t size, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
+
 /**
  * Quits the emulator gracefully (save eram into a '.sav' file, ...).
  */
