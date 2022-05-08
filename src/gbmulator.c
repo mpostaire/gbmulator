@@ -341,6 +341,8 @@ int main(int argc, char **argv) {
 
     if (argc == 2)
         gbmulator_load_cartridge(argv[1]);
+    else
+        emulator_set_color_palette(config.color_palette); // update ui color palette when no rom loaded
     #endif
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
