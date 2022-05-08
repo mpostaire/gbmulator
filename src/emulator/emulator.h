@@ -16,8 +16,8 @@
 // TODO make both these values configurable in emulator_init()?
 #define GB_APU_SAMPLE_RATE 44100
 // Higher ample count means higher sound quality but lower emulation smoothness.
-// 256 seems to be the safe minimum
-#define GB_APU_SAMPLE_COUNT 256
+// 256 seems to be the safe minimum (512 for the wasm port)
+#define GB_APU_SAMPLE_COUNT 512
 
 /**
  * Runs the emulator for one cpu step.

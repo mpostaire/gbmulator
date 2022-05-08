@@ -23,8 +23,8 @@ all: $(ODIR_STRUCTURE) $(MAIN)
 debug: CFLAGS+=-g -Og -DDEBUG
 debug: all
 
-wasm: CC:=/usr/lib/emscripten/emcc
-wasm: CFLAGS+=-sWASM=1 -sEXPORTED_RUNTIME_METHODS=[ccall] --shell-file template.html
+wasm: CC:=emcc
+wasm: CFLAGS+=-sWASM=1 -sUSE_SDL=2 -sEXPORTED_RUNTIME_METHODS=[ccall] --shell-file template.html
 wasm: $(ODIR_STRUCTURE) index.html
 debug_wasm: wasm
 debug_wasm: CFLAGS+=-sSINGLE_FILE

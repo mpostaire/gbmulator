@@ -62,8 +62,10 @@ static void ppu_vblank_cb(byte_t *pixels) {
 }
 
 static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
+    #ifndef __EMSCRIPTEN__
     while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size)
         SDL_Delay(1);
+    #endif
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
 
@@ -181,7 +183,6 @@ static void load_cartridge(const char *path) {
     char *rom_title = emulator_get_rom_title();
     snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
     SDL_SetWindowTitle(window, window_title);
-    printf("Playing %s\n", rom_title);
     is_rom_loaded = SDL_TRUE;
     ui_back_to_main_menu();
     is_paused = SDL_FALSE;
@@ -195,7 +196,6 @@ static void load_cartridge_from_data(const byte_t *data, size_t size) {
     char *rom_title = emulator_get_rom_title();
     snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
     SDL_SetWindowTitle(window, window_title);
-    printf("Playing %s\n", rom_title);
     is_rom_loaded = SDL_TRUE;
     ui_back_to_main_menu();
     is_paused = SDL_FALSE;
@@ -252,11 +252,7 @@ int main(int argc, char **argv) {
     const char *config_path = get_config_path();
     config_load(config_path);
 
-    #ifdef __EMSCRIPTEN__
-    SDL_Init(SDL_INIT_VIDEO/* | SDL_INIT_AUDIO*/);
-    #else
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
-    #endif
 
     ui_pixels_buffer = ui_init();
 

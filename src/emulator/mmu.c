@@ -67,11 +67,11 @@ static void load_cartridge(const byte_t *data, size_t size) {
         break;
     }
 
-    printf("Cartridge using MBC%d with %d ROM banks + %d RAM banks\n", mmu.mbc, mmu.rom_banks, mmu.ram_banks);
-
     // get rom title
     memcpy(&mmu.rom_title, (char *) &mmu.cartridge[0x134], 16);
     mmu.rom_title[16] = '\0';
+    printf("Playing %s\n", mmu.rom_title);
+    printf("Cartridge using MBC%d with %d ROM banks + %d RAM banks\n", mmu.mbc, mmu.rom_banks, mmu.ram_banks);
 
     // checksum validation
     int sum = 0;
