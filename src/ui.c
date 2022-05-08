@@ -371,12 +371,18 @@ static void back_to_prev_menu(void) {
         gbmulator_unpause();
     } else {
         current_menu = &main_menu;
+        #ifdef __EMSCRIPTEN__
+        gbmulator_request_config_save();
+        #endif
     }
 }
 
 void ui_back_to_main_menu(void) {
     current_menu = &main_menu;
     main_menu.position = 0;
+    #ifdef __EMSCRIPTEN__
+    gbmulator_request_config_save();
+    #endif
 }
 
 byte_t *ui_init(void) {
@@ -412,7 +418,7 @@ static void print_cursor(int x, int y, color_t color) {
     }
 }
 
-void print_char(const char c, int x, int y, color_t color) {
+static void print_char(const char c, int x, int y, color_t color) {
     int index = c - 32;
     if (index < 0 || index >= 0x5F) return;
     
@@ -426,7 +432,7 @@ void print_char(const char c, int x, int y, color_t color) {
     }
 }
 
-void print_text(const char *text, int x, int y, color_t color) {
+static void print_text(const char *text, int x, int y, color_t color) {
     for (int i = 0; text[i]; i++) {
         if (text[i] == '|')
             return;
@@ -554,9 +560,6 @@ void ui_press(SDL_Keysym *keysym) {
             break;
         default:
             entry->setter.on_input(entry, keysym->sym);
-            #ifdef __EMSCRIPTEN__
-            gbmulator_request_config_save();
-            #endif
             break;
         }
         entry->setter.editing = 0;
@@ -576,9 +579,6 @@ void ui_press(SDL_Keysym *keysym) {
                 new_pos = 0;
             entry->choices.position = new_pos;
             (entry->choices.choose)(entry);
-            #ifdef __EMSCRIPTEN__
-            gbmulator_request_config_save();
-            #endif
             break;
         case INPUT:
             new_cursor = entry->user_input.cursor + (key == JOYPAD_RIGHT ? 1 : -1);
@@ -641,9 +641,6 @@ void ui_press(SDL_Keysym *keysym) {
         if (key == SDLK_DELETE) {
             delete_char_at(&entry->user_input.input, entry->user_input.cursor);
             entry->user_input.on_input(entry);
-            #ifdef __EMSCRIPTEN__
-            gbmulator_request_config_save();
-            #endif
 
             if (entry->user_input.visible_lo > 0) {
                 entry->user_input.visible_lo -= 1;
@@ -653,9 +650,6 @@ void ui_press(SDL_Keysym *keysym) {
             new_cursor = entry->user_input.cursor - 1;
             delete_char_at(&entry->user_input.input, new_cursor);
             entry->user_input.on_input(entry);
-            #ifdef __EMSCRIPTEN__
-            gbmulator_request_config_save();
-            #endif
 
             if (new_cursor < 0)
                 new_cursor = 0;
@@ -691,7 +685,4 @@ void ui_text_input(const char *text) {
     }
 
     entry->user_input.on_input(entry);
-    #ifdef __EMSCRIPTEN__
-    gbmulator_request_config_save();
-    #endif
 }
