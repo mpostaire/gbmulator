@@ -18,6 +18,7 @@
 // TODO if is_rom_loaded == false, dont display resume option in main menu
 
 // TODO move emscripten code to separate file and make makefile compile on it (need a exclude variable to tell make to exclude gbmulator.c/gbmulator_wasm.c)
+// TODO when emscripten code is separated, refactor both (wasm and normal)
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
