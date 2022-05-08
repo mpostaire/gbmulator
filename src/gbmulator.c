@@ -15,6 +15,10 @@
 
 // TODO MBCs are poorly implemented (see https://github.com/drhelius/Gearboy to understand its handled)
 
+// TODO if is_rom_loaded == false, dont display resume option in main menu
+
+// TODO move emscripten code to separate file and make makefile compile on it (need a exclude variable to tell make to exclude gbmulator.c/gbmulator_wasm.c)
+
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
 SDL_bool is_rom_loaded = SDL_FALSE;
@@ -81,6 +85,7 @@ static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
     return buf;
 }
 
+#ifndef __EMSCRIPTEN__
 static const char *get_config_path(void) {
     char *xdg_config = get_xdg_path("XDG_CONFIG_HOME", ".config");
 
@@ -90,6 +95,7 @@ static const char *get_config_path(void) {
     free(xdg_config);
     return config_path;
 }
+#endif
 
 static char *get_save_path(const char *rom_filepath) {
     char *xdg_data = get_xdg_path("XDG_DATA_HOME", ".local/share");
@@ -182,6 +188,7 @@ static void finish_load_cartridge(void) {
     is_paused = SDL_FALSE;
 }
 
+#ifndef __EMSCRIPTEN__
 void gbmulator_load_cartridge(const char *path) {
     emulator_quit();
 
@@ -196,8 +203,23 @@ void gbmulator_load_cartridge(const char *path) {
     emulator_init(rom_path, save_path, ppu_vblank_cb, apu_samples_ready_cb);
     finish_load_cartridge();
 }
+#else
+typedef enum {
+    READY,
+    PENDING,
+    ENDED
+} sync_status_t;
 
-#ifdef __EMSCRIPTEN__
+typedef enum {
+    MOUNT,
+    CONFIG_LOAD,
+    CONFIG_SAVE
+} operation_t;
+
+sync_status_t fs_mounted = READY;
+sync_status_t config_loaded = READY;
+sync_status_t config_saved = READY;
+
 EMSCRIPTEN_KEEPALIVE int load_cartridge_from_data(uint8_t *data, size_t size) {
     // Load a file - this function is called from javascript when the file upload is activated
     emulator_quit();
@@ -212,7 +234,72 @@ EMSCRIPTEN_KEEPALIVE int load_cartridge_from_data(uint8_t *data, size_t size) {
     return 1;
 }
 
+void gbmulator_request_config_save(void) {
+    config_saved = READY;
+}
+
+EMSCRIPTEN_KEEPALIVE void idbfs_sync(operation_t operation) {
+    switch (operation) {
+    case MOUNT:
+        fs_mounted = ENDED;
+        break;
+    case CONFIG_LOAD:
+        config_loaded = ENDED;
+        break;
+    case CONFIG_SAVE:
+        config_saved = ENDED;
+        break;
+    default:
+        break;
+    }
+}
+
 void loop(void) {
+    // this is ugly because IDBFS is async...
+    if (fs_mounted == READY) {
+        fs_mounted = PENDING;
+        EM_ASM({
+            FS.mkdir('/gbmulator');
+            FS.mount(IDBFS, {}, '/gbmulator');
+
+            FS.syncfs(true, function (err) {
+                if (err)
+                    Module.print(err);
+                else
+                    Module.ccall('idbfs_sync', 'void', 'number', [$0])
+            });
+        }, MOUNT);
+        return;
+    } else if (fs_mounted == ENDED && config_loaded == READY) {
+        config_load("/gbmulator/gbmulator.conf");
+        emulator_set_apu_sampling_freq_multiplier(config.speed);
+        emulator_set_apu_sound_level(config.sound);
+        emulator_set_color_palette(config.color_palette);
+        ui_pixels_buffer = ui_init(); // update ui config
+        config_loaded = PENDING;
+        EM_ASM({
+            FS.syncfs(false, function (err) {
+                if (err)
+                    Module.print(err);
+                else
+                    Module.ccall('idbfs_sync', 'void', 'number', [$0])
+            });
+        }, CONFIG_LOAD);
+        return;
+    } else if (config_loaded == ENDED && config_saved == READY) {
+        config_save("/gbmulator/gbmulator.conf");
+        config_saved = PENDING;
+        EM_ASM({
+            FS.syncfs(false, function (err) {
+                if (err)
+                    Module.print(err);
+                else
+                    Module.ccall('idbfs_sync', 'void', 'number', [$0])
+            });
+        }, CONFIG_SAVE);
+        return;
+    }
+
     if (is_paused) {
         handle_input();
 
@@ -247,13 +334,14 @@ void loop(void) {
 #endif
 
 int main(int argc, char **argv) {
-    if (argc == 2)
-        gbmulator_load_cartridge(argv[1]);
-
-    // must be called after emulator_init because otherwise emualtor_init would overwrite some of the config
-    // like palette, sound, etc.
+    #ifndef __EMSCRIPTEN__
+    // must be called before emulator_init
     const char *config_path = get_config_path();
     config_load(config_path);
+
+    if (argc == 2)
+        gbmulator_load_cartridge(argv[1]);
+    #endif
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
 
@@ -336,7 +424,9 @@ int main(int argc, char **argv) {
 
     emulator_quit();
 
+    #ifndef __EMSCRIPTEN__
     config_save(config_path);
+    #endif
 
     SDL_DestroyWindow(window);
     SDL_DestroyRenderer(renderer);

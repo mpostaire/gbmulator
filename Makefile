@@ -25,9 +25,12 @@ debug: all
 
 wasm: CC:=emcc
 wasm: CFLAGS+=-sWASM=1 -sUSE_SDL=2 -sEXPORTED_RUNTIME_METHODS=[ccall] --shell-file template.html
+wasm: LDLIBS+=-lidbfs.js
 wasm: $(ODIR_STRUCTURE) index.html
 debug_wasm: wasm
 debug_wasm: CFLAGS+=-sSINGLE_FILE
+run_wasm: debug_wasm
+	emrun index.html
 
 index.html: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDLIBS)

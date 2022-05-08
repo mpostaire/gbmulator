@@ -100,7 +100,7 @@ void config_save(const char* config_path) {
         config.scale,
         config.speed,
         config.sound,
-        emulator_get_color_palette(),
+        config.color_palette,
         config.link_host,
         config.link_port,
         SDL_GetKeyName(config.left),
