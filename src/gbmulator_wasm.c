@@ -163,8 +163,8 @@ static void handle_input(void) {
                 if (!rom_title)
                     break;
                 len = strlen(rom_title);
-                savestate_path = xmalloc(len + 4);
-                snprintf(savestate_path, len + 3, "%s-%d", rom_title, event.key.keysym.sym - SDLK_F1);
+                savestate_path = xmalloc(len + 10);
+                snprintf(savestate_path, len + 9, "%s-state-%d", rom_title, event.key.keysym.sym - SDLK_F1);
                 if (event.key.keysym.mod & KMOD_SHIFT) {
                     size_t savestate_length;
                     byte_t *savestate = local_storage_get_item(savestate_path, &savestate_length);
