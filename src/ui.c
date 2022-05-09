@@ -374,7 +374,12 @@ static void on_input_set_keybind(menu_entry_t *entry, SDL_Keycode key) {
 
 static void back_to_prev_menu(void) {
     if (current_menu == &main_menu) {
+        byte_t count = 0;
         main_menu.position = 0;
+        while (main_menu.entries[main_menu.position].disabled && count < main_menu.length) {
+            main_menu.position = (main_menu.position + 1) % main_menu.length;
+            count++;
+        }
         gbmulator_unpause();
     } else {
         current_menu = &main_menu;
@@ -384,6 +389,11 @@ static void back_to_prev_menu(void) {
 void ui_back_to_main_menu(void) {
     current_menu = &main_menu;
     main_menu.position = 0;
+    byte_t count = 0;
+    while (main_menu.entries[main_menu.position].disabled && count < main_menu.length) {
+        main_menu.position = (main_menu.position + 1) % main_menu.length;
+        count++;
+    }
 }
 
 byte_t *ui_init(void) {
@@ -550,21 +560,29 @@ static void delete_char_at(char **text, byte_t n) {
     (*text)[i] = '\0';
 }
 
-void ui_press(SDL_Keysym *keysym) {
-    int key = sdl_key_to_joypad(keysym->sym);
+void ui_press(SDL_KeyboardEvent *keyevent) {
+    SDL_Keysym keysym = keyevent->keysym;
+    int key = sdl_key_to_joypad(keysym.sym);
     int count;
     menu_entry_t *entry = &current_menu->entries[current_menu->position];
     blink_counter = 0;
 
     if (entry->type == KEY_SETTER && entry->setter.editing) {
-        if (config_verif_key(keysym->sym))
-            entry->setter.on_input(entry, keysym->sym);
+        if (config_verif_key(keysym.sym))
+            entry->setter.on_input(entry, keysym.sym);
         entry->setter.editing = 0;
         return;
     }
 
     int new_pos, new_cursor, len;
     switch (key) {
+    case SDLK_PAUSE:
+    case SDLK_ESCAPE:
+        if (!keyevent->repeat) {
+            gbmulator_unpause();
+            ui_back_to_main_menu();
+        }
+        break;
     case JOYPAD_RIGHT:
     case JOYPAD_LEFT:
         switch (current_menu->entries[current_menu->position].type) {

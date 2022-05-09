@@ -142,19 +142,16 @@ static void handle_input(void) {
                 ui_text_input(event.text.text);
             break;
         case SDL_KEYDOWN:
-            if (is_paused)
-                ui_press(&event.key.keysym);
+            if (is_paused) {
+                ui_press(&event.key);
+                break;
+            }
             if (event.key.repeat)
                 break;
             switch (event.key.keysym.sym) {
             case SDLK_PAUSE:
             case SDLK_ESCAPE:
-                if (is_paused)
-                    ui_back_to_main_menu();
-                if (is_paused && !is_rom_loaded)
-                    is_paused = SDL_TRUE;
-                else
-                    is_paused = !is_paused;
+                is_paused = SDL_TRUE;
                 break;
             case SDLK_F1: case SDLK_F2:
             case SDLK_F3: case SDLK_F4:
