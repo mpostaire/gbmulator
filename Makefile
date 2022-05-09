@@ -33,13 +33,14 @@ debug: all
 
 wasm: CC:=emcc
 wasm: LDLIBS:=
+wasm: CFLAGS+=-O3
 wasm: $(ODIR_STRUCTURE) index.html
 
 debug_wasm: wasm
 	emrun index.html
 
 index.html: $(OBJ) template.html
-	$(CC) -o $@ $(OBJ) $(CFLAGS) -O3 -sWASM=1 -sUSE_SDL=2 -sEXPORTED_RUNTIME_METHODS=[ccall] --shell-file template.html -lidbfs.js
+	$(CC) -o $@ $(OBJ) $(CFLAGS) -sWASM=1 -sUSE_SDL=2 -sEXPORTED_RUNTIME_METHODS=[ccall] --shell-file template.html -lidbfs.js
 
 $(MAIN): $(OBJ)
 	$(CC) -o $(EXEC) $^ $(CFLAGS) $(LDLIBS)
