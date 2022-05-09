@@ -8,7 +8,7 @@
 #include "config.h"
 #include "emulator/emulator.h"
 
-// TODO fix this file (it's ugly code).
+// TODO fix this file (it's ugly code with lots of copy pasted repetitions).
 
 #define SET_PIXEL_RGBA(buf, x, y, color, alpha) \
     byte_t *_tmp_color_values = emulator_get_color_values((color)); \
@@ -221,14 +221,20 @@ menu_t keybindings_menu = {
 
 menu_t main_menu = {
     .title = "GBmulator",
+    #ifdef __EMSCRIPTEN__
+    .length = 5,
+    #else
     .length = 6,
+    #endif
     .entries = {
-        { "Resume", ACTION, .action = gbmulator_unpause },
+        { "Resume", ACTION, .disabled = 1, .action = gbmulator_unpause },
         { "Open ROM...", ACTION, .action = open_rom },
         { "Link cable...", SUBMENU, .submenu = &link_menu },
         { "Options...", SUBMENU, .submenu = &options_menu },
         { "Keybindings...", SUBMENU, .submenu = &keybindings_menu },
+        #ifndef __EMSCRIPTEN__
         { "Exit", ACTION, .action = gbmulator_exit }
+        #endif
     }
 };
 
@@ -334,11 +340,11 @@ static void open_rom(void) {
         var file_selector = document.createElement('input');
         file_selector.setAttribute('type', 'file');
         file_selector.setAttribute('onchange','open_file(event)');
-        file_selector.setAttribute('accept','.gb,.gbc'); // optional - limit accepted file types 
+        file_selector.setAttribute('accept','.gb,.gbc'); // optional - limit accepted file types
         file_selector.click();
     );
     #else
-    char filepath[1024];
+    char filepath[1024] = { 0 };
     FILE *f = popen("zenity --file-selection", "r");
     if (!f) {
         errnoprintf("zenity");
@@ -346,7 +352,8 @@ static void open_rom(void) {
     }
     fgets(filepath, 1024, f);
     filepath[strcspn(filepath, "\r\n")] = '\0';
-    gbmulator_load_cartridge(filepath);
+    if (strlen(filepath))
+        gbmulator_load_cartridge(filepath);
     #endif
 }
 
@@ -371,21 +378,21 @@ static void back_to_prev_menu(void) {
         gbmulator_unpause();
     } else {
         current_menu = &main_menu;
-        #ifdef __EMSCRIPTEN__
-        gbmulator_request_config_save();
-        #endif
     }
 }
 
 void ui_back_to_main_menu(void) {
     current_menu = &main_menu;
     main_menu.position = 0;
-    #ifdef __EMSCRIPTEN__
-    gbmulator_request_config_save();
-    #endif
 }
 
 byte_t *ui_init(void) {
+    byte_t count = 0;
+    do {
+        main_menu.position = (main_menu.position + 1) % main_menu.length;
+        count++;
+    } while(main_menu.entries[main_menu.position].disabled && count < main_menu.length);
+
     options_menu.entries[0].choices.position = config.scale - 1;
     options_menu.entries[1].choices.position = config.speed / 0.5f - 2;
     options_menu.entries[2].choices.position = config.sound * 4;
@@ -550,18 +557,8 @@ void ui_press(SDL_Keysym *keysym) {
     blink_counter = 0;
 
     if (entry->type == KEY_SETTER && entry->setter.editing) {
-        switch (keysym->sym) {
-        case SDLK_RETURN:
-        case SDLK_KP_ENTER:
-        case SDLK_DELETE:
-        case SDLK_BACKSPACE:
-        case SDLK_PAUSE:
-        case SDLK_ESCAPE:
-            break;
-        default:
+        if (config_verif_key(keysym->sym))
             entry->setter.on_input(entry, keysym->sym);
-            break;
-        }
         entry->setter.editing = 0;
         return;
     }
@@ -685,4 +682,8 @@ void ui_text_input(const char *text) {
     }
 
     entry->user_input.on_input(entry);
+}
+
+void ui_enable_resume_button(void) {
+    main_menu.entries[0].disabled = 0;
 }

@@ -25,28 +25,33 @@ void emulator_run_cycles(int cycles_limit) {
     for (int cycles_count = 0; cycles_count < cycles_limit; cycles_count += emulator_step());
 }
 
-void emulator_init(const char *rom_path, const char *save_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
+int emulator_init(char *rom_path, char *save_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
     cpu_init();
     apu_init(1.0f, 1.0f, apu_samples_ready_cb);
-    mmu_init(rom_path, save_path);
+    int ret = mmu_init(rom_path, save_path);
+    if (!ret) return 0;
     ppu_init(ppu_vblank_cb);
     timer_init();
     link_init();
     joypad_init();
+    return 1;
 }
 
-void emulator_init_from_data(const byte_t *rom_data, size_t size, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
+int emulator_init_from_data(const byte_t *rom_data, size_t size, char *save_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
     cpu_init();
     apu_init(1.0f, 1.0f, apu_samples_ready_cb);
-    mmu_init_from_data(rom_data, size);
+    int ret = mmu_init_from_data(rom_data, size, save_path);
+    if (!ret) return 0;
     ppu_init(ppu_vblank_cb);
     timer_init();
     link_init();
     joypad_init();
+    return 1;
 }
 
 void emulator_quit(void) {
     mmu_save_eram();
+    mmu_free();
     link_close_connection();
 }
 
@@ -66,8 +71,26 @@ void emulator_joypad_release(joypad_button_t key) {
     joypad_release(key);
 }
 
+byte_t *emulator_get_save_data(size_t *save_length) {
+    if (!mmu.mbc) {
+        *save_length = 0;
+        return NULL;
+    }
+    *save_length = sizeof(mmu.eram);
+    return mmu.eram;
+}
+
 char *emulator_get_rom_title(void) {
     return mmu.rom_title;
+}
+
+char *emulator_get_rom_title_from_data(byte_t *rom_data, size_t size) {
+    if (size < 0x144)
+        return NULL;
+    char *rom_title = xmalloc(17);
+    memcpy(rom_title, (char *) &rom_data[0x134], 16);
+    rom_title[16] = '\0';
+    return rom_title;
 }
 
 void emulator_update_pixels_with_palette(byte_t new_palette) {

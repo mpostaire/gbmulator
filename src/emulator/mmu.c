@@ -13,7 +13,7 @@
 
 mmu_t mmu;
 
-static void load_cartridge(const byte_t *data, size_t size) {
+static int load_cartridge(const byte_t *data, size_t size) {
     // clear memory
     memset(&mmu.mem, 0, sizeof(mmu.mem));
     // clear eram
@@ -23,7 +23,7 @@ static void load_cartridge(const byte_t *data, size_t size) {
 
     if (mmu.cartridge[0x0143] == 0xC0) {
         eprintf("CGB only rom: this emulator does not support CGB games yet\n");
-        exit(EXIT_FAILURE);
+        return 0;
     }
 
     switch (mmu.cartridge[0x0147]) {
@@ -50,8 +50,7 @@ static void load_cartridge(const byte_t *data, size_t size) {
     //     break;
     default:
         eprintf("MBC byte %02X not supported\n", mmu.cartridge[0x0147]);
-        exit(EXIT_FAILURE);
-        break;
+        return 0;
     }
 
     mmu.rom_banks = 2 << mmu.cartridge[0x0148];
@@ -79,7 +78,7 @@ static void load_cartridge(const byte_t *data, size_t size) {
         sum = sum - mmu.cartridge[i] - 1;
     if (((byte_t) (sum & 0xFF)) != mmu.cartridge[0x014D]) {
         eprintf("invalid checksum\n");
-        exit(EXIT_FAILURE);
+        return 0;
     }
 
     // load cartridge into rom banks (everything before VRAM (0x8000))
@@ -87,19 +86,27 @@ static void load_cartridge(const byte_t *data, size_t size) {
 
     // Load bios after cartridge to overwrite first 0x100 bytes.
     memcpy(&mmu.mem, &dmg_boot, sizeof(dmg_boot));
-}
 
-static void load_save(void) {
     // load save into ERAM
-    FILE *f = fopen(mmu.save_filepath, "rb");
-    // if there is a save file, load it into eram
-    if (f) {
-        fread(mmu.eram, sizeof(mmu.eram), 1, f);
-        fclose(f);
+    if (mmu.save_filepath) {
+        FILE *f = fopen(mmu.save_filepath, "rb");
+        // if there is a save file, load it into eram
+        if (f) {
+            fread(mmu.eram, sizeof(mmu.eram), 1, f);
+            fclose(f);
+        }
     }
+
+    return 1;
 }
 
-void mmu_init(const char *rom_path, const char *save_path) {
+int mmu_init(char *rom_path, char *save_path) {
+    const char *dot = strrchr(rom_path, '.');
+    if (!dot || strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb")))) {
+        eprintf("%s: wrong file extension\n", rom_path);
+        return 0;
+    }
+
     mmu = (mmu_t) {
         .save_filepath = save_path,
         .current_rom_bank = 1
@@ -108,7 +115,7 @@ void mmu_init(const char *rom_path, const char *save_path) {
     FILE *f = fopen(rom_path, "rb");
     if (!f) {
         errnoprintf("opening file");
-        exit(EXIT_FAILURE);
+        return 0;
     }
 
     byte_t *rom_data = xmalloc(sizeof(mmu.cartridge));
@@ -116,35 +123,48 @@ void mmu_init(const char *rom_path, const char *save_path) {
 
     fclose(f);
 
-    load_cartridge(rom_data, size);
+    byte_t ret = load_cartridge(rom_data, size);
+    if (!ret) return 0;
     mmu.rom_filepath = rom_path;
-    load_save();
     free(rom_data);
+
+    return 1;
 }
 
-void mmu_init_from_data(const byte_t *rom_data, size_t size) {
+int mmu_init_from_data(const byte_t *rom_data, size_t size, char *save_path) {
     mmu = (mmu_t) {
+        .save_filepath = save_path,
         .current_rom_bank = 1
     };
-    load_cartridge(rom_data, size);
+    return load_cartridge(rom_data, size);
 }
 
-void mmu_save_eram(void) {
-    if (!mmu.ram_banks) return;
+int mmu_save_eram(void) {
+    if (!mmu.ram_banks || !mmu.save_filepath)
+        return 0;
 
     make_parent_dirs(mmu.rom_filepath);
 
     FILE *f = fopen(mmu.save_filepath, "wb");
     if (!f) {
         errnoprintf("opening the save file");
-        exit(EXIT_FAILURE);
+        return 0;
     }
     if (!fwrite(mmu.eram, sizeof(mmu.eram), 1, f)) {
         eprintf("writing to save file\n");
         fclose(f);
-        exit(EXIT_FAILURE);
+        return 0;
     }
+
     fclose(f);
+    return 1;
+}
+
+void mmu_free(void) {
+    if (mmu.rom_filepath)
+        free(mmu.rom_filepath);
+    if (mmu.save_filepath)
+        free(mmu.save_filepath);
 }
 
 static void rtc_update(void) {

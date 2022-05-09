@@ -1,9 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <SDL2/SDL.h>
-#ifdef __EMSCRIPTEN__
-#include <emscripten.h>
-#endif
 
 #include "ui.h"
 #include "config.h"
@@ -15,29 +12,18 @@
 
 // TODO MBCs are poorly implemented (see https://github.com/drhelius/Gearboy to understand its handled)
 
-// TODO if is_rom_loaded == false, dont display resume option in main menu
-
-// TODO move emscripten code to separate file and make makefile compile on it (need a exclude variable to tell make to exclude gbmulator.c/gbmulator_wasm.c)
-// TODO when emscripten code is separated, refactor both (wasm and normal)
-
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
 SDL_bool is_rom_loaded = SDL_FALSE;
 
-SDL_Renderer *renderer;
 SDL_Window *window;
 
 SDL_Texture *ppu_texture;
 int ppu_texture_pitch;
 
-byte_t *ui_pixels_buffer;
-SDL_Texture *ui_texture;
-int ui_texture_pitch;
-
 SDL_AudioDeviceID audio_device;
 
 char *rom_path;
-byte_t scale;
 
 char window_title[sizeof(EMULATOR_NAME) + 19];
 
@@ -67,10 +53,8 @@ static void ppu_vblank_cb(byte_t *pixels) {
 }
 
 static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
-    #ifndef __EMSCRIPTEN__
     while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size)
         SDL_Delay(1);
-    #endif
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
 
@@ -86,7 +70,6 @@ static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
     return buf;
 }
 
-#ifndef __EMSCRIPTEN__
 static const char *get_config_path(void) {
     char *xdg_config = get_xdg_path("XDG_CONFIG_HOME", ".config");
 
@@ -96,7 +79,6 @@ static const char *get_config_path(void) {
     free(xdg_config);
     return config_path;
 }
-#endif
 
 static char *get_save_path(const char *rom_filepath) {
     char *xdg_data = get_xdg_path("XDG_DATA_HOME", ".local/share");
@@ -156,6 +138,8 @@ static void handle_input(void) {
             case SDLK_F3: case SDLK_F4:
             case SDLK_F5: case SDLK_F6:
             case SDLK_F7: case SDLK_F8:
+                if (!rom_path)
+                    break;
                 savestate_path = get_savestate_path(rom_path, event.key.keysym.sym - SDLK_F1);
                 if (event.key.keysym.mod & KMOD_SHIFT)
                     emulator_load_state(savestate_path);
@@ -177,19 +161,6 @@ static void handle_input(void) {
     }
 }
 
-static void finish_load_cartridge(void) {
-    emulator_set_apu_sampling_freq_multiplier(config.speed);
-    emulator_set_apu_sound_level(config.sound);
-    emulator_set_color_palette(config.color_palette);
-    char *rom_title = emulator_get_rom_title();
-    snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
-    SDL_SetWindowTitle(window, window_title);
-    is_rom_loaded = SDL_TRUE;
-    ui_back_to_main_menu();
-    is_paused = SDL_FALSE;
-}
-
-#ifndef __EMSCRIPTEN__
 void gbmulator_load_cartridge(const char *path) {
     emulator_quit();
 
@@ -201,156 +172,36 @@ void gbmulator_load_cartridge(const char *path) {
     snprintf(rom_path, len + 1, "%s", path);
 
     char *save_path = get_save_path(rom_path);
-    emulator_init(rom_path, save_path, ppu_vblank_cb, apu_samples_ready_cb);
-    finish_load_cartridge();
-}
-#else
-typedef enum {
-    READY,
-    PENDING,
-    ENDED
-} sync_status_t;
-
-typedef enum {
-    MOUNT,
-    CONFIG_LOAD,
-    CONFIG_SAVE
-} operation_t;
-
-sync_status_t fs_mounted = READY;
-sync_status_t config_loaded = READY;
-sync_status_t config_saved = ENDED;
-
-EMSCRIPTEN_KEEPALIVE int load_cartridge_from_data(uint8_t *data, size_t size) {
-    // Load a file - this function is called from javascript when the file upload is activated
-    emulator_quit();
-
-    if (rom_path)
-        free(rom_path);
-
-    emulator_init_from_data(data, size, ppu_vblank_cb, apu_samples_ready_cb);
-    finish_load_cartridge();
-
-    free(data);
-    return 1;
-}
-
-void gbmulator_request_config_save(void) {
-    config_saved = READY;
-}
-
-EMSCRIPTEN_KEEPALIVE void idbfs_sync(operation_t operation) {
-    switch (operation) {
-    case MOUNT:
-        fs_mounted = ENDED;
-        break;
-    case CONFIG_LOAD:
-        config_loaded = ENDED;
-        break;
-    case CONFIG_SAVE:
-        config_saved = ENDED;
-        break;
-    default:
-        break;
-    }
-}
-
-void loop(void) {
-    // this is ugly because IDBFS is async...
-    if (fs_mounted == READY) {
-        fs_mounted = PENDING;
-        EM_ASM({
-            FS.mkdir('/gbmulator');
-            FS.mount(IDBFS, {}, '/gbmulator');
-
-            FS.syncfs(true, function (err) {
-                if (err)
-                    Module.print(err);
-                else
-                    Module.ccall('idbfs_sync', 'void', 'number', [$0])
-            });
-        }, MOUNT);
+    if (!emulator_init(rom_path, save_path, ppu_vblank_cb, apu_samples_ready_cb))
         return;
-    } else if (fs_mounted == ENDED && config_loaded == READY) {
-        config_load("/gbmulator/gbmulator.conf");
-        emulator_set_apu_sampling_freq_multiplier(config.speed);
-        emulator_set_apu_sound_level(config.sound);
-        emulator_set_color_palette(config.color_palette);
-        ui_pixels_buffer = ui_init(); // update ui config
-        config_loaded = PENDING;
-        EM_ASM({
-            FS.syncfs(false, function (err) {
-                if (err)
-                    Module.print(err);
-                else
-                    Module.ccall('idbfs_sync', 'void', 'number', [$0])
-            });
-        }, CONFIG_LOAD);
-        return;
-    } else if (config_loaded == ENDED && config_saved == READY) {
-        config_save("/gbmulator/gbmulator.conf");
-        config_saved = PENDING;
-        EM_ASM({
-            FS.syncfs(false, function (err) {
-                if (err)
-                    Module.print(err);
-                else
-                    Module.ccall('idbfs_sync', 'void', 'number', [$0])
-            });
-        }, CONFIG_SAVE);
-        return;
-    }
 
-    if (is_paused) {
-        handle_input();
+    emulator_set_apu_sampling_freq_multiplier(config.speed);
+    emulator_set_apu_sound_level(config.sound);
+    emulator_set_color_palette(config.color_palette);
 
-        // display menu
-        ui_draw_menu();
-
-        if (scale != config.scale) {
-            scale = config.scale;
-            SDL_SetWindowSize(window, GB_SCREEN_WIDTH * scale, GB_SCREEN_HEIGHT * scale);
-        }
-
-        // update ppu_texture to show color palette changes behind the menu
-        if (is_rom_loaded) {
-            SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(), ppu_texture_pitch);
-            SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
-        }
-
-        SDL_UpdateTexture(ui_texture, NULL, ui_pixels_buffer, ui_texture_pitch);
-        SDL_RenderCopy(renderer, ui_texture, NULL, NULL);
-
-        SDL_RenderPresent(renderer);
-        return;
-    }
-
-    SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
-    SDL_RenderPresent(renderer);
-    handle_input(); // keep this the closest possible before emulator_step() to reduce input inaccuracies
-
-    // run the emulator for the approximate number of cycles it takes for the ppu to render a frame
-    emulator_run_cycles(GB_CPU_CYCLES_PER_FRAME * config.speed);
+    char *rom_title = emulator_get_rom_title();
+    snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
+    SDL_SetWindowTitle(window, window_title);
+    is_rom_loaded = SDL_TRUE;
+    ui_enable_resume_button();
+    ui_back_to_main_menu();
+    is_paused = SDL_FALSE;
 }
-#endif
 
 int main(int argc, char **argv) {
-    #ifndef __EMSCRIPTEN__
     // must be called before emulator_init
     const char *config_path = get_config_path();
     config_load(config_path);
+    byte_t *ui_pixels = ui_init();
 
     if (argc == 2)
         gbmulator_load_cartridge(argv[1]);
     else
         emulator_set_color_palette(config.color_palette); // update ui color palette when no rom loaded
-    #endif
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
 
-    ui_pixels_buffer = ui_init();
-
-    scale = config.scale;
+    byte_t scale = config.scale;
 
     window = SDL_CreateWindow(
         EMULATOR_NAME,
@@ -359,13 +210,13 @@ int main(int argc, char **argv) {
         GB_SCREEN_HEIGHT * scale,
         SDL_WINDOW_HIDDEN /*| SDL_WINDOW_RESIZABLE*/
     );
-    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
 
     ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
     ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 3;
-    ui_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    ui_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
+    SDL_Texture *ui_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    int ui_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
     SDL_SetTextureBlendMode(ui_texture, SDL_BLENDMODE_BLEND);
 
     SDL_AudioSpec audio_settings = {
@@ -377,9 +228,6 @@ int main(int argc, char **argv) {
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
     SDL_PauseAudioDevice(audio_device, 0);
 
-    #ifdef __EMSCRIPTEN__
-    emscripten_set_main_loop(loop, 60, 1);
-    #else
     // main gbmulator loop
     int cycles = 0;
     while (is_running) {
@@ -399,9 +247,11 @@ int main(int argc, char **argv) {
             if (is_rom_loaded) {
                 SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(), ppu_texture_pitch);
                 SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
+            } else {
+                SDL_RenderClear(renderer); // prevents background blinking
             }
 
-            SDL_UpdateTexture(ui_texture, NULL, ui_pixels_buffer, ui_texture_pitch);
+            SDL_UpdateTexture(ui_texture, NULL, ui_pixels, ui_texture_pitch);
             SDL_RenderCopy(renderer, ui_texture, NULL, NULL);
 
             SDL_RenderPresent(renderer);
@@ -423,13 +273,10 @@ int main(int argc, char **argv) {
 
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).
     }
-    #endif
 
     emulator_quit();
 
-    #ifndef __EMSCRIPTEN__
     config_save(config_path);
-    #endif
 
     SDL_DestroyWindow(window);
     SDL_DestroyRenderer(renderer);

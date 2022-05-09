@@ -91,7 +91,6 @@
 </head>
 
 <body>
-    <hr />
     <figure style="overflow:visible;" id="spinner">
         <div class="spinner"></div>
         <center style="margin-top:0.5em"><strong>emscripten</strong></center>
@@ -103,19 +102,6 @@
     <div class="emscripten_border">
         <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()"></canvas>
     </div>
-    <hr />
-    <div class="emscripten">
-        <input type="checkbox" id="resize">Resize canvas
-        <input type="checkbox" id="pointerLock" checked>Lock/hide mouse pointer
-        &nbsp;&nbsp;&nbsp;
-        <input type="button" value="Fullscreen"
-            onclick="Module.requestFullscreen(document.getElementById('pointerLock').checked, 
-                                                                                    document.getElementById('resize').checked)">
-    </div>
-
-    <hr />
-    <textarea class="emscripten" id="output" rows="8"></textarea>
-    <hr>
     <script type='text/javascript'>
         var statusElement = document.getElementById('status');
         var progressElement = document.getElementById('progress');
@@ -125,8 +111,7 @@
             preRun: [],
             postRun: [],
             print: (function () {
-                var element = document.getElementById('output');
-                if (element) element.value = ''; // clear browser cache
+
                 return function (text) {
                     if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
                     // These replacements are necessary if you render to raw HTML
@@ -135,10 +120,6 @@
                     //text = text.replace(/>/g, "&gt;");
                     //text = text.replace('\n', '<br>', 'g');
                     console.log(text);
-                    if (element) {
-                        element.value += text + "\n";
-                        element.scrollTop = element.scrollHeight; // focus on bottom
-                    }
                 };
             })(),
             printErr: function (text) {
@@ -196,9 +177,12 @@
                 const data_ptr = Module._malloc(num_bytes);
                 const data_on_heap = new Uint8Array(Module.HEAPU8.buffer, data_ptr, num_bytes);
                 data_on_heap.set(uint8Arr);
-                const res = Module.ccall('load_cartridge_from_data', 'number', ['number', 'number'], [data_on_heap.byteOffset, uint8Arr.length]);
+                Module.ccall('receive_rom_data', 'void', ['number', 'number'], [data_on_heap.byteOffset, uint8Arr.length]);
             };
-            file_reader.readAsArrayBuffer(e.target.files[0]);
+            if (e.target.files[0].name.match("^.*\.(gb|gbc)$"))
+                file_reader.readAsArrayBuffer(e.target.files[0]);
+            else
+                Module.printErr("Invalid file extension");
         };
 
         Module.setStatus('Downloading...');
@@ -208,6 +192,10 @@
             Module.setStatus = function (text) {
                 if (text) Module.printErr('[post-exception status] ' + text);
             };
+        };
+
+        window.onbeforeunload = function (event) {
+            Module.ccall('on_before_unload');
         };
     </script>
     {{{ SCRIPT }}}

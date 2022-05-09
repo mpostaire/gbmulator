@@ -15,8 +15,8 @@ typedef struct {
 } rtc_t;
 
 typedef struct {
-    const char *rom_filepath;
-    const char *save_filepath;
+    char *rom_filepath;
+    char *save_filepath;
     char rom_title[17];
 
     byte_t cartridge[8000000];
@@ -119,11 +119,13 @@ typedef enum {
 
 extern mmu_t mmu;
 
-void mmu_init(const char *rom_path, const char *save_path);
+int mmu_init(char *rom_path, char *save_path);
 
-void mmu_init_from_data(const byte_t *rom_data, size_t size);
+int mmu_init_from_data(const byte_t *rom_data, size_t size, char *save_path);
 
-void mmu_save_eram(void);
+int mmu_save_eram(void);
+
+void mmu_free(void);
 
 /**
  * only used in instructions (opcode execution)

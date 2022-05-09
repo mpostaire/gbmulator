@@ -1,19 +1,27 @@
-SDIR:=src
-ODIR:=out
-IDIR:=$(SDIR)
-CFLAGS:=-std=gnu11 -Wall -O2 -I$(IDIR)
-LDLIBS:=-lSDL2
-CC:=gcc
-MAIN:=gbmulator
-EXEC:=$(MAIN)
+SDIR=src
+ODIR=out
+IDIR=$(SDIR)
+CFLAGS=-std=gnu11 -Wall -O2 -I$(IDIR)
+LDLIBS=-lSDL2
+CC=gcc
+MAIN=gbmulator
+EXEC=$(MAIN)
+
+# exclude $(MAIN).c if 'make wasm' or 'make debug_wasm' is called, else exclude $(SDIR)/$(MAIN)_wasm.c
+ifneq (,$(findstring wasm,$(MAKECMDGOALS)))
+EXCLUDES:=$(SDIR)/$(MAIN).c
+else ifneq (,$(findstring debug_wasm,$(MAKECMDGOALS)))
+EXCLUDES:=$(SDIR)/$(MAIN).c
+else
+EXCLUDES:=$(SDIR)/gbmulator_wasm.c $(SDIR)/base64.c
+endif
 
 # recursive wildcard that goes into all subdirectories
 rwildcard=$(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
+SRC=$(filter-out $(EXCLUDES),$(call rwildcard,$(SDIR),*.c))
+OBJ=$(SRC:$(SDIR)/%.c=$(ODIR)/%.o)
 
-SRC:=$(call rwildcard,$(SDIR),*.c)
-OBJ:=$(SRC:$(SDIR)/%.c=$(ODIR)/%.o)
-
-HEADERS:=$(call rwildcard,$(IDIR),*.h)
+HEADERS=$(call rwildcard,$(IDIR),*.h)
 HEADERS:=$(HEADERS:$(IDIR)/%=$(ODIR)/%)
 # ODIR and its subdirectories structure to mkdir if they don't exist
 ODIR_STRUCTURE:=$(sort $(foreach d,$(OBJ) $(HEADERS),$(subst /$(lastword $(subst /, ,$d)),,$d)))
@@ -24,16 +32,14 @@ debug: CFLAGS+=-g -Og -DDEBUG
 debug: all
 
 wasm: CC:=emcc
-wasm: CFLAGS+=-sWASM=1 -sUSE_SDL=2 -sEXPORTED_RUNTIME_METHODS=[ccall] --shell-file template.html
-wasm: LDLIBS+=-lidbfs.js
+wasm: LDLIBS:=
 wasm: $(ODIR_STRUCTURE) index.html
+
 debug_wasm: wasm
-debug_wasm: CFLAGS+=-sSINGLE_FILE
-run_wasm: debug_wasm
 	emrun index.html
 
-index.html: $(OBJ)
-	$(CC) -o $@ $^ $(CFLAGS) $(LDLIBS)
+index.html: $(OBJ) template.html
+	$(CC) -o $@ $(OBJ) $(CFLAGS) -O3 -sWASM=1 -sUSE_SDL=2 -sEXPORTED_RUNTIME_METHODS=[ccall] --shell-file template.html -lidbfs.js
 
 $(MAIN): $(OBJ)
 	$(CC) -o $(EXEC) $^ $(CFLAGS) $(LDLIBS)
@@ -65,4 +71,4 @@ uninstall:
 
 -include $(foreach d,$(ODIR_STRUCTURE),$d/*.d)
 
-.PHONY: all clean run install debug
+.PHONY: all clean run install debug wasm debug_wasm

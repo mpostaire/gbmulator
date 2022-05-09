@@ -20,6 +20,8 @@ struct config {
     SDL_Keycode select;
 } extern config;
 
+int config_verif_key(SDL_Keycode key);
+
 void config_load(const char* config_path);
 
 void config_save(const char* config_path);

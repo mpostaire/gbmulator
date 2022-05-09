@@ -81,6 +81,11 @@ int emulator_load_state(const char *path) {
         fclose(f);
         return 0;
     }
+    if (strncmp(header.rom_title, mmu.rom_title, sizeof(header.rom_title))) {
+        eprintf("rom title mismatch (expected: [%.16s]; got: [%.16s])\n", mmu.rom_title, header.rom_title);
+        fclose(f);
+        return 0;
+    }
 
     if (!fread(&mmu.mem, sizeof(mmu) - offsetof(mmu_t, mem), 1, f)) {
         eprintf("reading mmu from %s\n", path);
@@ -98,5 +103,61 @@ int emulator_load_state(const char *path) {
     }
 
     fclose(f);
+    return 1;
+}
+
+typedef struct __attribute__((packed)) {
+    save_header_t header;
+    cpu_t cpu;
+    byte_t mmu[sizeof(mmu) - offsetof(mmu_t, mem)];
+    timer_t timer;
+} savestate_data_t;
+
+byte_t *emulator_get_state_data(size_t *length) {
+    savestate_data_t *savestate = xmalloc(sizeof(savestate_data_t));
+
+    memcpy(&savestate->header.identifier, FORMAT_STRING, sizeof(savestate->header.identifier));
+
+    memcpy(&savestate->header.rom_title, mmu.rom_title, sizeof(savestate->header.rom_title));
+    for (int i = 0; i < 16; i++)
+        if (savestate->header.rom_title[i] == '\0')
+            savestate->header.rom_title[i] = ' ';
+
+    memcpy(&savestate->cpu, &cpu, sizeof(cpu));
+
+    memcpy(&savestate->mmu, &mmu.mem, sizeof(mmu) - offsetof(mmu_t, mem));
+
+    memcpy(&savestate->timer, &timer, sizeof(timer));
+
+    *length = sizeof(savestate_data_t);
+    return (byte_t *) savestate;
+}
+
+int emulator_load_state_data(const byte_t *data, size_t length) {
+    if (length != sizeof(savestate_data_t)) {
+        eprintf("invalid data length\n");
+        return 0;
+    }
+
+    savestate_data_t *savestate = (savestate_data_t *) data;
+
+    if (strncmp(savestate->header.identifier, FORMAT_STRING, sizeof(FORMAT_STRING))) {
+        eprintf("invalid format\n");
+        return 0;
+    }
+    if (strncmp(savestate->header.rom_title, mmu.rom_title, sizeof(savestate->header.rom_title))) {
+        eprintf("rom title mismatch (expected: [%.16s]; got: [%.16s])\n", mmu.rom_title, savestate->header.rom_title);
+        return 0;
+    }
+
+    memcpy(&cpu, &savestate->cpu, sizeof(cpu));
+
+    memcpy(&mmu.mem, &savestate->mmu, sizeof(mmu) - offsetof(mmu_t, mem));
+
+    // resets apu's internal state to prevent glitchy audio if resuming from state without sound playing from state with sound playing
+    apu_init(apu.global_sound_level, apu.sampling_freq_multiplier, apu.samples_ready_cb);
+
+    memcpy(&timer, &savestate->timer, sizeof(timer));
+
     return 1;
 }

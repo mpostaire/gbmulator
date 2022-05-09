@@ -11,7 +11,7 @@
 
 #define GB_CPU_FREQ 4194304
 // 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame (the Game Boy runs at approximatively 60 fps)
-#define GB_CPU_CYCLES_PER_FRAME GB_CPU_FREQ / 60
+#define GB_CPU_CYCLES_PER_FRAME (GB_CPU_FREQ / 60)
 
 // TODO make both these values configurable in emulator_init()?
 #define GB_APU_SAMPLE_RATE 44100
@@ -38,9 +38,9 @@ void emulator_run_cycles(int cycles_limit);
  * @param new_frame_cb the function called whenever the ppu has finished rendering a new frame
  * @param apu_samples_ready_cb the function called whenever the samples buffer of the apu is full
  */
-void emulator_init(const char *rom_path, const char *save_path, void (*new_frame_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
+int emulator_init(char *rom_path, char *save_path, void (*new_frame_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
 
-void emulator_init_from_data(const byte_t *rom_data, size_t size, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
+int emulator_init_from_data(const byte_t *rom_data, size_t size, char *save_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
 
 /**
  * Quits the emulator gracefully (save eram into a '.sav' file, ...).
@@ -55,7 +55,11 @@ void emulator_joypad_press(joypad_button_t key);
 
 void emulator_joypad_release(joypad_button_t key);
 
+byte_t *emulator_get_save_data(size_t *save_length);
+
 char *emulator_get_rom_title(void);
+
+char *emulator_get_rom_title_from_data(byte_t *rom_data, size_t size);
 
 /**
  * convert the pixels buffer from the color values of the old emulation palette to the new color values of the new palette
