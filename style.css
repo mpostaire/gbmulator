@@ -3,6 +3,7 @@ html, body {
     width: 100%;
     margin: 0;
     overflow: hidden;
+    font-family: Arial, sans-serif;
 }
 
 .emscripten {
@@ -78,12 +79,21 @@ canvas.emscripten {
 }
 
 #gb {
+    display: flex;
+    justify-content: center;
+    flex-direction: column;
+
     position: fixed;
     top: 50%;
     left: 50%;
     background-color: #d2d6cd;
-    padding: 2.5% 2.5% 0 2.5%;
+    padding: 2em 2em 0 2em;
     border-radius: 2%;
+
+    box-shadow: 0 0 2em gray;
+    -o-box-shadow: 0 0 2em gray;
+    -moz-box-shadow: 0 0 2em gray;
+    -webkit-box-shadow: 0 0 2em gray;
 
     -webkit-transform: translate(-50%, -50%);
     transform: translate(-50%, -50%);
@@ -104,7 +114,7 @@ canvas.emscripten {
     display: flex;
     flex-direction: column;
     height: 12em;
-    margin: 0 1em 0 1em;
+    margin: 1em 1em 0 1em;
 }
 
 .gb-button:hover {
@@ -172,25 +182,30 @@ canvas.emscripten {
 
 #gb-up {
     border-radius: 0.4em 0.4em 0 0;
-    top: 1em;
+    height: 2.1em;
+    top: 1.1em;
     left: 2em;
 }
 
 #gb-down {
     border-radius: 0 0 0.4em 0.4em;
-    top: 5em;
+    height: 2.1em;
+    top: 4.9em;
     left: 2em;
 }
 
 #gb-left {
     border-radius: 0.4em 0 0 0.4em;
+    width: 2.1em;
     top: 3em;
+    left: 0.1em;
 }
 
 #gb-right {
     border-radius: 0 0.4em 0.4em 0;
+    width: 2.1em;
     top: 3em;
-    left: 4em;
+    left: 3.9em;
 }
 
 #gb-center {
@@ -223,7 +238,6 @@ canvas.emscripten {
     width: 3.5em;
     height: 0.8em;
     border-radius: 0.4em;
-    font-variant: small-caps;
     background-color: #535353;
     filter: brightness(80%);
 }
@@ -240,12 +254,13 @@ canvas.emscripten {
     position: absolute;
     color: #797c77;
     text-align: center;
+    bottom: -2.1em;
 }
 
 #gb-start-label {
-    left: 1.9em;
+    left: 1.8em;
 }
 
 #gb-select-label {
-    right: 1.6em;
+    right: 1.5em;
 }

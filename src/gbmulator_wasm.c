@@ -230,7 +230,6 @@ static void paused_loop(void) {
     SDL_RenderCopy(renderer, ui_texture, NULL, NULL);
 
     SDL_RenderPresent(renderer);
-    return;
 }
 
 static void loop(void) {
@@ -245,8 +244,6 @@ static void loop(void) {
 
     // run the emulator for the approximate number of cycles it takes for the ppu to render a frame
     emulator_run_cycles(GB_CPU_CYCLES_PER_FRAME * config.speed);
-
-    return;
 }
 
 int main(int argc, char **argv) {

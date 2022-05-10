@@ -10,7 +10,7 @@
 struct config config = {
     #ifdef __EMSCRIPTEN__
     .color_palette = PPU_COLOR_PALETTE_ORIG,
-    .scale = 4,
+    .scale = 2,
     .sound = 0.25f,
     #else
     .color_palette = PPU_COLOR_PALETTE_GRAY,

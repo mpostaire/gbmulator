@@ -196,7 +196,7 @@ menu_t options_menu = {
     .length = 5,
     .entries = {
         #ifdef __EMSCRIPTEN__
-        { "Scale:      | 2x, 3x , 4x ", CHOICE, .choices = { choose_win_scale, 3, 1 } },
+        { "Scale:      | 2x, 3x , 4x ", CHOICE, .choices = { choose_win_scale, 3, 0 } },
         #else
         { "Scale:      | 1x , 2x , 3x , 4x , 5x ", CHOICE, .choices = { choose_win_scale, 5, 0 } },
         #endif
