@@ -229,11 +229,11 @@ canvas.emscripten {
 }
 
 #gb-start {
-    right: 1em;
+    left: 1em;
 }
 
 #gb-select {
-    left: 1em;
+    right: 1em;
 }
 
 .gb-button-label {
@@ -243,9 +243,9 @@ canvas.emscripten {
 }
 
 #gb-start-label {
-    right: 1.9em;
+    left: 1.9em;
 }
 
 #gb-select-label {
-    left: 1.6em;
+    right: 1.6em;
 }
