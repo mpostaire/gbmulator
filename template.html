@@ -4,104 +4,71 @@
 <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Emscripten-Generated Code</title>
-    <style>
-        .emscripten {
-            padding-right: 0;
-            margin-left: auto;
-            margin-right: auto;
-            display: block;
-        }
-
-        div.emscripten {
-            text-align: center;
-        }
-
-        div.canvas_container {
-            position: fixed;
-            top: 37%;
-            left: 50%;
-            -webkit-transform: translate(-50%, -50%);
-            transform: translate(-50%, -50%);
-        }
-        
-        /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
-        canvas.emscripten {
-            border: 0px none;
-            background-color: black;
-        }
-
-        .spinner {
-            height: 50px;
-            width: 50px;
-            margin: 0px auto;
-            -webkit-animation: rotation .8s linear infinite;
-            -moz-animation: rotation .8s linear infinite;
-            -o-animation: rotation .8s linear infinite;
-            animation: rotation 0.8s linear infinite;
-            border-left: 10px solid rgb(0, 150, 240);
-            border-right: 10px solid rgb(0, 150, 240);
-            border-bottom: 10px solid rgb(0, 150, 240);
-            border-top: 10px solid rgb(100, 0, 200);
-            border-radius: 100%;
-            background-color: rgb(200, 100, 250);
-        }
-
-        @-webkit-keyframes rotation {
-            from {
-                -webkit-transform: rotate(0deg);
-            }
-
-            to {
-                -webkit-transform: rotate(360deg);
-            }
-        }
-
-        @-moz-keyframes rotation {
-            from {
-                -moz-transform: rotate(0deg);
-            }
-
-            to {
-                -moz-transform: rotate(360deg);
-            }
-        }
-
-        @-o-keyframes rotation {
-            from {
-                -o-transform: rotate(0deg);
-            }
-
-            to {
-                -o-transform: rotate(360deg);
-            }
-        }
-
-        @keyframes rotation {
-            from {
-                transform: rotate(0deg);
-            }
-
-            to {
-                transform: rotate(360deg);
-            }
-        }
-    </style>
+    <title>GBmulator</title>
+    <link rel="stylesheet" href="style.css">
 </head>
-
+<!-- TODO pause button and menu showing the pause/etc (shift +) f1-2-... keys -->
 <body>
     <figure style="overflow:visible;" id="spinner">
         <div class="spinner"></div>
-        <center style="margin-top:0.5em"><strong>emscripten</strong></center>
     </figure>
     <div class="emscripten" id="status">Downloading...</div>
     <div class="emscripten">
         <progress value="0" max="100" id="progress" hidden=1></progress>
     </div>
-    <div class="canvas_container">
-        <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+    <div id="gb">
+        <div id="gb-screen-border">
+            <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+        </div>
+        <div id="gb-controls">
+            <div id="gb-main-buttons">
+                <div id="gb-direction-buttons">
+                    <a class="gb-button gb-direction-button" id="gb-up">
+                        <div class="gb-direction-button-circle"></div>
+                    </a>
+                    <div id="gb-center"></div>
+                    <a class="gb-button gb-direction-button" id="gb-down">
+                        <div class="gb-direction-button-circle"></div>
+                    </a>
+                    <a class="gb-button gb-direction-button" id="gb-left">
+                        <div class="gb-direction-button-circle"></div>
+                    </a>
+                    <a class="gb-button gb-direction-button" id="gb-right">
+                        <div class="gb-direction-button-circle"></div>
+                    </a>
+                </div>
+                <div id="gb-round-buttons">
+                    <a class="gb-button gb-round-button" id="gb-b">B</a>
+                    <a class="gb-button gb-round-button" id="gb-a">A</a>
+                </div>
+            </div>
+            <div id="gb-start-select-buttons">
+                <div id="gb-start-button-container">
+                    <a class="gb-button gb-rectangle-button" id="gb-start"></a>
+                    <p class="gb-button-label" id="gb-start-label">start</p>
+                </div>
+                <div id="gb-select-button-container">
+                    <a class="gb-button gb-rectangle-button" id="gb-select"></a>
+                    <p class="gb-button-label" id="gb-select-label">select</p>
+                </div>
+            </div>
+        </div>
     </div>
     <script type='text/javascript'>
+        const buttons = [ "gb-left", "gb-right", "gb-up", "gb-down", "gb-a", "gb-b", "gb-start", "gb-select" ];
+        buttons.forEach(function (item, index) {
+            let elem = document.getElementById(item);
+            elem.onmousedown = function() {
+                Module.ccall('on_gui_button_down', 'void', ['number'], [index]);
+            };
+            elem.onmouseup = function() {
+                Module.ccall('on_gui_button_up', 'void', ['number'], [index]);
+            };
+            elem.onmouseleave = function() {
+                Module.ccall('on_gui_button_up', 'void', ['number'], [index]);
+            };
+        });
+
         var statusElement = document.getElementById('status');
         var progressElement = document.getElementById('progress');
         var spinnerElement = document.getElementById('spinner');

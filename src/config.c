@@ -8,10 +8,16 @@
 #include "emulator/emulator.h"
 
 struct config config = {
+    #ifdef __EMSCRIPTEN__
+    .color_palette = PPU_COLOR_PALETTE_ORIG,
+    .scale = 4,
+    .sound = 0.25f,
+    #else
     .color_palette = PPU_COLOR_PALETTE_GRAY,
     .scale = 3,
-    .speed = 1.0f,
     .sound = 0.5f,
+    #endif
+    .speed = 1.0f,
     .link_host = "127.0.0.1",
     .link_port = 7777,
 

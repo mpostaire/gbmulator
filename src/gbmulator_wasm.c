@@ -8,6 +8,8 @@
 #include "emulator/emulator.h"
 #include "base64.h"
 
+// TODO link cable support
+
 SDL_bool is_paused = SDL_TRUE;
 SDL_bool is_rom_loaded = SDL_FALSE;
 
@@ -92,6 +94,17 @@ static void save_eram(void) {
 EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
     save_eram();
     config_save("config");
+}
+
+EMSCRIPTEN_KEEPALIVE void on_gui_button_down(joypad_button_t button) {
+    if (is_paused)
+        ui_press_joypad(button);
+    else
+        emulator_joypad_press(button);
+}
+
+EMSCRIPTEN_KEEPALIVE void on_gui_button_up(joypad_button_t button) {
+    emulator_joypad_release(button);
 }
 
 EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {

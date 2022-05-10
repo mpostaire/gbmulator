@@ -165,8 +165,8 @@ struct menu_entry {
         } user_input;
         struct {
             byte_t editing;
-            SDL_Keycode key;
             char *key_name;
+            SDL_Keycode *config_key;
             void (*on_input)(menu_entry_t *, SDL_Keycode);
         } setter;
     };
@@ -195,7 +195,11 @@ menu_t options_menu = {
     .title = "Options",
     .length = 5,
     .entries = {
+        #ifdef __EMSCRIPTEN__
+        { "Scale:      | 2x, 3x , 4x ", CHOICE, .choices = { choose_win_scale, 3, 1 } },
+        #else
         { "Scale:      | 1x , 2x , 3x , 4x , 5x ", CHOICE, .choices = { choose_win_scale, 5, 0 } },
+        #endif
         { "Speed:      |1.0x,1.5x,2.0x,2.5x,3.0x,3.5x,4.0x", CHOICE, .choices = { choose_speed, 7, 0 } },
         { "Sound:      | OFF, 25%, 50%, 75%,100%", CHOICE, .choices = { choose_sound, 5, 4 } },
         { "Color:      |gray,orig", CHOICE, .choices = { choose_color, 2, 0 } },
@@ -254,30 +258,29 @@ static SDL_Keycode get_config_val(joypad_button_t button) {
     }
 }
 
-static SDL_Keycode *sdl_key_to_config_pointer(SDL_Keycode key) {
-    if (key == config.left) return &config.left;
-    if (key == config.right) return &config.right;
-    if (key == config.up) return &config.up;
-    if (key == config.down) return &config.down;
-    if (key == config.a) return &config.a;
-    if (key == config.b) return &config.b;
-    if (key == config.start) return &config.start;
-    if (key == config.select) return &config.select;
-    return NULL;
+static SDL_Keycode *get_config_pointer(joypad_button_t button) {
+    switch (button) {
+        case JOYPAD_LEFT: return &config.left;
+        case JOYPAD_RIGHT: return &config.right;
+        case JOYPAD_UP: return &config.up;
+        case JOYPAD_DOWN: return &config.down;
+        case JOYPAD_A: return &config.a;
+        case JOYPAD_B: return &config.b;
+        case JOYPAD_START: return &config.start;
+        case JOYPAD_SELECT: return &config.select;
+        default: return NULL;
+    }
 }
 
 static void key_setter_set_key(menu_entry_t *entry, SDL_Keycode key) {
     for (int i = 0; i < keybindings_menu.length - 1; i++) {
         if (entry == &keybindings_menu.entries[i]) {
-            SDL_Keycode *config_pointer = sdl_key_to_config_pointer(entry->setter.key);
-            if (config_pointer)
-                *config_pointer = key;
+            *entry->setter.config_key = key;
             break;
         }
     }
 
-    entry->setter.key = key;
-    const char *key_name = SDL_GetKeyName(entry->setter.key);
+    const char *key_name = SDL_GetKeyName(*entry->setter.config_key);
     int l = strlen(key_name);
     if (entry->setter.key_name)
         free(entry->setter.key_name);
@@ -286,7 +289,11 @@ static void key_setter_set_key(menu_entry_t *entry, SDL_Keycode key) {
 }
 
 static void choose_win_scale(menu_entry_t *entry) {
+    #ifdef __EMSCRIPTEN__
+    config.scale = entry->choices.position + 2;
+    #else
     config.scale = entry->choices.position + 1;
+    #endif
 }
 
 static void choose_speed(menu_entry_t *entry) {
@@ -360,14 +367,14 @@ static void open_rom(void) {
 static void on_input_set_keybind(menu_entry_t *entry, SDL_Keycode key) {
     int same = -1;
     for (int i = 0; i < keybindings_menu.length - 1; i++) {
-        if (keybindings_menu.position != i && keybindings_menu.entries[i].setter.key == key) {
+        if (keybindings_menu.position != i && *keybindings_menu.entries[i].setter.config_key == key) {
             same = i;
             break;
         }
     }
 
     if (same >= 0)
-        key_setter_set_key(&keybindings_menu.entries[same], entry->setter.key);
+        key_setter_set_key(&keybindings_menu.entries[same], *entry->setter.config_key);
 
     key_setter_set_key(entry, key);
 }
@@ -403,7 +410,11 @@ byte_t *ui_init(void) {
         count++;
     } while(main_menu.entries[main_menu.position].disabled && count < main_menu.length);
 
+    #ifdef __EMSCRIPTEN__
+    options_menu.entries[0].choices.position = config.scale - 2;
+    #else
     options_menu.entries[0].choices.position = config.scale - 1;
+    #endif
     options_menu.entries[1].choices.position = config.speed / 0.5f - 2;
     options_menu.entries[2].choices.position = config.sound * 4;
     options_menu.entries[3].choices.position = config.color_palette;
@@ -423,8 +434,10 @@ byte_t *ui_init(void) {
     link_menu.entries[2].user_input.max_length = 5;
     link_menu.entries[2].user_input.visible_hi = 5;
 
-    for (int i = 0; i < keybindings_menu.length - 1; i++)
+    for (int i = 0; i < keybindings_menu.length - 1; i++){
+        keybindings_menu.entries[i].setter.config_key = get_config_pointer(i);
         key_setter_set_key(&keybindings_menu.entries[i], get_config_val(i));
+    }
 
     return ui_pixels;
 }
@@ -558,6 +571,84 @@ static void delete_char_at(char **text, byte_t n) {
         (*text)[i] = (*text)[i + 1];
     }
     (*text)[i] = '\0';
+}
+
+void ui_press_joypad(joypad_button_t key) {
+    int new_pos, new_cursor, len, count;
+    menu_entry_t *entry = &current_menu->entries[current_menu->position];
+
+    if (entry->type == KEY_SETTER && entry->setter.editing)
+        return;
+
+    switch (key) {
+    case JOYPAD_RIGHT:
+    case JOYPAD_LEFT:
+        switch (current_menu->entries[current_menu->position].type) {
+        case CHOICE:
+            new_pos = key == JOYPAD_RIGHT ? entry->choices.position + 1 : entry->choices.position - 1;
+            if (new_pos < 0)
+                new_pos = entry->choices.length - 1;
+            else if (new_pos > entry->choices.length - 1)
+                new_pos = 0;
+            entry->choices.position = new_pos;
+            (entry->choices.choose)(entry);
+            break;
+        case INPUT:
+            new_cursor = entry->user_input.cursor + (key == JOYPAD_RIGHT ? 1 : -1);
+            len = strlen(entry->user_input.input);
+            if (new_cursor > len)
+                new_cursor = len;
+            else if (new_cursor < 0)
+                new_cursor = 0;
+            entry->user_input.cursor = new_cursor;
+        }
+        break;
+    case JOYPAD_UP:
+        count = 0;
+        do {
+            current_menu->position = current_menu->position - 1 < 0 ? current_menu->length - 1 : current_menu->position - 1;
+            count++;
+        } while(current_menu->entries[current_menu->position].disabled && count < current_menu->length);
+        if (current_menu->entries[current_menu->position].type == INPUT)
+            current_menu->entries[current_menu->position].user_input.cursor = strlen(current_menu->entries[current_menu->position].user_input.input);
+        break;
+    case JOYPAD_DOWN:
+        count = 0;
+        do {
+            current_menu->position = (current_menu->position + 1) % current_menu->length;
+            count++;
+        } while(current_menu->entries[current_menu->position].disabled && count < current_menu->length);
+        if (current_menu->entries[current_menu->position].type == INPUT)
+            current_menu->entries[current_menu->position].user_input.cursor = strlen(current_menu->entries[current_menu->position].user_input.input);
+        break;
+    case JOYPAD_A:
+        if (entry->type == INPUT)
+            break;
+        switch (entry->type) {
+        case ACTION:
+            (entry->action)();
+            break;
+        case KEY_SETTER:
+            entry->setter.editing = 1;
+            break;
+        case SUBMENU:
+            // if I ever decide to add more than 1 level of depth of menus/submenus, make a stack of menus and push here
+            current_menu = entry->submenu;
+            current_menu->position = 0;
+            while(current_menu->entries[current_menu->position].disabled && current_menu->position < current_menu->length) {
+                current_menu->position++;
+            }
+            break;
+        }
+        break;
+    case JOYPAD_B:
+        // if I ever decide to add more than 1 level of depth of menus/submenus, make a stack of menus and pop here
+        if (entry->type != INPUT)
+            back_to_prev_menu();
+        break;
+    default:
+        break;
+    }
 }
 
 void ui_press(SDL_KeyboardEvent *keyevent) {

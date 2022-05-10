@@ -1,0 +1,251 @@
+html, body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    overflow: hidden;
+}
+
+.emscripten {
+    padding-right: 0;
+    margin-left: auto;
+    margin-right: auto;
+    display: block;
+}
+
+div.emscripten {
+    text-align: center;
+}
+
+/* the canvas *must not* have any border or padding, or mouse coords will be wrong */
+canvas.emscripten {
+    border: 0px none;
+}
+
+.spinner {
+    height: 50px;
+    width: 50px;
+    margin: 0px auto;
+    -webkit-animation: rotation .8s linear infinite;
+    -moz-animation: rotation .8s linear infinite;
+    -o-animation: rotation .8s linear infinite;
+    animation: rotation 0.8s linear infinite;
+    border-left: 10px solid #d2d6cd;
+    border-right: 10px solid #d2d6cd;
+    border-bottom: 10px solid #d2d6cd;
+    border-top: 10px solid #9bbc09;
+    border-radius: 100%;
+    background-color: #a4a6af;
+}
+
+@-webkit-keyframes rotation {
+    from {
+        -webkit-transform: rotate(0deg);
+    }
+
+    to {
+        -webkit-transform: rotate(360deg);
+    }
+}
+
+@-moz-keyframes rotation {
+    from {
+        -moz-transform: rotate(0deg);
+    }
+
+    to {
+        -moz-transform: rotate(360deg);
+    }
+}
+
+@-o-keyframes rotation {
+    from {
+        -o-transform: rotate(0deg);
+    }
+
+    to {
+        -o-transform: rotate(360deg);
+    }
+}
+
+@keyframes rotation {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+#gb {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    background-color: #d2d6cd;
+    padding: 2.5% 2.5% 0 2.5%;
+    border-radius: 2%;
+
+    -webkit-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
+
+    user-select: none;
+    -o-user-select: none;
+    -moz-user-select: none;
+    -webkit-user-select: none;
+}
+
+#gb-screen-border {
+    padding: 2em;
+    border-radius: 3%;
+    background-color: #a4a6af;
+}
+
+#gb-controls {
+    display: flex;
+    flex-direction: column;
+    height: 12em;
+    margin: 0 1em 0 1em;
+}
+
+.gb-button:hover {
+    filter: brightness(100%);
+    cursor: pointer;
+}
+.gb-button:active {
+    filter: brightness(60%);
+}
+
+#gb-main-buttons {
+    display: flex;
+    height: 75%;
+}
+
+#gb-round-buttons {
+    position: relative;
+    width: 50%;
+}
+
+.gb-round-button {
+    position: absolute;
+    color: #eecede;
+    background-color: #b90866;
+    filter: brightness(80%);
+    text-align: center;
+    line-height: 3em;
+    width: 3em;
+    height: 3em;
+    border-radius: 50%;
+}
+
+#gb-a {
+    top: 1.5em;
+    right: 0;
+}
+
+#gb-b {
+    top: 3.5em;
+    right: 4em;
+}
+
+#gb-direction-buttons {
+    position: relative;
+    width: 50%;
+}
+
+.gb-direction-button-circle {
+    position: absolute;
+    background-color: #3c4446;
+    width: 1em;
+    height: 1em;
+    border-radius: 1em;
+    top: 25%;
+    left: 25%;
+}
+
+.gb-direction-button {
+    position: absolute;
+    background-color: #2a2e30;
+    filter: brightness(80%);
+    width: 2em;
+    height: 2em;
+}
+
+#gb-up {
+    border-radius: 0.4em 0.4em 0 0;
+    top: 1em;
+    left: 2em;
+}
+
+#gb-down {
+    border-radius: 0 0 0.4em 0.4em;
+    top: 5em;
+    left: 2em;
+}
+
+#gb-left {
+    border-radius: 0.4em 0 0 0.4em;
+    top: 3em;
+}
+
+#gb-right {
+    border-radius: 0 0.4em 0.4em 0;
+    top: 3em;
+    left: 4em;
+}
+
+#gb-center {
+    position: absolute;
+    background-color: #2a2e30;
+    filter: brightness(80%);
+    width: 2em;
+    height: 2em;
+    top: 3em;
+    left: 2em;
+}
+
+#gb-start-select-buttons {
+    display: flex;
+    justify-content: center;
+}
+
+#gb-start-button-container {
+    position: relative;
+    width: 50%;
+}
+
+#gb-select-button-container {
+    position: relative;
+    width: 50%;
+}
+
+.gb-rectangle-button {
+    position: absolute;
+    width: 3.5em;
+    height: 0.8em;
+    border-radius: 0.4em;
+    font-variant: small-caps;
+    background-color: #535353;
+    filter: brightness(80%);
+}
+
+#gb-start {
+    right: 1em;
+}
+
+#gb-select {
+    left: 1em;
+}
+
+.gb-button-label {
+    position: absolute;
+    color: #797c77;
+    text-align: center;
+}
+
+#gb-start-label {
+    right: 1.9em;
+}
+
+#gb-select-label {
+    left: 1.6em;
+}
