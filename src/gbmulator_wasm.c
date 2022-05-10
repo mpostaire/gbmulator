@@ -201,31 +201,42 @@ static void handle_input(void) {
     }
 }
 
+static void loop(void);
+static void paused_loop(void) {
+    if (!is_paused) {
+        emscripten_cancel_main_loop();
+        emscripten_set_main_loop(loop, 60, 1);
+    }
+
+    handle_input();
+
+    // display menu
+    ui_draw_menu();
+
+    if (scale != config.scale) {
+        scale = config.scale;
+        SDL_SetWindowSize(window, GB_SCREEN_WIDTH * scale, GB_SCREEN_HEIGHT * scale);
+    }
+
+    // update ppu_texture to show color palette changes behind the menu
+    if (is_rom_loaded) {
+        SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(), ppu_texture_pitch);
+        SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
+    } else {
+        SDL_RenderClear(renderer); // prevents background blinking
+    }
+
+    SDL_UpdateTexture(ui_texture, NULL, ui_pixels_buffer, ui_texture_pitch);
+    SDL_RenderCopy(renderer, ui_texture, NULL, NULL);
+
+    SDL_RenderPresent(renderer);
+    return;
+}
+
 static void loop(void) {
     if (is_paused) {
-        handle_input();
-
-        // display menu
-        ui_draw_menu();
-
-        if (scale != config.scale) {
-            scale = config.scale;
-            SDL_SetWindowSize(window, GB_SCREEN_WIDTH * scale, GB_SCREEN_HEIGHT * scale);
-        }
-
-        // update ppu_texture to show color palette changes behind the menu
-        if (is_rom_loaded) {
-            SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(), ppu_texture_pitch);
-            SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
-        } else {
-            SDL_RenderClear(renderer); // prevents background blinking
-        }
-
-        SDL_UpdateTexture(ui_texture, NULL, ui_pixels_buffer, ui_texture_pitch);
-        SDL_RenderCopy(renderer, ui_texture, NULL, NULL);
-
-        SDL_RenderPresent(renderer);
-        return;
+        emscripten_cancel_main_loop();
+        emscripten_set_main_loop(paused_loop, 30, 1);
     }
 
     SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
@@ -273,7 +284,7 @@ int main(int argc, char **argv) {
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
     SDL_PauseAudioDevice(audio_device, 0);
 
-    emscripten_set_main_loop(loop, 60, 1);
+    emscripten_set_main_loop(paused_loop, 30, 1);
 
     return EXIT_SUCCESS;
 }
