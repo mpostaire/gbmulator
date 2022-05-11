@@ -43,13 +43,18 @@ int link_start_server(const int port) {
     if (serial_link.sfd != -1 || serial_link.is_server)
         return 0;
 
-    serial_link.sfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    serial_link.sfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP);
     if (serial_link.sfd == -1) {
         errnoprintf("socket");
         return 0;
     }
     int option = 1;
-    setsockopt(serial_link.sfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+    if (setsockopt(serial_link.sfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option))) {
+        errnoprintf("setsockopt");
+        close(serial_link.sfd);
+        serial_link.sfd = -1;
+        return 0;
+    };
 
     struct sockaddr_in addr = { 0 };
     addr.sin_addr.s_addr = htonl(INADDR_ANY); // use INADDR_LOOPBACK for local host only
@@ -81,7 +86,7 @@ int link_connect_to_server(const char* address, const int port) {
     if (serial_link.other_sfd != -1 || serial_link.is_server)
         return 0;
 
-    serial_link.other_sfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    serial_link.other_sfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP);
     if (serial_link.other_sfd == -1) {
         errnoprintf("socket");
         return 0;

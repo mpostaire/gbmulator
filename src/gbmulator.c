@@ -53,8 +53,9 @@ static void ppu_vblank_cb(byte_t *pixels) {
 }
 
 static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
-    while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size)
-        SDL_Delay(1);
+    // TODO find out if this is necessary
+    // while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size)
+    //     SDL_Delay(1);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
 
@@ -172,7 +173,7 @@ void gbmulator_load_cartridge(const char *path) {
     if (!emulator_init(rom_path, save_path, ppu_vblank_cb, apu_samples_ready_cb))
         return;
 
-    emulator_set_apu_sampling_freq_multiplier(config.speed);
+    emulator_set_apu_speed(config.speed);
     emulator_set_apu_sound_level(config.sound);
     emulator_set_color_palette(config.color_palette);
 
@@ -181,6 +182,7 @@ void gbmulator_load_cartridge(const char *path) {
     SDL_SetWindowTitle(window, window_title);
     is_rom_loaded = SDL_TRUE;
     ui_enable_resume_button();
+    ui_enable_link_button();
     ui_back_to_main_menu();
     is_paused = SDL_FALSE;
 }

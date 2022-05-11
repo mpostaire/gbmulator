@@ -114,7 +114,7 @@ int mmu_init(char *rom_path, char *save_path) {
 
     FILE *f = fopen(rom_path, "rb");
     if (!f) {
-        errnoprintf("opening file");
+        errnoprintf("opening file %s", rom_path);
         return 0;
     }
 

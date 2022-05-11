@@ -94,7 +94,7 @@ int emulator_load_state(const char *path) {
     }
 
     // resets apu's internal state to prevent glitchy audio if resuming from state without sound playing from state with sound playing
-    apu_init(apu.global_sound_level, apu.sampling_freq_multiplier, apu.samples_ready_cb);
+    apu_init(apu.global_sound_level, apu.speed, apu.samples_ready_cb);
 
     if (!fread(&timer, sizeof(timer), 1, f)) {
         eprintf("reading timer from %s\n", path);
@@ -155,7 +155,7 @@ int emulator_load_state_data(const byte_t *data, size_t length) {
     memcpy(&mmu.mem, &savestate->mmu, sizeof(mmu) - offsetof(mmu_t, mem));
 
     // resets apu's internal state to prevent glitchy audio if resuming from state without sound playing from state with sound playing
-    apu_init(apu.global_sound_level, apu.sampling_freq_multiplier, apu.samples_ready_cb);
+    apu_init(apu.global_sound_level, apu.speed, apu.samples_ready_cb);
 
     memcpy(&timer, &savestate->timer, sizeof(timer));
 

@@ -72,4 +72,4 @@ uninstall:
 
 -include $(foreach d,$(ODIR_STRUCTURE),$d/*.d)
 
-.PHONY: all clean run install debug wasm debug_wasm
+.PHONY: all clean run install uninstall debug wasm debug_wasm

@@ -228,7 +228,7 @@ void apu_step(int cycles) {
         channel_step(&apu.channel4);
 
         apu.take_sample_cycles_count++;
-        if (apu.take_sample_cycles_count >= (GB_CPU_FREQ / GB_APU_SAMPLE_RATE) * apu.sampling_freq_multiplier) { // 44100 Hz (if speed == 1.0f)
+        if (apu.take_sample_cycles_count >= (GB_CPU_FREQ / GB_APU_SAMPLE_RATE) * apu.speed) { // 44100 Hz (if speed == 1.0f)
             apu.take_sample_cycles_count = 0;
 
             float S01_volume = ((mmu.mem[NR50] & 0x07) + 1) / 8.0f; // keep it between 0.0f and 1.0f
@@ -257,10 +257,10 @@ void apu_step(int cycles) {
 }
 
 // TODO find a way to make sampling_freq_multiplier unnecessary
-void apu_init(float global_sound_level, float sampling_freq_multiplier, void (*samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
+void apu_init(float global_sound_level, float speed, void (*samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
     apu = (apu_t) {
         .global_sound_level = CLAMP(global_sound_level, 0.0f, 1.0f),
-        .sampling_freq_multiplier = sampling_freq_multiplier,
+        .speed = speed,
         .samples_ready_cb = samples_ready_cb,
         .channel1 = (channel_t) {
             .NRx0 = &mmu.mem[NR10],

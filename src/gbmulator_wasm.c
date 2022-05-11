@@ -129,7 +129,7 @@ EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {
         free(save);
     }
 
-    emulator_set_apu_sampling_freq_multiplier(config.speed);
+    emulator_set_apu_speed(config.speed);
     emulator_set_apu_sound_level(config.sound);
     emulator_set_color_palette(config.color_palette);
 

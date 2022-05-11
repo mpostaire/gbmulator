@@ -233,7 +233,7 @@ menu_t main_menu = {
     .entries = {
         { "Resume", ACTION, .disabled = 1, .action = gbmulator_unpause },
         { "Open ROM...", ACTION, .action = open_rom },
-        { "Link cable...", SUBMENU, .submenu = &link_menu },
+        { "Link cable...", SUBMENU, .disabled = 1, .submenu = &link_menu },
         { "Options...", SUBMENU, .submenu = &options_menu },
         { "Keybindings...", SUBMENU, .submenu = &keybindings_menu },
         #ifndef __EMSCRIPTEN__
@@ -298,7 +298,7 @@ static void choose_win_scale(menu_entry_t *entry) {
 
 static void choose_speed(menu_entry_t *entry) {
     config.speed = (entry->choices.position * 0.5f) + 1;
-    emulator_set_apu_sampling_freq_multiplier(config.speed);
+    emulator_set_apu_speed(config.speed);
 }
 
 static void choose_sound(menu_entry_t *entry) {
@@ -795,4 +795,8 @@ void ui_text_input(const char *text) {
 
 void ui_enable_resume_button(void) {
     main_menu.entries[0].disabled = 0;
+}
+
+void ui_enable_link_button(void) {
+    main_menu.entries[2].disabled = 0;
 }

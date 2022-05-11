@@ -134,8 +134,8 @@ byte_t *emulator_get_pixels(void) {
     return ppu.pixels;
 }
 
-void emulator_set_apu_sampling_freq_multiplier(float speed) {
-    apu.sampling_freq_multiplier = speed;
+void emulator_set_apu_speed(float speed) {
+    apu.speed = speed;
 }
 
 void emulator_set_apu_sound_level(float level) {

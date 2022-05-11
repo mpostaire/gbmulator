@@ -43,7 +43,7 @@ typedef struct {
     float global_sound_level;
 
     int take_sample_cycles_count;
-    float sampling_freq_multiplier;
+    float speed;
     void (*samples_ready_cb)(float *audio_buffer, int audio_buffer_size);
 
     int audio_buffer_index;
@@ -70,7 +70,7 @@ void apu_step(int cycles);
 /**
  * Initializes the internal state of the ppu.
  * @param global_sound_level the configurable sound output multiplier applied to all channels in stereo
- * @param sampling_freq_multiplier the configurable multiplier to increase the sampling frequency (should be the same as the emulation speed multiplier)
+ * @param speed the configurable multiplier to increase the sampling rate (should be the same as the emulation speed multiplier)
  * @param samples_ready_cb the function called whenever the samples buffer is full
  */
-void apu_init(float global_sound_level, float sampling_freq_multiplier, void (*samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
+void apu_init(float global_sound_level, float speed, void (*samples_ready_cb)(float *audio_buffer, int audio_buffer_size));

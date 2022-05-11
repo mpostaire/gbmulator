@@ -74,6 +74,6 @@ byte_t *emulator_get_color_values(color_t color);
 
 byte_t *emulator_get_pixels(void);
 
-void emulator_set_apu_sampling_freq_multiplier(float speed);
+void emulator_set_apu_speed(float speed);
 
 void emulator_set_apu_sound_level(float level);

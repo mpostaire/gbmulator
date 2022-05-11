@@ -17,3 +17,5 @@ void ui_press(SDL_KeyboardEvent *keyevent);
 void ui_text_input(const char *text);
 
 void ui_enable_resume_button(void);
+
+void ui_enable_link_button(void);
