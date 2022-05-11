@@ -140,9 +140,9 @@ static void handle_input(void) {
                     break;
                 savestate_path = get_savestate_path(rom_path, event.key.keysym.sym - SDLK_F1);
                 if (event.key.keysym.mod & KMOD_SHIFT)
-                    emulator_load_state(savestate_path);
-                else
                     emulator_save_state(savestate_path);
+                else
+                    emulator_load_state(savestate_path);
                 free(savestate_path);
                 break;
             }

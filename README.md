@@ -48,8 +48,8 @@ The following table show the default keybindings (they can be changed in GBmulat
 |START|NUMPAD 1|
 |SELECT|NUMPAD 2|
 |Options menu*|ESCAPE or PAUSE|
-|Create savesate 1->8*|F1->F8|
-|Load savesate 1->8*|SHIFT + F1->F8|
+|Load savesate 1->8*|F1->F8|
+|Create savesate 1->8*|SHIFT + F1->F8|
 
 ## TODO
 

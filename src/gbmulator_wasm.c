@@ -177,15 +177,15 @@ static void handle_input(void) {
                 snprintf(savestate_path, len + 9, "%s-state-%d", rom_title, event.key.keysym.sym - SDLK_F1);
                 if (event.key.keysym.mod & KMOD_SHIFT) {
                     size_t savestate_length;
-                    byte_t *savestate = local_storage_get_item(savestate_path, &savestate_length);
-                    emulator_load_state_data(savestate, savestate_length);
-                    free(savestate);
-                } else {
-                    size_t savestate_length;
                     byte_t *savestate = emulator_get_state_data(&savestate_length);
                     byte_t *encoded_savestate = base64_encode(savestate, savestate_length, NULL);
                     local_storage_set_item(savestate_path, encoded_savestate);
                     free(encoded_savestate);
+                    free(savestate);
+                } else {
+                    size_t savestate_length;
+                    byte_t *savestate = local_storage_get_item(savestate_path, &savestate_length);
+                    emulator_load_state_data(savestate, savestate_length);
                     free(savestate);
                 }
                 free(savestate_path);
