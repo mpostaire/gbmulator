@@ -503,7 +503,7 @@ void ui_draw_menu(void) {
     // clear ui pixels
     ui_clear();
 
-    byte_t title_x = 72 - ((strlen(current_menu->title) * 8) / 2);
+    byte_t title_x = (GB_SCREEN_WIDTH / 2) - ((strlen(current_menu->title) * 8) / 2);
     byte_t labels_start_y = 72 - ((current_menu->length * 8) / 2);
     if (labels_start_y < 48)
         labels_start_y = 48;
