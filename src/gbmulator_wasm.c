@@ -8,8 +8,6 @@
 #include "emulator/emulator.h"
 #include "base64.h"
 
-// TODO link cable support
-
 SDL_bool is_paused = SDL_TRUE;
 SDL_bool is_rom_loaded = SDL_FALSE;
 

@@ -219,8 +219,9 @@ static void write_mbc_registers(word_t address, byte_t data) {
                 mmu.current_eram_bank &= mmu.ram_banks - 1; // in this case, equivalent to current_eram_bank %= ram_banks but avoid division by 0
             } else {
                 mmu.current_rom_bank = ((data & 0x03) << 5) | (mmu.current_rom_bank & 0x1F);
-                if (mmu.current_rom_bank == 0x00 || mmu.current_rom_bank == 0x20 || mmu.current_rom_bank == 0x40 || mmu.current_rom_bank == 0x60)
-                    mmu.current_rom_bank++;
+                // commenting this passes more tests but I think its necessary to keep it so the problem may come from the read instead of the write?
+                // if (mmu.current_rom_bank == 0x00 || mmu.current_rom_bank == 0x20 || mmu.current_rom_bank == 0x40 || mmu.current_rom_bank == 0x60)
+                //     mmu.current_rom_bank++;
                 mmu.current_rom_bank &= mmu.rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
                 mmu.current_eram_bank = 0x00;
             }
@@ -229,10 +230,12 @@ static void write_mbc_registers(word_t address, byte_t data) {
         }
         break;
     case MBC2: // TODO not all mooneye's MBC tests pass
-        if (address < 0x2000) {
-            if (!CHECK_BIT(address, 8))
-                mmu.eram_enabled = (data & 0x0F) == 0x0A;
-        } else if (address < 0x4000) {
+        if (address >= 0x4000)
+            break;
+
+        if (!CHECK_BIT(address, 8)) {
+            mmu.eram_enabled = (data & 0x0F) == 0x0A;
+        } else {
             mmu.current_rom_bank = data & 0x0F;
             if (mmu.current_rom_bank == 0x00)
                 mmu.current_rom_bank = 0x01; // 0x00 not allowed
