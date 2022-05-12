@@ -20,6 +20,8 @@
 
 void *xmalloc(size_t size);
 
+void *xrealloc(void *ptr, size_t size);
+
 /**
  * @returns 1 if directory_path is a directory, 0 otherwise.
  */

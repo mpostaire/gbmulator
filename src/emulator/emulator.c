@@ -51,7 +51,6 @@ int emulator_init_from_data(const byte_t *rom_data, size_t size, char *save_path
 
 void emulator_quit(void) {
     mmu_save_eram();
-    mmu_free();
     link_close_connection();
 }
 

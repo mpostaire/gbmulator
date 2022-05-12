@@ -282,9 +282,7 @@ static void key_setter_set_key(menu_entry_t *entry, SDL_Keycode key) {
 
     const char *key_name = SDL_GetKeyName(*entry->setter.config_key);
     int l = strlen(key_name);
-    if (entry->setter.key_name)
-        free(entry->setter.key_name);
-    entry->setter.key_name = xmalloc(l + 1);
+    entry->setter.key_name = xrealloc(entry->setter.key_name, l + 1);
     snprintf(entry->setter.key_name, l + 1, "%s", key_name);
 }
 

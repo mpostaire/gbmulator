@@ -125,8 +125,6 @@ int mmu_init_from_data(const byte_t *rom_data, size_t size, char *save_path);
 
 int mmu_save_eram(void);
 
-void mmu_free(void);
-
 /**
  * only used in instructions (opcode execution)
  */

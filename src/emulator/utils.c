@@ -14,6 +14,15 @@ void *xmalloc(size_t size) {
     return ptr;
 }
 
+void *xrealloc(void *ptr, size_t size) {
+    char *new_ptr;
+    if (!(new_ptr = realloc(ptr, size))) {
+        errnoprintf("malloc");
+        exit(EXIT_FAILURE);
+    }
+    return new_ptr;
+}
+
 int dir_exists(const char *directory_path) {
     DIR *dir = opendir(directory_path);
 	if (dir == NULL) {

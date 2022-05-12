@@ -222,8 +222,6 @@ static void paused_loop(void) {
     if (is_rom_loaded) {
         SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(), ppu_texture_pitch);
         SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
-    } else {
-        SDL_RenderClear(renderer); // prevents background blinking
     }
 
     SDL_UpdateTexture(ui_texture, NULL, ui_pixels_buffer, ui_texture_pitch);
@@ -264,6 +262,7 @@ int main(int argc, char **argv) {
         SDL_WINDOW_HIDDEN /*| SDL_WINDOW_RESIZABLE*/
     );
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    SDL_RenderClear(renderer);
     SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
 
     ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);

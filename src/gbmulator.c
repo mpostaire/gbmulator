@@ -53,9 +53,8 @@ static void ppu_vblank_cb(byte_t *pixels) {
 }
 
 static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
-    // TODO find out if this is necessary
-    // while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size)
-    //     SDL_Delay(1);
+    while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size)
+        SDL_Delay(1);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
 
@@ -162,11 +161,8 @@ static void handle_input(void) {
 void gbmulator_load_cartridge(const char *path) {
     emulator_quit();
 
-    if (rom_path)
-        free(rom_path);
-
     size_t len = strlen(path);
-    rom_path = xmalloc(len + 2);
+    rom_path = xrealloc(rom_path, len + 2);
     snprintf(rom_path, len + 1, "%s", path);
 
     char *save_path = get_save_path(rom_path);
@@ -210,6 +206,7 @@ int main(int argc, char **argv) {
         SDL_WINDOW_HIDDEN /*| SDL_WINDOW_RESIZABLE*/
     );
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    SDL_RenderClear(renderer);
     SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
 
     ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
@@ -246,8 +243,6 @@ int main(int argc, char **argv) {
             if (is_rom_loaded) {
                 SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(), ppu_texture_pitch);
                 SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
-            } else {
-                SDL_RenderClear(renderer); // prevents background blinking
             }
 
             SDL_UpdateTexture(ui_texture, NULL, ui_pixels, ui_texture_pitch);

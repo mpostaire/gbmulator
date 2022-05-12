@@ -13,14 +13,7 @@
 
 mmu_t mmu;
 
-static int load_cartridge(const byte_t *data, size_t size) {
-    // clear memory
-    memset(&mmu.mem, 0, sizeof(mmu.mem));
-    // clear eram
-    memset(&mmu.eram, 0, sizeof(mmu.eram));
-
-    memcpy(mmu.cartridge, data, size);
-
+static int parse_cartridge(void) {
     if (mmu.cartridge[0x0143] == 0xC0) {
         eprintf("CGB only rom: this emulator does not support CGB games yet\n");
         return 0;
@@ -67,7 +60,7 @@ static int load_cartridge(const byte_t *data, size_t size) {
     }
 
     // get rom title
-    memcpy(&mmu.rom_title, (char *) &mmu.cartridge[0x134], 16);
+    memcpy(mmu.rom_title, (char *) &mmu.cartridge[0x134], 16);
     mmu.rom_title[16] = '\0';
     printf("Playing %s\n", mmu.rom_title);
     printf("Cartridge using MBC%d with %d ROM banks + %d RAM banks\n", mmu.mbc, mmu.rom_banks, mmu.ram_banks);
@@ -82,17 +75,18 @@ static int load_cartridge(const byte_t *data, size_t size) {
     }
 
     // load cartridge into rom banks (everything before VRAM (0x8000))
-    memcpy(&mmu.mem, &mmu.cartridge, VRAM);
+    memcpy(mmu.mem, mmu.cartridge, VRAM);
 
     // Load bios after cartridge to overwrite first 0x100 bytes.
-    memcpy(&mmu.mem, &dmg_boot, sizeof(dmg_boot));
+    memcpy(mmu.mem, dmg_boot, sizeof(dmg_boot));
 
     // load save into ERAM
     if (mmu.save_filepath) {
         FILE *f = fopen(mmu.save_filepath, "rb");
         // if there is a save file, load it into eram
         if (f) {
-            fread(mmu.eram, sizeof(mmu.eram), 1, f);
+            if (!fread(mmu.eram, sizeof(mmu.eram), 1, f))
+                errnoprintf("reading %s\n", mmu.save_filepath);
             fclose(f);
         }
     }
@@ -108,9 +102,18 @@ int mmu_init(char *rom_path, char *save_path) {
     }
 
     mmu = (mmu_t) {
-        .save_filepath = save_path,
         .current_rom_bank = 1
     };
+    size_t len = strlen(save_path);
+    mmu.save_filepath = xrealloc(mmu.save_filepath, len + 2);
+    snprintf(mmu.save_filepath, len + 1, "%s", save_path);
+
+    len = strlen(rom_path);
+    mmu.rom_filepath = xrealloc(mmu.rom_filepath, len + 2);
+    snprintf(mmu.rom_filepath, len + 1, "%s", rom_path);
+
+    memset(mmu.mem, 0, sizeof(mmu.mem));
+    memset(mmu.eram, 0, sizeof(mmu.eram));
 
     FILE *f = fopen(rom_path, "rb");
     if (!f) {
@@ -118,25 +121,34 @@ int mmu_init(char *rom_path, char *save_path) {
         return 0;
     }
 
-    byte_t *rom_data = xmalloc(sizeof(mmu.cartridge));
-    size_t size = fread(mmu.cartridge, sizeof(mmu.cartridge), 1, f);
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);
 
+    char *buf = xmalloc(sizeof(mmu.cartridge));
+    if (!fread(buf, fsize, 1, f)) {
+        errnoprintf("reading %s", rom_path);
+        fclose(f);
+        return 0;
+    }
     fclose(f);
 
-    byte_t ret = load_cartridge(rom_data, size);
-    if (!ret) return 0;
-    mmu.rom_filepath = rom_path;
-    free(rom_data);
-
-    return 1;
+    memcpy(mmu.cartridge, buf, fsize);
+    return parse_cartridge();
 }
 
 int mmu_init_from_data(const byte_t *rom_data, size_t size, char *save_path) {
     mmu = (mmu_t) {
-        .save_filepath = save_path,
         .current_rom_bank = 1
     };
-    return load_cartridge(rom_data, size);
+    size_t len = strlen(save_path);
+    mmu.save_filepath = xrealloc(mmu.save_filepath, len + 2);
+    snprintf(mmu.save_filepath, len + 1, "%s", save_path);
+    memset(mmu.mem, 0, sizeof(mmu.mem));
+    memset(mmu.eram, 0, sizeof(mmu.eram));
+
+    memcpy(mmu.cartridge, rom_data, size);
+    return parse_cartridge();
 }
 
 int mmu_save_eram(void) {
@@ -158,13 +170,6 @@ int mmu_save_eram(void) {
 
     fclose(f);
     return 1;
-}
-
-void mmu_free(void) {
-    if (mmu.rom_filepath)
-        free(mmu.rom_filepath);
-    if (mmu.save_filepath)
-        free(mmu.save_filepath);
 }
 
 static void rtc_update(void) {
@@ -408,7 +413,7 @@ void mmu_write(word_t address, byte_t data) {
         mmu.mem[address] = data;
     } else if (address == BANK && data == 1) {
         // disable boot rom
-        memcpy(&mmu.mem, &mmu.cartridge, 0x100);
+        memcpy(mmu.mem, mmu.cartridge, 0x100);
         mmu.mem[address] = data;
     } else if (address == P1) {
         // prevent writes to the lower nibble of the P1 register (joypad)
