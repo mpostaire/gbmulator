@@ -6,4 +6,4 @@
 .vscode
 !font
 !images
-index.*
+!docs
