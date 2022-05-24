@@ -27,6 +27,53 @@ byte_t ppu_color_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
     }
 };
 
+typedef struct {
+    byte_t y;
+    byte_t x;
+    byte_t tile_index;
+    byte_t attributes;
+    // the order of the struct members is important!
+} obj_t;
+
+struct oam_scan_t {
+    obj_t objs[10];
+    byte_t size;
+    byte_t index; // used in oam mode to iterate over the oam memory, in drawing mode to iterate over the scanned objs array
+    byte_t step;
+} oam_scan;
+
+typedef struct {
+    color_t color;
+    byte_t palette;
+    byte_t priority;
+} pixel_t;
+
+typedef struct {
+    pixel_t pixels[8];
+    byte_t size;
+    byte_t head;
+} pixel_fifo_t;
+
+typedef enum {
+    GET_TILE_ID,
+    GET_TILE_SLICE_LOW = 3,
+    GET_TILE_SLICE_HIGH = 5,
+    PUSH = 7
+} pixel_fetcher_step_t;
+
+typedef struct {
+    pixel_t pixels[8];
+    pixel_fetcher_step_t step;
+
+    word_t tilemap_address;
+    word_t tiledata_address;
+    byte_t current_tile_id;
+} pixel_fetcher_t;
+
+pixel_fifo_t bg_fifo;
+pixel_fifo_t obj_fifo;
+pixel_fetcher_t pixel_fetcher;
+
 ppu_t ppu;
 
 static void update_blank_screen_color(void) {
@@ -54,217 +101,178 @@ static color_t get_color(byte_t color_data, word_t palette_address) {
     return (mmu.mem[palette_address] & filter) >> (color_data * 2);
 }
 
-/**
- * Draws background and window pixels of line LY
- */
-static void draw_bg_win(void) {
-    byte_t y = mmu.mem[LY];
-    byte_t window_y = mmu.mem[WY];
-    byte_t window_x = mmu.mem[WX] - 7;
-    byte_t scroll_x = mmu.mem[SCX];
-    byte_t scroll_y = mmu.mem[SCY];
-
-    word_t bg_tilemap_address = CHECK_BIT(mmu.mem[LCDC], 3) ? 0x9C00 : 0x9800;
-    word_t win_tilemap_address = CHECK_BIT(mmu.mem[LCDC], 6) ? 0x9C00 : 0x9800;
-
-    for (int x = 0; x < GB_SCREEN_WIDTH; x++) {
-        // background and window disabled, draw white pixel
-        if (!CHECK_BIT(mmu.mem[LCDC], 0)) {
-            SET_PIXEL(ppu.pixels, x, y, get_color(WHITE, BGP));
-            continue;
-        }
-
-        // 1. FIND TILE DATA
-
-        // wich line on the background or window we are currently on
-        byte_t pos_y;
-        // wich row on the background or window we are currently on
-        byte_t pos_x;
-
-        // draw window if window enabled and current pixel inside window region
-        byte_t win;
-        if (CHECK_BIT(mmu.mem[LCDC], 5) && window_y <= y) {
-            win = 1;
-            pos_y = y - window_y;
-            pos_x = x - window_x;
-        } else {
-            win = 0;
-            pos_y = scroll_y + y;
-            pos_x = scroll_x + x;
-        }
-
-        // find tile_id x,y coordinates in the memory "2D array" holding the tile_ids.
-        // True y pos is SCY + LY. Then divide by 8 because tiles are 8x8 and multiply by 32 because this is a 32x32 "2D array" in a 1D array.
-        word_t tile_id_y = (pos_y / 8) * 32;
-        // True x pos is SCX + x. Then divide by 8 because tiles are 8x8.
-        byte_t tile_id_x = pos_x / 8;
-        word_t tile_id_address = (win ? win_tilemap_address : bg_tilemap_address) + tile_id_x + tile_id_y;
-
-        // get tiledata memory address
-        word_t tiledata_address;
-        s_word_t tile_id;
-        if (CHECK_BIT(mmu.mem[LCDC], 4)) {
-            tile_id = mmu.mem[tile_id_address];
-            tiledata_address = 0x8000 + tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
-        } else {
-            tile_id = (s_byte_t) mmu.mem[tile_id_address] + 128;
-            tiledata_address = 0x8800 + tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
-        }
-
-        // find the vertical line of the tile we are on (% 8 because tiles are 8 pixels tall, * 2 because each line takes 2 bytes of memory)
-        byte_t tiledata_line = (pos_y % 8) * 2;
-
-        // 2. DRAW PIXEL
-
-        // pixel color data takes 2 bytes in memory
-        byte_t pixel_data_1 = mmu.mem[tiledata_address + tiledata_line];
-        byte_t pixel_data_2 = mmu.mem[tiledata_address + tiledata_line + 1];
-
-        // bit 7 of 1st byte == low bit of pixel 0, bit 7 of 2nd byte == high bit of pixel 0
-        // bit 6 of 1st byte == low bit of pixel 1, bit 6 of 2nd byte == high bit of pixel 1
-        // etc.
-        byte_t relevant_bit = ((pos_x % 8) - 7) * -1;
-
-        // construct color data
-        byte_t color_data = (GET_BIT(pixel_data_2, relevant_bit) << 1) | GET_BIT(pixel_data_1, relevant_bit);
-        // cache color_data to be used for objects rendering
-        ppu.pixels_cache_color_data[x][y] = color_data;
-        // set pixel color using BG (for background and window) palette data
-        SET_PIXEL(ppu.pixels, x, y, get_color(color_data, BGP));
-    }
+static pixel_t *pixel_fifo_pop(pixel_fifo_t *fifo) {
+    if (fifo->size == 0)
+        return NULL;
+    fifo->size--;
+    return &fifo->pixels[fifo->head++];
 }
 
-/**
- * Draws sprites of line LY
- */
-static void draw_objects(void) {
-    // 1. FIND UP TO 10 OBJECTS TO RENDER
-
-    // objects disabled
-    if (!CHECK_BIT(mmu.mem[LCDC], 1))
+static void pixel_fifo_push(pixel_fifo_t *fifo, pixel_t *pixels, byte_t flip_x) {
+    if (fifo->size > 0)
         return;
 
-    byte_t y = mmu.mem[LY];
-    byte_t rendered_objects = 0; // Keeps track of the number of rendered objects. There is a limit of 10 per scanline.
-    word_t obj_to_render[10];
-
-    // are objects 8x8 or 8x16?
-    byte_t obj_height = 8;
-    if (CHECK_BIT(mmu.mem[LCDC], 2))
-        obj_height = 16;
-
-    // iterate over all possible object in OAM memory
-    for (byte_t obj_id = 0; obj_id < 40; obj_id++) {
-        // each object takes 4 bytes in the OAM
-        word_t obj_address = OAM + (obj_id * 4);
-
-        // obj y + 16 position is in byte 0
-        s_word_t pos_y = mmu.mem[obj_address] - 16;
-
-        // don't render this object if it doesn't intercept the current scanline
-        if (y < pos_y || y >= pos_y + obj_height)
-            continue;
-
-        obj_to_render[rendered_objects] = obj_address;
-        if (++rendered_objects >= 10)
-            break;
-    }
-
-    // return if no object on this line
-    if (!rendered_objects)
-        return;
-
-    // 2. RENDER THE OBJECTS
-
-    // store the x position of each pixel drawn by the highest priority object
-    byte_t obj_pixel_priority[GB_SCREEN_WIDTH];
-    // default at 255 because no object will have that much of x coordinate (and if so, will not be visible anyway)
-    memset(obj_pixel_priority, 255, sizeof(obj_pixel_priority));
-
-    // iterate over all objects to render
-    for (int obj = rendered_objects - 1; obj >= 0; obj--) {
-        word_t obj_address = obj_to_render[obj];
-        // obj y + 16 position is in byte 0
-        s_word_t pos_y = mmu.mem[obj_address] - 16;
-        // obj x + 8 position is in byte 1 (signed word important here!)
-        s_word_t pos_x = mmu.mem[obj_address + 1] - 8;
-        // obj position in the tile memory array
-        byte_t tile_index = mmu.mem[obj_address + 2];
-        if (obj_height > 8)
-            tile_index &= 0xFE;
-        // attributes flags
-        byte_t flags = mmu.mem[obj_address + 3];
-
-        // palette address
-        word_t palette = OBP0;
-        if (CHECK_BIT(flags, 4))
-            palette = OBP1;
-
-        // find line of the object we are currently on
-        byte_t obj_line = y - pos_y;
-        if (CHECK_BIT(flags, 6)) // flip y
-            obj_line = (obj_line - (obj_height - 1)) * -1;
-        obj_line *= 2; // each line takes 2 bytes in memory
-
-        // find object tile data in memory
-        word_t objdata_address = 0x8000 + tile_index * 16;
-
-        // 3. DRAW OBJECT
-
-        // pixel color data takes 2 bytes in memory
-        byte_t pixel_data_1 = mmu.mem[objdata_address + obj_line];
-        byte_t pixel_data_2 = mmu.mem[objdata_address + obj_line + 1];
-
-        // bit 7 of 1st byte == low bit of pixel 0, bit 7 of 2nd byte == high bit of pixel 0
-        // bit 6 of 1st byte == low bit of pixel 1, bit 6 of 2nd byte == high bit of pixel 1
-        // etc.
-        for (byte_t x = 0; x <= 7; x++) {
-            s_word_t pixel_x = pos_x + x;
-            // don't draw pixel if it's outside the screen
-            if (pixel_x < 0 || pixel_x > 159)
-                continue;
-
-            byte_t relevant_bit = x; // flip x
-            if (!CHECK_BIT(flags, 5)) // don't flip x
-                relevant_bit = (relevant_bit - 7) * -1;
-
-            // construct color data
-            byte_t color_data = (GET_BIT(pixel_data_2, relevant_bit) << 1) | GET_BIT(pixel_data_1, relevant_bit);
-            if (color_data == WHITE) // WHITE is the transparent color for objects, don't draw it (this needs to be done BEFORE palette conversion).
-                continue;
-
-            // if an object with lower x coordinate has already drawn this pixel, it has higher priority so we abort
-            if (obj_pixel_priority[pixel_x] < pos_x)
-                continue;
-
-            // store current object x coordinate in priority array
-            obj_pixel_priority[pixel_x] = pos_x;
-
-            // if object is below background, object can only be drawn current if backgournd/window color (before applying palette) is 0
-            if (CHECK_BIT(flags, 7) && ppu.pixels_cache_color_data[pixel_x][y])
-                continue;
-
-            // set pixel color using palette
-            SET_PIXEL(ppu.pixels, pixel_x, y, get_color(color_data, palette));
+    if (flip_x) {
+        while (fifo->size < 8) {
+            fifo->pixels[fifo->size] = pixels[7 - fifo->size];
+            fifo->size++;
         }
-    }
-}
-
-static int lyc(void) {
-    if (mmu.mem[LY] == mmu.mem[LYC]) { // LY == LYC compare // FIXME BEFORE FIXING EVERYTHING ELSE (this may be the source of a LOT of problems)
-        SET_BIT(mmu.mem[STAT], 2);
-        return CHECK_BIT(mmu.mem[STAT], 6);
     } else {
-        RESET_BIT(mmu.mem[STAT], 2);
-        return 0;
+        while (fifo->size < 8) {
+            fifo->pixels[fifo->size] = pixels[fifo->size];
+            fifo->size++;
+        }
+    }
+    fifo->head = 0;
+}
+
+byte_t lx = 0;
+byte_t dropped_pixels = 0;
+static inline void drawing_step(void) {
+    // pixel fetcher step
+    switch (pixel_fetcher.step) { // TODO make steps an enum
+    case GET_TILE_ID:
+        // TODO check if in bg or win mode (for now only bg mode is implemented)
+        // pixel_fetcher.tilemap_address = 0x9800 | (GET_BIT(mmu.mem[LCDC], 6) << 10) | ((mmu.mem[WY] / 8) << 5) | (lx / 8);
+        pixel_fetcher.tilemap_address = 0x9800 | (GET_BIT(mmu.mem[LCDC], 3) << 10) | (((mmu.mem[LY] + mmu.mem[SCY]) / 8) << 5) | ((lx + mmu.mem[SCX]) / 8);
+
+        // TODO if the ppu vram access is blocked, the tile id read is 0xFF
+        // TODO 9th bit computed as (LCDC & $10) && !(ID & $80)???
+        pixel_fetcher.current_tile_id = mmu.mem[pixel_fetcher.tilemap_address];
+        break;
+    case GET_TILE_SLICE_LOW:
+        // get tiledata memory address
+        if (CHECK_BIT(mmu.mem[LCDC], 4)) {
+            pixel_fetcher.tiledata_address = 0x8000 + pixel_fetcher.current_tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
+        } else {
+            s_word_t tile_id = (s_byte_t) pixel_fetcher.current_tile_id + 128;
+            pixel_fetcher.tiledata_address = 0x8800 + tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
+        }
+        // add the vertical line of the tile we are on (% 8 because tiles are 8 pixels tall, * 2 because each line takes 2 bytes of memory)
+        pixel_fetcher.tiledata_address += ((mmu.mem[SCY] + mmu.mem[LY]) % 8) * 2;
+
+        byte_t tile_slice_lo = mmu.mem[pixel_fetcher.tiledata_address];
+        for (byte_t i = 0; i < 8; i++)
+            pixel_fetcher.pixels[i].color = GET_BIT(tile_slice_lo, 7 - i);
+        break;
+    case GET_TILE_SLICE_HIGH:
+        byte_t tile_slice_hi = mmu.mem[pixel_fetcher.tiledata_address + 1];
+        for (byte_t i = 0; i < 8; i++)
+            pixel_fetcher.pixels[i].color |= GET_BIT(tile_slice_hi, 7 - i) << 1;
+        break;
+    case PUSH:
+        pixel_fifo_push(&bg_fifo, pixel_fetcher.pixels, 0);
+        break;
+    }
+    pixel_fetcher.step = (pixel_fetcher.step + 1) % 8;
+    lx++;
+
+    // OBJ fetcher is just check for both conditions, then replace bg_push by push_obj on the first obj that is in the lx + 8 range ?
+    // as oam objs are sorted, the first one that matches is either the head of the list or none
+
+    // bg fifo step
+    pixel_t *bg_pixel = pixel_fifo_pop(&bg_fifo);
+
+    // obj fifo step
+
+    // merge and draw pixel
+    if (bg_pixel) {
+        SET_PIXEL(ppu.pixels, lx - 8, mmu.mem[LY], get_color(bg_pixel->color, BGP));
+    }
+
+    // TODO >= or > ?
+    if (lx >= GB_SCREEN_WIDTH + 8) {
+        lx = 0;
+        dropped_pixels = 0;
+
+        pixel_fetcher = (pixel_fetcher_t) { 0 };
+        bg_fifo = (pixel_fifo_t) { 0 };
+        obj_fifo = (pixel_fifo_t) { 0 };
+
+        oam_scan.index = 0;
+
+        PPU_SET_MODE(PPU_MODE_HBLANK);
+        if (CHECK_BIT(mmu.mem[STAT], 3))
+            cpu_request_interrupt(IRQ_STAT);
     }
 }
 
-/**
- * This does not implement the pixel FIFO but draws each scanline instantly when starting PPU_HBLANK (mode 0).
- * TODO if STAT interrupts are a problem, implement these corner cases: http://gameboy.mongenel.com/dmg/istat98.txt
- */
-byte_t ignore = 0;
+static inline void oam_scan_step(void) {
+    // it takes 2 cycles to scan one OBJ so we skip every other step
+    if (!oam_scan.step) {
+        oam_scan.step = 1;
+        return;
+    }
+
+    obj_t *obj = (obj_t *) &mmu.mem[OAM + (oam_scan.index * 4)];
+    byte_t obj_height = CHECK_BIT(mmu.mem[LCDC], 2) ? 16 : 8;
+    // NOTE: obj->x != 0 condition should not be checked even if ultimate gameboy talk says it should
+    if (oam_scan.size < 10 && (mmu.mem[LY] + 16 >= obj->y) && (mmu.mem[LY] + 16 < obj->y + obj_height)) {
+        oam_scan.objs[oam_scan.size++] = (obj_t) {
+            .y = obj->y,
+            .x = obj->x,
+            .tile_index = obj->tile_index,
+            .attributes = obj->attributes
+        };
+    }
+
+    oam_scan.step = 0;
+    oam_scan.index++;
+
+    // if OAM scan has ended, switch to DRAWING mode
+    if (oam_scan.index == 40) {
+        oam_scan.step = 0;
+        oam_scan.index = 0;
+
+        PPU_SET_MODE(PPU_MODE_DRAWING);
+    }
+}
+
+byte_t hblank_duration = 0;
+word_t vblank_duration = 0;
+word_t vblank_line_duration = 0;
+// TODO hblank duration should be adaptive following what the time it took for DRAWING mode
+static inline void hblank_step(void) {
+    if (!hblank_duration) {
+        mmu.mem[LY]++;
+        if (mmu.mem[LY] == GB_SCREEN_HEIGHT) {
+            PPU_SET_MODE(PPU_MODE_VBLANK);
+            vblank_duration = 4560;
+            vblank_line_duration = 456;
+            if (CHECK_BIT(mmu.mem[STAT], 4))
+                cpu_request_interrupt(IRQ_STAT);
+
+            cpu_request_interrupt(IRQ_VBLANK);
+            if (ppu.new_frame_cb)
+                ppu.new_frame_cb(ppu.pixels);
+        } else {
+            PPU_SET_MODE(PPU_MODE_OAM);
+            if (CHECK_BIT(mmu.mem[STAT], 5))
+                cpu_request_interrupt(IRQ_STAT);
+        }
+    }
+    hblank_duration--;
+}
+
+static inline void vblank_step(void) {
+    if (!vblank_line_duration) {
+        mmu.mem[LY]++; // increase at each new line
+        vblank_line_duration = 456;
+    }
+
+    if (!vblank_duration) {
+        if (mmu.mem[LY] == 154) {
+            mmu.mem[LY] = 0;
+            PPU_SET_MODE(PPU_MODE_OAM);
+            if (CHECK_BIT(mmu.mem[STAT], 5))
+                cpu_request_interrupt(IRQ_STAT);
+        }
+    }
+
+    vblank_line_duration--;
+    vblank_duration--;
+}
+
 byte_t sent_blank_pixels = 0;
 void ppu_step(int cycles) {
     if (!CHECK_BIT(mmu.mem[LCDC], 7)) { // is LCD disabled?
@@ -277,74 +285,44 @@ void ppu_step(int cycles) {
             sent_blank_pixels = 1;
         }
         PPU_SET_MODE(PPU_MODE_HBLANK);
-        ppu.cycles = 0;
+        hblank_duration = 87; // set hblank duration to its minimum possible value
         mmu.mem[LY] = 0;
         return;
     }
     sent_blank_pixels = 0;
 
-    ppu.cycles += cycles;
-    byte_t request_stat_irq = 0;
-    RESET_BIT(mmu.mem[STAT], 2);
+    RESET_BIT(mmu.mem[STAT], 2); // reset LYC=LY flag
 
-    switch (mmu.mem[STAT] & 0x03) { // switch current mode
-    case PPU_MODE_OAM:
-        if (ppu.cycles >= 80) {
-            ppu.cycles -= 80;
-            PPU_SET_MODE(PPU_MODE_DRAWING);
+    while (cycles--) {
+        switch (mmu.mem[STAT] & 0x03) {
+        case PPU_MODE_OAM:
+            // Scanning OAM for (X, Y) coordinates of sprites that overlap this line
+            // there is up to 40 OBJs in OAM memory and this mode takes 80 cycles: 2 cycles per OBJ to check if it should be displayed
+            // put them into an array of max size 10.
+            oam_scan_step();
+            break;
+        case PPU_MODE_DRAWING:
+            // Reading OAM and VRAM to generate the picture
+            drawing_step();
+            break;
+        case PPU_MODE_HBLANK:
+            // Horizontal blanking
+            hblank_step();
+            break;
+        case PPU_MODE_VBLANK:
+            // Vertical blanking
+            vblank_step();
+            break;
         }
-        break;
-    case PPU_MODE_DRAWING:
-        if (ppu.cycles >= 172) {
-            ppu.cycles -= 172;
-            PPU_SET_MODE(PPU_MODE_HBLANK);
-            request_stat_irq = CHECK_BIT(mmu.mem[STAT], 3);
-
-            draw_bg_win();
-            draw_objects();
-        }
-        break;
-    case PPU_MODE_HBLANK:
-        if (ppu.cycles >= 204) {
-            ppu.cycles -= 204;
-            mmu.mem[LY] += 1;
-            ignore = 0;
-
-            if (mmu.mem[LY] == GB_SCREEN_HEIGHT) {
-                PPU_SET_MODE(PPU_MODE_VBLANK);
-                request_stat_irq = CHECK_BIT(mmu.mem[STAT], 4);
-
-                cpu_request_interrupt(IRQ_VBLANK);
-                if (ppu.new_frame_cb)
-                    ppu.new_frame_cb(ppu.pixels);
-            } else {
-                PPU_SET_MODE(PPU_MODE_OAM);
-                request_stat_irq = CHECK_BIT(mmu.mem[STAT], 5);
-            }
-        }
-        break;
-    case PPU_MODE_VBLANK:
-        if (ppu.cycles >= 456) {
-            ppu.cycles -= 456;
-            mmu.mem[LY] += 1;
-            ignore = 0;
-
-            if (mmu.mem[LY] == 154) {
-                mmu.mem[LY] = 0;
-                PPU_SET_MODE(PPU_MODE_OAM);
-                request_stat_irq = CHECK_BIT(mmu.mem[STAT], 5);
-            }
-        }
-        break;
     }
 
-    if (!ignore && lyc()) {
-        ignore = 1;
-        request_stat_irq = 1;
+    if (mmu.mem[LY] == mmu.mem[LYC]) { // LY == LYC compare // FIXME BEFORE FIXING EVERYTHING ELSE (this may be the source of a LOT of problems)
+        SET_BIT(mmu.mem[STAT], 2);
+        if (CHECK_BIT(mmu.mem[STAT], 6))
+            cpu_request_interrupt(IRQ_STAT);
+    } else {
+        RESET_BIT(mmu.mem[STAT], 2);
     }
-
-    if (request_stat_irq)
-        cpu_request_interrupt(IRQ_STAT);
 }
 
 void ppu_init(void (*new_frame_cb)(byte_t *pixels)) {
