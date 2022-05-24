@@ -29,6 +29,8 @@ byte_t ppu_color_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
 
 ppu_t ppu;
 
+extern inline void ppu_ly_lyc_compare(void);
+
 static void update_blank_screen_color(void) {
     for (int i = 0; i < GB_SCREEN_WIDTH; i++) {
         for (int j = 0; j < GB_SCREEN_HEIGHT; j++) {
@@ -250,21 +252,11 @@ static void draw_objects(void) {
     }
 }
 
-static int lyc(void) {
-    if (mmu.mem[LY] == mmu.mem[LYC]) { // LY == LYC compare // FIXME BEFORE FIXING EVERYTHING ELSE (this may be the source of a LOT of problems)
-        SET_BIT(mmu.mem[STAT], 2);
-        return CHECK_BIT(mmu.mem[STAT], 6);
-    } else {
-        RESET_BIT(mmu.mem[STAT], 2);
-        return 0;
-    }
-}
-
 /**
  * This does not implement the pixel FIFO but draws each scanline instantly when starting PPU_HBLANK (mode 0).
  * TODO if STAT interrupts are a problem, implement these corner cases: http://gameboy.mongenel.com/dmg/istat98.txt
  */
-byte_t ignore = 0;
+byte_t ignore_lyc = 0;
 byte_t sent_blank_pixels = 0;
 void ppu_step(int cycles) {
     if (!CHECK_BIT(mmu.mem[LCDC], 7)) { // is LCD disabled?
@@ -284,7 +276,6 @@ void ppu_step(int cycles) {
     sent_blank_pixels = 0;
 
     ppu.cycles += cycles;
-    byte_t request_stat_irq = 0;
     RESET_BIT(mmu.mem[STAT], 2);
 
     switch (mmu.mem[STAT] & 0x03) { // switch current mode
@@ -298,7 +289,8 @@ void ppu_step(int cycles) {
         if (ppu.cycles >= 172) {
             ppu.cycles -= 172;
             PPU_SET_MODE(PPU_MODE_HBLANK);
-            request_stat_irq = CHECK_BIT(mmu.mem[STAT], 3);
+            if (CHECK_BIT(mmu.mem[STAT], 3))
+                cpu_request_interrupt(IRQ_STAT);
 
             draw_bg_win();
             draw_objects();
@@ -308,18 +300,20 @@ void ppu_step(int cycles) {
         if (ppu.cycles >= 204) {
             ppu.cycles -= 204;
             mmu.mem[LY] += 1;
-            ignore = 0;
+            ignore_lyc = 0;
 
             if (mmu.mem[LY] == GB_SCREEN_HEIGHT) {
                 PPU_SET_MODE(PPU_MODE_VBLANK);
-                request_stat_irq = CHECK_BIT(mmu.mem[STAT], 4);
+                if (CHECK_BIT(mmu.mem[STAT], 4))
+                    cpu_request_interrupt(IRQ_STAT);
 
                 cpu_request_interrupt(IRQ_VBLANK);
                 if (ppu.new_frame_cb)
                     ppu.new_frame_cb(ppu.pixels);
             } else {
                 PPU_SET_MODE(PPU_MODE_OAM);
-                request_stat_irq = CHECK_BIT(mmu.mem[STAT], 5);
+                if (CHECK_BIT(mmu.mem[STAT], 5))
+                    cpu_request_interrupt(IRQ_STAT);
             }
         }
         break;
@@ -327,24 +321,22 @@ void ppu_step(int cycles) {
         if (ppu.cycles >= 456) {
             ppu.cycles -= 456;
             mmu.mem[LY] += 1;
-            ignore = 0;
+            ignore_lyc = 0;
 
             if (mmu.mem[LY] == 154) {
                 mmu.mem[LY] = 0;
                 PPU_SET_MODE(PPU_MODE_OAM);
-                request_stat_irq = CHECK_BIT(mmu.mem[STAT], 5);
+                if (CHECK_BIT(mmu.mem[STAT], 5))
+                    cpu_request_interrupt(IRQ_STAT);
             }
         }
         break;
     }
 
-    if (!ignore && lyc()) {
-        ignore = 1;
-        request_stat_irq = 1;
+    if (!ignore_lyc) {
+        ppu_ly_lyc_compare();
+        ignore_lyc = 1;
     }
-
-    if (request_stat_irq)
-        cpu_request_interrupt(IRQ_STAT);
 }
 
 void ppu_init(void (*new_frame_cb)(byte_t *pixels)) {
