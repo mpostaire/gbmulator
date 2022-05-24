@@ -411,6 +411,7 @@ void mmu_write(word_t address, byte_t data) {
         // read only
     } else if (address == LYC) {
         // a write to LYC triggers an immediate LY=LYC comparison
+        mmu.mem[address] = data;
         ppu_ly_lyc_compare();
     } else if (address == DMA) {
         // OAM DMA transfer

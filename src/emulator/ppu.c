@@ -130,6 +130,7 @@ byte_t lx = 0;
 byte_t dropped_pixels = 0;
 static inline void drawing_step(void) {
     // pixel fetcher step
+    byte_t tile_slice;
     byte_t is_window = CHECK_BIT(mmu.mem[LCDC], 5) && mmu.mem[LY] >= mmu.mem[WY] && lx == mmu.mem[WX] - 7;
     // if (is_window)
     //     pixel_fetcher.step = GET_TILE_ID;
@@ -157,24 +158,24 @@ static inline void drawing_step(void) {
         // add the vertical line of the tile we are on (% 8 because tiles are 8 pixels tall, * 2 because each line takes 2 bytes of memory)
         pixel_fetcher.tiledata_address += ((mmu.mem[SCY] + mmu.mem[LY]) % 8) * 2;
 
-        byte_t tile_slice_lo = 0;
-        // if (CHECK_BIT(mmu.mem[LCDC], 0)) // TODO uncomment when ly=lyc interrupt is fixed
-            tile_slice_lo = mmu.mem[pixel_fetcher.tiledata_address];
-        if (is_window) {
-            tile_slice_lo = 1;
-        }
+        // if bg/win is enabled, get color data, else get 0
+        if (CHECK_BIT(mmu.mem[LCDC], 0))
+            tile_slice = mmu.mem[pixel_fetcher.tiledata_address];
+        else
+            tile_slice = 0;
+
         for (byte_t i = 0; i < 8; i++)
-            pixel_fetcher.pixels[i].color = GET_BIT(tile_slice_lo, 7 - i);
+            pixel_fetcher.pixels[i].color = GET_BIT(tile_slice, 7 - i);
         break;
     case GET_TILE_SLICE_HIGH:
-        byte_t tile_slice_hi = 0;
-        // if (CHECK_BIT(mmu.mem[LCDC], 0)) // TODO uncomment when ly=lyc interrupt is fixed
-            tile_slice_hi = mmu.mem[pixel_fetcher.tiledata_address + 1];
-        if (is_window) {
-            tile_slice_lo = 1;
-        }
+        // if bg/win is enabled, get color data, else get 0
+        if (CHECK_BIT(mmu.mem[LCDC], 0))
+            tile_slice = mmu.mem[pixel_fetcher.tiledata_address + 1];
+        else
+            tile_slice = 0;
+
         for (byte_t i = 0; i < 8; i++)
-            pixel_fetcher.pixels[i].color |= GET_BIT(tile_slice_hi, 7 - i) << 1;
+            pixel_fetcher.pixels[i].color |= GET_BIT(tile_slice, 7 - i) << 1;
         break;
     case PUSH:
         pixel_fifo_push(&bg_fifo, pixel_fetcher.pixels, 0);
@@ -285,7 +286,7 @@ static inline void vblank_step(void) {
     if (!vblank_duration) {
         // mmu.mem[LY] == 154 here
         mmu.mem[LY] = 0;
-        // ppu_ly_lyc_compare(); // TODO
+        ppu_ly_lyc_compare();
 
         PPU_SET_MODE(PPU_MODE_OAM);
         if (CHECK_BIT(mmu.mem[STAT], 5))
@@ -312,6 +313,8 @@ void ppu_step(int cycles) {
         mmu.mem[LY] = 0;
         return;
     }
+
+    // if lcd was just enabled, check for LYC=LY
     if (sent_blank_pixels)
         ppu_ly_lyc_compare();
     sent_blank_pixels = 0;
