@@ -11,11 +11,11 @@
 // TODO fix this file (it's ugly code with lots of copy pasted repetitions).
 
 #define SET_PIXEL_RGBA(buf, x, y, color, alpha) \
-    byte_t *_tmp_color_values = emulator_get_color_values((color)); \
+    { byte_t *_tmp_color_values = emulator_get_color_values((color)); \
     *(buf + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)) = _tmp_color_values[0]; \
     *(buf + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1) = _tmp_color_values[1]; \
     *(buf + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2) = _tmp_color_values[2]; \
-    *(buf + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 3) = (alpha);
+    *(buf + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 3) = (alpha); }
 
 const byte_t font[0x5F][0x8] = {
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
@@ -441,9 +441,8 @@ byte_t *ui_init(void) {
 }
 
 static void print_cursor(int x, int y, color_t color) {
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 8; i++)
         SET_PIXEL_RGBA(ui_pixels, x, y + i, color, 0xFF);
-    }
 }
 
 static void print_char(const char c, int x, int y, color_t color) {
@@ -451,13 +450,10 @@ static void print_char(const char c, int x, int y, color_t color) {
     if (index < 0 || index >= 0x5F) return;
     
     const byte_t *char_data = font[index];
-    for (int i = 0; i < 8; i++) {
-        for (int j = 0; j < 8; j++) {
-            if (GET_BIT(char_data[j], SDL_abs(i - 7))) {
+    for (int i = 0; i < 8; i++)
+        for (int j = 0; j < 8; j++)
+            if (GET_BIT(char_data[j], SDL_abs(i - 7)))
                 SET_PIXEL_RGBA(ui_pixels, x + i, y + j, color, 0xFF);
-            }
-        }
-    }
 }
 
 static void print_text(const char *text, int x, int y, color_t color) {
@@ -469,11 +465,9 @@ static void print_text(const char *text, int x, int y, color_t color) {
 }
 
 static void ui_clear(void) {
-    for (int i = 0; i < GB_SCREEN_WIDTH; i++) {
-        for (int j = 0; j < GB_SCREEN_HEIGHT; j++) {
+    for (int i = 0; i < GB_SCREEN_WIDTH; i++)
+        for (int j = 0; j < GB_SCREEN_HEIGHT; j++)
             SET_PIXEL_RGBA(ui_pixels, i, j, BLACK, 0xD5);
-        }
-    }
 }
 
 static void print_choice(const char *choices, int x, int y, int n, color_t text_color, color_t arrow_color) {

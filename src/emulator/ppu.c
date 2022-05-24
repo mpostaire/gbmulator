@@ -8,9 +8,11 @@
 
 #define PPU_SET_MODE(m) mmu.mem[STAT] = (mmu.mem[STAT] & 0xFC) | (m)
 
-#define SET_PIXEL(buf, x, y, color) *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = ppu_color_palettes[ppu.current_color_palette][(color)][0]; \
+#define SET_PIXEL(buf, x, y, color) { *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = ppu_color_palettes[ppu.current_color_palette][(color)][0]; \
                             *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 1) = ppu_color_palettes[ppu.current_color_palette][(color)][1]; \
-                            *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 2) = ppu_color_palettes[ppu.current_color_palette][(color)][2];
+                            *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 2) = ppu_color_palettes[ppu.current_color_palette][(color)][2]; }
+
+void extern inline ppu_ly_lyc_compare(void);
 
 byte_t ppu_color_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
     { // grayscale colors
@@ -77,11 +79,9 @@ pixel_fetcher_t pixel_fetcher;
 ppu_t ppu;
 
 static void update_blank_screen_color(void) {
-    for (int i = 0; i < GB_SCREEN_WIDTH; i++) {
-        for (int j = 0; j < GB_SCREEN_HEIGHT; j++) {
+    for (int i = 0; i < GB_SCREEN_WIDTH; i++)
+        for (int j = 0; j < GB_SCREEN_HEIGHT; j++)
             SET_PIXEL(ppu.blank_pixels, i, j, WHITE);
-        }
-    }
 }
 
 /**
@@ -130,11 +130,17 @@ byte_t lx = 0;
 byte_t dropped_pixels = 0;
 static inline void drawing_step(void) {
     // pixel fetcher step
+    byte_t is_window = CHECK_BIT(mmu.mem[LCDC], 5) && mmu.mem[LY] >= mmu.mem[WY] && lx == mmu.mem[WX] - 7;
+    // if (is_window)
+    //     pixel_fetcher.step = GET_TILE_ID;
+
     switch (pixel_fetcher.step) { // TODO make steps an enum
     case GET_TILE_ID:
         // TODO check if in bg or win mode (for now only bg mode is implemented)
-        // pixel_fetcher.tilemap_address = 0x9800 | (GET_BIT(mmu.mem[LCDC], 6) << 10) | ((mmu.mem[WY] / 8) << 5) | (lx / 8);
-        pixel_fetcher.tilemap_address = 0x9800 | (GET_BIT(mmu.mem[LCDC], 3) << 10) | (((mmu.mem[LY] + mmu.mem[SCY]) / 8) << 5) | ((lx + mmu.mem[SCX]) / 8);
+        if (is_window)
+            pixel_fetcher.tilemap_address = 0x9800 | (GET_BIT(mmu.mem[LCDC], 6) << 10) | ((mmu.mem[WY] / 8) << 5) | (lx / 8);
+        else
+            pixel_fetcher.tilemap_address = 0x9800 | (GET_BIT(mmu.mem[LCDC], 3) << 10) | (((mmu.mem[LY] + mmu.mem[SCY]) / 8) << 5) | ((lx + mmu.mem[SCX]) / 8);
 
         // TODO if the ppu vram access is blocked, the tile id read is 0xFF
         // TODO 9th bit computed as (LCDC & $10) && !(ID & $80)???
@@ -151,12 +157,22 @@ static inline void drawing_step(void) {
         // add the vertical line of the tile we are on (% 8 because tiles are 8 pixels tall, * 2 because each line takes 2 bytes of memory)
         pixel_fetcher.tiledata_address += ((mmu.mem[SCY] + mmu.mem[LY]) % 8) * 2;
 
-        byte_t tile_slice_lo = mmu.mem[pixel_fetcher.tiledata_address];
+        byte_t tile_slice_lo = 0;
+        // if (CHECK_BIT(mmu.mem[LCDC], 0)) // TODO uncomment when ly=lyc interrupt is fixed
+            tile_slice_lo = mmu.mem[pixel_fetcher.tiledata_address];
+        if (is_window) {
+            tile_slice_lo = 1;
+        }
         for (byte_t i = 0; i < 8; i++)
             pixel_fetcher.pixels[i].color = GET_BIT(tile_slice_lo, 7 - i);
         break;
     case GET_TILE_SLICE_HIGH:
-        byte_t tile_slice_hi = mmu.mem[pixel_fetcher.tiledata_address + 1];
+        byte_t tile_slice_hi = 0;
+        // if (CHECK_BIT(mmu.mem[LCDC], 0)) // TODO uncomment when ly=lyc interrupt is fixed
+            tile_slice_hi = mmu.mem[pixel_fetcher.tiledata_address + 1];
+        if (is_window) {
+            tile_slice_lo = 1;
+        }
         for (byte_t i = 0; i < 8; i++)
             pixel_fetcher.pixels[i].color |= GET_BIT(tile_slice_hi, 7 - i) << 1;
         break;
@@ -176,9 +192,8 @@ static inline void drawing_step(void) {
     // obj fifo step
 
     // merge and draw pixel
-    if (bg_pixel) {
+    if (bg_pixel)
         SET_PIXEL(ppu.pixels, lx - 8, mmu.mem[LY], get_color(bg_pixel->color, BGP));
-    }
 
     // TODO >= or > ?
     if (lx >= GB_SCREEN_WIDTH + 8) {
@@ -231,10 +246,13 @@ static inline void oam_scan_step(void) {
 byte_t hblank_duration = 0;
 word_t vblank_duration = 0;
 word_t vblank_line_duration = 0;
-// TODO hblank duration should be adaptive following what the time it took for DRAWING mode
+// TODO hblank duration should be adaptive following what time it took for DRAWING mode
 static inline void hblank_step(void) {
     if (!hblank_duration) {
         mmu.mem[LY]++;
+
+        ppu_ly_lyc_compare();
+
         if (mmu.mem[LY] == GB_SCREEN_HEIGHT) {
             PPU_SET_MODE(PPU_MODE_VBLANK);
             vblank_duration = 4560;
@@ -258,15 +276,20 @@ static inline void vblank_step(void) {
     if (!vblank_line_duration) {
         mmu.mem[LY]++; // increase at each new line
         vblank_line_duration = 456;
+
+        // line 153 can trigger the LY=LYC interrupt
+        if (mmu.mem[LY] == 153)
+            ppu_ly_lyc_compare();
     }
 
     if (!vblank_duration) {
-        if (mmu.mem[LY] == 154) {
-            mmu.mem[LY] = 0;
-            PPU_SET_MODE(PPU_MODE_OAM);
-            if (CHECK_BIT(mmu.mem[STAT], 5))
-                cpu_request_interrupt(IRQ_STAT);
-        }
+        // mmu.mem[LY] == 154 here
+        mmu.mem[LY] = 0;
+        // ppu_ly_lyc_compare(); // TODO
+
+        PPU_SET_MODE(PPU_MODE_OAM);
+        if (CHECK_BIT(mmu.mem[STAT], 5))
+            cpu_request_interrupt(IRQ_STAT);
     }
 
     vblank_line_duration--;
@@ -289,6 +312,8 @@ void ppu_step(int cycles) {
         mmu.mem[LY] = 0;
         return;
     }
+    if (sent_blank_pixels)
+        ppu_ly_lyc_compare();
     sent_blank_pixels = 0;
 
     RESET_BIT(mmu.mem[STAT], 2); // reset LYC=LY flag
@@ -314,14 +339,6 @@ void ppu_step(int cycles) {
             vblank_step();
             break;
         }
-    }
-
-    if (mmu.mem[LY] == mmu.mem[LYC]) { // LY == LYC compare // FIXME BEFORE FIXING EVERYTHING ELSE (this may be the source of a LOT of problems)
-        SET_BIT(mmu.mem[STAT], 2);
-        if (CHECK_BIT(mmu.mem[STAT], 6))
-            cpu_request_interrupt(IRQ_STAT);
-    } else {
-        RESET_BIT(mmu.mem[STAT], 2);
     }
 }
 

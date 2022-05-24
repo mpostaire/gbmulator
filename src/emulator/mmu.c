@@ -409,6 +409,9 @@ void mmu_write(word_t address, byte_t data) {
         // UNUSABLE memory is unusable
     } else if (address == LY) {
         // read only
+    } else if (address == LYC) {
+        // a write to LYC triggers an immediate LY=LYC comparison
+        ppu_ly_lyc_compare();
     } else if (address == DMA) {
         // OAM DMA transfer
         // TODO this should not be instantaneous (it takes 640 cycles to complete and during that time the cpu can only access HRAM)
