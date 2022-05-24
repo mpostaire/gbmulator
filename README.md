@@ -54,7 +54,7 @@ The following table show the default keybindings (they can be changed in GBmulat
 ## TODO
 
 - memory DMA transfer not instant + blocks everything except hram
-- fix ppu
+- rewrite ppu from scanline rendering to cycle accurate rendering
 - GBC mode
 - better mbc support
 - fix apu bugs
