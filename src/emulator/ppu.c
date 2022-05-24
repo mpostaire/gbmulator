@@ -62,7 +62,7 @@ static color_t get_color(byte_t color_data, word_t palette_address) {
 static void draw_bg_win(void) {
     byte_t y = mmu.mem[LY];
     byte_t window_y = mmu.mem[WY];
-    byte_t window_x = mmu.mem[WX] - 7;
+    s_word_t window_x = mmu.mem[WX] - 7;
     byte_t scroll_x = mmu.mem[SCX];
     byte_t scroll_y = mmu.mem[SCY];
 
