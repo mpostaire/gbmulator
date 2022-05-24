@@ -73,6 +73,10 @@ static void draw_bg_win(void) {
 
     for (int x = 0; x < GB_SCREEN_WIDTH; x++) {
         // background and window disabled, draw white pixel
+        // TODO this may be not the cause but dmg-acid2 test fails at the exclamation marks
+        //      it's displayed only for one frame and after the bg/win enable bit (LCDC.0) is 0 and it doesn't show anymore
+        //      it's as if the LCDC.0 reset happens 8 scanlines too soon (1 tile height) as it should be 1 at scanline 0 and 0 at scanline 8
+        //      see https://i.imgur.com/x2R66WQ.png for an image showing the lines at which the LYC=LY STAT interrupt should fire
         if (!CHECK_BIT(mmu.mem[LCDC], 0)) {
             SET_PIXEL(ppu.pixels, x, y, get_color(WHITE, BGP));
             continue;
@@ -147,50 +151,25 @@ static void draw_bg_win(void) {
  * Draws sprites of line LY
  */
 static void draw_objects(void) {
-    // 1. FIND UP TO 10 OBJECTS TO RENDER
-
     // objects disabled
     if (!CHECK_BIT(mmu.mem[LCDC], 1))
         return;
-
-    byte_t y = mmu.mem[LY];
-    byte_t rendered_objects = 0; // Keeps track of the number of rendered objects. There is a limit of 10 per scanline.
-    word_t obj_to_render[10];
 
     // are objects 8x8 or 8x16?
     byte_t obj_height = 8;
     if (CHECK_BIT(mmu.mem[LCDC], 2))
         obj_height = 16;
 
-    // iterate over all possible object in OAM memory
-    for (byte_t obj_id = 0; obj_id < 40 && rendered_objects < 10; obj_id++) {
-        // each object takes 4 bytes in the OAM
-        word_t obj_address = OAM + (obj_id * 4);
-
-        // obj y + 16 position is in byte 0
-        s_word_t pos_y = mmu.mem[obj_address] - 16;
-
-        // don't render this object if it doesn't intercept the current scanline
-        if (y < pos_y || y >= pos_y + obj_height)
-            continue;
-
-        obj_to_render[rendered_objects++] = obj_address;
-    }
-
-    // return if no object on this line
-    if (!rendered_objects)
-        return;
-
-    // 2. RENDER THE OBJECTS
-
     // store the x position of each pixel drawn by the highest priority object
     byte_t obj_pixel_priority[GB_SCREEN_WIDTH];
     // default at 255 because no object will have that much of x coordinate (and if so, will not be visible anyway)
     memset(obj_pixel_priority, 255, sizeof(obj_pixel_priority));
 
+    byte_t y = mmu.mem[LY];
+
     // iterate over all objects to render
-    for (int obj = rendered_objects - 1; obj >= 0; obj--) {
-        word_t obj_address = obj_to_render[obj];
+    for (short i = ppu.oam_scan.size - 1; i >= 0; i--) {
+        word_t obj_address = ppu.oam_scan.objs_addresses[i];
         // obj y + 16 position is in byte 0
         s_word_t pos_y = mmu.mem[obj_address] - 16;
         // obj x + 8 position is in byte 1 (signed word important here!)
@@ -257,6 +236,31 @@ static void draw_objects(void) {
     }
 }
 
+static inline void oam_scan(void) {
+    // clear previous oam_scan
+    ppu.oam_scan.size = 0;
+
+    byte_t y = mmu.mem[LY];
+    byte_t obj_height = 8;
+    if (CHECK_BIT(mmu.mem[LCDC], 2))
+        obj_height = 16;
+
+    // iterate over all possible object in OAM memory
+    for (byte_t obj_id = 0; obj_id < 40 && ppu.oam_scan.size < 10; obj_id++) {
+        // each object takes 4 bytes in the OAM
+        word_t obj_address = OAM + (obj_id * 4);
+
+        // obj y + 16 position is in byte 0
+        s_word_t pos_y = mmu.mem[obj_address] - 16;
+
+        // don't render this object if it doesn't intercept the current scanline
+        if (y < pos_y || y >= pos_y + obj_height)
+            continue;
+
+        ppu.oam_scan.objs_addresses[ppu.oam_scan.size++] = obj_address;
+    }
+}
+
 /**
  * This does not implement the pixel FIFO but draws each scanline instantly when starting PPU_HBLANK (mode 0).
  * TODO if STAT interrupts are a problem, implement these corner cases: http://gameboy.mongenel.com/dmg/istat98.txt
@@ -290,6 +294,7 @@ void ppu_step(int cycles) {
     case PPU_MODE_OAM:
         if (ppu.cycles >= 80) {
             ppu.cycles -= 80;
+            oam_scan();
             PPU_SET_MODE(PPU_MODE_DRAWING);
         }
         break;

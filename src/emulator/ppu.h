@@ -24,6 +24,11 @@ typedef struct {
     byte_t sent_blank_pixels;
     byte_t blank_pixels[GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 3];
 
+    struct {
+        word_t objs_addresses[10];
+        byte_t size;
+    } oam_scan;
+
     byte_t wly; // window "LY" internal counter
     int cycles;
 } ppu_t;
