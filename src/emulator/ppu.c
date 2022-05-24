@@ -276,7 +276,7 @@ void ppu_step(int cycles) {
             ppu.new_frame_cb(ppu.blank_pixels);
             sent_blank_pixels = 1;
         }
-        PPU_SET_MODE(PPU_HBLANK);
+        PPU_SET_MODE(PPU_MODE_HBLANK);
         ppu.cycles = 0;
         mmu.mem[LY] = 0;
         return;
@@ -288,42 +288,42 @@ void ppu_step(int cycles) {
     RESET_BIT(mmu.mem[STAT], 2);
 
     switch (mmu.mem[STAT] & 0x03) { // switch current mode
-    case PPU_OAM:
+    case PPU_MODE_OAM:
         if (ppu.cycles >= 80) {
             ppu.cycles -= 80;
-            PPU_SET_MODE(PPU_DRAWING);
+            PPU_SET_MODE(PPU_MODE_DRAWING);
         }
         break;
-    case PPU_DRAWING:
+    case PPU_MODE_DRAWING:
         if (ppu.cycles >= 172) {
             ppu.cycles -= 172;
-            PPU_SET_MODE(PPU_HBLANK);
+            PPU_SET_MODE(PPU_MODE_HBLANK);
             request_stat_irq = CHECK_BIT(mmu.mem[STAT], 3);
 
             draw_bg_win();
             draw_objects();
         }
         break;
-    case PPU_HBLANK:
+    case PPU_MODE_HBLANK:
         if (ppu.cycles >= 204) {
             ppu.cycles -= 204;
             mmu.mem[LY] += 1;
             ignore = 0;
 
             if (mmu.mem[LY] == GB_SCREEN_HEIGHT) {
-                PPU_SET_MODE(PPU_VBLANK);
+                PPU_SET_MODE(PPU_MODE_VBLANK);
                 request_stat_irq = CHECK_BIT(mmu.mem[STAT], 4);
 
                 cpu_request_interrupt(IRQ_VBLANK);
                 if (ppu.new_frame_cb)
                     ppu.new_frame_cb(ppu.pixels);
             } else {
-                PPU_SET_MODE(PPU_OAM);
+                PPU_SET_MODE(PPU_MODE_OAM);
                 request_stat_irq = CHECK_BIT(mmu.mem[STAT], 5);
             }
         }
         break;
-    case PPU_VBLANK:
+    case PPU_MODE_VBLANK:
         if (ppu.cycles >= 456) {
             ppu.cycles -= 456;
             mmu.mem[LY] += 1;
@@ -331,7 +331,7 @@ void ppu_step(int cycles) {
 
             if (mmu.mem[LY] == 154) {
                 mmu.mem[LY] = 0;
-                PPU_SET_MODE(PPU_OAM);
+                PPU_SET_MODE(PPU_MODE_OAM);
                 request_stat_irq = CHECK_BIT(mmu.mem[STAT], 5);
             }
         }

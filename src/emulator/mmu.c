@@ -322,11 +322,11 @@ byte_t mmu_read(word_t address) {
     }
 
     // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
-    if (address >= OAM && address < UNUSABLE && CHECK_BIT(mmu.mem[LCDC], 7) && ((PPU_IS_MODE(PPU_OAM) || PPU_IS_MODE(PPU_DRAWING))))
+    if (address >= OAM && address < UNUSABLE && CHECK_BIT(mmu.mem[LCDC], 7) && ((PPU_IS_MODE(PPU_MODE_OAM) || PPU_IS_MODE(PPU_MODE_DRAWING))))
         return 0xFF;
 
     // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
-    if ((address >= VRAM && address < ERAM) && CHECK_BIT(mmu.mem[LCDC], 7) && PPU_IS_MODE(PPU_DRAWING))
+    if ((address >= VRAM && address < ERAM) && CHECK_BIT(mmu.mem[LCDC], 7) && PPU_IS_MODE(PPU_MODE_DRAWING))
         return 0xFF;
 
     // UNUSABLE memory is unusable
@@ -401,9 +401,9 @@ void mmu_write(word_t address, byte_t data) {
     } else if (address == DIV) {
         // writing to DIV resets it to 0
         mmu.mem[address] = 0;
-    } else if ((address >= OAM && address < UNUSABLE) && ((PPU_IS_MODE(PPU_OAM) || PPU_IS_MODE(PPU_DRAWING)) && CHECK_BIT(mmu.mem[LCDC], 7))) {
+    } else if ((address >= OAM && address < UNUSABLE) && ((PPU_IS_MODE(PPU_MODE_OAM) || PPU_IS_MODE(PPU_MODE_DRAWING)) && CHECK_BIT(mmu.mem[LCDC], 7))) {
         // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD enabled
-    } else if ((address >= VRAM && address < ERAM) && (PPU_IS_MODE(PPU_DRAWING) && CHECK_BIT(mmu.mem[LCDC], 7))) {
+    } else if ((address >= VRAM && address < ERAM) && (PPU_IS_MODE(PPU_MODE_DRAWING) && CHECK_BIT(mmu.mem[LCDC], 7))) {
         // VRAM inaccessible by cpu while ppu in mode 3 and LCD enabled
     } else if (address >= UNUSABLE && address < IO) {
         // UNUSABLE memory is unusable

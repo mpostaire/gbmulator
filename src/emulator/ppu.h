@@ -6,10 +6,10 @@
 #define PPU_IS_MODE(m) ((mmu.mem[STAT] & 0x03) == (m))
 
 typedef enum {
-    PPU_HBLANK,
-    PPU_VBLANK,
-    PPU_OAM,
-    PPU_DRAWING
+    PPU_MODE_HBLANK,
+    PPU_MODE_VBLANK,
+    PPU_MODE_OAM,
+    PPU_MODE_DRAWING
 } ppu_mode_t;
 
 typedef struct {
