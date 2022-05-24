@@ -69,6 +69,8 @@ static void draw_bg_win(void) {
     word_t bg_tilemap_address = CHECK_BIT(mmu.mem[LCDC], 3) ? 0x9C00 : 0x9800;
     word_t win_tilemap_address = CHECK_BIT(mmu.mem[LCDC], 6) ? 0x9C00 : 0x9800;
 
+    byte_t win_in_scanline = 0;
+
     for (int x = 0; x < GB_SCREEN_WIDTH; x++) {
         // background and window disabled, draw white pixel
         if (!CHECK_BIT(mmu.mem[LCDC], 0)) {
@@ -85,9 +87,10 @@ static void draw_bg_win(void) {
 
         // draw window if window enabled and current pixel inside window region
         byte_t win;
-        if (CHECK_BIT(mmu.mem[LCDC], 5) && window_y <= y) {
+        if (CHECK_BIT(mmu.mem[LCDC], 5) && window_y <= y && x >= window_x) {
+            win_in_scanline = 1;
             win = 1;
-            pos_y = y - window_y;
+            pos_y = ppu.wly;
             pos_x = x - window_x;
         } else {
             win = 0;
@@ -134,6 +137,10 @@ static void draw_bg_win(void) {
         // set pixel color using BG (for background and window) palette data
         SET_PIXEL(ppu.pixels, x, y, get_color(color_data, BGP));
     }
+
+    // increment ppu.wly if the window is present in this scanline
+    if (win_in_scanline)
+        ppu.wly++;
 }
 
 /**
@@ -156,7 +163,7 @@ static void draw_objects(void) {
         obj_height = 16;
 
     // iterate over all possible object in OAM memory
-    for (byte_t obj_id = 0; obj_id < 40; obj_id++) {
+    for (byte_t obj_id = 0; obj_id < 40 && rendered_objects < 10; obj_id++) {
         // each object takes 4 bytes in the OAM
         word_t obj_address = OAM + (obj_id * 4);
 
@@ -167,9 +174,7 @@ static void draw_objects(void) {
         if (y < pos_y || y >= pos_y + obj_height)
             continue;
 
-        obj_to_render[rendered_objects] = obj_address;
-        if (++rendered_objects >= 10)
-            break;
+        obj_to_render[rendered_objects++] = obj_address;
     }
 
     // return if no object on this line
@@ -256,27 +261,30 @@ static void draw_objects(void) {
  * This does not implement the pixel FIFO but draws each scanline instantly when starting PPU_HBLANK (mode 0).
  * TODO if STAT interrupts are a problem, implement these corner cases: http://gameboy.mongenel.com/dmg/istat98.txt
  */
-byte_t ignore_lyc = 0;
-byte_t sent_blank_pixels = 0;
 void ppu_step(int cycles) {
     if (!CHECK_BIT(mmu.mem[LCDC], 7)) { // is LCD disabled?
         // TODO not sure of the handling of LCD disabled
         // TODO LCD disabled should fill screen with a color brighter than WHITE
 
-        if (!sent_blank_pixels) {
+        if (!ppu.sent_blank_pixels) {
             update_blank_screen_color();
             ppu.new_frame_cb(ppu.blank_pixels);
-            sent_blank_pixels = 1;
+            ppu.sent_blank_pixels = 1;
         }
         PPU_SET_MODE(PPU_MODE_HBLANK);
+        RESET_BIT(mmu.mem[STAT], 2); // set LYC=LY to 0?
         ppu.cycles = 0;
         mmu.mem[LY] = 0;
+        ppu.wly = 0;
         return;
     }
-    sent_blank_pixels = 0;
+
+    // if lcd was just enabled, check for LYC=LY
+    if (ppu.sent_blank_pixels)
+        ppu_ly_lyc_compare();
+    ppu.sent_blank_pixels = 0;
 
     ppu.cycles += cycles;
-    RESET_BIT(mmu.mem[STAT], 2);
 
     switch (mmu.mem[STAT] & 0x03) { // switch current mode
     case PPU_MODE_OAM:
@@ -299,8 +307,8 @@ void ppu_step(int cycles) {
     case PPU_MODE_HBLANK:
         if (ppu.cycles >= 204) {
             ppu.cycles -= 204;
-            mmu.mem[LY] += 1;
-            ignore_lyc = 0;
+            mmu.mem[LY]++;
+            ppu_ly_lyc_compare();
 
             if (mmu.mem[LY] == GB_SCREEN_HEIGHT) {
                 PPU_SET_MODE(PPU_MODE_VBLANK);
@@ -320,22 +328,20 @@ void ppu_step(int cycles) {
     case PPU_MODE_VBLANK:
         if (ppu.cycles >= 456) {
             ppu.cycles -= 456;
-            mmu.mem[LY] += 1;
-            ignore_lyc = 0;
+            mmu.mem[LY]++;
+            if (mmu.mem[LY] == 153)
+                ppu_ly_lyc_compare();
 
             if (mmu.mem[LY] == 154) {
                 mmu.mem[LY] = 0;
+                ppu_ly_lyc_compare();
+                ppu.wly = 0;
                 PPU_SET_MODE(PPU_MODE_OAM);
                 if (CHECK_BIT(mmu.mem[STAT], 5))
                     cpu_request_interrupt(IRQ_STAT);
             }
         }
         break;
-    }
-
-    if (!ignore_lyc) {
-        ppu_ly_lyc_compare();
-        ignore_lyc = 1;
     }
 }
 

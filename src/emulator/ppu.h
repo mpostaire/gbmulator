@@ -21,8 +21,10 @@ typedef struct {
     byte_t pixels[GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 3];
     byte_t pixels_cache_color_data[GB_SCREEN_WIDTH][GB_SCREEN_HEIGHT];
 
+    byte_t sent_blank_pixels;
     byte_t blank_pixels[GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 3];
 
+    byte_t wly; // window "LY" internal counter
     int cycles;
 } ppu_t;
 
