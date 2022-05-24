@@ -262,7 +262,7 @@ int main(int argc, char **argv) {
             handle_input(); // keep this the closest possible before emulator_step() to reduce input inaccuracies
         }
 
-        // run on step of the emulator
+        // run one step of the emulator
         cycles += emulator_step();
 
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).
