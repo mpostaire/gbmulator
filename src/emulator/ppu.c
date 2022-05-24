@@ -8,9 +8,9 @@
 
 #define PPU_SET_MODE(m) mmu.mem[STAT] = (mmu.mem[STAT] & 0xFC) | (m)
 
-#define SET_PIXEL(buf, x, y, color) *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = ppu_color_palettes[ppu.current_color_palette][(color)][0]; \
+#define SET_PIXEL(buf, x, y, color) { *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = ppu_color_palettes[ppu.current_color_palette][(color)][0]; \
                             *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 1) = ppu_color_palettes[ppu.current_color_palette][(color)][1]; \
-                            *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 2) = ppu_color_palettes[ppu.current_color_palette][(color)][2];
+                            *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 2) = ppu_color_palettes[ppu.current_color_palette][(color)][2]; }
 
 byte_t ppu_color_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
     { // grayscale colors
@@ -30,14 +30,6 @@ byte_t ppu_color_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
 ppu_t ppu;
 
 extern inline void ppu_ly_lyc_compare(void);
-
-static void update_blank_screen_color(void) {
-    for (int i = 0; i < GB_SCREEN_WIDTH; i++) {
-        for (int j = 0; j < GB_SCREEN_HEIGHT; j++) {
-            SET_PIXEL(ppu.blank_pixels, i, j, WHITE);
-        }
-    }
-}
 
 /**
  * @returns color after applying palette.
@@ -137,7 +129,7 @@ static void draw_bg_win(void) {
         // construct color data
         byte_t color_data = (GET_BIT(pixel_data_2, relevant_bit) << 1) | GET_BIT(pixel_data_1, relevant_bit);
         // cache color_data to be used for objects rendering
-        ppu.pixels_cache_color_data[x][y] = color_data;
+        ppu.scanline_cache_color_data[x] = color_data;
         // set pixel color using BG (for background and window) palette data
         SET_PIXEL(ppu.pixels, x, y, get_color(color_data, BGP));
     }
@@ -226,8 +218,8 @@ static void draw_objects(void) {
             // store current object x coordinate in priority array
             obj_pixel_priority[pixel_x] = pos_x;
 
-            // if object is below background, object can only be drawn current if backgournd/window color (before applying palette) is 0
-            if (CHECK_BIT(flags, 7) && ppu.pixels_cache_color_data[pixel_x][y])
+            // if object is below background, object can only be drawn current if background/window color (before applying palette) is 0
+            if (CHECK_BIT(flags, 7) && ppu.scanline_cache_color_data[pixel_x])
                 continue;
 
             // set pixel color using palette
@@ -271,8 +263,12 @@ void ppu_step(int cycles) {
         // TODO LCD disabled should fill screen with a color brighter than WHITE
 
         if (!ppu.sent_blank_pixels) {
-            update_blank_screen_color();
-            ppu.new_frame_cb(ppu.blank_pixels);
+            // blank screen
+            for (int i = 0; i < GB_SCREEN_WIDTH; i++)
+                for (int j = 0; j < GB_SCREEN_HEIGHT; j++)
+                    SET_PIXEL(ppu.pixels, i, j, WHITE);
+
+            ppu.new_frame_cb(ppu.pixels);
             ppu.sent_blank_pixels = 1;
         }
         PPU_SET_MODE(PPU_MODE_HBLANK);

@@ -19,10 +19,9 @@ typedef struct {
     byte_t current_color_palette;
 
     byte_t pixels[GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 3];
-    byte_t pixels_cache_color_data[GB_SCREEN_WIDTH][GB_SCREEN_HEIGHT];
+    byte_t scanline_cache_color_data[GB_SCREEN_WIDTH];
 
     byte_t sent_blank_pixels;
-    byte_t blank_pixels[GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 3];
 
     struct {
         word_t objs_addresses[10];
