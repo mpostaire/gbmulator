@@ -2,50 +2,6 @@
 
 #include "types.h"
 
-typedef struct {
-    byte_t s;
-    byte_t m;
-    byte_t h;
-    byte_t dl;
-    byte_t dh;
-    time_t value_in_seconds; // current rtc counter seconds, minutes, hours and days in seconds (helps with rtc_update())
-    byte_t enabled;
-    byte_t reg; // rtc register
-    byte_t latch;
-} rtc_t;
-
-typedef struct {
-    char *rom_filepath;
-    char *save_filepath;
-    char rom_title[17];
-
-    byte_t cartridge[8400000];
-    // do not move the 'mem' member (savestate.c uses offsetof mem on this struct)
-    // everything that is below this line will be saved in the savestates
-    byte_t mem[0x10000];
-    byte_t eram[0x8000]; // max 4 banks of size 0x2000
-
-    byte_t mbc;
-    byte_t rom_banks;
-    byte_t ram_banks;
-    word_t current_rom_bank;
-    s_word_t current_eram_bank;
-    byte_t mbc1_mode;
-    byte_t eram_enabled;
-
-    struct {
-        byte_t s;
-        byte_t m;
-        byte_t h;
-        byte_t dl;
-        byte_t dh;
-        time_t value_in_seconds; // current rtc counter seconds, minutes, hours and days in seconds (helps with rtc_update())
-        byte_t enabled;
-        byte_t reg; // rtc register
-        byte_t latch;
-    } rtc;
-} mmu_t;
-
 typedef enum {
     ROM_BANK0 = 0x0000, // From cartridge, usually a fixed bank.
     ROM_BANKN = 0x4000, // From cartridge, switchable bank via MBC (if any).
@@ -118,30 +74,18 @@ typedef enum {
     IE = 0xFFFF // Interrupt Enable
 } mem_map_t;
 
-typedef enum {
-    MBC0,
-    MBC1,
-    MBC2,
-    MBC3,
-    MBC5 = 5,
-    MBC6,
-    MBC7
-} mbc_type_t;
+int mmu_init(emulator_t *emu, char *rom_path, char *save_path);
 
-extern mmu_t mmu;
+int mmu_init_from_data(emulator_t *emu, const byte_t *rom_data, size_t size, char *save_path);
 
-int mmu_init(char *rom_path, char *save_path);
-
-int mmu_init_from_data(const byte_t *rom_data, size_t size, char *save_path);
-
-int mmu_save_eram(void);
+void mmu_quit(emulator_t *emu);
 
 /**
  * only used in instructions (opcode execution)
  */
-byte_t mmu_read(word_t address);
+byte_t mmu_read(emulator_t *emu, word_t address);
 
 /**
  * only used in instructions (opcode execution)
  */
-void mmu_write(word_t address, byte_t data);
+void mmu_write(emulator_t *emu, word_t address, byte_t data);

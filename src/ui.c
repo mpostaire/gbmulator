@@ -11,7 +11,7 @@
 // TODO fix this file (it's ugly code with lots of copy pasted repetitions).
 
 #define SET_PIXEL_RGBA(buf, x, y, color, alpha) \
-    { byte_t *_tmp_color_values = emulator_get_color_values((color)); \
+    { byte_t *_tmp_color_values = emulator_get_color_values_from_palette(config.color_palette, (color)); \
     *(buf + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)) = _tmp_color_values[0]; \
     *(buf + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1) = _tmp_color_values[1]; \
     *(buf + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2) = _tmp_color_values[2]; \
@@ -296,18 +296,22 @@ static void choose_win_scale(menu_entry_t *entry) {
 
 static void choose_speed(menu_entry_t *entry) {
     config.speed = (entry->choices.position * 0.5f) + 1;
-    emulator_set_apu_speed(config.speed);
+    if (emu)
+        emulator_set_apu_speed(emu, config.speed);
 }
 
 static void choose_sound(menu_entry_t *entry) {
     config.sound = entry->choices.position * 0.25f;
-    emulator_set_apu_sound_level(config.sound);
+    if (emu)
+        emulator_set_apu_sound_level(emu, config.sound);
 }
 
 static void choose_color(menu_entry_t *entry) {
     config.color_palette = entry->choices.position;
-    emulator_update_pixels_with_palette(config.color_palette);
-    emulator_set_color_palette(config.color_palette);
+    if (emu) {
+        emulator_update_pixels_with_palette(emu, config.color_palette);
+        emulator_set_color_palette(emu, config.color_palette);
+    }
 }
 
 static void choose_link_mode(menu_entry_t *entry) {
@@ -324,11 +328,13 @@ static void on_input_link_port(menu_entry_t *entry) {
 }
 
 static void start_link(void) {
+    if (!emu) return;
+
     int success;
     if (link_menu.entries[0].choices.position)
-        success = emulator_connect_to_link(config.link_host, config.link_port);
+        success = emulator_connect_to_link(emu, config.link_host, config.link_port);
     else
-        success = emulator_start_link(config.link_port);
+        success = emulator_start_link(emu, config.link_port);
     
     if (success){
         link_menu.entries[0].disabled = 1;

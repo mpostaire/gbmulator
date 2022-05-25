@@ -8,13 +8,12 @@
 
 // TODO fix pause menu when starting game link connexion while pause menu is still active (it's working but weirdly so low priority)
 
-// TODO MBCs are poorly implemented (see https://github.com/drhelius/Gearboy to understand its handled)
+// TODO MBCs have a few bugs implemented (see https://github.com/drhelius/Gearboy to understand its handled)
 
 // TODO sdl gamepad support (like ps3 controller) - with no configurable bindings
 
 // TODO switch gb/gbc mode in settings -- if a rom is already running, reset gameboy
 // TODO reset gameboy in ui main menu
-// TODO 
 
 // TODO ppu lcd off should take multiple cycles to turn on again?
 
@@ -32,6 +31,8 @@ SDL_AudioDeviceID audio_device;
 char *rom_path;
 
 char window_title[sizeof(EMULATOR_NAME) + 19];
+
+emulator_t *emu;
 
 void gbmulator_exit(void) {
     is_running = SDL_FALSE;
@@ -145,17 +146,17 @@ static void handle_input(void) {
                     break;
                 savestate_path = get_savestate_path(rom_path, event.key.keysym.sym - SDLK_F1);
                 if (event.key.keysym.mod & KMOD_SHIFT)
-                    emulator_save_state(savestate_path);
+                    emulator_save_state(emu, savestate_path);
                 else
-                    emulator_load_state(savestate_path);
+                    emulator_load_state(emu, savestate_path);
                 free(savestate_path);
                 break;
             }
-            emulator_joypad_press(sdl_key_to_joypad(event.key.keysym.sym));
+            emulator_joypad_press(emu, sdl_key_to_joypad(event.key.keysym.sym));
             break;
         case SDL_KEYUP:
             if (!event.key.repeat)
-                emulator_joypad_release(sdl_key_to_joypad(event.key.keysym.sym));
+                emulator_joypad_release(emu, sdl_key_to_joypad(event.key.keysym.sym));
             break;
         case SDL_QUIT:
             is_running = SDL_FALSE;
@@ -165,21 +166,22 @@ static void handle_input(void) {
 }
 
 void gbmulator_load_cartridge(const char *path) {
-    emulator_quit();
+    if (emu)
+        emulator_quit(emu);
 
     size_t len = strlen(path);
     rom_path = xrealloc(rom_path, len + 2);
     snprintf(rom_path, len + 1, "%s", path);
 
     char *save_path = get_save_path(rom_path);
-    if (!emulator_init(rom_path, save_path, ppu_vblank_cb, apu_samples_ready_cb))
-        return;
+    emu = emulator_init(rom_path, save_path, ppu_vblank_cb, apu_samples_ready_cb);
+    if (!emu) return;
 
-    emulator_set_apu_speed(config.speed);
-    emulator_set_apu_sound_level(config.sound);
-    emulator_set_color_palette(config.color_palette);
+    emulator_set_apu_speed(emu, config.speed);
+    emulator_set_apu_sound_level(emu, config.sound);
+    emulator_set_color_palette(emu, config.color_palette);
 
-    char *rom_title = emulator_get_rom_title();
+    char *rom_title = emulator_get_rom_title(emu);
     snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
     SDL_SetWindowTitle(window, window_title);
     is_rom_loaded = SDL_TRUE;
@@ -194,11 +196,10 @@ int main(int argc, char **argv) {
     const char *config_path = get_config_path();
     config_load(config_path);
     byte_t *ui_pixels = ui_init();
+    emu = NULL;
 
     if (argc == 2)
         gbmulator_load_cartridge(argv[1]);
-    else
-        emulator_set_color_palette(config.color_palette); // update ui color palette when no rom loaded
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
 
@@ -247,7 +248,7 @@ int main(int argc, char **argv) {
 
             // update ppu_texture to show color palette changes behind the menu
             if (is_rom_loaded) {
-                SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(), ppu_texture_pitch);
+                SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(emu), ppu_texture_pitch);
                 SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
             }
 
@@ -269,12 +270,13 @@ int main(int argc, char **argv) {
         }
 
         // run one step of the emulator
-        cycles += emulator_step();
+        cycles += emulator_step(emu);
 
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).
     }
 
-    emulator_quit();
+    emulator_quit(emu);
+    free(rom_path);
 
     config_save(config_path);
 

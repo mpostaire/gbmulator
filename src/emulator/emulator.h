@@ -23,13 +23,13 @@
  * Runs the emulator for one cpu step.
  * @returns the ammount of cycles the emulator has run for
  */
-int emulator_step(void);
+int emulator_step(emulator_t *emu);
 
 /**
  * Runs the emulator for the given ammount of cpu cycles.
  * @param cycles_limit the ammount of cycles the emulator will run for
  */
-void emulator_run_cycles(int cycles_limit);
+void emulator_run_cycles(emulator_t *emu, int cycles_limit);
 
 /**
  * Inits the emulator.
@@ -38,42 +38,44 @@ void emulator_run_cycles(int cycles_limit);
  * @param new_frame_cb the function called whenever the ppu has finished rendering a new frame
  * @param apu_samples_ready_cb the function called whenever the samples buffer of the apu is full
  */
-int emulator_init(char *rom_path, char *save_path, void (*new_frame_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
+emulator_t *emulator_init(char *rom_path, char *save_path, void (*new_frame_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
 
-int emulator_init_from_data(const byte_t *rom_data, size_t size, char *save_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
+emulator_t *emulator_init_from_data(const byte_t *rom_data, size_t size, char *save_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
 
 /**
  * Quits the emulator gracefully (save eram into a '.sav' file, ...).
  */
-void emulator_quit(void);
+void emulator_quit(emulator_t *emu);
 
-int emulator_start_link(const int port);
+int emulator_start_link(emulator_t *emu, const int port);
 
-int emulator_connect_to_link(const char* address, const int port);
+int emulator_connect_to_link(emulator_t *emu, const char* address, const int port);
 
-void emulator_joypad_press(joypad_button_t key);
+void emulator_joypad_press(emulator_t *emu, joypad_button_t key);
 
-void emulator_joypad_release(joypad_button_t key);
+void emulator_joypad_release(emulator_t *emu, joypad_button_t key);
 
-byte_t *emulator_get_save_data(size_t *save_length);
+byte_t *emulator_get_save_data(emulator_t *emu, size_t *save_length);
 
-char *emulator_get_rom_title(void);
+char *emulator_get_rom_title(emulator_t *emu);
 
 char *emulator_get_rom_title_from_data(byte_t *rom_data, size_t size);
 
 /**
  * convert the pixels buffer from the color values of the old emulation palette to the new color values of the new palette
  */
-void emulator_update_pixels_with_palette(byte_t new_palette);
+void emulator_update_pixels_with_palette(emulator_t *emu, byte_t new_palette);
 
-byte_t emulator_get_color_palette(void);
+byte_t emulator_get_color_palette(emulator_t *emu);
 
-void emulator_set_color_palette(color_palette_t palette);
+byte_t *emulator_get_color_values_from_palette(color_palette_t palette, color_t color);
 
-byte_t *emulator_get_color_values(color_t color);
+void emulator_set_color_palette(emulator_t *emu, color_palette_t palette);
 
-byte_t *emulator_get_pixels(void);
+byte_t *emulator_get_color_values(emulator_t *emu, color_t color);
 
-void emulator_set_apu_speed(float speed);
+byte_t *emulator_get_pixels(emulator_t *emu);
 
-void emulator_set_apu_sound_level(float level);
+void emulator_set_apu_speed(emulator_t *emu, float speed);
+
+void emulator_set_apu_sound_level(emulator_t *emu, float level);

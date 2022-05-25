@@ -1,16 +1,16 @@
 #include <string.h>
+#include <stdlib.h>
 
+#include "emulator.h"
 #include "ppu.h"
-#include "utils.h"
-#include "types.h"
 #include "mmu.h"
 #include "cpu.h"
 
-#define PPU_SET_MODE(m) mmu.mem[STAT] = (mmu.mem[STAT] & 0xFC) | (m)
+#define PPU_SET_MODE(m) mmu->mem[STAT] = (mmu->mem[STAT] & 0xFC) | (m)
 
-#define SET_PIXEL(buf, x, y, color) { *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = ppu_color_palettes[ppu.current_color_palette][(color)][0]; \
-                            *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 1) = ppu_color_palettes[ppu.current_color_palette][(color)][1]; \
-                            *(buf + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 2) = ppu_color_palettes[ppu.current_color_palette][(color)][2]; }
+#define SET_PIXEL(ppu_ptr, x, y, color) { *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = ppu_color_palettes[(ppu_ptr)->current_color_palette][(color)][0]; \
+                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 1) = ppu_color_palettes[(ppu_ptr)->current_color_palette][(color)][1]; \
+                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 2) = ppu_color_palettes[(ppu_ptr)->current_color_palette][(color)][2]; }
 
 byte_t ppu_color_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
     { // grayscale colors
@@ -27,14 +27,12 @@ byte_t ppu_color_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
     }
 };
 
-ppu_t ppu;
-
-extern inline void ppu_ly_lyc_compare(void);
+extern inline void ppu_ly_lyc_compare(emulator_t *emu);
 
 /**
  * @returns color after applying palette.
  */
-static color_t get_color(byte_t color_data, word_t palette_address) {
+static color_t get_color(mmu_t *mmu, byte_t color_data, word_t palette_address) {
     // get relevant bits of the color palette the color_data maps to
     byte_t filter = 0; // initialize to 0 to shut gcc warnings
     switch (color_data) {
@@ -45,21 +43,24 @@ static color_t get_color(byte_t color_data, word_t palette_address) {
     }
 
     // return the color using the palette
-    return (mmu.mem[palette_address] & filter) >> (color_data * 2);
+    return (mmu->mem[palette_address] & filter) >> (color_data * 2);
 }
 
 /**
  * Draws background and window pixels of line LY
  */
-static void draw_bg_win(void) {
-    byte_t y = mmu.mem[LY];
-    byte_t window_y = mmu.mem[WY];
-    s_word_t window_x = mmu.mem[WX] - 7;
-    byte_t scroll_x = mmu.mem[SCX];
-    byte_t scroll_y = mmu.mem[SCY];
+static void draw_bg_win(emulator_t *emu) {
+    ppu_t *ppu = emu->ppu;
+    mmu_t *mmu = emu->mmu;
 
-    word_t bg_tilemap_address = CHECK_BIT(mmu.mem[LCDC], 3) ? 0x9C00 : 0x9800;
-    word_t win_tilemap_address = CHECK_BIT(mmu.mem[LCDC], 6) ? 0x9C00 : 0x9800;
+    byte_t y = mmu->mem[LY];
+    byte_t window_y = mmu->mem[WY];
+    s_word_t window_x = mmu->mem[WX] - 7;
+    byte_t scroll_x = mmu->mem[SCX];
+    byte_t scroll_y = mmu->mem[SCY];
+
+    word_t bg_tilemap_address = CHECK_BIT(mmu->mem[LCDC], 3) ? 0x9C00 : 0x9800;
+    word_t win_tilemap_address = CHECK_BIT(mmu->mem[LCDC], 6) ? 0x9C00 : 0x9800;
 
     byte_t win_in_scanline = 0;
 
@@ -69,8 +70,8 @@ static void draw_bg_win(void) {
         //      it's displayed only for one frame and after the bg/win enable bit (LCDC.0) is 0 and it doesn't show anymore
         //      it's as if the LCDC.0 reset happens 8 scanlines too soon (1 tile height) as it should be 1 at scanline 0 and 0 at scanline 8
         //      see https://i.imgur.com/x2R66WQ.png for an image showing the lines at which the LYC=LY STAT interrupt should fire
-        if (!CHECK_BIT(mmu.mem[LCDC], 0)) {
-            SET_PIXEL(ppu.pixels, x, y, get_color(WHITE, BGP));
+        if (!CHECK_BIT(mmu->mem[LCDC], 0)) {
+            SET_PIXEL(ppu, x, y, get_color(mmu, WHITE, BGP));
             continue;
         }
 
@@ -83,10 +84,10 @@ static void draw_bg_win(void) {
 
         // draw window if window enabled and current pixel inside window region
         byte_t win;
-        if (CHECK_BIT(mmu.mem[LCDC], 5) && window_y <= y && x >= window_x) {
+        if (CHECK_BIT(mmu->mem[LCDC], 5) && window_y <= y && x >= window_x) {
             win_in_scanline = 1;
             win = 1;
-            pos_y = ppu.wly;
+            pos_y = ppu->wly;
             pos_x = x - window_x;
         } else {
             win = 0;
@@ -104,11 +105,11 @@ static void draw_bg_win(void) {
         // get tiledata memory address
         word_t tiledata_address;
         s_word_t tile_id;
-        if (CHECK_BIT(mmu.mem[LCDC], 4)) {
-            tile_id = mmu.mem[tile_id_address];
+        if (CHECK_BIT(mmu->mem[LCDC], 4)) {
+            tile_id = mmu->mem[tile_id_address];
             tiledata_address = 0x8000 + tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
         } else {
-            tile_id = (s_byte_t) mmu.mem[tile_id_address] + 128;
+            tile_id = (s_byte_t) mmu->mem[tile_id_address] + 128;
             tiledata_address = 0x8800 + tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
         }
 
@@ -118,8 +119,8 @@ static void draw_bg_win(void) {
         // 2. DRAW PIXEL
 
         // pixel color data takes 2 bytes in memory
-        byte_t pixel_data_1 = mmu.mem[tiledata_address + tiledata_line];
-        byte_t pixel_data_2 = mmu.mem[tiledata_address + tiledata_line + 1];
+        byte_t pixel_data_1 = mmu->mem[tiledata_address + tiledata_line];
+        byte_t pixel_data_2 = mmu->mem[tiledata_address + tiledata_line + 1];
 
         // bit 7 of 1st byte == low bit of pixel 0, bit 7 of 2nd byte == high bit of pixel 0
         // bit 6 of 1st byte == low bit of pixel 1, bit 6 of 2nd byte == high bit of pixel 1
@@ -129,27 +130,30 @@ static void draw_bg_win(void) {
         // construct color data
         byte_t color_data = (GET_BIT(pixel_data_2, relevant_bit) << 1) | GET_BIT(pixel_data_1, relevant_bit);
         // cache color_data to be used for objects rendering
-        ppu.scanline_cache_color_data[x] = color_data;
+        ppu->scanline_cache_color_data[x] = color_data;
         // set pixel color using BG (for background and window) palette data
-        SET_PIXEL(ppu.pixels, x, y, get_color(color_data, BGP));
+        SET_PIXEL(ppu, x, y, get_color(mmu, color_data, BGP));
     }
 
-    // increment ppu.wly if the window is present in this scanline
+    // increment ppu->wly if the window is present in this scanline
     if (win_in_scanline)
-        ppu.wly++;
+        ppu->wly++;
 }
 
 /**
  * Draws sprites of line LY
  */
-static void draw_objects(void) {
+static void draw_objects(emulator_t *emu) {
+    ppu_t *ppu = emu->ppu;
+    mmu_t *mmu = emu->mmu;
+
     // objects disabled
-    if (!CHECK_BIT(mmu.mem[LCDC], 1))
+    if (!CHECK_BIT(mmu->mem[LCDC], 1))
         return;
 
     // are objects 8x8 or 8x16?
     byte_t obj_height = 8;
-    if (CHECK_BIT(mmu.mem[LCDC], 2))
+    if (CHECK_BIT(mmu->mem[LCDC], 2))
         obj_height = 16;
 
     // store the x position of each pixel drawn by the highest priority object
@@ -157,21 +161,21 @@ static void draw_objects(void) {
     // default at 255 because no object will have that much of x coordinate (and if so, will not be visible anyway)
     memset(obj_pixel_priority, 255, sizeof(obj_pixel_priority));
 
-    byte_t y = mmu.mem[LY];
+    byte_t y = mmu->mem[LY];
 
     // iterate over all objects to render
-    for (short i = ppu.oam_scan.size - 1; i >= 0; i--) {
-        word_t obj_address = ppu.oam_scan.objs_addresses[i];
+    for (short i = ppu->oam_scan.size - 1; i >= 0; i--) {
+        word_t obj_address = ppu->oam_scan.objs_addresses[i];
         // obj y + 16 position is in byte 0
-        s_word_t pos_y = mmu.mem[obj_address] - 16;
+        s_word_t pos_y = mmu->mem[obj_address] - 16;
         // obj x + 8 position is in byte 1 (signed word important here!)
-        s_word_t pos_x = mmu.mem[obj_address + 1] - 8;
+        s_word_t pos_x = mmu->mem[obj_address + 1] - 8;
         // obj position in the tile memory array
-        byte_t tile_index = mmu.mem[obj_address + 2];
+        byte_t tile_index = mmu->mem[obj_address + 2];
         if (obj_height > 8)
             tile_index &= 0xFE;
         // attributes flags
-        byte_t flags = mmu.mem[obj_address + 3];
+        byte_t flags = mmu->mem[obj_address + 3];
 
         // palette address
         word_t palette = OBP0;
@@ -190,8 +194,8 @@ static void draw_objects(void) {
         // 3. DRAW OBJECT
 
         // pixel color data takes 2 bytes in memory
-        byte_t pixel_data_1 = mmu.mem[objdata_address + obj_line];
-        byte_t pixel_data_2 = mmu.mem[objdata_address + obj_line + 1];
+        byte_t pixel_data_1 = mmu->mem[objdata_address + obj_line];
+        byte_t pixel_data_2 = mmu->mem[objdata_address + obj_line + 1];
 
         // bit 7 of 1st byte == low bit of pixel 0, bit 7 of 2nd byte == high bit of pixel 0
         // bit 6 of 1st byte == low bit of pixel 1, bit 6 of 2nd byte == high bit of pixel 1
@@ -219,37 +223,40 @@ static void draw_objects(void) {
             obj_pixel_priority[pixel_x] = pos_x;
 
             // if object is below background, object can only be drawn current if background/window color (before applying palette) is 0
-            if (CHECK_BIT(flags, 7) && ppu.scanline_cache_color_data[pixel_x])
+            if (CHECK_BIT(flags, 7) && ppu->scanline_cache_color_data[pixel_x])
                 continue;
 
             // set pixel color using palette
-            SET_PIXEL(ppu.pixels, pixel_x, y, get_color(color_data, palette));
+            SET_PIXEL(ppu, pixel_x, y, get_color(mmu, color_data, palette));
         }
     }
 }
 
-static inline void oam_scan(void) {
-    // clear previous oam_scan
-    ppu.oam_scan.size = 0;
+static inline void oam_scan(emulator_t *emu) {
+    ppu_t *ppu = emu->ppu;
+    mmu_t *mmu = emu->mmu;
 
-    byte_t y = mmu.mem[LY];
+    // clear previous oam_scan
+    ppu->oam_scan.size = 0;
+
+    byte_t y = mmu->mem[LY];
     byte_t obj_height = 8;
-    if (CHECK_BIT(mmu.mem[LCDC], 2))
+    if (CHECK_BIT(mmu->mem[LCDC], 2))
         obj_height = 16;
 
     // iterate over all possible object in OAM memory
-    for (byte_t obj_id = 0; obj_id < 40 && ppu.oam_scan.size < 10; obj_id++) {
+    for (byte_t obj_id = 0; obj_id < 40 && ppu->oam_scan.size < 10; obj_id++) {
         // each object takes 4 bytes in the OAM
         word_t obj_address = OAM + (obj_id * 4);
 
         // obj y + 16 position is in byte 0
-        s_word_t pos_y = mmu.mem[obj_address] - 16;
+        s_word_t pos_y = mmu->mem[obj_address] - 16;
 
         // don't render this object if it doesn't intercept the current scanline
         if (y < pos_y || y >= pos_y + obj_height)
             continue;
 
-        ppu.oam_scan.objs_addresses[ppu.oam_scan.size++] = obj_address;
+        ppu->oam_scan.objs_addresses[ppu->oam_scan.size++] = obj_address;
     }
 }
 
@@ -257,95 +264,107 @@ static inline void oam_scan(void) {
  * This does not implement the pixel FIFO but draws each scanline instantly when starting PPU_HBLANK (mode 0).
  * TODO if STAT interrupts are a problem, implement these corner cases: http://gameboy.mongenel.com/dmg/istat98.txt
  */
-void ppu_step(int cycles) {
-    if (!CHECK_BIT(mmu.mem[LCDC], 7)) { // is LCD disabled?
+void ppu_step(emulator_t *emu, int cycles) {
+    ppu_t *ppu = emu->ppu;
+    mmu_t *mmu = emu->mmu;
+
+    if (!CHECK_BIT(mmu->mem[LCDC], 7)) { // is LCD disabled?
         // TODO not sure of the handling of LCD disabled
         // TODO LCD disabled should fill screen with a color brighter than WHITE
 
-        if (!ppu.sent_blank_pixels) {
+        if (!ppu->sent_blank_pixels) {
             // blank screen
             for (int i = 0; i < GB_SCREEN_WIDTH; i++)
                 for (int j = 0; j < GB_SCREEN_HEIGHT; j++)
-                    SET_PIXEL(ppu.pixels, i, j, WHITE);
+                    SET_PIXEL(ppu, i, j, WHITE);
 
-            ppu.new_frame_cb(ppu.pixels);
-            ppu.sent_blank_pixels = 1;
+            ppu->new_frame_cb(ppu->pixels);
+            ppu->sent_blank_pixels = 1;
         }
         PPU_SET_MODE(PPU_MODE_HBLANK);
-        RESET_BIT(mmu.mem[STAT], 2); // set LYC=LY to 0?
-        ppu.cycles = 0;
-        mmu.mem[LY] = 0;
-        ppu.wly = 0;
+        RESET_BIT(mmu->mem[STAT], 2); // set LYC=LY to 0?
+        ppu->cycles = 0;
+        mmu->mem[LY] = 0;
+        ppu->wly = 0;
         return;
     }
 
     // if lcd was just enabled, check for LYC=LY
-    if (ppu.sent_blank_pixels)
-        ppu_ly_lyc_compare();
-    ppu.sent_blank_pixels = 0;
+    if (ppu->sent_blank_pixels)
+        ppu_ly_lyc_compare(emu);
+    ppu->sent_blank_pixels = 0;
 
-    ppu.cycles += cycles;
+    ppu->cycles += cycles;
 
-    switch (mmu.mem[STAT] & 0x03) { // switch current mode
+    switch (mmu->mem[STAT] & 0x03) { // switch current mode
     case PPU_MODE_OAM:
-        if (ppu.cycles >= 80) {
-            ppu.cycles -= 80;
-            oam_scan();
+        if (ppu->cycles >= 80) {
+            ppu->cycles -= 80;
+            oam_scan(emu);
             PPU_SET_MODE(PPU_MODE_DRAWING);
         }
         break;
     case PPU_MODE_DRAWING:
-        if (ppu.cycles >= 172) {
-            ppu.cycles -= 172;
+        if (ppu->cycles >= 172) {
+            ppu->cycles -= 172;
             PPU_SET_MODE(PPU_MODE_HBLANK);
-            if (CHECK_BIT(mmu.mem[STAT], 3))
-                cpu_request_interrupt(IRQ_STAT);
+            if (CHECK_BIT(mmu->mem[STAT], 3))
+                cpu_request_interrupt(emu, IRQ_STAT);
 
-            draw_bg_win();
-            draw_objects();
+            draw_bg_win(emu);
+            draw_objects(emu);
         }
         break;
     case PPU_MODE_HBLANK:
-        if (ppu.cycles >= 204) {
-            ppu.cycles -= 204;
-            mmu.mem[LY]++;
-            ppu_ly_lyc_compare();
+        if (ppu->cycles >= 204) {
+            ppu->cycles -= 204;
+            mmu->mem[LY]++;
+            ppu_ly_lyc_compare(emu);
 
-            if (mmu.mem[LY] == GB_SCREEN_HEIGHT) {
+            if (mmu->mem[LY] == GB_SCREEN_HEIGHT) {
                 PPU_SET_MODE(PPU_MODE_VBLANK);
-                if (CHECK_BIT(mmu.mem[STAT], 4))
-                    cpu_request_interrupt(IRQ_STAT);
+                if (CHECK_BIT(mmu->mem[STAT], 4))
+                    cpu_request_interrupt(emu, IRQ_STAT);
 
-                cpu_request_interrupt(IRQ_VBLANK);
-                if (ppu.new_frame_cb)
-                    ppu.new_frame_cb(ppu.pixels);
+                cpu_request_interrupt(emu, IRQ_VBLANK);
+                if (ppu->new_frame_cb)
+                    ppu->new_frame_cb(ppu->pixels);
             } else {
                 PPU_SET_MODE(PPU_MODE_OAM);
-                if (CHECK_BIT(mmu.mem[STAT], 5))
-                    cpu_request_interrupt(IRQ_STAT);
+                if (CHECK_BIT(mmu->mem[STAT], 5))
+                    cpu_request_interrupt(emu, IRQ_STAT);
             }
         }
         break;
     case PPU_MODE_VBLANK:
-        if (ppu.cycles >= 456) {
-            ppu.cycles -= 456;
-            mmu.mem[LY]++;
-            if (mmu.mem[LY] == 153)
-                ppu_ly_lyc_compare();
+        if (ppu->cycles >= 456) {
+            ppu->cycles -= 456;
+            mmu->mem[LY]++;
+            if (mmu->mem[LY] == 153)
+                ppu_ly_lyc_compare(emu);
 
-            if (mmu.mem[LY] == 154) {
-                mmu.mem[LY] = 0;
-                ppu_ly_lyc_compare();
-                ppu.wly = 0;
+            if (mmu->mem[LY] == 154) {
+                mmu->mem[LY] = 0;
+                ppu_ly_lyc_compare(emu);
+                ppu->wly = 0;
                 PPU_SET_MODE(PPU_MODE_OAM);
-                if (CHECK_BIT(mmu.mem[STAT], 5))
-                    cpu_request_interrupt(IRQ_STAT);
+                if (CHECK_BIT(mmu->mem[STAT], 5))
+                    cpu_request_interrupt(emu, IRQ_STAT);
             }
         }
         break;
     }
 }
 
-void ppu_init(void (*new_frame_cb)(byte_t *pixels)) {
-    ppu = (ppu_t) { .new_frame_cb = new_frame_cb };
+void ppu_init(emulator_t *emu, void (*new_frame_cb)(byte_t *pixels)) {
+    emu->ppu = xcalloc(1, sizeof(ppu_t));
+    emu->ppu->new_frame_cb = new_frame_cb;
+    emu->ppu->pixels = xmalloc(GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 3);
+    emu->ppu->scanline_cache_color_data = xmalloc(GB_SCREEN_WIDTH);
+}
+
+void ppu_quit(emulator_t *emu) {
+    free(emu->ppu->pixels);
+    free(emu->ppu->scanline_cache_color_data);
+    free(emu->ppu);
 }

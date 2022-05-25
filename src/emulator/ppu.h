@@ -1,11 +1,10 @@
 #pragma once
 
-#include "emulator.h"
 #include "types.h"
 #include "mmu.h"
 #include "cpu.h"
 
-#define PPU_IS_MODE(m) ((mmu.mem[STAT] & 0x03) == (m))
+#define PPU_IS_MODE(emu_ptr, m) (((emu_ptr)->mmu->mem[STAT] & 0x03) == (m))
 
 typedef enum {
     PPU_MODE_HBLANK,
@@ -14,38 +13,22 @@ typedef enum {
     PPU_MODE_DRAWING
 } ppu_mode_t;
 
-typedef struct {
-    void (*new_frame_cb)(byte_t *pixels);
-    byte_t current_color_palette;
-
-    byte_t pixels[GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 3];
-    byte_t scanline_cache_color_data[GB_SCREEN_WIDTH];
-
-    byte_t sent_blank_pixels;
-
-    struct {
-        word_t objs_addresses[10];
-        byte_t size;
-    } oam_scan;
-
-    byte_t wly; // window "LY" internal counter
-    int cycles;
-} ppu_t;
-
 extern byte_t ppu_color_palettes[PPU_COLOR_PALETTE_MAX][4][3];
 
-extern ppu_t ppu;
+void inline ppu_ly_lyc_compare(emulator_t *emu) {
+    mmu_t *mmu = emu->mmu;
 
-void ppu_step(int cycles);
-
-void ppu_init(void (*new_frame_cb)(byte_t *pixels));
-
-void inline ppu_ly_lyc_compare(void) {
-    if (mmu.mem[LY] == mmu.mem[LYC]) {
-        SET_BIT(mmu.mem[STAT], 2);
-        if (CHECK_BIT(mmu.mem[STAT], 6))
-            cpu_request_interrupt(IRQ_STAT);
+    if (mmu->mem[LY] == mmu->mem[LYC]) {
+        SET_BIT(mmu->mem[STAT], 2);
+        if (CHECK_BIT(mmu->mem[STAT], 6))
+            cpu_request_interrupt(emu, IRQ_STAT);
     } else {
-        RESET_BIT(mmu.mem[STAT], 2);
+        RESET_BIT(mmu->mem[STAT], 2);
     }
 }
+
+void ppu_step(emulator_t *emu, int cycles);
+
+void ppu_init(emulator_t *emu, void (*new_frame_cb)(byte_t *pixels));
+
+void ppu_quit(emulator_t *emu);

@@ -2,6 +2,10 @@
 
 #include <SDL2/SDL.h>
 
+#include "emulator/emulator.h"
+
+extern emulator_t *emu;
+
 void gbmulator_load_cartridge(const char *path);
 
 void gbmulator_exit(void);

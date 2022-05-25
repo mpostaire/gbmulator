@@ -1,12 +1,9 @@
 #pragma once
 
-typedef struct {
-    int div_counter;
-    int tima_counter;
-} gbtimer_t;
+#include "types.h"
 
-extern gbtimer_t timer;
+void timer_step(emulator_t *emu, int cycles);
 
-void timer_step(int cycles);
+void timer_init(emulator_t *emu);
 
-void timer_init(void);
+void timer_quit(emulator_t *emu);

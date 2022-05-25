@@ -29,6 +29,8 @@ byte_t scale;
 
 char window_title[sizeof(EMULATOR_NAME) + 19];
 
+emulator_t *emu;
+
 void gbmulator_unpause(void) {
     if (is_rom_loaded)
         is_paused = SDL_FALSE;
@@ -82,7 +84,7 @@ int sdl_key_to_joypad(SDL_Keycode key) {
 
 static void save_eram(void) {
     size_t save_length;
-    byte_t *save_data = emulator_get_save_data(&save_length);
+    byte_t *save_data = emulator_get_save_data(emu, &save_length);
     if (!save_data) return;
     byte_t *save = base64_encode(save_data, save_length, NULL);
     local_storage_set_item(rom_title, save);
@@ -98,38 +100,38 @@ EMSCRIPTEN_KEEPALIVE void on_gui_button_down(joypad_button_t button) {
     if (is_paused)
         ui_press_joypad(button);
     else
-        emulator_joypad_press(button);
+        emulator_joypad_press(emu, button);
 }
 
 EMSCRIPTEN_KEEPALIVE void on_gui_button_up(joypad_button_t button) {
-    emulator_joypad_release(button);
+    emulator_joypad_release(emu, button);
 }
 
 EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {
-    if (rom_title) {
+    if (emu) {
         save_eram();
         free(rom_title);
+        emulator_quit(emu);
     }
-    emulator_quit();
 
     rom_title = emulator_get_rom_title_from_data(rom_data, rom_size);
     for (int i = 0; i < 16; i++)
         if (rom_title[i] == ' ')
             rom_title[i] = '_';
 
-    if (!emulator_init_from_data(rom_data, rom_size, NULL, ppu_vblank_cb, apu_samples_ready_cb))
-        return;
+    emu = emulator_init_from_data(rom_data, rom_size, NULL, ppu_vblank_cb, apu_samples_ready_cb);
+    if (!emu) return;
 
     size_t save_length;
     unsigned char *save = local_storage_get_item(rom_title, &save_length);
     if (save) {
-        memcpy(emulator_get_save_data(NULL), save, save_length);
+        memcpy(emulator_get_save_data(emu, NULL), save, save_length);
         free(save);
     }
 
-    emulator_set_apu_speed(config.speed);
-    emulator_set_apu_sound_level(config.sound);
-    emulator_set_color_palette(config.color_palette);
+    emulator_set_apu_speed(emu, config.speed);
+    emulator_set_apu_sound_level(emu, config.sound);
+    emulator_set_color_palette(emu, config.color_palette);
 
     snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
     SDL_SetWindowTitle(window, window_title);
@@ -175,7 +177,7 @@ static void handle_input(void) {
                 snprintf(savestate_path, len + 9, "%s-state-%d", rom_title, event.key.keysym.sym - SDLK_F1);
                 if (event.key.keysym.mod & KMOD_SHIFT) {
                     size_t savestate_length;
-                    byte_t *savestate = emulator_get_state_data(&savestate_length);
+                    byte_t *savestate = emulator_get_state_data(emu, &savestate_length);
                     byte_t *encoded_savestate = base64_encode(savestate, savestate_length, NULL);
                     local_storage_set_item(savestate_path, encoded_savestate);
                     free(encoded_savestate);
@@ -183,17 +185,17 @@ static void handle_input(void) {
                 } else {
                     size_t savestate_length;
                     byte_t *savestate = local_storage_get_item(savestate_path, &savestate_length);
-                    emulator_load_state_data(savestate, savestate_length);
+                    emulator_load_state_data(emu, savestate, savestate_length);
                     free(savestate);
                 }
                 free(savestate_path);
                 break;
             }
-            emulator_joypad_press(sdl_key_to_joypad(event.key.keysym.sym));
+            emulator_joypad_press(emu, sdl_key_to_joypad(event.key.keysym.sym));
             break;
         case SDL_KEYUP:
             if (!event.key.repeat)
-                emulator_joypad_release(sdl_key_to_joypad(event.key.keysym.sym));
+                emulator_joypad_release(emu, sdl_key_to_joypad(event.key.keysym.sym));
             break;
         }
     }
@@ -218,7 +220,7 @@ static void paused_loop(void) {
 
     // update ppu_texture to show color palette changes behind the menu
     if (is_rom_loaded) {
-        SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(), ppu_texture_pitch);
+        SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(emu), ppu_texture_pitch);
         SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
     }
 
@@ -239,14 +241,14 @@ static void loop(void) {
     handle_input(); // keep this the closest possible before emulator_step() to reduce input inaccuracies
 
     // run the emulator for the approximate number of cycles it takes for the ppu to render a frame
-    emulator_run_cycles(GB_CPU_CYCLES_PER_FRAME * config.speed);
+    emulator_run_cycles(emu, GB_CPU_CYCLES_PER_FRAME * config.speed);
 }
 
 int main(int argc, char **argv) {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
 
     config_load("config");
-    emulator_set_color_palette(config.color_palette); // update ui color palette when no rom loaded
+    emu = NULL;
 
     ui_pixels_buffer = ui_init();
 

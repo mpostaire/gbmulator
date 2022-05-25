@@ -1,3 +1,5 @@
+#include <stdlib.h>
+
 #include "emulator.h"
 #include "apu.h"
 #include "mmu.h"
@@ -11,8 +13,6 @@ const byte_t duty_cycles[4][8] = {
     { 1, 0, 0, 0, 0, 1, 1, 1 },
     { 0, 1, 1, 1, 1, 1, 1, 0 }
 };
-
-apu_t apu;
 
 static void channel_step(channel_t *c) {
     c->freq_timer--;
@@ -46,16 +46,16 @@ static void channel_step(channel_t *c) {
     c->duty = duty_cycles[wave_pattern_duty][c->duty_position];
 }
 
-static void channel_length(channel_t *c) {
+static void channel_length(emulator_t *emu, channel_t *c) {
     if (!CHECK_BIT(*c->NRx4, 6)) // length enabled ?
         return;
 
     c->length_counter--;
     if (c->length_counter <= 0)
-        APU_DISABLE_CHANNEL(c->id);
+        APU_DISABLE_CHANNEL(emu, c->id);
 }
 
-static int calc_sweep_freq(channel_t *c) {
+static int calc_sweep_freq(emulator_t *emu, channel_t *c) {
     int freq = c->sweep_freq >> (*c->NRx0 & 0x07);
     if ((*c->NRx0 & 0x08) >> 3)
         freq = c->sweep_freq - freq;
@@ -63,12 +63,12 @@ static int calc_sweep_freq(channel_t *c) {
         freq = c->sweep_freq + freq;
     
     if (freq > 2047)
-        APU_DISABLE_CHANNEL(c->id);
+        APU_DISABLE_CHANNEL(emu, c->id);
     
     return freq;
 }
 
-static void channel_sweep(channel_t *c) {
+static void channel_sweep(emulator_t *emu, channel_t *c) {
     c->sweep_timer--;
     if (c->sweep_timer <= 0) {
         byte_t sweep_period = (*c->NRx0 & 0x70) >> 4;
@@ -76,7 +76,7 @@ static void channel_sweep(channel_t *c) {
     
         if (c->sweep_enabled && sweep_period > 0) {
             byte_t sweep_shift = *c->NRx0 & 0x07;
-            int new_freq = calc_sweep_freq(c);
+            int new_freq = calc_sweep_freq(emu, c);
             
             if (new_freq < 2048 && sweep_shift > 0) {
                 c->sweep_freq = new_freq;
@@ -84,7 +84,7 @@ static void channel_sweep(channel_t *c) {
                 *c->NRx3 = new_freq & 0xFF;
                 *c->NRx4 = (new_freq >> 8) & 0x07;
 
-                calc_sweep_freq(c); // for the overflow check
+                calc_sweep_freq(emu, c); // for the overflow check
             }
         }
     }
@@ -106,8 +106,8 @@ static void channel_envelope(channel_t *c) {
 }
 
 // TODO channel 3 ony enables channel and do nothing else?????
-void apu_channel_trigger(channel_t *c) {
-    APU_ENABLE_CHANNEL(c->id);
+void apu_channel_trigger(emulator_t *emu, channel_t *c) {
+    APU_ENABLE_CHANNEL(emu, c->id);
     if (c->length_counter <= 0)
         c->length_counter = c->id == APU_CHANNEL_3 ? 256 : 64;
 
@@ -133,30 +133,30 @@ void apu_channel_trigger(channel_t *c) {
         c->sweep_enabled = (sweep_period > 0) || (sweep_shift > 0);
 
         if (sweep_shift > 0)
-            calc_sweep_freq(c);
+            calc_sweep_freq(emu, c);
     }
 
     if (c->id == APU_CHANNEL_4)
         c->LFSR = 0x7FFF;
 
     if ((c->id == APU_CHANNEL_3 && !CHECK_BIT(*c->NRx0, 7)) || (c->id != APU_CHANNEL_3 && !(*c->NRx2 >> 3)))
-        APU_DISABLE_CHANNEL(c->id);
+        APU_DISABLE_CHANNEL(emu, c->id);
 }
 
-static float channel_dac(channel_t *c) {
+static float channel_dac(emulator_t *emu, channel_t *c) {
     switch (c->id) {
     case APU_CHANNEL_1:
     case APU_CHANNEL_2:
-        if ((*c->NRx2 >> 3) && APU_IS_CHANNEL_ENABLED(c->id)) // if dac enabled and channel enabled
+        if ((*c->NRx2 >> 3) && APU_IS_CHANNEL_ENABLED(emu, c->id)) // if dac enabled and channel enabled
             return ((c->duty * c->envelope_volume) / 7.5f) - 1.0f;
         break;
     case APU_CHANNEL_3:
         if ((*c->NRx0 >> 7) /*&& APU_IS_CHANNEL_ENABLED(c->id)*/) { // if dac enabled and channel enabled -- TODO check why channel 3 enabled flag is not working properly
-            byte_t sample = mmu.mem[WAVE_RAM + (c->wave_position / 2)];
+            byte_t sample = emu->mmu->mem[WAVE_RAM + (c->wave_position / 2)];
             if (c->wave_position % 2 == 0) // TODO check if this works properly (I think it always reads the 2 nibbles as the same values)
                 sample >>= 4;
             sample &= 0x0F;
-            switch ((mmu.mem[NR32] >> 5) & 0x03) {
+            switch ((emu->mmu->mem[NR32] >> 5) & 0x03) {
             case 0:
                 sample >>= 4; // mute
                 break;
@@ -171,127 +171,136 @@ static float channel_dac(channel_t *c) {
         }
         break;
     case APU_CHANNEL_4: // TODO works but it seems (in Tetris) this channel volume is a bit too loud
-        if ((*c->NRx2 >> 3) && APU_IS_CHANNEL_ENABLED(c->id)) // if dac enabled and channel enabled
+        if ((*c->NRx2 >> 3) && APU_IS_CHANNEL_ENABLED(emu, c->id)) // if dac enabled and channel enabled
             return ((!(c->LFSR & 0x01) * c->envelope_volume) / 7.5f) - 1.0f;
         break;
     }
     return 0.0f;
 }
 
-void apu_step(int cycles) {
-    if (!IS_APU_ENABLED)
+void apu_step(emulator_t *emu, int cycles) {
+    if (!IS_APU_ENABLED(emu))
         return;
 
+    apu_t *apu = emu->apu;
+    mmu_t *mmu = emu->mmu;
+
     while (cycles-- > 0) {
-        apu.frame_sequencer_cycles_count++;
-        if (apu.frame_sequencer_cycles_count >= 8192) { // 512 Hz
-            apu.frame_sequencer_cycles_count = 0;
-            switch (apu.frame_sequencer) {
+        apu->frame_sequencer_cycles_count++;
+        if (apu->frame_sequencer_cycles_count >= 8192) { // 512 Hz
+            apu->frame_sequencer_cycles_count = 0;
+            switch (apu->frame_sequencer) {
             case 0:
-                channel_length(&apu.channel1);
-                channel_length(&apu.channel2);
-                channel_length(&apu.channel3);
-                channel_length(&apu.channel4);
+                channel_length(emu, &apu->channel1);
+                channel_length(emu, &apu->channel2);
+                channel_length(emu, &apu->channel3);
+                channel_length(emu, &apu->channel4);
                 break;
             case 2:
-                channel_length(&apu.channel1);
-                channel_sweep(&apu.channel1);
-                channel_length(&apu.channel2);
-                channel_length(&apu.channel3);
-                channel_length(&apu.channel4);
+                channel_length(emu, &apu->channel1);
+                channel_sweep(emu, &apu->channel1);
+                channel_length(emu, &apu->channel2);
+                channel_length(emu, &apu->channel3);
+                channel_length(emu, &apu->channel4);
                 break;
             case 4:
-                channel_length(&apu.channel1);
-                channel_length(&apu.channel2);
-                channel_length(&apu.channel3);
-                channel_length(&apu.channel4);
+                channel_length(emu, &apu->channel1);
+                channel_length(emu, &apu->channel2);
+                channel_length(emu, &apu->channel3);
+                channel_length(emu, &apu->channel4);
                 break;
             case 6:
-                channel_length(&apu.channel1);
-                channel_sweep(&apu.channel1);
-                channel_length(&apu.channel2);
-                channel_length(&apu.channel3);
-                channel_length(&apu.channel4);
+                channel_length(emu, &apu->channel1);
+                channel_sweep(emu, &apu->channel1);
+                channel_length(emu, &apu->channel2);
+                channel_length(emu, &apu->channel3);
+                channel_length(emu, &apu->channel4);
                 break;
             case 7:
-                channel_envelope(&apu.channel1);
-                channel_envelope(&apu.channel2);
-                channel_envelope(&apu.channel4);
+                channel_envelope(&apu->channel1);
+                channel_envelope(&apu->channel2);
+                channel_envelope(&apu->channel4);
                 break;
             }
-            apu.frame_sequencer = (apu.frame_sequencer + 1) % 8;
+            apu->frame_sequencer = (apu->frame_sequencer + 1) % 8;
         }
 
-        channel_step(&apu.channel1);
-        channel_step(&apu.channel2);
-        channel_step(&apu.channel3);
-        channel_step(&apu.channel4);
+        channel_step(&apu->channel1);
+        channel_step(&apu->channel2);
+        channel_step(&apu->channel3);
+        channel_step(&apu->channel4);
 
-        apu.take_sample_cycles_count++;
-        if (apu.take_sample_cycles_count >= (GB_CPU_FREQ / GB_APU_SAMPLE_RATE) * apu.speed) { // 44100 Hz (if speed == 1.0f)
-            apu.take_sample_cycles_count = 0;
+        apu->take_sample_cycles_count++;
+        if (apu->take_sample_cycles_count >= (GB_CPU_FREQ / GB_APU_SAMPLE_RATE) * apu->speed) { // 44100 Hz (if speed == 1.0f)
+            apu->take_sample_cycles_count = 0;
 
-            float S01_volume = ((mmu.mem[NR50] & 0x07) + 1) / 8.0f; // keep it between 0.0f and 1.0f
-            float S02_volume = (((mmu.mem[NR50] & 0x70) >> 4) + 1) / 8.0f; // keep it between 0.0f and 1.0f
-            float S01_output = ((CHECK_BIT(mmu.mem[NR51], APU_CHANNEL_1) ? channel_dac(&apu.channel1) : 0.0f)
-                                + (CHECK_BIT(mmu.mem[NR51], APU_CHANNEL_2) ? channel_dac(&apu.channel2) : 0.0f)
-                                + (CHECK_BIT(mmu.mem[NR51], APU_CHANNEL_3) ? channel_dac(&apu.channel3) : 0.0f)
-                                + (CHECK_BIT(mmu.mem[NR51], APU_CHANNEL_4) ? channel_dac(&apu.channel4) : 0.0f)) / 4.0f;
-            float S02_output = ((CHECK_BIT(mmu.mem[NR51], APU_CHANNEL_1 + 4) ? channel_dac(&apu.channel1) : 0.0f)
-                                + (CHECK_BIT(mmu.mem[NR51], APU_CHANNEL_2 + 4) ? channel_dac(&apu.channel2) : 0.0f)
-                                + (CHECK_BIT(mmu.mem[NR51], APU_CHANNEL_3 + 4) ? channel_dac(&apu.channel3) : 0.0f)
-                                + (CHECK_BIT(mmu.mem[NR51], APU_CHANNEL_4 + 4) ? channel_dac(&apu.channel4) : 0.0f)) / 4.0f;
+            float S01_volume = ((mmu->mem[NR50] & 0x07) + 1) / 8.0f; // keep it between 0.0f and 1.0f
+            float S02_volume = (((mmu->mem[NR50] & 0x70) >> 4) + 1) / 8.0f; // keep it between 0.0f and 1.0f
+            float S01_output = ((CHECK_BIT(mmu->mem[NR51], APU_CHANNEL_1) ? channel_dac(emu, &apu->channel1) : 0.0f)
+                                + (CHECK_BIT(mmu->mem[NR51], APU_CHANNEL_2) ? channel_dac(emu, &apu->channel2) : 0.0f)
+                                + (CHECK_BIT(mmu->mem[NR51], APU_CHANNEL_3) ? channel_dac(emu, &apu->channel3) : 0.0f)
+                                + (CHECK_BIT(mmu->mem[NR51], APU_CHANNEL_4) ? channel_dac(emu, &apu->channel4) : 0.0f)) / 4.0f;
+            float S02_output = ((CHECK_BIT(mmu->mem[NR51], APU_CHANNEL_1 + 4) ? channel_dac(emu, &apu->channel1) : 0.0f)
+                                + (CHECK_BIT(mmu->mem[NR51], APU_CHANNEL_2 + 4) ? channel_dac(emu, &apu->channel2) : 0.0f)
+                                + (CHECK_BIT(mmu->mem[NR51], APU_CHANNEL_3 + 4) ? channel_dac(emu, &apu->channel3) : 0.0f)
+                                + (CHECK_BIT(mmu->mem[NR51], APU_CHANNEL_4 + 4) ? channel_dac(emu, &apu->channel4) : 0.0f)) / 4.0f;
 
             // S02 (left)
-            apu.audio_buffer[apu.audio_buffer_index++] = S02_output * S02_volume * apu.global_sound_level;
+            apu->audio_buffer[apu->audio_buffer_index++] = S02_output * S02_volume * apu->global_sound_level;
             // S01 (right)
-            apu.audio_buffer[apu.audio_buffer_index++] = S01_output * S01_volume * apu.global_sound_level;
+            apu->audio_buffer[apu->audio_buffer_index++] = S01_output * S01_volume * apu->global_sound_level;
         }
 
-        if (apu.audio_buffer_index >= GB_APU_SAMPLE_COUNT) {
-            apu.audio_buffer_index = 0;
-            if (apu.samples_ready_cb)
-                apu.samples_ready_cb(apu.audio_buffer, sizeof(apu.audio_buffer));
+        if (apu->audio_buffer_index >= GB_APU_SAMPLE_COUNT) {
+            apu->audio_buffer_index = 0;
+            if (apu->samples_ready_cb)
+                apu->samples_ready_cb(apu->audio_buffer, sizeof(apu->audio_buffer));
         }
     }
 }
 
 // TODO find a way to make sampling_freq_multiplier unnecessary
-void apu_init(float global_sound_level, float speed, void (*samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
-    apu = (apu_t) {
-        .global_sound_level = CLAMP(global_sound_level, 0.0f, 1.0f),
-        .speed = speed,
-        .samples_ready_cb = samples_ready_cb,
-        .channel1 = (channel_t) {
-            .NRx0 = &mmu.mem[NR10],
-            .NRx1 = &mmu.mem[NR11],
-            .NRx2 = &mmu.mem[NR12],
-            .NRx3 = &mmu.mem[NR13],
-            .NRx4 = &mmu.mem[NR14],
-            .id = APU_CHANNEL_1
-        },
-        .channel2 = (channel_t) { 
-            .NRx1 = &mmu.mem[NR21],
-            .NRx2 = &mmu.mem[NR22],
-            .NRx3 = &mmu.mem[NR23],
-            .NRx4 = &mmu.mem[NR24],
-            .id = APU_CHANNEL_2
-        },
-        .channel3 = (channel_t) {
-            .NRx0 = &mmu.mem[NR30],
-            .NRx1 = &mmu.mem[NR31],
-            .NRx2 = &mmu.mem[NR32],
-            .NRx3 = &mmu.mem[NR33],
-            .NRx4 = &mmu.mem[NR34],
-            .id = APU_CHANNEL_3
-        },
-        .channel4 = (channel_t) { 
-            .NRx1 = &mmu.mem[NR41],
-            .NRx2 = &mmu.mem[NR42],
-            .NRx3 = &mmu.mem[NR43],
-            .NRx4 = &mmu.mem[NR44],
-            .LFSR = 0,
-            .id = APU_CHANNEL_4
-        }
+void apu_init(emulator_t *emu, float global_sound_level, float speed, void (*samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
+    apu_t *apu = xcalloc(1, sizeof(apu_t));
+
+    apu->global_sound_level = CLAMP(global_sound_level, 0.0f, 1.0f);
+    apu->speed = speed;
+    apu->samples_ready_cb = samples_ready_cb;
+    apu->channel1 = (channel_t) {
+        .NRx0 = &emu->mmu->mem[NR10],
+        .NRx1 = &emu->mmu->mem[NR11],
+        .NRx2 = &emu->mmu->mem[NR12],
+        .NRx3 = &emu->mmu->mem[NR13],
+        .NRx4 = &emu->mmu->mem[NR14],
+        .id = APU_CHANNEL_1
     };
+    apu->channel2 = (channel_t) { 
+        .NRx1 = &emu->mmu->mem[NR21],
+        .NRx2 = &emu->mmu->mem[NR22],
+        .NRx3 = &emu->mmu->mem[NR23],
+        .NRx4 = &emu->mmu->mem[NR24],
+        .id = APU_CHANNEL_2
+    };
+    apu->channel3 = (channel_t) {
+        .NRx0 = &emu->mmu->mem[NR30],
+        .NRx1 = &emu->mmu->mem[NR31],
+        .NRx2 = &emu->mmu->mem[NR32],
+        .NRx3 = &emu->mmu->mem[NR33],
+        .NRx4 = &emu->mmu->mem[NR34],
+        .id = APU_CHANNEL_3
+    };
+    apu->channel4 = (channel_t) { 
+        .NRx1 = &emu->mmu->mem[NR41],
+        .NRx2 = &emu->mmu->mem[NR42],
+        .NRx3 = &emu->mmu->mem[NR43],
+        .NRx4 = &emu->mmu->mem[NR44],
+        .LFSR = 0,
+        .id = APU_CHANNEL_4
+    };
+
+    emu->apu = apu;
+}
+
+void apu_quit(emulator_t *emu) {
+    free(emu->apu);
 }

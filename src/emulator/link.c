@@ -7,7 +7,9 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-#include "utils.h"
+#include <stdlib.h>
+
+#include "emulator.h"
 #include "cpu.h"
 #include "mmu.h"
 #include "link.h"
@@ -17,42 +19,40 @@
 // TODO handle disconnection
 // TODO this may cause glitches in sound emulation due to the blocking send and recv (investigate when sound is implemented)
 
-struct link_t {
-    int cycles_counter;
-    int bit_counter;
-    int sfd; // server's socket used only by the server
-    int is_server;
-    int other_sfd;
-    int connected;
-    struct sockaddr_in other_addr;
-} serial_link;
-
 typedef struct {
     byte_t data;
     byte_t transfer;
 } pkt_t;
 
-void link_init(void) {
-    serial_link = (struct link_t) {
-        .other_sfd = -1,
-        .sfd = -1
-    };
+void link_init(emulator_t *emu) {
+    emu->link = xcalloc(1, sizeof(link_t));
+    emu->link->other_sfd = -1;
+    emu->link->sfd = -1;
 }
 
-int link_start_server(const int port) {
-    if (serial_link.sfd != -1 || serial_link.is_server)
+void link_quit(emulator_t *emu) {
+    close(emu->link->other_sfd);
+    if (emu->link->is_server)
+        close(emu->link->sfd);
+    free(emu->link);
+}
+
+int link_start_server(emulator_t *emu, const int port) {
+    link_t *link = emu->link;
+
+    if (link->sfd != -1 || link->is_server)
         return 0;
 
-    serial_link.sfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP);
-    if (serial_link.sfd == -1) {
+    link->sfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP);
+    if (link->sfd == -1) {
         errnoprintf("socket");
         return 0;
     }
     int option = 1;
-    if (setsockopt(serial_link.sfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option))) {
+    if (setsockopt(link->sfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option))) {
         errnoprintf("setsockopt");
-        close(serial_link.sfd);
-        serial_link.sfd = -1;
+        close(link->sfd);
+        link->sfd = -1;
         return 0;
     };
 
@@ -61,90 +61,86 @@ int link_start_server(const int port) {
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
 
-    if (bind(serial_link.sfd, (struct sockaddr *) &addr, sizeof(addr)) == -1) {
+    if (bind(link->sfd, (struct sockaddr *) &addr, sizeof(addr)) == -1) {
         errnoprintf("bind");
-        close(serial_link.sfd);
-        serial_link.sfd = -1;
+        close(link->sfd);
+        link->sfd = -1;
         return 0;
     }
 
-    if (listen(serial_link.sfd, 1) == -1) {
+    if (listen(link->sfd, 1) == -1) {
         errnoprintf("listen");
-        close(serial_link.sfd);
-        serial_link.sfd = -1;
+        close(link->sfd);
+        link->sfd = -1;
         return 0;
     }
 
-    serial_link.is_server = 1;
+    link->is_server = 1;
 
     printf("Link server waiting for client on port %d...\n", port);
 
     return 1;
 }
 
-int link_connect_to_server(const char* address, const int port) {
-    if (serial_link.other_sfd != -1 || serial_link.is_server)
+int link_connect_to_server(emulator_t *emu, const char* address, const int port) {
+    link_t *link = emu->link;
+
+    if (link->other_sfd != -1 || link->is_server)
         return 0;
 
-    serial_link.other_sfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP);
-    if (serial_link.other_sfd == -1) {
+    link->other_sfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP);
+    if (link->other_sfd == -1) {
         errnoprintf("socket");
         return 0;
     }
 
-    serial_link.other_addr.sin_addr.s_addr = inet_addr(address); // local host
-    serial_link.other_addr.sin_family = AF_INET;
-    serial_link.other_addr.sin_port = htons(port);
+    link->other_addr.sin_addr.s_addr = inet_addr(address); // local host
+    link->other_addr.sin_family = AF_INET;
+    link->other_addr.sin_port = htons(port);
 
-    int ret = connect(serial_link.other_sfd, (struct sockaddr *) &serial_link.other_addr, sizeof(serial_link.other_addr));
+    int ret = connect(link->other_sfd, (struct sockaddr *) &link->other_addr, sizeof(link->other_addr));
     if (ret == -1 && errno != EINPROGRESS) {
         errnoprintf("connect");
-        close(serial_link.other_sfd);
-        serial_link.other_sfd = -1;
+        close(link->other_sfd);
+        link->other_sfd = -1;
         return 0;
     }
 
-    serial_link.is_server = 0;
+    link->is_server = 0;
 
     printf("Link client connecting to server %s:%d...\n", address, port);
 
     return 1;
 }
 
-void link_close_connection(void) {
-    close(serial_link.other_sfd);
-    if (serial_link.is_server)
-        close(serial_link.sfd);
-}
-
 /**
  * Check if a connection has been made without blocking.
  */
-static void complete_connection(void) {
-    if (serial_link.is_server) {
-        socklen_t other_addr_len = sizeof(serial_link.other_addr);
-        serial_link.other_sfd = accept(serial_link.sfd, (struct sockaddr *) &serial_link.other_addr, &other_addr_len);
-        if (serial_link.other_sfd == -1) {
+static void complete_connection(link_t *link) {
+    if (link->is_server) {
+        socklen_t other_addr_len = sizeof(link->other_addr);
+        link->other_sfd = accept(link->sfd, (struct sockaddr *) &link->other_addr, &other_addr_len);
+        if (link->other_sfd == -1) {
             if (errno != EAGAIN)
                 errnoprintf("accept");
             return;
         }
-        fcntl(serial_link.other_sfd, F_SETFL, 0); // make other_sfd blocking
-        serial_link.connected = 1;
-        printf("Connected to %s:%d\n", inet_ntoa(serial_link.other_addr.sin_addr), ntohs(serial_link.other_addr.sin_port));
+        fcntl(link->other_sfd, F_SETFL, 0); // make other_sfd blocking
+        link->connected = 1;
+        printf("Connected to %s:%d\n", inet_ntoa(link->other_addr.sin_addr), ntohs(link->other_addr.sin_port));
     } else {
         struct pollfd fds;
-        fds.fd = serial_link.other_sfd;
+        fds.fd = link->other_sfd;
         fds.events = POLLOUT;
         if (poll(&fds, 1, 0) == 1) {
             char buf;
-            if (send(serial_link.other_sfd, &buf, 0, MSG_NOSIGNAL) == 0) {
-                serial_link.connected = 1;
-                printf("Connected to %s:%d\n", inet_ntoa(serial_link.other_addr.sin_addr), ntohs(serial_link.other_addr.sin_port));
-                fcntl(serial_link.other_sfd, F_SETFL, 0); // make other_sfd blocking
+            if (send(link->other_sfd, &buf, 0, MSG_NOSIGNAL) == 0) {
+                link->connected = 1;
+                printf("Connected to %s:%d\n", inet_ntoa(link->other_addr.sin_addr), ntohs(link->other_addr.sin_port));
+                fcntl(link->other_sfd, F_SETFL, 0); // make other_sfd blocking
             } else {
-                close(serial_link.other_sfd);
-                serial_link.other_sfd = -1;
+                close(link->other_sfd);
+                link->other_sfd = -1;
                 errnoprintf("could not make a connection");
             }
         }
@@ -170,47 +166,50 @@ static void complete_connection(void) {
  * 
  * If emulator on 1 computer faster than the other, may cause problems --> cpu cycle sync important?
  */
-void link_step(int cycles) {
-    serial_link.cycles_counter += cycles;
+void link_step(emulator_t *emu, int cycles) {
+    link_t *link = emu->link;
+    mmu_t *mmu = emu->mmu;
+
+    link->cycles_counter += cycles;
 
     // TODO this should be a 8192 Hz clock (cycles_counter >= 512)... but as it's too fast and cause bugs, this will do for now
-    if (serial_link.cycles_counter >= 4096) {
-        serial_link.cycles_counter -= 4096; // keep leftover cycles (if any)
+    if (link->cycles_counter >= 4096) {
+        link->cycles_counter -= 4096; // keep leftover cycles (if any)
 
-        if (!serial_link.connected)
-            complete_connection();
+        if (!link->connected)
+            complete_connection(link);
 
         // transfer requested / in progress with internal clock (we are the master of the connection)
         byte_t transfer = 0;
-        if (CHECK_BIT(mmu.mem[SC], 7) && CHECK_BIT(mmu.mem[SC], 0)) {
-            if (serial_link.bit_counter < 8) { // emulate 8 bit shifting
-                serial_link.bit_counter++;
+        if (CHECK_BIT(mmu->mem[SC], 7) && CHECK_BIT(mmu->mem[SC], 0)) {
+            if (link->bit_counter < 8) { // emulate 8 bit shifting
+                link->bit_counter++;
             } else {
-                serial_link.bit_counter = 0;
+                link->bit_counter = 0;
                 transfer = 1;
             }
         }
 
-        if (serial_link.connected) {
+        if (link->connected) {
             // send our SB register and transfer flag
-            pkt_t outbuf = { .data = mmu.mem[SB], .transfer = transfer };
-            send(serial_link.other_sfd, &outbuf, sizeof(outbuf), MSG_NOSIGNAL);
+            pkt_t outbuf = { .data = mmu->mem[SB], .transfer = transfer };
+            send(link->other_sfd, &outbuf, sizeof(outbuf), MSG_NOSIGNAL);
 
             // receive their SB register and transfer flag
             pkt_t inbuf = { 0 };
-            recv(serial_link.other_sfd, &inbuf, sizeof(inbuf), MSG_NOSIGNAL);
+            recv(link->other_sfd, &inbuf, sizeof(inbuf), MSG_NOSIGNAL);
 
             // if either one of us initiate the transfer (transfer flag is true), swap our SB registers and request interrupt
             if (outbuf.transfer || inbuf.transfer) {
                 // printf("send %02X, recv %02X\n", outbuf.data, inbuf.data);
-                mmu.mem[SB] = inbuf.data;
-                RESET_BIT(mmu.mem[SC], 7);
-                cpu_request_interrupt(IRQ_SERIAL);
+                mmu->mem[SB] = inbuf.data;
+                RESET_BIT(mmu->mem[SC], 7);
+                cpu_request_interrupt(emu, IRQ_SERIAL);
             }
         } else if (transfer) { // not connected but still transfer pending
-            mmu.mem[SB] = 0xFF;
-            RESET_BIT(mmu.mem[SC], 7);
-            cpu_request_interrupt(IRQ_SERIAL);
+            mmu->mem[SB] = 0xFF;
+            RESET_BIT(mmu->mem[SC], 7);
+            cpu_request_interrupt(emu, IRQ_SERIAL);
         }
     }
 }
