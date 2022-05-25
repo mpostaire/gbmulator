@@ -19,7 +19,7 @@ typedef struct {
     char *save_filepath;
     char rom_title[17];
 
-    byte_t cartridge[8000000];
+    byte_t cartridge[8400000];
     // do not move the 'mem' member (savestate.c uses offsetof mem on this struct)
     // everything that is below this line will be saved in the savestates
     byte_t mem[0x10000];
@@ -28,11 +28,22 @@ typedef struct {
     byte_t mbc;
     byte_t rom_banks;
     byte_t ram_banks;
-    byte_t current_rom_bank;
+    word_t current_rom_bank;
     s_word_t current_eram_bank;
     byte_t mbc1_mode;
     byte_t eram_enabled;
-    rtc_t rtc;
+
+    struct {
+        byte_t s;
+        byte_t m;
+        byte_t h;
+        byte_t dl;
+        byte_t dh;
+        time_t value_in_seconds; // current rtc counter seconds, minutes, hours and days in seconds (helps with rtc_update())
+        byte_t enabled;
+        byte_t reg; // rtc register
+        byte_t latch;
+    } rtc;
 } mmu_t;
 
 typedef enum {
@@ -112,7 +123,7 @@ typedef enum {
     MBC1,
     MBC2,
     MBC3,
-    MBC5,
+    MBC5 = 5,
     MBC6,
     MBC7
 } mbc_type_t;

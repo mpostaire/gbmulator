@@ -53,12 +53,12 @@ The following table show the default keybindings (they can be changed in GBmulat
 
 ## TODO
 
-- memory DMA transfer not instant + blocks everything except hram
-- rewrite ppu from scanline rendering to cycle accurate rendering
 - GBC mode
-- better mbc support
+- fix mbc bugs + implement missing mbcs
 - fix apu bugs
-- Fix buggy serial data transfer
+- memory DMA transfer not instant + blocks everything except hram (low priority)
+- rewrite ppu from scanline rendering to cycle accurate rendering
+- fix buggy serial data transfer
 
 ## Resources used
 - https://gbdev.io/pandocs/

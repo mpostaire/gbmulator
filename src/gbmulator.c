@@ -6,11 +6,17 @@
 #include "config.h"
 #include "emulator/emulator.h"
 
-// FIXME LY==LYC interrupt buggy, in fact most of the ppu is (check argentum emulator ppu code to understand how its handled)
-
 // TODO fix pause menu when starting game link connexion while pause menu is still active (it's working but weirdly so low priority)
 
 // TODO MBCs are poorly implemented (see https://github.com/drhelius/Gearboy to understand its handled)
+
+// TODO sdl gamepad support (like ps3 controller) - with no configurable bindings
+
+// TODO switch gb/gbc mode in settings -- if a rom is already running, reset gameboy
+// TODO reset gameboy in ui main menu
+// TODO 
+
+// TODO ppu lcd off should take multiple cycles to turn on again?
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;

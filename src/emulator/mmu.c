@@ -16,7 +16,7 @@ mmu_t mmu;
 
 static int parse_cartridge(void) {
     if (mmu.cartridge[0x0143] == 0xC0) {
-        eprintf("CGB only rom: this emulator does not support CGB games yet\n");
+        eprintf("CGB only rom: this emulator does not support CGB only games yet\n");
         return 0;
     }
 
@@ -33,14 +33,14 @@ static int parse_cartridge(void) {
     case 0x0F: case 0x10: case 0x11: case 0x12: case 0x13:
         mmu.mbc = MBC3;
         break;
-    // case 0x19: case 0x1A: case 0x1B: case 0x1C: case 0x1D: case 0x1E:
-    //     mbc = MBC5;
-    //     break;
+    case 0x19: case 0x1A: case 0x1B: case 0x1C: case 0x1D: case 0x1E:
+        mmu.mbc = MBC5;
+        break;
     // case 0x20:
-    //     mbc = MBC6;
+    //     mmu.mbc = MBC6;
     //     break;
     // case 0x22:
-    //     mbc = MBC7;
+    //     mmu.mbc = MBC7;
     //     break;
     default:
         eprintf("MBC byte %02X not supported\n", mmu.cartridge[0x0147]);
@@ -97,8 +97,8 @@ static int parse_cartridge(void) {
 
 int mmu_init(char *rom_path, char *save_path) {
     const char *dot = strrchr(rom_path, '.');
-    if (!dot || strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb")))) {
-        eprintf("%s: wrong file extension\n", rom_path);
+    if (!dot || (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) && strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))))) {
+        eprintf("%s: wrong file extension (expected .gb or .gbc)\n", rom_path);
         return 0;
     }
 
@@ -244,11 +244,12 @@ static void write_mbc_registers(word_t address, byte_t data) {
         }
         break;
     case MBC3:
+        // TODO fix this casue in pokemon gold no window available for popping error on any action that saves to eram or needs to access large rom?
         if (address < 0x2000) {
             mmu.eram_enabled = (data & 0x0F) == 0x0A;
             mmu.rtc.enabled = (data & 0x0F) == 0x0A;
         } else if (address < 0x4000) {
-            mmu.current_rom_bank = data & 0x7F;
+            mmu.current_rom_bank = data;// & 0x7F;
             if (mmu.current_rom_bank == 0x00)
                 mmu.current_rom_bank = 0x01; // 0x00 not allowed
             mmu.current_rom_bank &= mmu.rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
@@ -264,6 +265,21 @@ static void write_mbc_registers(word_t address, byte_t data) {
             if (mmu.rtc.latch == 0x00 && data == 0x01 && !CHECK_BIT(mmu.rtc.dh, 6))
                 rtc_update();
             mmu.rtc.latch = data;
+        }
+        break;
+    case MBC5:
+        if (address < 0x2000) {
+            mmu.eram_enabled = (data & 0x0F) == 0x0A;
+        } else if (address < 0x3000) {
+            mmu.current_rom_bank = (mmu.current_rom_bank & 0x100) | data;
+            mmu.current_rom_bank &= mmu.rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
+        } else if (address < 0x4000) {
+            mmu.current_rom_bank = ((data & 1) << 8) | mmu.current_rom_bank;
+            mmu.current_rom_bank &= mmu.rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
+        } else if (address < 0x6000) {
+            mmu.current_eram_bank = data & 0x0F;
+            mmu.current_eram_bank &= mmu.ram_banks - 1; // in this case, equivalent to current_eram_bank %= ram_banks but avoid division by 0
+            // TODO On cartridges which feature a rumble motor, bit 3 controls the rumble motor instead of the RAM chip.
         }
         break;
     default:
@@ -296,13 +312,18 @@ static void write_mbc_eram(word_t address, byte_t data) {
             }
         }
         break;
+    case MBC5:
+        if (mmu.eram_enabled)
+            mmu.eram[(address - 0xA000) + (mmu.current_eram_bank * 0x2000)] = data;
+        // TODO MBC5 eram is the same as for MBC1, except that RAM sizes are 8 KiB, 32 KiB and 128 KiB.
+        break;
     default:
         break;
     }
 }
 
 byte_t mmu_read(word_t address) {
-    if (mmu.mbc == MBC1 || mmu.mbc == MBC2 || mmu.mbc == MBC3) { // TODO not all mooneye's MBC tests pass
+    if (mmu.mbc >= MBC1 && mmu.mbc <= MBC5) { // TODO not all mooneye's MBC tests pass
         if (address >= 0x4000 && address < 0x8000) // ROM_BANKN
             return mmu.cartridge[(address - 0x4000) + (mmu.current_rom_bank * 0x4000)];
 
