@@ -88,7 +88,8 @@ byte_t *emulator_get_save_data(emulator_t *emu, size_t *save_length) {
         *save_length = 0;
         return NULL;
     }
-    *save_length = sizeof(emu->mmu->eram);
+    if (save_length)
+        *save_length = sizeof(emu->mmu->eram);
     return emu->mmu->eram;
 }
 
@@ -102,6 +103,8 @@ char *emulator_get_rom_title_from_data(byte_t *rom_data, size_t size) {
     char *rom_title = xmalloc(17);
     memcpy(rom_title, (char *) &rom_data[0x134], 16);
     rom_title[16] = '\0';
+    if (rom_data[0x0143] == 0xC0 || rom_data[0x0143] == 0x80)
+        rom_title[15] = '\0';
     return rom_title;
 }
 

@@ -191,10 +191,11 @@ static void handle_input(void) {
                 free(savestate_path);
                 break;
             }
-            emulator_joypad_press(emu, sdl_key_to_joypad(event.key.keysym.sym));
+            if (emu)
+                emulator_joypad_press(emu, sdl_key_to_joypad(event.key.keysym.sym));
             break;
         case SDL_KEYUP:
-            if (!event.key.repeat)
+            if (!event.key.repeat && emu)
                 emulator_joypad_release(emu, sdl_key_to_joypad(event.key.keysym.sym));
             break;
         }

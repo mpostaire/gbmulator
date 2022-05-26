@@ -101,16 +101,15 @@ int mmu_init(emulator_t *emu, char *rom_path, char *save_path) {
     mmu_t *mmu = xcalloc(1, sizeof(mmu_t));
     mmu->current_rom_bank = 1;
 
-    size_t len = strlen(save_path);
-    emu->save_filepath = xmalloc(len + 2);
-    snprintf(emu->save_filepath, len + 1, "%s", save_path);
+    if (save_path) {
+        size_t len = strlen(save_path);
+        emu->save_filepath = xmalloc(len + 2);
+        snprintf(emu->save_filepath, len + 1, "%s", save_path);
+    }
 
-    len = strlen(rom_path);
+    size_t len = strlen(rom_path);
     emu->rom_filepath = xmalloc(len + 2);
     snprintf(emu->rom_filepath, len + 1, "%s", rom_path);
-
-    memset(mmu->mem, 0, sizeof(mmu->mem));
-    memset(mmu->eram, 0, sizeof(mmu->eram));
 
     FILE *f = fopen(rom_path, "rb");
     if (!f) {
@@ -140,11 +139,11 @@ int mmu_init_from_data(emulator_t *emu, const byte_t *rom_data, size_t size, cha
     mmu_t *mmu = xcalloc(1, sizeof(mmu_t));
     mmu->current_rom_bank = 1;
 
-    size_t len = strlen(save_path);
-    emu->save_filepath = xmalloc(len + 2);
-    snprintf(emu->save_filepath, len + 1, "%s", save_path);
-    memset(mmu->mem, 0, sizeof(mmu->mem));
-    memset(mmu->eram, 0, sizeof(mmu->eram));
+    if (save_path) {
+        size_t len = strlen(save_path);
+        emu->save_filepath = xmalloc(len + 2);
+        snprintf(emu->save_filepath, len + 1, "%s", save_path);
+    }
 
     memcpy(mmu->cartridge, rom_data, size);
     emu->mmu = mmu;

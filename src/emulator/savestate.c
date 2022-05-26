@@ -135,9 +135,6 @@ byte_t *emulator_get_state_data(emulator_t *emu, size_t *length) {
     memcpy(savestate->header.identifier, FORMAT_STRING, sizeof(savestate->header.identifier));
 
     memcpy(savestate->header.rom_title, emu->rom_title, sizeof(savestate->header.rom_title));
-    for (int i = 0; i < 16; i++)
-        if (savestate->header.rom_title[i] == '\0')
-            savestate->header.rom_title[i] = ' ';
 
     memcpy(&savestate->cpu, emu->cpu, sizeof(cpu_t));
 
