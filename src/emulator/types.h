@@ -96,11 +96,11 @@ typedef struct {
     // do not move the 'mem' member (savestate.c uses offsetof mem on this struct)
     // everything that is below this line will be saved in the savestates
     byte_t mem[0x10000];
-    byte_t eram[0x8000]; // max 4 banks of size 0x2000
+    byte_t eram[0x20000]; // max 16 banks of size 0x2000
 
     mbc_type_t mbc;
     byte_t rom_banks;
-    byte_t ram_banks;
+    byte_t eram_banks;
     word_t current_rom_bank;
     s_word_t current_eram_bank;
     byte_t mbc1_mode;

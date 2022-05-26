@@ -47,11 +47,11 @@ static int parse_cartridge(mmu_t *mmu) {
     mmu->rom_banks = 2 << mmu->cartridge[0x0148];
 
     switch (mmu->cartridge[0x0149]) {
-    case 0x00: mmu->ram_banks = 0; break;
-    case 0x02: mmu->ram_banks = 1; break;
-    case 0x03: mmu->ram_banks = 4; break;
-    case 0x04: mmu->ram_banks = 16; break;
-    case 0x05: mmu->ram_banks = 8; break;
+    case 0x00: mmu->eram_banks = 0; break;
+    case 0x02: mmu->eram_banks = 1; break;
+    case 0x03: mmu->eram_banks = 4; break;
+    case 0x04: mmu->eram_banks = 16; break;
+    case 0x05: mmu->eram_banks = 8; break;
     default:
         // TODO handle this case
         break;
@@ -61,7 +61,7 @@ static int parse_cartridge(mmu_t *mmu) {
     memcpy(mmu->rom_title, (char *) &mmu->cartridge[0x134], 16);
     mmu->rom_title[16] = '\0';
     printf("Playing %s\n", mmu->rom_title);
-    printf("Cartridge using MBC%d with %d ROM banks + %d RAM banks\n", mmu->mbc, mmu->rom_banks, mmu->ram_banks);
+    printf("Cartridge using MBC%d with %d ROM banks + %d RAM banks\n", mmu->mbc, mmu->rom_banks, mmu->eram_banks);
 
     // checksum validation
     int sum = 0;
@@ -84,7 +84,7 @@ static int parse_cartridge(mmu_t *mmu) {
         // if there is a save file, load it into eram
         if (f) {
             if (!fread(mmu->eram, sizeof(mmu->eram), 1, f))
-                errnoprintf("reading %s\n", mmu->save_filepath);
+                errnoprintf("reading %s", mmu->save_filepath);
             fclose(f);
         }
     }
@@ -153,7 +153,7 @@ int mmu_init_from_data(emulator_t *emu, const byte_t *rom_data, size_t size, cha
 }
 
 static int save_eram(mmu_t *mmu) {
-    if (!mmu->ram_banks || !mmu->save_filepath)
+    if (!mmu->eram_banks || !mmu->save_filepath)
         return 0;
 
     make_parent_dirs(mmu->rom_filepath);
@@ -198,7 +198,7 @@ static void rtc_update(mmu_t *mmu) {
         SET_BIT(mmu->rtc.dh, 7);
         d %= 0x0200;
     }
-    mmu->rtc.dh |= (d & 0x01) >> 8;
+    mmu->rtc.dh |= (d & 0x100) >> 8;
     mmu->rtc.dl = d & 0xFF;
 
     mmu->rtc.h = elapsed / 3600;
@@ -211,12 +211,11 @@ static void rtc_update(mmu_t *mmu) {
 }
 
 // TODO MBC1 special cases where rom bank 0 is changed are not implemented
-// TODO rewrite mbc to use true registers
 static void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) {
     switch (mmu->mbc) {
     case MBC0:
         break; // read only, do nothing
-    case MBC1: // TODO not all mooneye's MBC tests pass
+    case MBC1:
         if (address < 0x2000) {
             mmu->eram_enabled = (data & 0x0F) == 0x0A;
         } else if (address < 0x4000) {
@@ -227,7 +226,7 @@ static void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) {
         } else if (address < 0x6000) {
             if (mmu->mbc1_mode) { // ROM mode
                 mmu->current_eram_bank = data & 0x03;
-                mmu->current_eram_bank &= mmu->ram_banks - 1; // in this case, equivalent to current_eram_bank %= ram_banks but avoid division by 0
+                mmu->current_eram_bank &= mmu->eram_banks - 1; // in this case, equivalent to current_eram_bank %= eram_banks but avoid division by 0
             } else {
                 mmu->current_rom_bank = ((data & 0x03) << 5) | (mmu->current_rom_bank & 0x1F);
                 // commenting this passes more tests but I think its necessary to keep it so the problem may come from the read instead of the write?
@@ -240,7 +239,7 @@ static void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) {
             mmu->mbc1_mode = data & 0x01;
         }
         break;
-    case MBC2: // TODO not all mooneye's MBC tests pass
+    case MBC2:
         if (address >= 0x4000)
             break;
 
@@ -254,19 +253,18 @@ static void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) {
         }
         break;
     case MBC3:
-        // TODO fix this casue in pokemon gold no window available for popping error on any action that saves to eram or needs to access large rom?
         if (address < 0x2000) {
             mmu->eram_enabled = (data & 0x0F) == 0x0A;
             mmu->rtc.enabled = (data & 0x0F) == 0x0A;
         } else if (address < 0x4000) {
-            mmu->current_rom_bank = data;// & 0x7F;
+            mmu->current_rom_bank = data & 0x7F;
             if (mmu->current_rom_bank == 0x00)
                 mmu->current_rom_bank = 0x01; // 0x00 not allowed
             mmu->current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
         } else if (address < 0x6000) {
             if (data <= 0x03) {
                 mmu->current_eram_bank = data;
-                mmu->current_eram_bank &= mmu->ram_banks - 1; // in this case, equivalent to current_eram_bank %= ram_banks but avoid division by 0
+                mmu->current_eram_bank &= mmu->eram_banks - 1; // in this case, equivalent to current_eram_bank %= eram_banks but avoid division by 0
             } else if (data >= 0x08 && data <= 0x0C) {
                 mmu->rtc.reg = data;
                 mmu->current_eram_bank = -1;
@@ -288,7 +286,7 @@ static void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) {
             mmu->current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
         } else if (address < 0x6000) {
             mmu->current_eram_bank = data & 0x0F;
-            mmu->current_eram_bank &= mmu->ram_banks - 1; // in this case, equivalent to current_eram_bank %= ram_banks but avoid division by 0
+            mmu->current_eram_bank &= mmu->eram_banks - 1; // in this case, equivalent to current_eram_bank %= eram_banks but avoid division by 0
             // TODO On cartridges which feature a rumble motor, bit 3 controls the rumble motor instead of the RAM chip.
         }
         break;
@@ -297,7 +295,6 @@ static void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) {
     }
 }
 
-// TODO not all mooneye's MBC tests pass
 static void write_mbc_eram(mmu_t *mmu, word_t address, byte_t data) {
     switch (mmu->mbc) {
     case MBC1:
@@ -335,23 +332,23 @@ static void write_mbc_eram(mmu_t *mmu, word_t address, byte_t data) {
 byte_t mmu_read(emulator_t *emu, word_t address) {
     mmu_t *mmu = emu->mmu;
 
-    if (mmu->mbc >= MBC1 && mmu->mbc <= MBC5) { // TODO not all mooneye's MBC tests pass
+    if (mmu->mbc >= MBC1 && mmu->mbc <= MBC5) {
         if (address >= 0x4000 && address < 0x8000) // ROM_BANKN
             return mmu->cartridge[(address - 0x4000) + (mmu->current_rom_bank * 0x4000)];
 
         if (address >= 0xA000 && address < 0xC000) { // ERAM
-            if (mmu->rtc.enabled) { // implies mbc == MBC3 because rtc_enabled is set to 0 by default
+            if (mmu->current_eram_bank >= 0) {
+                return mmu->eram_enabled ? mmu->eram[(address - 0xA000) + (mmu->current_eram_bank * 0x2000)] : 0xFF;
+            } else if (mmu->rtc.enabled) { // implies mbc == MBC3 because rtc_enabled is set to 0 by default
                 switch (mmu->rtc.reg) {
                 case 0x08: return mmu->rtc.s;
                 case 0x09: return mmu->rtc.m;
                 case 0x0A: return mmu->rtc.h;
                 case 0x0B: return mmu->rtc.dl;
                 case 0x0C: return mmu->rtc.dh;
-                default: break; // break, not return because we want to access eram (if enabled) in this case
+                default: return 0xFF;
                 }
             }
-
-            return mmu->eram_enabled ? mmu->eram[(address - 0xA000) + (mmu->current_eram_bank * 0x2000)] : 0xFF;
         }
     }
 

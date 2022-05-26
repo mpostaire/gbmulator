@@ -17,6 +17,8 @@
 
 // TODO ppu lcd off should take multiple cycles to turn on again?
 
+// TODO fix savestates
+
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
 SDL_bool is_rom_loaded = SDL_FALSE;
