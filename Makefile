@@ -28,7 +28,7 @@ ODIR_STRUCTURE:=$(sort $(foreach d,$(OBJ) $(HEADERS),$(subst /$(lastword $(subst
 
 all: $(ODIR_STRUCTURE) $(MAIN)
 
-debug: CFLAGS+=-g -Og -DDEBUG
+debug: CFLAGS+=-g -Og
 debug: all
 
 wasm: CC:=emcc
@@ -40,7 +40,7 @@ debug_wasm: wasm
 	emrun docs/index.html
 
 index.html: $(OBJ) template.html
-	$(CC) -o docs/$@ $(OBJ) $(CFLAGS) -sWASM=1 -sUSE_SDL=2 -sEXPORTED_RUNTIME_METHODS=[ccall] --shell-file template.html -lidbfs.js
+	$(CC) -o docs/$@ $(OBJ) $(CFLAGS) -sINITIAL_MEMORY=32MB -sWASM=1 -sUSE_SDL=2 -sEXPORTED_RUNTIME_METHODS=[ccall] --shell-file template.html -lidbfs.js
 
 docs:
 	mkdir -p $@
