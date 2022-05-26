@@ -12,11 +12,6 @@
 #include "cpu.h"
 
 static int parse_cartridge(mmu_t *mmu) {
-    if (mmu->cartridge[0x0143] == 0xC0) {
-        eprintf("CGB only rom: this emulator does not support CGB only games yet\n");
-        return 0;
-    }
-
     switch (mmu->cartridge[0x0147]) {
     case 0x00:
         mmu->mbc = MBC0;
@@ -60,6 +55,8 @@ static int parse_cartridge(mmu_t *mmu) {
     // get rom title
     memcpy(mmu->rom_title, (char *) &mmu->cartridge[0x134], 16);
     mmu->rom_title[16] = '\0';
+    if (mmu->cartridge[0x0143] == 0xC0 || mmu->cartridge[0x0143] == 0x80)
+        mmu->rom_title[15] = '\0';
     printf("Playing %s\n", mmu->rom_title);
     printf("Cartridge using MBC%d with %d ROM banks + %d RAM banks\n", mmu->mbc, mmu->rom_banks, mmu->eram_banks);
 

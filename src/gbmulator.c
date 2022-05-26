@@ -200,9 +200,6 @@ int main(int argc, char **argv) {
     byte_t *ui_pixels = ui_init();
     emu = NULL;
 
-    if (argc == 2)
-        gbmulator_load_cartridge(argv[1]);
-
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
 
     byte_t scale = config.scale;
@@ -214,6 +211,10 @@ int main(int argc, char **argv) {
         GB_SCREEN_HEIGHT * scale,
         SDL_WINDOW_HIDDEN /*| SDL_WINDOW_RESIZABLE*/
     );
+
+    if (argc == 2)
+        gbmulator_load_cartridge(argv[1]);
+
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_RenderClear(renderer);
     SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
