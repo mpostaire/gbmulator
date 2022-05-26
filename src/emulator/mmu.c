@@ -24,8 +24,11 @@ static int parse_cartridge(emulator_t *emu) {
     case 0x05: case 0x06:
         mmu->mbc = MBC2;
         break;
-    case 0x0F: case 0x10: case 0x11: case 0x12: case 0x13:
+    case 0x0F: case 0x11: case 0x12: case 0x13:
         mmu->mbc = MBC3;
+        break;
+    case 0x10:
+        mmu->mbc = MBC30;
         break;
     case 0x19: case 0x1A: case 0x1B: case 0x1C: case 0x1D: case 0x1E:
         mmu->mbc = MBC5;
@@ -49,9 +52,6 @@ static int parse_cartridge(emulator_t *emu) {
     case 0x03: mmu->eram_banks = 4; break;
     case 0x04: mmu->eram_banks = 16; break;
     case 0x05: mmu->eram_banks = 8; break;
-    default:
-        // TODO handle this case
-        break;
     }
 
     // get rom title
@@ -60,7 +60,7 @@ static int parse_cartridge(emulator_t *emu) {
     if (mmu->cartridge[0x0143] == 0xC0 || mmu->cartridge[0x0143] == 0x80)
         emu->rom_title[15] = '\0';
     printf("Playing %s\n", emu->rom_title);
-    printf("Cartridge using MBC%d with %d ROM banks + %d RAM banks\n", mmu->mbc, mmu->rom_banks, mmu->eram_banks);
+    printf("Cartridge using MBC%d with %d ROM banks + %d RAM banks\n", mmu->mbc == MBC30 ? 30 : mmu->mbc, mmu->rom_banks, mmu->eram_banks);
 
     // checksum validation
     int sum = 0;
@@ -251,11 +251,12 @@ static void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) {
         }
         break;
     case MBC3:
+    case MBC30:
         if (address < 0x2000) {
             mmu->eram_enabled = (data & 0x0F) == 0x0A;
             mmu->rtc.enabled = (data & 0x0F) == 0x0A;
         } else if (address < 0x4000) {
-            mmu->current_rom_bank = data & 0x7F;
+            mmu->current_rom_bank = mmu->mbc == MBC30 ? data : data & 0x7F;
             if (mmu->current_rom_bank == 0x00)
                 mmu->current_rom_bank = 0x01; // 0x00 not allowed
             mmu->current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0

@@ -81,7 +81,8 @@ typedef enum {
     MBC1,
     MBC2,
     MBC3,
-    MBC5 = 5,
+    MBC30,
+    MBC5,
     MBC6,
     MBC7
 } mbc_type_t;
