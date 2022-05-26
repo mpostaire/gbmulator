@@ -17,7 +17,10 @@
 
 // TODO ppu lcd off should take multiple cycles to turn on again?
 
-// TODO rtc buggy with pokemon gold (it seems to work for minutes but it still complains: maybe the days are broken -- pokemon red/yellow are working...)
+// TODO idea to increase rendering smoothness: instead of delay until audio queue is empty, leave apu callback without pushing new sound
+//      and try to do it each frame until it's ok -> may cause other problems...
+
+// TODO also save rtc if cartridge has rtc
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;

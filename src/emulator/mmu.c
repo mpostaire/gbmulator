@@ -11,27 +11,92 @@
 #include "boot.h"
 #include "cpu.h"
 
+const char *mbc_names[] = {
+    "ROM_ONLY",
+    "MBC1",
+    "MBC2",
+    "MBC3",
+    "MBC30",
+    "MBC5",
+    "MBC6",
+    "MBC7",
+    "HuC1"
+};
+
 static int parse_cartridge(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
     switch (mmu->cartridge[0x0147]) {
     case 0x00:
-        mmu->mbc = MBC0;
+        mmu->mbc = ROM_ONLY;
         break;
-    case 0x01: case 0x02: case 0x03:
+    case 0x01:
         mmu->mbc = MBC1;
         break;
-    case 0x05: case 0x06:
+    case 0x02:
+        mmu->mbc = MBC1;
+        mmu->has_eram = 1;
+        break;
+    case 0x03:
+        mmu->mbc = MBC1;
+        mmu->has_eram = 1;
+        mmu->has_battery = 1;
+        break;
+    case 0x05:
         mmu->mbc = MBC2;
         break;
-    case 0x0F: case 0x11: case 0x12: case 0x13:
+    case 0x06:
+        mmu->mbc = MBC2;
+        mmu->has_battery = 1;
+        break;
+    case 0x0F:
+        mmu->mbc = MBC3;
+        mmu->has_rtc = 1;
+        mmu->has_battery = 1;
+    case 0x10:
+        mmu->mbc = MBC3;
+        mmu->has_rtc = 1;
+        mmu->has_battery = 1;
+        mmu->has_eram = 1;
+        break;
+    case 0x11:
         mmu->mbc = MBC3;
         break;
-    case 0x10:
-        mmu->mbc = MBC30;
+    case 0x12:
+        mmu->mbc = MBC3;
+        mmu->has_eram = 1;
         break;
-    case 0x19: case 0x1A: case 0x1B: case 0x1C: case 0x1D: case 0x1E:
+    case 0x13:
+        mmu->mbc = MBC3;
+        mmu->has_battery = 1;
+        mmu->has_eram = 1;
+        break;
+    case 0x19:
         mmu->mbc = MBC5;
+        break;
+    case 0x1A:
+        mmu->mbc = MBC5;
+        mmu->has_eram = 1;
+        break;
+    case 0x1B:
+        mmu->mbc = MBC5;
+        mmu->has_eram = 1;
+        mmu->has_battery = 1;
+        break;
+    case 0x1C:
+        mmu->mbc = MBC5;
+        mmu->has_rumble = 1;
+        break;
+    case 0x1D:
+        mmu->mbc = MBC5;
+        mmu->has_rumble = 1;
+        mmu->has_eram = 1;
+        break;
+    case 0x1E:
+        mmu->mbc = MBC5;
+        mmu->has_rumble = 1;
+        mmu->has_eram = 1;
+        mmu->has_battery = 1;
         break;
     // case 0x20:
     //     mmu->mbc = MBC6;
@@ -54,13 +119,31 @@ static int parse_cartridge(emulator_t *emu) {
     case 0x05: mmu->eram_banks = 8; break;
     }
 
+    if (mmu->mbc == MBC3 && mmu->eram_banks == 8)
+        mmu->mbc = MBC30;
+
     // get rom title
     memcpy(emu->rom_title, (char *) &mmu->cartridge[0x134], 16);
     emu->rom_title[16] = '\0';
     if (mmu->cartridge[0x0143] == 0xC0 || mmu->cartridge[0x0143] == 0x80)
         emu->rom_title[15] = '\0';
     printf("Playing %s\n", emu->rom_title);
-    printf("Cartridge using MBC%d with %d ROM banks + %d RAM banks\n", mmu->mbc == MBC30 ? 30 : mmu->mbc, mmu->rom_banks, mmu->eram_banks);
+
+    char *ram_str = NULL;
+    if (mmu->has_eram) {
+        ram_str = xmalloc(18);
+        snprintf(ram_str, 17, " + %d RAM banks", mmu->eram_banks);
+    }
+
+    printf("Cartridge using %s with %d ROM banks%s%s%s%s\n",
+            mbc_names[mmu->mbc],
+            mmu->rom_banks,
+            ram_str ? ram_str : "",
+            mmu->has_battery ? " + BATTERY" : "",
+            mmu->has_rtc ? " + RTC" : "",
+            mmu->has_rumble ? " + RUMBLE" : ""
+    );
+    free(ram_str);
 
     // checksum validation
     int sum = 0;
@@ -78,12 +161,16 @@ static int parse_cartridge(emulator_t *emu) {
     memcpy(mmu->mem, dmg_boot, sizeof(dmg_boot));
 
     // load save into ERAM
-    if (emu->save_filepath) {
+    if (emu->mmu->has_battery && emu->save_filepath) {
         FILE *f = fopen(emu->save_filepath, "rb");
         // if there is a save file, load it into eram
         if (f) {
-            fread(mmu->eram, 0x2000 * mmu->eram_banks, 1, f);
             // no fread check because a missing/invalid save file is not an error
+            fread(mmu->eram, 0x2000 * mmu->eram_banks, 1, f);
+
+            if (mmu->has_rtc)
+                fread(&emu->mmu->rtc, sizeof(emu->mmu->rtc), 1, f);
+
             fclose(f);
         }
     }
@@ -151,7 +238,7 @@ int mmu_init_from_data(emulator_t *emu, const byte_t *rom_data, size_t size, cha
 }
 
 static int save_eram(emulator_t *emu) {
-    if (!emu->mmu->eram_banks || !emu->save_filepath)
+    if (!emu->mmu->has_battery || !emu->save_filepath)
         return 0;
 
     make_parent_dirs(emu->rom_filepath);
@@ -162,9 +249,17 @@ static int save_eram(emulator_t *emu) {
         return 0;
     }
     if (!fwrite(emu->mmu->eram, 0x2000 * emu->mmu->eram_banks, 1, f)) {
-        eprintf("writing to save file\n");
+        eprintf("writing eram to save file\n");
         fclose(f);
         return 0;
+    }
+
+    if (emu->mmu->has_rtc) {
+        if (!fwrite(&emu->mmu->rtc, sizeof(emu->mmu->rtc), 1, f)) {
+            eprintf("writing rtc to save file\n");
+            fclose(f);
+            return 0;
+        }
     }
 
     fclose(f);
@@ -211,7 +306,7 @@ static void rtc_update(mmu_t *mmu) {
 // TODO MBC1 special cases where rom bank 0 is changed are not implemented
 static void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) {
     switch (mmu->mbc) {
-    case MBC0:
+    case ROM_ONLY:
         break; // read only, do nothing
     case MBC1:
         if (address < 0x2000) {
@@ -227,7 +322,7 @@ static void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) {
                 mmu->current_eram_bank &= mmu->eram_banks - 1; // in this case, equivalent to current_eram_bank %= eram_banks but avoid division by 0
             } else {
                 mmu->current_rom_bank = ((data & 0x03) << 5) | (mmu->current_rom_bank & 0x1F);
-                // commenting this passes more tests but I think its necessary to keep it so the problem may come from the read instead of the write?
+                // TODO commenting this passes more tests but I think its necessary to keep it so the problem may come from the read instead of the write?
                 // if (mmu->current_rom_bank == 0x00 || mmu->current_rom_bank == 0x20 || mmu->current_rom_bank == 0x40 || mmu->current_rom_bank == 0x60)
                 //     mmu->current_rom_bank++;
                 mmu->current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
@@ -254,7 +349,8 @@ static void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) {
     case MBC30:
         if (address < 0x2000) {
             mmu->eram_enabled = (data & 0x0F) == 0x0A;
-            mmu->rtc.enabled = (data & 0x0F) == 0x0A;
+            if (mmu->has_rtc)
+                mmu->rtc.enabled = (data & 0x0F) == 0x0A;
         } else if (address < 0x4000) {
             mmu->current_rom_bank = mmu->mbc == MBC30 ? data : data & 0x7F;
             if (mmu->current_rom_bank == 0x00)
@@ -264,11 +360,11 @@ static void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) {
             if (data <= 0x03) {
                 mmu->current_eram_bank = data;
                 mmu->current_eram_bank &= mmu->eram_banks - 1; // in this case, equivalent to current_eram_bank %= eram_banks but avoid division by 0
-            } else if (data >= 0x08 && data <= 0x0C) {
+            } else if (mmu->has_rtc && data >= 0x08 && data <= 0x0C) {
                 mmu->rtc.reg = data;
                 mmu->current_eram_bank = -1;
             }
-        } else if (address < 0x8000) {
+        } else if (address < 0x8000 && mmu->has_rtc) {
             if (mmu->rtc.latch == 0x00 && data == 0x01 && !CHECK_BIT(mmu->rtc.dh, 6))
                 rtc_update(mmu);
             mmu->rtc.latch = data;
@@ -297,18 +393,18 @@ static void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) {
 static void write_mbc_eram(mmu_t *mmu, word_t address, byte_t data) {
     switch (mmu->mbc) {
     case MBC1:
-        if (mmu->eram_enabled)
+        if (mmu->has_eram && mmu->eram_enabled)
             mmu->eram[(address - 0xA000) + (mmu->current_eram_bank * 0x2000)] = data;
         break;
     case MBC2:
-        if (mmu->eram_enabled)
+        if (mmu->has_eram && mmu->eram_enabled)
             mmu->eram[(address - 0xA000) + (mmu->current_eram_bank * 0x2000)] = data & 0x0F;
         break;
     case MBC3:
     case MBC30:
-        if (mmu->eram_enabled && mmu->current_eram_bank >= 0) {
+        if (mmu->has_eram && mmu->eram_enabled && mmu->current_eram_bank >= 0) {
             mmu->eram[(address - 0xA000) + (mmu->current_eram_bank * 0x2000)] = data;
-        } else if (mmu->rtc.enabled) {
+        } else if (mmu->has_rtc && mmu->rtc.enabled) {
             switch (mmu->rtc.reg) {
             case 0x08: mmu->rtc.s = data; break;
             case 0x09: mmu->rtc.m = data; break;
@@ -320,7 +416,7 @@ static void write_mbc_eram(mmu_t *mmu, word_t address, byte_t data) {
         }
         break;
     case MBC5:
-        if (mmu->eram_enabled)
+        if (mmu->has_eram && mmu->eram_enabled)
             mmu->eram[(address - 0xA000) + (mmu->current_eram_bank * 0x2000)] = data;
         // TODO MBC5 eram is the same as for MBC1, except that RAM sizes are 8 KiB, 32 KiB and 128 KiB.
         break;
@@ -337,9 +433,9 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
             return mmu->cartridge[(address - 0x4000) + (mmu->current_rom_bank * 0x4000)];
 
         if (address >= 0xA000 && address < 0xC000) { // ERAM
-            if (mmu->current_eram_bank >= 0) {
+            if (mmu->has_eram && mmu->current_eram_bank >= 0) {
                 return mmu->eram_enabled ? mmu->eram[(address - 0xA000) + (mmu->current_eram_bank * 0x2000)] : 0xFF;
-            } else if (mmu->rtc.enabled) { // implies mbc == MBC3 because rtc_enabled is set to 0 by default
+            } else if (mmu->has_rtc && mmu->rtc.enabled) { // implies mbc == MBC3 (or MBC30) because rtc_enabled is set to 0 by default
                 switch (mmu->rtc.reg) {
                 case 0x08: return mmu->rtc.s;
                 case 0x09: return mmu->rtc.m;

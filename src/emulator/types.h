@@ -77,14 +77,15 @@ typedef struct {
 } cpu_t;
 
 typedef enum {
-    MBC0,
+    ROM_ONLY,
     MBC1,
     MBC2,
     MBC3,
     MBC30,
     MBC5,
     MBC6,
-    MBC7
+    MBC7,
+    HuC1
 } mbc_type_t;
 
 typedef struct {
@@ -101,6 +102,11 @@ typedef struct {
     s_word_t current_eram_bank;
     byte_t mbc1_mode;
     byte_t eram_enabled;
+
+    byte_t has_eram;
+    byte_t has_battery;
+    byte_t has_rumble;
+    byte_t has_rtc;
 
     struct {
         byte_t s;
