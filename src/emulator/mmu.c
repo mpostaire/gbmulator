@@ -305,6 +305,7 @@ static void write_mbc_eram(mmu_t *mmu, word_t address, byte_t data) {
             mmu->eram[(address - 0xA000) + (mmu->current_eram_bank * 0x2000)] = data & 0x0F;
         break;
     case MBC3:
+    case MBC30:
         if (mmu->eram_enabled && mmu->current_eram_bank >= 0) {
             mmu->eram[(address - 0xA000) + (mmu->current_eram_bank * 0x2000)] = data;
         } else if (mmu->rtc.enabled) {
