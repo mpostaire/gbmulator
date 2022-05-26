@@ -93,7 +93,7 @@ byte_t *emulator_get_save_data(emulator_t *emu, size_t *save_length) {
 }
 
 char *emulator_get_rom_title(emulator_t *emu) {
-    return emu->mmu->rom_title;
+    return emu->rom_title;
 }
 
 char *emulator_get_rom_title_from_data(byte_t *rom_data, size_t size) {

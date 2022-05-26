@@ -11,7 +11,9 @@
 #include "boot.h"
 #include "cpu.h"
 
-static int parse_cartridge(mmu_t *mmu) {
+static int parse_cartridge(emulator_t *emu) {
+    mmu_t *mmu = emu->mmu;
+
     switch (mmu->cartridge[0x0147]) {
     case 0x00:
         mmu->mbc = MBC0;
@@ -53,11 +55,11 @@ static int parse_cartridge(mmu_t *mmu) {
     }
 
     // get rom title
-    memcpy(mmu->rom_title, (char *) &mmu->cartridge[0x134], 16);
-    mmu->rom_title[16] = '\0';
+    memcpy(emu->rom_title, (char *) &mmu->cartridge[0x134], 16);
+    emu->rom_title[16] = '\0';
     if (mmu->cartridge[0x0143] == 0xC0 || mmu->cartridge[0x0143] == 0x80)
-        mmu->rom_title[15] = '\0';
-    printf("Playing %s\n", mmu->rom_title);
+        emu->rom_title[15] = '\0';
+    printf("Playing %s\n", emu->rom_title);
     printf("Cartridge using MBC%d with %d ROM banks + %d RAM banks\n", mmu->mbc, mmu->rom_banks, mmu->eram_banks);
 
     // checksum validation
@@ -76,8 +78,8 @@ static int parse_cartridge(mmu_t *mmu) {
     memcpy(mmu->mem, dmg_boot, sizeof(dmg_boot));
 
     // load save into ERAM
-    if (mmu->save_filepath) {
-        FILE *f = fopen(mmu->save_filepath, "rb");
+    if (emu->save_filepath) {
+        FILE *f = fopen(emu->save_filepath, "rb");
         // if there is a save file, load it into eram
         if (f) {
             fread(mmu->eram, sizeof(mmu->eram), 1, f);
@@ -100,12 +102,12 @@ int mmu_init(emulator_t *emu, char *rom_path, char *save_path) {
     mmu->current_rom_bank = 1;
 
     size_t len = strlen(save_path);
-    mmu->save_filepath = xmalloc(len + 2);
-    snprintf(mmu->save_filepath, len + 1, "%s", save_path);
+    emu->save_filepath = xmalloc(len + 2);
+    snprintf(emu->save_filepath, len + 1, "%s", save_path);
 
     len = strlen(rom_path);
-    mmu->rom_filepath = xmalloc(len + 2);
-    snprintf(mmu->rom_filepath, len + 1, "%s", rom_path);
+    emu->rom_filepath = xmalloc(len + 2);
+    snprintf(emu->rom_filepath, len + 1, "%s", rom_path);
 
     memset(mmu->mem, 0, sizeof(mmu->mem));
     memset(mmu->eram, 0, sizeof(mmu->eram));
@@ -131,7 +133,7 @@ int mmu_init(emulator_t *emu, char *rom_path, char *save_path) {
     memcpy(mmu->cartridge, buf, fsize);
     free(buf);
     emu->mmu = mmu;
-    return parse_cartridge(mmu);
+    return parse_cartridge(emu);
 }
 
 int mmu_init_from_data(emulator_t *emu, const byte_t *rom_data, size_t size, char *save_path) {
@@ -139,28 +141,28 @@ int mmu_init_from_data(emulator_t *emu, const byte_t *rom_data, size_t size, cha
     mmu->current_rom_bank = 1;
 
     size_t len = strlen(save_path);
-    mmu->save_filepath = xmalloc(len + 2);
-    snprintf(mmu->save_filepath, len + 1, "%s", save_path);
+    emu->save_filepath = xmalloc(len + 2);
+    snprintf(emu->save_filepath, len + 1, "%s", save_path);
     memset(mmu->mem, 0, sizeof(mmu->mem));
     memset(mmu->eram, 0, sizeof(mmu->eram));
 
     memcpy(mmu->cartridge, rom_data, size);
     emu->mmu = mmu;
-    return parse_cartridge(mmu);
+    return parse_cartridge(emu);
 }
 
-static int save_eram(mmu_t *mmu) {
-    if (!mmu->eram_banks || !mmu->save_filepath)
+static int save_eram(emulator_t *emu) {
+    if (!emu->mmu->eram_banks || !emu->save_filepath)
         return 0;
 
-    make_parent_dirs(mmu->rom_filepath);
+    make_parent_dirs(emu->rom_filepath);
 
-    FILE *f = fopen(mmu->save_filepath, "wb");
+    FILE *f = fopen(emu->save_filepath, "wb");
     if (!f) {
         errnoprintf("opening the save file");
         return 0;
     }
-    if (!fwrite(mmu->eram, sizeof(mmu->eram), 1, f)) {
+    if (!fwrite(emu->mmu->eram, sizeof(emu->mmu->eram), 1, f)) {
         eprintf("writing to save file\n");
         fclose(f);
         return 0;
@@ -171,12 +173,12 @@ static int save_eram(mmu_t *mmu) {
 }
 
 void mmu_quit(emulator_t *emu) {
-    save_eram(emu->mmu);
+    save_eram(emu);
 
-    if (emu->mmu->rom_filepath)
-        free(emu->mmu->rom_filepath);
-    if (emu->mmu->save_filepath)
-        free(emu->mmu->save_filepath);
+    if (emu->rom_filepath)
+        free(emu->rom_filepath);
+    if (emu->save_filepath)
+        free(emu->save_filepath);
     free(emu->mmu);
 }
 

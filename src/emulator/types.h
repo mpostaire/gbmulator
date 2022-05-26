@@ -87,11 +87,6 @@ typedef enum {
 } mbc_type_t;
 
 typedef struct {
-    // TODO move those 3 variables into emulator_t
-    char *rom_filepath;
-    char *save_filepath;
-    char rom_title[17];
-
     byte_t cartridge[8400000];
     // do not move the 'mem' member (savestate.c uses offsetof mem on this struct)
     // everything that is below this line will be saved in the savestates
@@ -207,6 +202,10 @@ typedef struct {
 } link_t;
 
 typedef struct {
+    char *rom_filepath;
+    char *save_filepath;
+    char rom_title[17];
+
     cpu_t *cpu;
     mmu_t *mmu;
     ppu_t *ppu;
