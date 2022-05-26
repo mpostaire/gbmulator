@@ -89,7 +89,7 @@ byte_t *emulator_get_save_data(emulator_t *emu, size_t *save_length) {
         return NULL;
     }
     if (save_length)
-        *save_length = sizeof(emu->mmu->eram);
+        *save_length = 0x2000 * emu->mmu->eram_banks;
     return emu->mmu->eram;
 }
 

@@ -82,7 +82,7 @@ static int parse_cartridge(emulator_t *emu) {
         FILE *f = fopen(emu->save_filepath, "rb");
         // if there is a save file, load it into eram
         if (f) {
-            fread(mmu->eram, sizeof(mmu->eram), 1, f);
+            fread(mmu->eram, 0x2000 * mmu->eram_banks, 1, f);
             // no fread check because a missing/invalid save file is not an error
             fclose(f);
         }
@@ -161,7 +161,7 @@ static int save_eram(emulator_t *emu) {
         errnoprintf("opening the save file");
         return 0;
     }
-    if (!fwrite(emu->mmu->eram, sizeof(emu->mmu->eram), 1, f)) {
+    if (!fwrite(emu->mmu->eram, 0x2000 * emu->mmu->eram_banks, 1, f)) {
         eprintf("writing to save file\n");
         fclose(f);
         return 0;
