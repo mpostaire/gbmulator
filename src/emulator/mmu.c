@@ -83,8 +83,8 @@ static int parse_cartridge(mmu_t *mmu) {
         FILE *f = fopen(mmu->save_filepath, "rb");
         // if there is a save file, load it into eram
         if (f) {
-            if (!fread(mmu->eram, sizeof(mmu->eram), 1, f))
-                errnoprintf("reading %s", mmu->save_filepath);
+            fread(mmu->eram, sizeof(mmu->eram), 1, f);
+            // no fread check because a missing/invalid save file is not an error
             fclose(f);
         }
     }

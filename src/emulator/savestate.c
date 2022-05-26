@@ -43,7 +43,7 @@ int emulator_save_state(emulator_t *emu, const char *path) {
         return 0;
     }
 
-    if (!fwrite(&emu->cpu, sizeof(cpu_t), 1, f)) {
+    if (!fwrite(emu->cpu, sizeof(cpu_t), 1, f)) {
         eprintf("writing cpu to %s\n", path);
         fclose(f);
         return 0;
@@ -55,7 +55,7 @@ int emulator_save_state(emulator_t *emu, const char *path) {
         return 0;
     }
 
-    if (!fwrite(&emu->timer, sizeof(timer_t), 1, f)) {
+    if (!fwrite(emu->timer, sizeof(timer_t), 1, f)) {
         eprintf("timer to %s\n", path);
         fclose(f);
         return 0;
@@ -84,7 +84,7 @@ int emulator_load_state(emulator_t *emu, const char *path) {
         return 0;
     }
 
-    if (!fread(&emu->cpu, sizeof(cpu_t), 1, f)) {
+    if (!fread(emu->cpu, sizeof(cpu_t), 1, f)) {
         errnoprintf("reading cpu from %s", path);
         fclose(f);
         return 0;
@@ -95,16 +95,21 @@ int emulator_load_state(emulator_t *emu, const char *path) {
         return 0;
     }
 
-    if (!fread(&emu->mmu->mem, sizeof(mmu_t) - offsetof(mmu_t, mem), 1, f)) {
+    if (!fread(emu->mmu->mem, sizeof(mmu_t) - offsetof(mmu_t, mem), 1, f)) {
         errnoprintf("reading mmu from %s", path);
         fclose(f);
         return 0;
     }
 
     // resets apu's internal state to prevent glitchy audio if resuming from state without sound playing from state with sound playing
-    apu_init(emu, emu->apu->global_sound_level, emu->apu->speed, emu->apu->samples_ready_cb);
+    float sound = emu->apu->global_sound_level;
+    float speed = emu->apu->speed;
+    void (*cb)(float *, int);
+    cb = emu->apu->samples_ready_cb;
+    apu_quit(emu);
+    apu_init(emu, sound, speed, cb);
 
-    if (!fread(&emu->timer, sizeof(timer_t), 1, f)) {
+    if (!fread(emu->timer, sizeof(timer_t), 1, f)) {
         errnoprintf("reading timer from %s", path);
         fclose(f);
         return 0;
@@ -124,11 +129,11 @@ byte_t *emulator_get_state_data(emulator_t *emu, size_t *length) {
         if (savestate->header.rom_title[i] == '\0')
             savestate->header.rom_title[i] = ' ';
 
-    memcpy(&savestate->cpu, &emu->cpu, sizeof(cpu_t));
+    memcpy(&savestate->cpu, emu->cpu, sizeof(cpu_t));
 
-    memcpy(&savestate->mmu, emu->mmu->mem, sizeof(mmu_t) - offsetof(mmu_t, mem));
+    memcpy(&savestate->mmu, &emu->mmu->mem, sizeof(mmu_t) - offsetof(mmu_t, mem));
 
-    memcpy(&savestate->timer, &emu->timer, sizeof(timer_t));
+    memcpy(&savestate->timer, emu->timer, sizeof(timer_t));
 
     *length = sizeof(savestate_data_t);
     return (byte_t *) savestate;
@@ -151,14 +156,19 @@ int emulator_load_state_data(emulator_t *emu, const byte_t *data, size_t length)
         return 0;
     }
 
-    memcpy(&emu->cpu, &savestate->cpu, sizeof(cpu_t));
+    memcpy(emu->cpu, &savestate->cpu, sizeof(cpu_t));
 
     memcpy(emu->mmu->mem, &savestate->mmu, sizeof(mmu_t) - offsetof(mmu_t, mem));
 
     // resets apu's internal state to prevent glitchy audio if resuming from state without sound playing from state with sound playing
-    apu_init(emu, emu->apu->global_sound_level, emu->apu->speed, emu->apu->samples_ready_cb);
+    float sound = emu->apu->global_sound_level;
+    float speed = emu->apu->speed;
+    void (*cb)(float *, int);
+    cb = emu->apu->samples_ready_cb;
+    apu_quit(emu);
+    apu_init(emu, sound, speed, cb);
 
-    memcpy(&emu->timer, &savestate->timer, sizeof(timer_t));
+    memcpy(emu->timer, &savestate->timer, sizeof(timer_t));
 
     return 1;
 }

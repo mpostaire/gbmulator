@@ -17,7 +17,7 @@
 
 // TODO ppu lcd off should take multiple cycles to turn on again?
 
-// TODO fix savestates
+// TODO rtc buggy with pokemon gold (it seems to work for minutes but it still complains: maybe the days are broken -- pokemon red/yellow are working...)
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
