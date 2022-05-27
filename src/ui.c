@@ -201,7 +201,7 @@ menu_t options_menu = {
         #ifdef __EMSCRIPTEN__
         { "Scale:      | 2x, 3x , 4x ", CHOICE, .choices = { choose_win_scale, 3, 0 } },
         #else
-        { "Scale:      | 1x , 2x , 3x , 4x , 5x ", CHOICE, .choices = { choose_win_scale, 5, 0 } },
+        { "Scale:      |Full, 1x , 2x , 3x , 4x , 5x ", CHOICE, .choices = { choose_win_scale, 6, 1 } },
         #endif
         { "Speed:      |1.0x,1.5x,2.0x,2.5x,3.0x,3.5x,4.0x", CHOICE, .choices = { choose_speed, 7, 0 } },
         { "Sound:      | OFF, 25%, 50%, 75%,100%", CHOICE, .choices = { choose_sound, 5, 4 } },
@@ -296,7 +296,7 @@ static void choose_win_scale(menu_entry_t *entry) {
     #ifdef __EMSCRIPTEN__
     config.scale = entry->choices.position + 2;
     #else
-    config.scale = entry->choices.position + 1;
+    config.scale = entry->choices.position;
     #endif
 }
 
@@ -429,7 +429,7 @@ byte_t *ui_init(void) {
     #ifdef __EMSCRIPTEN__
     options_menu.entries[0].choices.position = config.scale - 2;
     #else
-    options_menu.entries[0].choices.position = config.scale - 1;
+    options_menu.entries[0].choices.position = config.scale;
     #endif
     options_menu.entries[1].choices.position = config.speed / 0.5f - 2;
     options_menu.entries[2].choices.position = config.sound * 4;

@@ -10,14 +10,12 @@
 
 // TODO implemented MBCs have a few bugs (see https://github.com/drhelius/Gearboy to understand its handled)
 
-// TODO switch gb/gbc mode in settings -- if a rom is already running, reset gameboy
-
 // TODO ppu lcd off should take multiple cycles to turn on again?
 
 // TODO idea to increase rendering smoothness: instead of delay until audio queue is empty, leave apu callback without pushing new sound
 //      and try to do it each frame until it's ok -> may cause other problems...
 
-// TODO make ui menu scale = fullscreen with aspect ratio black bars
+// TODO switch gb/gbc mode in settings -- if a rom is already running, reset gameboy
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
@@ -258,6 +256,7 @@ int main(int argc, char **argv) {
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
 
+    SDL_bool is_fullscreen = SDL_FALSE;
     byte_t scale = config.scale;
 
     window = SDL_CreateWindow(
@@ -272,6 +271,13 @@ int main(int argc, char **argv) {
         gbmulator_load_cartridge(argv[1]);
 
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    SDL_RenderSetLogicalSize(renderer, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+
+    if (scale == 0) {
+        is_fullscreen = SDL_TRUE;
+        SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+    }
+
     SDL_RenderClear(renderer);
     SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
 
@@ -304,8 +310,20 @@ int main(int argc, char **argv) {
 
             if (scale != config.scale) {
                 scale = config.scale;
-                SDL_SetWindowSize(window, GB_SCREEN_WIDTH * scale, GB_SCREEN_HEIGHT * scale);
+                if (scale == 0) {
+                    is_fullscreen = SDL_TRUE;
+                    SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+                } else {
+                    if (is_fullscreen) {
+                        is_fullscreen = SDL_FALSE;
+                        SDL_SetWindowFullscreen(window, 0);
+                    }
+                    SDL_SetWindowSize(window, GB_SCREEN_WIDTH * scale, GB_SCREEN_HEIGHT * scale);
+                }
             }
+
+            if (is_fullscreen)
+                SDL_RenderClear(renderer);
 
             // update ppu_texture to show color palette changes behind the menu
             if (is_rom_loaded) {
@@ -325,6 +343,8 @@ int main(int argc, char **argv) {
         // handle_input is a slow function: don't call it every step
         if (cycles >= GB_CPU_CYCLES_PER_FRAME * config.speed) {
             cycles = 0;
+            if (is_fullscreen)
+                SDL_RenderClear(renderer);
             SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
             SDL_RenderPresent(renderer);
             handle_input(); // keep this the closest possible before emulator_step() to reduce input inaccuracies
