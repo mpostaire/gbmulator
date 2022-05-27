@@ -8,9 +8,7 @@
 
 // TODO fix pause menu when starting game link connexion while pause menu is still active (it's working but weirdly so low priority)
 
-// TODO MBCs have a few bugs implemented (see https://github.com/drhelius/Gearboy to understand its handled)
-
-// TODO sdl gamepad support (like ps3 controller) - with no configurable bindings
+// TODO implemented MBCs have a few bugs (see https://github.com/drhelius/Gearboy to understand its handled)
 
 // TODO switch gb/gbc mode in settings -- if a rom is already running, reset gameboy
 // TODO reset gameboy in ui main menu
@@ -22,6 +20,8 @@
 
 // TODO change speed to be an emulator variable
 
+// TODO make ui menu scale = fullscreen with aspect ratio black bars
+
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
 SDL_bool is_rom_loaded = SDL_FALSE;
@@ -32,6 +32,9 @@ SDL_Texture *ppu_texture;
 int ppu_texture_pitch;
 
 SDL_AudioDeviceID audio_device;
+
+SDL_GameController *pad;
+SDL_bool is_controller_present = SDL_FALSE;
 
 char *rom_path;
 
@@ -58,6 +61,20 @@ int sdl_key_to_joypad(SDL_Keycode key) {
     if (key == config.start) return JOYPAD_START;
     if (key == config.select) return JOYPAD_SELECT;
     return key;
+}
+
+int sdl_controller_to_joypad(int button) {
+    switch (button) {
+    case SDL_CONTROLLER_BUTTON_DPAD_LEFT: return JOYPAD_LEFT;
+    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return JOYPAD_RIGHT;
+    case SDL_CONTROLLER_BUTTON_DPAD_UP: return JOYPAD_UP;
+    case SDL_CONTROLLER_BUTTON_DPAD_DOWN: return JOYPAD_DOWN;
+    case SDL_CONTROLLER_BUTTON_A: return JOYPAD_A;
+    case SDL_CONTROLLER_BUTTON_B: return JOYPAD_B;
+    case SDL_CONTROLLER_BUTTON_START: return JOYPAD_START;
+    case SDL_CONTROLLER_BUTTON_BACK: return JOYPAD_SELECT;
+    }
+    return -1;
 }
 
 static void ppu_vblank_cb(byte_t *pixels) {
@@ -133,7 +150,7 @@ static void handle_input(void) {
             break;
         case SDL_KEYDOWN:
             if (is_paused) {
-                ui_press(&event.key);
+                ui_keyboard_press(&event.key);
                 break;
             }
             if (event.key.repeat)
@@ -162,6 +179,34 @@ static void handle_input(void) {
         case SDL_KEYUP:
             if (!event.key.repeat)
                 emulator_joypad_release(emu, sdl_key_to_joypad(event.key.keysym.sym));
+            break;
+        case SDL_CONTROLLERBUTTONDOWN:
+            if (is_paused) {
+                ui_controller_press(event.cbutton.button);
+                break;
+            }
+            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
+                is_paused = SDL_TRUE;
+                break;
+            }
+            emulator_joypad_press(emu, sdl_controller_to_joypad(event.cbutton.button));
+            break;
+        case SDL_CONTROLLERBUTTONUP:
+            emulator_joypad_release(emu, sdl_controller_to_joypad(event.cbutton.button));
+            break;
+        case SDL_CONTROLLERDEVICEADDED:
+            if (!is_controller_present) {
+                pad = SDL_GameControllerOpen(event.cdevice.which);
+                is_controller_present = SDL_TRUE;
+                printf("%s connected\n", SDL_GameControllerName(pad));
+            }
+            break;
+        case SDL_CONTROLLERDEVICEREMOVED:
+            if (is_controller_present) {
+                SDL_GameControllerClose(pad);
+                is_controller_present = SDL_FALSE;
+                printf("%s disconnected\n", SDL_GameControllerName(pad));
+            }
             break;
         case SDL_QUIT:
             is_running = SDL_FALSE;
@@ -203,7 +248,7 @@ int main(int argc, char **argv) {
     byte_t *ui_pixels = ui_init();
     emu = NULL;
 
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
 
     byte_t scale = config.scale;
 
@@ -243,6 +288,8 @@ int main(int argc, char **argv) {
         // emulation paused
         if (is_paused) {
             handle_input();
+            if (!is_paused) // if user input disable pause, don't draw ui
+                continue;
 
             // display menu
             ui_draw_menu();
@@ -285,6 +332,9 @@ int main(int argc, char **argv) {
     free(rom_path);
 
     config_save(config_path);
+
+    if (is_controller_present)
+        SDL_GameControllerClose(pad);
 
     SDL_DestroyWindow(window);
     SDL_DestroyRenderer(renderer);

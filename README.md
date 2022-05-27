@@ -36,7 +36,9 @@ gbmulator path/to/rom.gb
 ```
 
 ## Key bindings
+
 The following table show the default keybindings (they can be changed in GBmulator's menus except those marked with a '*').
+
 |Action|Key|
 |---|---|
 |UP|Up arrow|
@@ -51,9 +53,11 @@ The following table show the default keybindings (they can be changed in GBmulat
 |*Load savesate 1->8|F1->F8|
 |*Create savesate 1->8|SHIFT + F1->F8|
 
+There is also support for gamepad controllers but the buttons aren't configurable.
+
 ## TODO
 
-- GBC mode
+- GBC mode: build sameboy boot rom but change logo.png to my own
 - fix mbc bugs + implement MBC6, MBC7, HuC1 and multicart MBCs
 - fix apu bugs
 - rewrite ppu from scanline rendering to cycle accurate rendering

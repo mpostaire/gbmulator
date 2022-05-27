@@ -12,7 +12,9 @@ void ui_draw_menu(void);
 
 void ui_press_joypad(joypad_button_t key);
 
-void ui_press(SDL_KeyboardEvent *keyevent);
+void ui_keyboard_press(SDL_KeyboardEvent *keyevent);
+
+void ui_controller_press(int button);
 
 void ui_text_input(const char *text);
 

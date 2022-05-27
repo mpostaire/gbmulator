@@ -649,25 +649,16 @@ void ui_press_joypad(joypad_button_t key) {
     }
 }
 
-void ui_press(SDL_KeyboardEvent *keyevent) {
-    SDL_Keysym keysym = keyevent->keysym;
-    int key = sdl_key_to_joypad(keysym.sym);
+static void ui_press(int key, int repeat, int is_controller) {
     int count;
     menu_entry_t *entry = &current_menu->entries[current_menu->position];
     blink_counter = 0;
-
-    if (entry->type == KEY_SETTER && entry->setter.editing) {
-        if (config_verif_key(keysym.sym))
-            entry->setter.on_input(entry, keysym.sym);
-        entry->setter.editing = 0;
-        return;
-    }
 
     int new_pos, new_cursor, len;
     switch (key) {
     case SDLK_PAUSE:
     case SDLK_ESCAPE:
-        if (!keyevent->repeat) {
+        if (!repeat) {
             gbmulator_unpause();
             ui_back_to_main_menu();
         }
@@ -722,7 +713,8 @@ void ui_press(SDL_KeyboardEvent *keyevent) {
             (entry->action)();
             break;
         case KEY_SETTER:
-            entry->setter.editing = 1;
+            if (!is_controller)
+                entry->setter.editing = 1;
             break;
         case SUBMENU:
             // if I ever decide to add more than 1 level of depth of menus/submenus, make a stack of menus and push here
@@ -765,6 +757,30 @@ void ui_press(SDL_KeyboardEvent *keyevent) {
             }
         }
     }
+}
+
+void ui_keyboard_press(SDL_KeyboardEvent *keyevent) {
+    SDL_Keysym keysym = keyevent->keysym;
+    int key = sdl_key_to_joypad(keysym.sym);
+    menu_entry_t *entry = &current_menu->entries[current_menu->position];
+
+    if (entry->type == KEY_SETTER && entry->setter.editing) {
+        if (config_verif_key(keysym.sym))
+            entry->setter.on_input(entry, keysym.sym);
+        entry->setter.editing = 0;
+        return;
+    }
+
+    ui_press(key, keyevent->repeat, 0);
+}
+
+void ui_controller_press(int button) {
+    if (button == SDL_CONTROLLER_BUTTON_GUIDE) {
+        gbmulator_unpause();
+        ui_back_to_main_menu();
+        return;
+    }
+    ui_press(sdl_controller_to_joypad(button), 0, 1);
 }
 
 void ui_text_input(const char *text) {

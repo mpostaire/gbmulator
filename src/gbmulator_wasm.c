@@ -23,6 +23,9 @@ int ui_texture_pitch;
 
 SDL_AudioDeviceID audio_device;
 
+SDL_GameController *pad;
+SDL_bool is_controller_present = SDL_FALSE;
+
 char *rom_title;
 
 byte_t scale;
@@ -82,6 +85,20 @@ int sdl_key_to_joypad(SDL_Keycode key) {
     return key;
 }
 
+int sdl_controller_to_joypad(int button) {
+    switch (button) {
+    case SDL_CONTROLLER_BUTTON_DPAD_LEFT: return JOYPAD_LEFT;
+    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return JOYPAD_RIGHT;
+    case SDL_CONTROLLER_BUTTON_DPAD_UP: return JOYPAD_UP;
+    case SDL_CONTROLLER_BUTTON_DPAD_DOWN: return JOYPAD_DOWN;
+    case SDL_CONTROLLER_BUTTON_A: return JOYPAD_A;
+    case SDL_CONTROLLER_BUTTON_B: return JOYPAD_B;
+    case SDL_CONTROLLER_BUTTON_START: return JOYPAD_START;
+    case SDL_CONTROLLER_BUTTON_BACK: return JOYPAD_SELECT;
+    }
+    return -1;
+}
+
 static void save(void) {
     size_t save_length;
     byte_t *save_data = emulator_get_save_data(emu, &save_length);
@@ -93,8 +110,20 @@ static void save(void) {
 }
 
 EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
-    save();
+    emulator_quit(emu);
+    free(rom_title);
+
     config_save("config");
+
+    if (is_controller_present)
+        SDL_GameControllerClose(pad);
+
+    SDL_DestroyWindow(window);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyTexture(ppu_texture);
+    SDL_DestroyTexture(ui_texture);
+
+    SDL_Quit();
 }
 
 EMSCRIPTEN_KEEPALIVE void on_gui_button_down(joypad_button_t button) {
@@ -157,7 +186,7 @@ static void handle_input(void) {
             break;
         case SDL_KEYDOWN:
             if (is_paused) {
-                ui_press(&event.key);
+                ui_keyboard_press(&event.key);
                 break;
             }
             if (event.key.repeat)
@@ -199,6 +228,34 @@ static void handle_input(void) {
             if (!event.key.repeat && emu)
                 emulator_joypad_release(emu, sdl_key_to_joypad(event.key.keysym.sym));
             break;
+        case SDL_CONTROLLERBUTTONDOWN:
+            if (is_paused) {
+                ui_controller_press(event.cbutton.button);
+                break;
+            }
+            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
+                is_paused = SDL_TRUE;
+                break;
+            }
+            emulator_joypad_press(emu, sdl_controller_to_joypad(event.cbutton.button));
+            break;
+        case SDL_CONTROLLERBUTTONUP:
+            emulator_joypad_release(emu, sdl_controller_to_joypad(event.cbutton.button));
+            break;
+        case SDL_CONTROLLERDEVICEADDED:
+            if (!is_controller_present) {
+                pad = SDL_GameControllerOpen(event.cdevice.which);
+                is_controller_present = SDL_TRUE;
+                printf("%s connected\n", SDL_GameControllerName(pad));
+            }
+            break;
+        case SDL_CONTROLLERDEVICEREMOVED:
+            if (is_controller_present) {
+                SDL_GameControllerClose(pad);
+                is_controller_present = SDL_FALSE;
+                printf("%s disconnected\n", SDL_GameControllerName(pad));
+            }
+            break;
         }
     }
 }
@@ -211,6 +268,10 @@ static void paused_loop(void) {
     }
 
     handle_input();
+    if (!is_paused) { // if user input disable pause, don't draw ui
+        emscripten_cancel_main_loop();
+        emscripten_set_main_loop(loop, 60, 1);
+    }
 
     // display menu
     ui_draw_menu();
@@ -247,7 +308,7 @@ static void loop(void) {
 }
 
 int main(int argc, char **argv) {
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
 
     config_load("config");
     emu = NULL;
