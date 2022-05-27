@@ -110,8 +110,10 @@ static void save(void) {
 }
 
 EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
-    emulator_quit(emu);
-    free(rom_title);
+    if (emu)
+        emulator_quit(emu);
+    if (rom_title)
+        free(rom_title);
 
     config_save("config");
 
@@ -134,7 +136,8 @@ EMSCRIPTEN_KEEPALIVE void on_gui_button_down(joypad_button_t button) {
 }
 
 EMSCRIPTEN_KEEPALIVE void on_gui_button_up(joypad_button_t button) {
-    emulator_joypad_release(emu, button);
+    if (!is_paused)
+        emulator_joypad_release(emu, button);
 }
 
 EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {
@@ -221,11 +224,11 @@ static void handle_input(void) {
                 free(savestate_path);
                 break;
             }
-            if (emu)
+            if (!is_paused)
                 emulator_joypad_press(emu, sdl_key_to_joypad(event.key.keysym.sym));
             break;
         case SDL_KEYUP:
-            if (!event.key.repeat && emu)
+            if (!event.key.repeat && !is_paused)
                 emulator_joypad_release(emu, sdl_key_to_joypad(event.key.keysym.sym));
             break;
         case SDL_CONTROLLERBUTTONDOWN:
@@ -237,10 +240,12 @@ static void handle_input(void) {
                 is_paused = SDL_TRUE;
                 break;
             }
-            emulator_joypad_press(emu, sdl_controller_to_joypad(event.cbutton.button));
+            if (!is_paused)
+                emulator_joypad_press(emu, sdl_controller_to_joypad(event.cbutton.button));
             break;
         case SDL_CONTROLLERBUTTONUP:
-            emulator_joypad_release(emu, sdl_controller_to_joypad(event.cbutton.button));
+            if (!is_paused)
+                emulator_joypad_release(emu, sdl_controller_to_joypad(event.cbutton.button));
             break;
         case SDL_CONTROLLERDEVICEADDED:
             if (!is_controller_present) {
@@ -312,6 +317,7 @@ int main(int argc, char **argv) {
 
     config_load("config");
     emu = NULL;
+    rom_title = NULL;
 
     ui_pixels_buffer = ui_init();
 

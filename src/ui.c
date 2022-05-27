@@ -139,6 +139,9 @@ static void on_input_link_host(menu_entry_t *entry);
 static void on_input_link_port(menu_entry_t *entry);
 static void start_link(void);
 static void open_rom(void);
+#ifndef __EMSCRIPTEN__
+static void reset_rom(void);
+#endif
 static void on_input_set_keybind(menu_entry_t *entry, SDL_Keycode key);
 static void back_to_prev_menu(void);
 
@@ -228,11 +231,14 @@ menu_t main_menu = {
     #ifdef __EMSCRIPTEN__
     .length = 5,
     #else
-    .length = 6,
+    .length = 7,
     #endif
     .entries = {
         { "Resume", ACTION, .disabled = 1, .action = gbmulator_unpause },
         { "Open ROM...", ACTION, .action = open_rom },
+        #ifndef __EMSCRIPTEN__
+        { "Reset ROM", ACTION, .disabled = 1, .action = reset_rom },
+        #endif
         { "Link cable...", SUBMENU, .disabled = 1, .submenu = &link_menu },
         { "Options...", SUBMENU, .submenu = &options_menu },
         { "Keybindings...", SUBMENU, .submenu = &keybindings_menu },
@@ -367,6 +373,12 @@ static void open_rom(void) {
         gbmulator_load_cartridge(filepath);
     #endif
 }
+
+#ifndef __EMSCRIPTEN__
+static void reset_rom(void) {
+    gbmulator_load_cartridge(NULL);
+}
+#endif
 
 static void on_input_set_keybind(menu_entry_t *entry, SDL_Keycode key) {
     int same = -1;
@@ -813,4 +825,8 @@ void ui_enable_resume_button(void) {
 
 void ui_enable_link_button(void) {
     main_menu.entries[2].disabled = 0;
+}
+
+void ui_enable_reset_button(void) {
+    main_menu.entries[3].disabled = 0;
 }

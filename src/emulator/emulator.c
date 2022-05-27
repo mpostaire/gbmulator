@@ -125,6 +125,10 @@ void emulator_load_save_data(emulator_t *emu, byte_t *save_data, size_t save_len
         memcpy(&emu->mmu->rtc.value_in_seconds, &save_data[eram_len], rtc_len);
 }
 
+char *emulator_get_rom_path(emulator_t *emu) {
+    return emu->rom_filepath;
+}
+
 char *emulator_get_rom_title(emulator_t *emu) {
     return emu->rom_title;
 }

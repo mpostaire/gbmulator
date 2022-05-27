@@ -6,6 +6,10 @@
 
 extern emulator_t *emu;
 
+/**
+ * Load and play a cartridge. 
+ * @param path the path of the rom to load or NULL to reload the currently playing rom
+ */
 void gbmulator_load_cartridge(const char *path);
 
 void gbmulator_exit(void);

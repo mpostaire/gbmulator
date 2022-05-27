@@ -21,3 +21,5 @@ void ui_text_input(const char *text);
 void ui_enable_resume_button(void);
 
 void ui_enable_link_button(void);
+
+void ui_enable_reset_button(void);

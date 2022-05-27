@@ -11,14 +11,11 @@
 // TODO implemented MBCs have a few bugs (see https://github.com/drhelius/Gearboy to understand its handled)
 
 // TODO switch gb/gbc mode in settings -- if a rom is already running, reset gameboy
-// TODO reset gameboy in ui main menu
 
 // TODO ppu lcd off should take multiple cycles to turn on again?
 
 // TODO idea to increase rendering smoothness: instead of delay until audio queue is empty, leave apu callback without pushing new sound
 //      and try to do it each frame until it's ok -> may cause other problems...
-
-// TODO change speed to be an emulator variable
 
 // TODO make ui menu scale = fullscreen with aspect ratio black bars
 
@@ -174,10 +171,11 @@ static void handle_input(void) {
                 free(savestate_path);
                 break;
             }
-            emulator_joypad_press(emu, sdl_key_to_joypad(event.key.keysym.sym));
+            if (!is_paused)
+                emulator_joypad_press(emu, sdl_key_to_joypad(event.key.keysym.sym));
             break;
         case SDL_KEYUP:
-            if (!event.key.repeat)
+            if (!event.key.repeat && !is_paused)
                 emulator_joypad_release(emu, sdl_key_to_joypad(event.key.keysym.sym));
             break;
         case SDL_CONTROLLERBUTTONDOWN:
@@ -189,10 +187,12 @@ static void handle_input(void) {
                 is_paused = SDL_TRUE;
                 break;
             }
-            emulator_joypad_press(emu, sdl_controller_to_joypad(event.cbutton.button));
+            if (!is_paused)
+                emulator_joypad_press(emu, sdl_controller_to_joypad(event.cbutton.button));
             break;
         case SDL_CONTROLLERBUTTONUP:
-            emulator_joypad_release(emu, sdl_controller_to_joypad(event.cbutton.button));
+            if (!is_paused)
+                emulator_joypad_release(emu, sdl_controller_to_joypad(event.cbutton.button));
             break;
         case SDL_CONTROLLERDEVICEADDED:
             if (!is_controller_present) {
@@ -219,9 +219,11 @@ void gbmulator_load_cartridge(const char *path) {
     if (emu)
         emulator_quit(emu);
 
-    size_t len = strlen(path);
-    rom_path = xrealloc(rom_path, len + 2);
-    snprintf(rom_path, len + 1, "%s", path);
+    if (path) {
+        size_t len = strlen(path);
+        rom_path = xrealloc(rom_path, len + 2);
+        snprintf(rom_path, len + 1, "%s", path);
+    }
 
     char *save_path = get_save_path(rom_path);
     emu = emulator_init(rom_path, save_path, ppu_vblank_cb, apu_samples_ready_cb);
@@ -237,6 +239,7 @@ void gbmulator_load_cartridge(const char *path) {
     is_rom_loaded = SDL_TRUE;
     ui_enable_resume_button();
     ui_enable_link_button();
+    ui_enable_reset_button();
     ui_back_to_main_menu();
     is_paused = SDL_FALSE;
 }
@@ -247,6 +250,7 @@ int main(int argc, char **argv) {
     config_load(config_path);
     byte_t *ui_pixels = ui_init();
     emu = NULL;
+    rom_path = NULL;
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
 
@@ -328,8 +332,10 @@ int main(int argc, char **argv) {
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).
     }
 
-    emulator_quit(emu);
-    free(rom_path);
+    if (emu)
+        emulator_quit(emu);
+    if (rom_path)
+        free(rom_path);
 
     config_save(config_path);
 
