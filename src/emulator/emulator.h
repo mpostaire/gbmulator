@@ -57,6 +57,8 @@ void emulator_joypad_release(emulator_t *emu, joypad_button_t key);
 
 byte_t *emulator_get_save_data(emulator_t *emu, size_t *save_length);
 
+void emulator_load_save_data(emulator_t *emu, byte_t *save_data, size_t save_len);
+
 char *emulator_get_rom_title(emulator_t *emu);
 
 char *emulator_get_rom_title_from_data(byte_t *rom_data, size_t size);

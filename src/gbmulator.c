@@ -20,7 +20,7 @@
 // TODO idea to increase rendering smoothness: instead of delay until audio queue is empty, leave apu callback without pushing new sound
 //      and try to do it each frame until it's ok -> may cause other problems...
 
-// TODO also save rtc if cartridge has rtc
+// TODO change speed to be an emulator variable
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;

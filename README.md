@@ -54,9 +54,8 @@ The following table show the default keybindings (they can be changed in GBmulat
 ## TODO
 
 - GBC mode
-- fix mbc bugs + implement missing mbcs
+- fix mbc bugs + implement MBC6, MBC7, HuC1 and multicart MBCs
 - fix apu bugs
-- memory DMA transfer not instant + blocks everything except hram (low priority)
 - rewrite ppu from scanline rendering to cycle accurate rendering
 - fix buggy serial data transfer
 

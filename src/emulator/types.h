@@ -89,6 +89,32 @@ typedef enum {
 } mbc_type_t;
 
 typedef struct {
+    int cpu_cycles_counter;
+    word_t rtc_cycles_counter;
+
+    byte_t latched_s;
+    byte_t latched_m;
+    byte_t latched_h;
+    byte_t latched_dl;
+    byte_t latched_dh;
+
+    byte_t s;
+    byte_t m;
+    byte_t h;
+    byte_t dl;
+    byte_t dh;
+
+    byte_t enabled;
+    byte_t reg; // rtc register
+    byte_t latch;
+
+    // do not move the 'value_in_seconds' member (mmu.c and emulator.c use offsetof value_in_seconds on this struct)
+    // everything that is below this line will be saved in the save file
+    time_t value_in_seconds; // current rtc time in seconds
+    time_t timestamp; // real unix time at the moment the rtc was clocked
+} rtc_t;
+
+typedef struct {
     byte_t cartridge[8400000];
     // do not move the 'mem' member (savestate.c uses offsetof mem on this struct)
     // everything that is below this line will be saved in the savestates
@@ -108,17 +134,7 @@ typedef struct {
     byte_t has_rumble;
     byte_t has_rtc;
 
-    struct {
-        byte_t s;
-        byte_t m;
-        byte_t h;
-        byte_t dl;
-        byte_t dh;
-        time_t value_in_seconds; // current rtc counter seconds, minutes, hours and days in seconds (helps with rtc_update())
-        byte_t enabled;
-        byte_t reg; // rtc register
-        byte_t latch;
-    } rtc;
+    rtc_t rtc;
 } mmu_t;
 
 typedef struct {

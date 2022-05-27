@@ -80,6 +80,8 @@ int mmu_init_from_data(emulator_t *emu, const byte_t *rom_data, size_t size, cha
 
 void mmu_quit(emulator_t *emu);
 
+void mmu_step(emulator_t *emu, int cycles);
+
 /**
  * only used in instructions (opcode execution)
  */

@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stddef.h>
 
 #include "emulator.h"
 #include "mmu.h"
@@ -14,9 +15,9 @@ int emulator_step(emulator_t *emu) {
     // the next cpu_step() will resume the previous instruction. This will makes the timer "hack" (increment within a loop and not an if)
     // obsolete while allowing accurate memory timings emulation.
     int cycles = cpu_step(emu);
+    mmu_step(emu, cycles);
     timer_step(emu, cycles);
     link_step(emu, cycles);
-    // TODO insert mmu_step(cycles) here to implement OAM DMA transfer delay
     ppu_step(emu, cycles);
     apu_step(emu, cycles);
     return cycles;
@@ -88,9 +89,40 @@ byte_t *emulator_get_save_data(emulator_t *emu, size_t *save_length) {
         *save_length = 0;
         return NULL;
     }
+
+    size_t eram_len = emu->mmu->has_battery ? 0x2000 * emu->mmu->eram_banks : 0;
+    size_t rtc_len = emu->mmu->has_rtc ? sizeof(rtc_t) - offsetof(rtc_t, value_in_seconds) : 0;
+    size_t total_len = eram_len + rtc_len;
     if (save_length)
-        *save_length = 0x2000 * emu->mmu->eram_banks;
-    return emu->mmu->eram;
+        *save_length = total_len;
+    
+    if (total_len == 0)
+        return NULL;
+
+    byte_t *save_data = xmalloc(total_len);
+
+    if (eram_len > 0)
+        memcpy(save_data, emu->mmu->eram, eram_len);
+
+    if (rtc_len > 0)
+        memcpy(&save_data[eram_len], &emu->mmu->rtc.value_in_seconds, rtc_len);
+
+    return save_data;
+}
+
+void emulator_load_save_data(emulator_t *emu, byte_t *save_data, size_t save_len) {
+    size_t eram_len = emu->mmu->has_battery ? 0x2000 * emu->mmu->eram_banks : 0;
+    size_t rtc_len = emu->mmu->has_rtc ? sizeof(rtc_t) - offsetof(rtc_t, value_in_seconds) : 0;
+    size_t total_len = eram_len + rtc_len;
+
+    if (total_len != save_len || total_len == 0)
+        return;
+
+    if (eram_len > 0)
+        memcpy(emu->mmu->eram, save_data, eram_len);
+
+    if (rtc_len > 0)
+        memcpy(&emu->mmu->rtc.value_in_seconds, &save_data[eram_len], rtc_len);
 }
 
 char *emulator_get_rom_title(emulator_t *emu) {

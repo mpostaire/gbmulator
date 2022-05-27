@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -22,6 +23,38 @@ const char *mbc_names[] = {
     "MBC7",
     "HuC1"
 };
+
+static inline void rtc_update(rtc_t *rtc) {
+    time_t now = time(NULL);
+    time_t elapsed = now - rtc->timestamp;
+    rtc->timestamp = now;
+    rtc->value_in_seconds += elapsed;
+    time_t value_in_seconds = rtc->value_in_seconds;
+
+    word_t d = value_in_seconds / 86400;
+    value_in_seconds %= 86400;
+
+    // day overflow
+    if (d >= 0x0200) {
+        SET_BIT(rtc->dh, 7);
+        d %= 0x0200;
+    }
+
+    rtc->dh |= (d & 0x100) >> 8;
+    rtc->dl = d & 0xFF;
+
+    rtc->h = value_in_seconds / 3600;
+    value_in_seconds %= 3600;
+
+    rtc->m = value_in_seconds / 60;
+    value_in_seconds %= 60;
+
+    rtc->s = value_in_seconds;
+
+    // if there was a day overflow, emulate the overflow on rtc->value_in_seconds
+    if (CHECK_BIT(rtc->dh, 7))
+        rtc->value_in_seconds = rtc->s + rtc->m * 60 + rtc->h * 3600 + d * 86400;
+}
 
 static int parse_cartridge(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
@@ -165,11 +198,15 @@ static int parse_cartridge(emulator_t *emu) {
         FILE *f = fopen(emu->save_filepath, "rb");
         // if there is a save file, load it into eram
         if (f) {
-            // no fread check because a missing/invalid save file is not an error
-            fread(mmu->eram, 0x2000 * mmu->eram_banks, 1, f);
+            // no fread checks because a missing/invalid save file is not an error
 
-            if (mmu->has_rtc)
-                fread(&emu->mmu->rtc, sizeof(emu->mmu->rtc), 1, f);
+            if (mmu->eram_banks > 0)
+                fread(mmu->eram, 0x2000 * mmu->eram_banks, 1, f);
+
+            if (mmu->has_rtc) {
+                fread(&mmu->rtc.value_in_seconds, sizeof(rtc_t) - offsetof(rtc_t, value_in_seconds), 1, f);
+                rtc_update(&mmu->rtc);
+            }
 
             fclose(f);
         }
@@ -237,8 +274,9 @@ int mmu_init_from_data(emulator_t *emu, const byte_t *rom_data, size_t size, cha
     return parse_cartridge(emu);
 }
 
-static int save_eram(emulator_t *emu) {
-    if (!emu->mmu->has_battery || !emu->save_filepath)
+static int save(emulator_t *emu) {
+    // don't save if the cartridge has no battery or no save path has been given or their is no rtc and no eram banks
+    if (!emu->mmu->has_battery || !emu->save_filepath || (!emu->mmu->has_rtc && emu->mmu->eram_banks == 0))
         return 0;
 
     make_parent_dirs(emu->rom_filepath);
@@ -248,14 +286,17 @@ static int save_eram(emulator_t *emu) {
         errnoprintf("opening the save file");
         return 0;
     }
-    if (!fwrite(emu->mmu->eram, 0x2000 * emu->mmu->eram_banks, 1, f)) {
-        eprintf("writing eram to save file\n");
-        fclose(f);
-        return 0;
+
+    if (emu->mmu->eram_banks > 0) {
+        if (!fwrite(emu->mmu->eram, 0x2000 * emu->mmu->eram_banks, 1, f)) {
+            eprintf("writing eram to save file\n");
+            fclose(f);
+            return 0;
+        }
     }
 
     if (emu->mmu->has_rtc) {
-        if (!fwrite(&emu->mmu->rtc, sizeof(emu->mmu->rtc), 1, f)) {
+        if (!fwrite(&emu->mmu->rtc.value_in_seconds, sizeof(rtc_t) - offsetof(rtc_t, value_in_seconds), 1, f)) {
             eprintf("writing rtc to save file\n");
             fclose(f);
             return 0;
@@ -267,7 +308,7 @@ static int save_eram(emulator_t *emu) {
 }
 
 void mmu_quit(emulator_t *emu) {
-    save_eram(emu);
+    save(emu);
 
     if (emu->rom_filepath)
         free(emu->rom_filepath);
@@ -276,31 +317,25 @@ void mmu_quit(emulator_t *emu) {
     free(emu->mmu);
 }
 
-static void rtc_update(mmu_t *mmu) {
-    // get current time in seconds
-    time_t current_update_time = time(NULL);
+void mmu_step(emulator_t *emu, int cycles) {
+    while (cycles-- > 0) {
+        // step rtc clock if it's present and is not halted
+        if (emu->mmu->has_rtc && !CHECK_BIT(emu->mmu->rtc.dh, 6)) {
+            emu->mmu->rtc.cpu_cycles_counter++;
+            if (emu->mmu->rtc.cpu_cycles_counter >= GB_CPU_FREQ / 32768) { // 32768 Hz
+                emu->mmu->rtc.cpu_cycles_counter = 0;
 
-    // get time elapsed
-    time_t elapsed = current_update_time - mmu->rtc.value_in_seconds;
+                emu->mmu->rtc.rtc_cycles_counter++;
+                if (CHECK_BIT(emu->mmu->rtc.rtc_cycles_counter, 15)) {
+                    emu->mmu->rtc.rtc_cycles_counter = 0;
+                    rtc_update(&emu->mmu->rtc);
+                }
+            }
+        }
 
-    mmu->rtc.value_in_seconds += elapsed;
-
-    word_t d = mmu->rtc.value_in_seconds / 86400;
-    elapsed %= 86400;
-    if (d >= 0x0200) { // day overflow
-        SET_BIT(mmu->rtc.dh, 7);
-        d %= 0x0200;
+        // TODO update OAM DMA
+        // mmu->oam_dma_cycles_counter++;
     }
-    mmu->rtc.dh |= (d & 0x100) >> 8;
-    mmu->rtc.dl = d & 0xFF;
-
-    mmu->rtc.h = elapsed / 3600;
-    elapsed %= 3600;
-
-    mmu->rtc.m = elapsed / 60;
-    elapsed %= 60;
-
-    mmu->rtc.s = elapsed;
 }
 
 // TODO MBC1 special cases where rom bank 0 is changed are not implemented
@@ -365,8 +400,13 @@ static void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) {
                 mmu->current_eram_bank = -1;
             }
         } else if (address < 0x8000 && mmu->has_rtc) {
-            if (mmu->rtc.latch == 0x00 && data == 0x01 && !CHECK_BIT(mmu->rtc.dh, 6))
-                rtc_update(mmu);
+            if (mmu->rtc.latch == 0x00 && data == 0x01 && !CHECK_BIT(mmu->rtc.dh, 6)) {
+                mmu->rtc.latched_s = mmu->rtc.s;
+                mmu->rtc.latched_m = mmu->rtc.m;
+                mmu->rtc.latched_h = mmu->rtc.h;
+                mmu->rtc.latched_dl = mmu->rtc.dl;
+                mmu->rtc.latched_dh = mmu->rtc.dh;
+            }
             mmu->rtc.latch = data;
         }
         break;
@@ -437,11 +477,11 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
                 return mmu->eram_enabled ? mmu->eram[(address - 0xA000) + (mmu->current_eram_bank * 0x2000)] : 0xFF;
             } else if (mmu->has_rtc && mmu->rtc.enabled) { // implies mbc == MBC3 (or MBC30) because rtc_enabled is set to 0 by default
                 switch (mmu->rtc.reg) {
-                case 0x08: return mmu->rtc.s;
-                case 0x09: return mmu->rtc.m;
-                case 0x0A: return mmu->rtc.h;
-                case 0x0B: return mmu->rtc.dl;
-                case 0x0C: return mmu->rtc.dh;
+                case 0x08: return mmu->rtc.latched_s;
+                case 0x09: return mmu->rtc.latched_m;
+                case 0x0A: return mmu->rtc.latched_h;
+                case 0x0B: return mmu->rtc.latched_dl;
+                case 0x0C: return mmu->rtc.latched_dh;
                 default: return 0xFF;
                 }
             }

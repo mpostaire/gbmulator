@@ -82,17 +82,18 @@ int sdl_key_to_joypad(SDL_Keycode key) {
     return key;
 }
 
-static void save_eram(void) {
+static void save(void) {
     size_t save_length;
     byte_t *save_data = emulator_get_save_data(emu, &save_length);
     if (!save_data) return;
     byte_t *save = base64_encode(save_data, save_length, NULL);
     local_storage_set_item(rom_title, save);
+    free(save_data);
     free(save);
 }
 
 EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
-    save_eram();
+    save();
     config_save("config");
 }
 
@@ -109,7 +110,7 @@ EMSCRIPTEN_KEEPALIVE void on_gui_button_up(joypad_button_t button) {
 
 EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {
     if (emu) {
-        save_eram();
+        save();
         free(rom_title);
         emulator_quit(emu);
     }
@@ -125,7 +126,7 @@ EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {
     size_t save_length;
     unsigned char *save = local_storage_get_item(rom_title, &save_length);
     if (save) {
-        memcpy(emulator_get_save_data(emu, NULL), save, save_length);
+        emulator_load_save_data(emu, save, save_length);
         free(save);
     }
 
