@@ -93,8 +93,12 @@ int sdl_controller_to_joypad(int button) {
     case SDL_CONTROLLER_BUTTON_DPAD_DOWN: return JOYPAD_DOWN;
     case SDL_CONTROLLER_BUTTON_A: return JOYPAD_A;
     case SDL_CONTROLLER_BUTTON_B: return JOYPAD_B;
-    case SDL_CONTROLLER_BUTTON_START: return JOYPAD_START;
-    case SDL_CONTROLLER_BUTTON_BACK: return JOYPAD_SELECT;
+    case SDL_CONTROLLER_BUTTON_START:
+    case SDL_CONTROLLER_BUTTON_X:
+        return JOYPAD_START;
+    case SDL_CONTROLLER_BUTTON_BACK:
+    case SDL_CONTROLLER_BUTTON_Y:
+        return JOYPAD_SELECT;
     }
     return -1;
 }
