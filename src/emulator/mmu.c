@@ -158,9 +158,13 @@ static int parse_cartridge(emulator_t *emu) {
     // get rom title
     memcpy(emu->rom_title, (char *) &mmu->cartridge[0x134], 16);
     emu->rom_title[16] = '\0';
-    if (mmu->cartridge[0x0143] == 0xC0 || mmu->cartridge[0x0143] == 0x80)
+    if (mmu->cartridge[0x0143] == 0xC0 || mmu->cartridge[0x0143] == 0x80) {
         emu->rom_title[15] = '\0';
-    printf("Playing %s\n", emu->rom_title);
+        emu->mode = GBC;
+    } else {
+        emu->mode = DMG;
+    }
+    printf("[%s] Playing %s\n", emu->mode == DMG ? "DMG" : "GBC", emu->rom_title);
 
     char *ram_str = NULL;
     if (mmu->has_eram) {
@@ -190,8 +194,15 @@ static int parse_cartridge(emulator_t *emu) {
     // load cartridge into rom banks (everything before VRAM (0x8000))
     memcpy(mmu->mem, mmu->cartridge, VRAM);
 
-    // Load bios after cartridge to overwrite first 0x100 bytes.
-    memcpy(mmu->mem, dmg_boot, sizeof(dmg_boot));
+    if (emu->mode == DMG) {
+        // Load bios after cartridge to overwrite first 0x100 bytes.
+        memcpy(mmu->mem, dmg_boot, sizeof(dmg_boot));
+    } else {
+        // Load first part of the bios after cartridge to overwrite first 0x100 bytes.
+        memcpy(mmu->mem, cgb_boot, 0x100);
+        // Load second part of the bios.
+        memcpy(&mmu->mem[0x200], &cgb_boot[0x200], sizeof(cgb_boot) - 0x200);
+    }
 
     // load save into ERAM
     if (emu->mmu->has_battery && emu->save_filepath) {
@@ -469,8 +480,8 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
     mmu_t *mmu = emu->mmu;
 
     if (mmu->mbc >= MBC1 && mmu->mbc <= MBC5) {
-        if (address >= 0x4000 && address < 0x8000) // ROM_BANKN
-            return mmu->cartridge[(address - 0x4000) + (mmu->current_rom_bank * 0x4000)];
+        if (address >= ROM_BANKN && address < VRAM) // ROM_BANKN
+            return mmu->cartridge[(address - ROM_BANKN) + (mmu->current_rom_bank * 0x4000)];
 
         if (address >= 0xA000 && address < 0xC000) { // ERAM
             if (mmu->has_eram && mmu->current_eram_bank >= 0) {
@@ -492,9 +503,28 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
     if (address >= OAM && address < UNUSABLE && CHECK_BIT(mmu->mem[LCDC], 7) && ((PPU_IS_MODE(emu, PPU_MODE_OAM) || PPU_IS_MODE(emu, PPU_MODE_DRAWING))))
         return 0xFF;
 
-    // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
-    if ((address >= VRAM && address < ERAM) && CHECK_BIT(mmu->mem[LCDC], 7) && PPU_IS_MODE(emu, PPU_MODE_DRAWING))
-        return 0xFF;
+    if (address >= VRAM && address < ERAM) {
+        // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
+        if (CHECK_BIT(mmu->mem[LCDC], 7) && PPU_IS_MODE(emu, PPU_MODE_DRAWING))
+            return 0xFF;
+
+        if (emu->mode == GBC && CHECK_BIT(mmu->mem[VBK], 0))
+            return mmu->vram_extra[(address - VRAM)];
+        else
+            return mmu->mem[address];
+    }
+
+    // If in GBC mode, access to extra wram banks
+    if (emu->mode == GBC && address >= WRAM_BANKN && address < ECHO) {
+        byte_t current_wram_bank = mmu->mem[SVBK];
+        if (current_wram_bank > 0)
+            current_wram_bank--;
+        if (current_wram_bank > 7) {
+            eprintf("reading invalid wram bank %d\n", current_wram_bank);
+            current_wram_bank = 7;
+        }
+        return mmu->wram_extra[(address - WRAM_BANKN) + (current_wram_bank * 0x1000)];
+    }
 
     // UNUSABLE memory is unusable
     if (address >= UNUSABLE && address < IO)
@@ -557,6 +587,22 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
     if (address > NR52 && address < WAVE_RAM)
         return 0xFF;
 
+    if (address == 0xFF72)
+        return emu->mode == GBC ? mmu->mem[address] : 0xFF; // only readable in GBC mode
+
+    if (emu->mode == GBC) {
+        if (address == 0xFF75)
+            return mmu->mem[address] & 0x70;
+        
+        // TODO The low nibble is a copy of sound channel #1’s PCM amplitude, the high nibble a copy of sound channel #2’s.
+        // if (address == PCM12)
+        //     return 0xFF;
+
+        // TODO The low nibble is a copy of sound channel #3’s PCM amplitude, the high nibble a copy of sound channel #4’s.
+        // if (address == PCM34)
+        //     return 0xFF;
+    }
+
     return mmu->mem[address];
 }
 
@@ -565,17 +611,33 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
 
     if (address < VRAM) {
         write_mbc_registers(mmu, address, data);
+    } else if (address >= VRAM && address < ERAM) {
+        // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
+        if (CHECK_BIT(mmu->mem[LCDC], 7) && PPU_IS_MODE(emu, PPU_MODE_DRAWING))
+            return;
+
+        if (emu->mode == GBC && CHECK_BIT(mmu->mem[VBK], 0))
+            mmu->vram_extra[(address - VRAM)] = data;
+        else
+            mmu->mem[address] = data;
     } else if (address >= ERAM && address < WRAM_BANK0) {
         write_mbc_eram(mmu, address, data);
+    } else if (emu->mode == GBC && address >= WRAM_BANKN && address < ECHO) {
+        byte_t current_wram_bank = mmu->mem[SVBK];
+        if (current_wram_bank > 0)
+            current_wram_bank--;
+        if (current_wram_bank > 7) {
+            eprintf("writing to invalid wram bank %d\n", current_wram_bank);
+            current_wram_bank = 7;
+        }
+        mmu->wram_extra[(address - WRAM_BANKN) + (current_wram_bank * 0x1000)] = data;
+    } else if ((address >= OAM && address < UNUSABLE) && ((PPU_IS_MODE(emu, PPU_MODE_OAM) || PPU_IS_MODE(emu, PPU_MODE_DRAWING)) && CHECK_BIT(mmu->mem[LCDC], 7))) {
+        // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD enabled
+    } else if (address >= UNUSABLE && address < IO) {
+        // UNUSABLE memory is unusable
     } else if (address == DIV) {
         // writing to DIV resets it to 0
         mmu->mem[address] = 0;
-    } else if ((address >= OAM && address < UNUSABLE) && ((PPU_IS_MODE(emu, PPU_MODE_OAM) || PPU_IS_MODE(emu, PPU_MODE_DRAWING)) && CHECK_BIT(mmu->mem[LCDC], 7))) {
-        // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD enabled
-    } else if ((address >= VRAM && address < ERAM) && (PPU_IS_MODE(emu, PPU_MODE_DRAWING) && CHECK_BIT(mmu->mem[LCDC], 7))) {
-        // VRAM inaccessible by cpu while ppu in mode 3 and LCD enabled
-    } else if (address >= UNUSABLE && address < IO) {
-        // UNUSABLE memory is unusable
     } else if (address == LY) {
         // read only
     } else if (address == LYC) {
@@ -587,9 +649,14 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         // TODO this should not be instantaneous (it takes 640 cycles to complete and during that time the cpu can only access HRAM)
         memcpy(&mmu->mem[OAM], &mmu->mem[data * 0x100], 0xA0 * sizeof(byte_t));
         mmu->mem[address] = data;
-    } else if (address == BANK && data == 1) {
+    } else if (address == BANK) {
         // disable boot rom
-        memcpy(mmu->mem, mmu->cartridge, 0x100);
+        if (emu->mode == DMG && data == 0x01) {
+            memcpy(mmu->mem, mmu->cartridge, 0x100);
+        } else if (emu->mode == GBC && data == 0x11) {
+            memcpy(mmu->mem, mmu->cartridge, 0x100);
+            memcpy(&mmu->mem[0x200], &mmu->cartridge[0x200], sizeof(cgb_boot) - 0x200);
+        }
         mmu->mem[address] = data;
     } else if (address == P1) {
         // prevent writes to the lower nibble of the P1 register (joypad)
@@ -711,6 +778,14 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
             mmu->mem[address] = data;
     } else if (address == STAT) {
         mmu->mem[address] = 0x80 | (data & 0x78) | (mmu->mem[address] & 0x07);
+    } else if (address == 0xFF74 && emu->mode == GBC) {
+        mmu->mem[address] = data; // only writable in GBC mode
+    } else if (address == 0xFF75 && emu->mode == GBC) {
+        mmu->mem[address] = data & 0x70;
+    } else if (address == 0xFF76 && emu->mode == GBC) {
+        // read only
+    } else if (address == 0xFF77 && emu->mode == GBC) {
+        // read only
     } else {
         mmu->mem[address] = data;
     }

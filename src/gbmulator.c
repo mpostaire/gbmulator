@@ -8,7 +8,7 @@
 
 // TODO fix pause menu when starting game link connexion while pause menu is still active (it's working but weirdly so low priority)
 
-// TODO implemented MBCs have a few bugs (see https://github.com/drhelius/Gearboy to understand its handled)
+// TODO implemented MBCs have a few bugs (see https://github.com/drhelius/Gearboy to understand how its handled)
 
 // TODO ppu lcd off should take multiple cycles to turn on again?
 
@@ -16,6 +16,8 @@
 //      and try to do it each frame until it's ok -> may cause other problems...
 
 // TODO switch gb/gbc mode in settings -- if a rom is already running, reset gameboy
+
+// TODO check dmg only game in cgb mode to see if it works
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;

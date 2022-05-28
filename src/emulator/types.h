@@ -120,6 +120,8 @@ typedef struct {
     // everything that is below this line will be saved in the savestates
     byte_t mem[0x10000];
     byte_t eram[0x20000]; // max 16 banks of size 0x2000
+    byte_t wram_extra[0x7000]; // 7 extra banks of wram of size 0x1000 for a total of 8 banks
+    byte_t vram_extra[0x2000]; // 1 extra bank of wram of size 0x1000 for a total of 2 banks
 
     mbc_type_t mbc;
     byte_t rom_banks;
@@ -224,10 +226,17 @@ typedef struct {
     struct sockaddr_in other_addr;
 } link_t;
 
+typedef enum {
+    DMG,
+    GBC
+} emulator_mode_t;
+
 typedef struct {
     char *rom_filepath;
     char *save_filepath;
     char rom_title[17];
+
+    emulator_mode_t mode;
 
     cpu_t *cpu;
     mmu_t *mmu;

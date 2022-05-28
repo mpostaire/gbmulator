@@ -1874,7 +1874,7 @@ static int exec_opcode(emulator_t *emu, byte_t opcode, word_t operand) {
         cycles = 4;
         break;
     case 0x10: // STOP
-        // TODO Halts until button press. Blargg's cpu_instrs.gb test rom wrongly assumes this is a CGB emulator and will reach this opcode. 
+        // TODO Halts until button press. Blargg's cpu_instrs.gb test rom wrongly assumes this is a GBC emulator and will reach this opcode. 
         cycles = 4;
         break;
     case 0x11: // LD DE, nn

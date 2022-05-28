@@ -107,10 +107,10 @@ static void draw_bg_win(emulator_t *emu) {
         s_word_t tile_id;
         if (CHECK_BIT(mmu->mem[LCDC], 4)) {
             tile_id = mmu->mem[tile_id_address];
-            tiledata_address = 0x8000 + tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
+            tiledata_address = VRAM + tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
         } else {
             tile_id = (s_byte_t) mmu->mem[tile_id_address] + 128;
-            tiledata_address = 0x8800 + tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
+            tiledata_address = VRAM + tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
         }
 
         // find the vertical line of the tile we are on (% 8 because tiles are 8 pixels tall, * 2 because each line takes 2 bytes of memory)
@@ -189,7 +189,7 @@ static void draw_objects(emulator_t *emu) {
         obj_line *= 2; // each line takes 2 bytes in memory
 
         // find object tile data in memory
-        word_t objdata_address = 0x8000 + tile_index * 16;
+        word_t objdata_address = VRAM + tile_index * 16;
 
         // 3. DRAW OBJECT
 
