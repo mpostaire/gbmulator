@@ -458,12 +458,12 @@ byte_t *ui_init(void) {
     return ui_pixels;
 }
 
-static void print_cursor(int x, int y, color_t color) {
+static void print_cursor(int x, int y, dmg_color_t color) {
     for (int i = 0; i < 8; i++)
         SET_PIXEL_RGBA(ui_pixels, x, y + i, color, 0xFF);
 }
 
-static void print_char(const char c, int x, int y, color_t color) {
+static void print_char(const char c, int x, int y, dmg_color_t color) {
     int index = c - 32;
     if (index < 0 || index >= 0x5F) return;
     
@@ -474,7 +474,7 @@ static void print_char(const char c, int x, int y, color_t color) {
                 SET_PIXEL_RGBA(ui_pixels, x + i, y + j, color, 0xFF);
 }
 
-static void print_text(const char *text, int x, int y, color_t color) {
+static void print_text(const char *text, int x, int y, dmg_color_t color) {
     for (int i = 0; text[i]; i++) {
         if (text[i] == '|')
             return;
@@ -485,10 +485,10 @@ static void print_text(const char *text, int x, int y, color_t color) {
 static void ui_clear(void) {
     for (int i = 0; i < GB_SCREEN_WIDTH; i++)
         for (int j = 0; j < GB_SCREEN_HEIGHT; j++)
-            SET_PIXEL_RGBA(ui_pixels, i, j, BLACK, 0xD5);
+            SET_PIXEL_RGBA(ui_pixels, i, j, DMG_BLACK, 0xD5);
 }
 
-static void print_choice(const char *choices, int x, int y, int n, color_t text_color, color_t arrow_color) {
+static void print_choice(const char *choices, int x, int y, int n, dmg_color_t text_color, dmg_color_t arrow_color) {
     int delim_count = 0;
     int printed_char_count = 1;
     print_char('<', x, y, arrow_color);
@@ -520,12 +520,12 @@ void ui_draw_menu(void) {
     if (labels_start_y < 48)
         labels_start_y = 48;
 
-    print_text(current_menu->title, title_x, 32, WHITE);
-    print_text(">", 0, labels_start_y + (8 * current_menu->position), WHITE);
+    print_text(current_menu->title, title_x, 32, DMG_WHITE);
+    print_text(">", 0, labels_start_y + (8 * current_menu->position), DMG_WHITE);
     for (byte_t i = 0; i < current_menu->length; i++) {
         menu_entry_t *entry = &current_menu->entries[i];
         byte_t y = labels_start_y + (i * 8);
-        color_t text_color = entry->disabled ? DARK_GRAY : WHITE;
+        dmg_color_t text_color = entry->disabled ? DMG_DARK_GRAY : DMG_WHITE;
         print_text(entry->label, 8, y, text_color);
 
         int delim_index;
@@ -534,13 +534,13 @@ void ui_draw_menu(void) {
         case CHOICE:
             delim_index = strcspn(entry->label, "|");
             char *choices = &entry->label[delim_index + 1];
-            print_choice(choices, (delim_index * 8) + 8, y, entry->choices.position, text_color, entry->disabled ? DARK_GRAY : LIGHT_GRAY);
+            print_choice(choices, (delim_index * 8) + 8, y, entry->choices.position, text_color, entry->disabled ? DMG_DARK_GRAY : DMG_LIGHT_GRAY);
             break;
         case KEY_SETTER:
             if (!entry->setter.editing)
-                print_text(entry->setter.key_name, GB_SCREEN_WIDTH - (strlen(entry->setter.key_name) * 8) - 8, y, WHITE);
+                print_text(entry->setter.key_name, GB_SCREEN_WIDTH - (strlen(entry->setter.key_name) * 8) - 8, y, DMG_WHITE);
             else if (blink_counter > 30)
-                print_text(entry->setter.key_name, GB_SCREEN_WIDTH - (strlen(entry->setter.key_name) * 8) - 8, y, WHITE);
+                print_text(entry->setter.key_name, GB_SCREEN_WIDTH - (strlen(entry->setter.key_name) * 8) - 8, y, DMG_WHITE);
             break;
         case INPUT:
             x = (strlen(entry->label) * 8) + 8;
@@ -561,15 +561,15 @@ void ui_draw_menu(void) {
 
             print_text(visible_input, x, y, text_color);
             if (current_menu->position == i && blink_counter < 30)
-                print_cursor(x + ((entry->user_input.cursor - entry->user_input.visible_lo) * 8), y, WHITE);
+                print_cursor(x + ((entry->user_input.cursor - entry->user_input.visible_lo) * 8), y, DMG_WHITE);
             break;
         }
     }
 
     // TODO bottom right corner label status: "Link: Inactive, Waiting, Active"
     // for this an access to link status is needed (not possible yet)
-    // print_text("Link:", 0, 0, WHITE);
-    // print_text("I", 40, 0, WHITE);
+    // print_text("Link:", 0, 0, DMG_WHITE);
+    // print_text("I", 40, 0, DMG_WHITE);
 }
 
 static void delete_char_at(char **text, byte_t n) {

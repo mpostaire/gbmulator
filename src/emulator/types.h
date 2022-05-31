@@ -10,11 +10,11 @@ typedef short s_word_t;
 
 // TODO? LCD off special bright white color
 typedef enum {
-    WHITE,
-    LIGHT_GRAY,
-    DARK_GRAY,
-    BLACK
-} color_t;
+    DMG_WHITE,
+    DMG_LIGHT_GRAY,
+    DMG_DARK_GRAY,
+    DMG_BLACK
+} dmg_color_t;
 
 typedef enum {
     PPU_COLOR_PALETTE_GRAY,
@@ -122,6 +122,8 @@ typedef struct {
     byte_t eram[0x20000]; // max 16 banks of size 0x2000
     byte_t wram_extra[0x7000]; // 7 extra banks of wram of size 0x1000 for a total of 8 banks
     byte_t vram_extra[0x2000]; // 1 extra bank of wram of size 0x1000 for a total of 2 banks
+    byte_t cram_bg[0x40]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
+    byte_t cram_obj[0x40]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
 
     mbc_type_t mbc;
     byte_t rom_banks;
@@ -145,8 +147,10 @@ typedef struct {
 
     byte_t *pixels;
     byte_t *scanline_cache_color_data;
+    // stores the x position of each pixel drawn by the highest priority object
+    byte_t *obj_pixel_priority;
 
-    byte_t sent_blank_pixels;
+    byte_t is_lcd_turning_on;
 
     struct {
         word_t objs_addresses[10];
@@ -228,7 +232,7 @@ typedef struct {
 
 typedef enum {
     DMG,
-    GBC
+    CGB
 } emulator_mode_t;
 
 typedef struct {

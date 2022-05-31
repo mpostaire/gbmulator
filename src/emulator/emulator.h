@@ -17,6 +17,7 @@
 #define GB_APU_SAMPLE_RATE 44100
 // Higher ample count means higher sound quality but lower emulation smoothness.
 // 256 seems to be the safe minimum (512 for the wasm port)
+// FIXME can't go lower than 512 anymore -> identify guilty commit and fix (+ make apu->audio_buffer a pointer and malloc/free it)
 #define GB_APU_SAMPLE_COUNT 512
 
 /**
@@ -72,11 +73,11 @@ void emulator_update_pixels_with_palette(emulator_t *emu, byte_t new_palette);
 
 byte_t emulator_get_color_palette(emulator_t *emu);
 
-byte_t *emulator_get_color_values_from_palette(color_palette_t palette, color_t color);
+byte_t *emulator_get_color_values_from_palette(color_palette_t palette, dmg_color_t color);
 
 void emulator_set_color_palette(emulator_t *emu, color_palette_t palette);
 
-byte_t *emulator_get_color_values(emulator_t *emu, color_t color);
+byte_t *emulator_get_color_values(emulator_t *emu, dmg_color_t color);
 
 byte_t *emulator_get_pixels(emulator_t *emu);
 

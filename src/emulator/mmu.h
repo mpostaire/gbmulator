@@ -5,10 +5,10 @@
 typedef enum {
     ROM_BANK0 = 0x0000, // From cartridge, usually a fixed bank.
     ROM_BANKN = 0x4000, // From cartridge, switchable bank via MBC (if any).
-    VRAM = 0x8000,      // Only bank 0 in Non-GBC mode. Switchable bank 0/1 in GBC mode.
+    VRAM = 0x8000,      // Only bank 0 in Non-CGB mode. Switchable bank 0/1 in CGB mode.
     ERAM = 0xA000,
     WRAM_BANK0 = 0xC000,
-    WRAM_BANKN = 0xD000, // Only bank 1 in Non-GBC mode. Switchable bank 1~7 in GBC mode.
+    WRAM_BANKN = 0xD000, // Only bank 1 in Non-CGB mode. Switchable bank 1~7 in CGB mode.
     ECHO = 0xE000,
     OAM = 0xFE00,
     UNUSABLE = 0xFEA0,
@@ -69,26 +69,31 @@ typedef enum {
     WX = 0xFF4B,   // Window X Position + 7
 
     KEY0 = 0xFF4C,
-    KEY1 = 0xFF4D, // Prepare Speed Switch (GBC-only)
+    KEY1 = 0xFF4D, // Prepare Speed Switch (CGB-only)
 
-    VBK = 0xFF4F, // VRAM Bank (GBC-only)
+    VBK = 0xFF4F, // VRAM Bank (CGB-only)
 
     BANK = 0xFF50,
 
-    HDMA1 = 0xFF51, // New DMA Source, High (GBC-only)
-    HDMA2 = 0xFF52, // New DMA Source, Low (GBC-only)
-    HDMA3 = 0xFF53, // New DMA Destination, High (GBC-only)
-    HDMA4 = 0xFF54, // New DMA Destination, Low (GBC-only)
-    HDMA5 = 0xFF55, // New DMA Length/Mode/Start (GBC-only)
+    HDMA1 = 0xFF51, // New DMA Source, High (CGB-only)
+    HDMA2 = 0xFF52, // New DMA Source, Low (CGB-only)
+    HDMA3 = 0xFF53, // New DMA Destination, High (CGB-only)
+    HDMA4 = 0xFF54, // New DMA Destination, Low (CGB-only)
+    HDMA5 = 0xFF55, // New DMA Length/Mode/Start (CGB-only)
 
-    RP = 0xFF56, // Infrared Communication Port (GBC-only)
+    RP = 0xFF56, // Infrared Communication Port (CGB-only)
 
-    OPRI = 0xFF6C, // Object Priority Mode (GBC-only)
+    BGPI = 0xFF68, // Background Palette Index (CGB-only)
+    BGPD = 0xFF69, // Background Palette Data (CGB-only)
+    OBPI = 0xFF6A, // Object Palette Index (CGB-only)
+    OBPD = 0xFF6B, // Object Palette Data (CGB-only)
 
-    SVBK = 0xFF70, // WRAM Bank (GBC-only)
+    OPRI = 0xFF6C, // Object Priority Mode (CGB-only)
 
-    PCM12 = 0xFF76, // PCM amplitudes 1 & 2 (GBC-only)
-    PCM34 = 0xFF77, // PCM amplitudes 3 & 4 (GBC-only)
+    SVBK = 0xFF70, // WRAM Bank (CGB-only)
+
+    PCM12 = 0xFF76, // PCM amplitudes 1 & 2 (CGB-only)
+    PCM34 = 0xFF77, // PCM amplitudes 3 & 4 (CGB-only)
 
     HRAM = 0xFF80,
     IE = 0xFFFF // Interrupt Enable

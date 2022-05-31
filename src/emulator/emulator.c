@@ -153,7 +153,7 @@ void emulator_update_pixels_with_palette(emulator_t *emu, byte_t new_palette) {
             byte_t *B = (emu->ppu->pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3) + 2);
 
             // find which color is at pixel (i,j)
-            for (color_t c = WHITE; c <= BLACK; c++) {
+            for (dmg_color_t c = DMG_WHITE; c <= DMG_BLACK; c++) {
                 if (*R == ppu_color_palettes[emu->ppu->current_color_palette][c][0] &&
                     *G == ppu_color_palettes[emu->ppu->current_color_palette][c][1] &&
                     *B == ppu_color_palettes[emu->ppu->current_color_palette][c][2]) {
@@ -177,11 +177,11 @@ void emulator_set_color_palette(emulator_t *emu, color_palette_t palette) {
     emu->ppu->current_color_palette = palette;
 }
 
-byte_t *emulator_get_color_values(emulator_t *emu, color_t color) {
+byte_t *emulator_get_color_values(emulator_t *emu, dmg_color_t color) {
     return ppu_color_palettes[emu->ppu->current_color_palette][color];
 }
 
-byte_t *emulator_get_color_values_from_palette(color_palette_t palette, color_t color) {
+byte_t *emulator_get_color_values_from_palette(color_palette_t palette, dmg_color_t color) {
     return ppu_color_palettes[palette][color];
 }
 

@@ -28,7 +28,7 @@ ODIR_STRUCTURE:=$(sort $(foreach d,$(OBJ) $(HEADERS),$(subst /$(lastword $(subst
 
 all: $(ODIR_STRUCTURE) $(MAIN)
 
-debug: CFLAGS+=-g -Og
+debug: CFLAGS+=-g -O0
 debug: all
 
 wasm: CC:=emcc

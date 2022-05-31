@@ -10,14 +10,16 @@
 
 // TODO implemented MBCs have a few bugs (see https://github.com/drhelius/Gearboy to understand how its handled)
 
-// TODO ppu lcd off should take multiple cycles to turn on again?
-
 // TODO idea to increase rendering smoothness: instead of delay until audio queue is empty, leave apu callback without pushing new sound
 //      and try to do it each frame until it's ok -> may cause other problems...
 
+// FIXME dmg-acid2 test: everything good but missing exclamation mark. In fact it works for the 1st frame after
+//       turning lcd on and it don't show for the other frames (as the ppu doesn't draw the first frame after lcd on,
+//       it isn't visible). cgb-adic2 doesn't have this problem, the exclamation mark works well.
+
 // TODO switch gb/gbc mode in settings -- if a rom is already running, reset gameboy
 
-// TODO check dmg only game in cgb mode to see if it works
+// TODO IMPORTANT check dmg only game in cgb mode to see if it works
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;

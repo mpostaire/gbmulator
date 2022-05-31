@@ -1,9 +1,11 @@
 # GBmulator
-A Game Boy emulator with sound and serial data transfer (link cable) support over tcp.
+A Game Boy Color emulator with sound and serial data transfer (link cable) support over tcp.
 
 You can compile and run it on your machine or use it in your browser [here](https://mpostaire.github.io/) (the link cable doesn't work in the browser version).
 
 ## Screenshots
+
+TODO gameboy color screenshots
 
 GBmulator running some games:
 
@@ -57,7 +59,6 @@ There is also support for gamepad controllers but the buttons aren't configurabl
 
 ## TODO
 
-- GBC mode: build sameboy boot rom but change logo.png to my own
 - fix mbc bugs + implement MBC6, MBC7, HuC1 and multicart MBCs
 - fix apu bugs
 - rewrite ppu from scanline rendering to cycle accurate rendering
