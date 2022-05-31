@@ -199,7 +199,7 @@ typedef struct {
     void (*samples_ready_cb)(float *audio_buffer, int audio_buffer_size);
 
     int audio_buffer_index;
-    float audio_buffer[512]; //GB_APU_SAMPLE_COUNT];
+    float *audio_buffer;
 
     byte_t frame_sequencer;
     int frame_sequencer_cycles_count;

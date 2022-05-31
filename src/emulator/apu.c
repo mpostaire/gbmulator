@@ -254,14 +254,16 @@ void apu_step(emulator_t *emu, int cycles) {
         if (apu->audio_buffer_index >= GB_APU_SAMPLE_COUNT) {
             apu->audio_buffer_index = 0;
             if (apu->samples_ready_cb)
-                apu->samples_ready_cb(apu->audio_buffer, sizeof(apu->audio_buffer));
+                apu->samples_ready_cb(apu->audio_buffer, sizeof(float) * GB_APU_SAMPLE_COUNT);
         }
     }
 }
 
-// TODO find a way to make sampling_freq_multiplier unnecessary
+// TODO find a way to make speed unnecessary
 void apu_init(emulator_t *emu, float global_sound_level, float speed, void (*samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
     apu_t *apu = xcalloc(1, sizeof(apu_t));
+
+    apu->audio_buffer = xmalloc(sizeof(float) * GB_APU_SAMPLE_COUNT);
 
     apu->global_sound_level = CLAMP(global_sound_level, 0.0f, 1.0f);
     apu->speed = speed;
@@ -302,5 +304,6 @@ void apu_init(emulator_t *emu, float global_sound_level, float speed, void (*sam
 }
 
 void apu_quit(emulator_t *emu) {
+    free(emu->apu->audio_buffer);
     free(emu->apu);
 }

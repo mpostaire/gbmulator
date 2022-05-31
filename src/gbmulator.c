@@ -10,9 +10,6 @@
 
 // TODO implemented MBCs have a few bugs (see https://github.com/drhelius/Gearboy to understand how its handled)
 
-// TODO idea to increase rendering smoothness: instead of delay until audio queue is empty, leave apu callback without pushing new sound
-//      and try to do it each frame until it's ok -> may cause other problems...
-
 // FIXME dmg-acid2 test: everything good but missing exclamation mark. In fact it works for the 1st frame after
 //       turning lcd on and it don't show for the other frames (as the ppu doesn't draw the first frame after lcd on,
 //       it isn't visible). cgb-adic2 doesn't have this problem, the exclamation mark works well.
@@ -85,6 +82,7 @@ static void ppu_vblank_cb(byte_t *pixels) {
 }
 
 static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
+    // keep this delay just in case even if the condition is never true (the audio and video should be synced but better safe than sorry)
     while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size)
         SDL_Delay(1);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
@@ -294,7 +292,7 @@ int main(int argc, char **argv) {
     SDL_AudioSpec audio_settings = {
         .freq = GB_APU_SAMPLE_RATE,
         .format = AUDIO_F32SYS,
-        .channels = 2,
+        .channels = GB_APU_CHANNELS,
         .samples = GB_APU_SAMPLE_COUNT
     };
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);

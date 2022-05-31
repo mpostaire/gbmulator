@@ -13,12 +13,10 @@
 // 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame (the Game Boy runs at approximatively 60 fps)
 #define GB_CPU_CYCLES_PER_FRAME (GB_CPU_FREQ / 60)
 
-// TODO make both these values configurable in emulator_init()?
+#define GB_APU_CHANNELS 2
 #define GB_APU_SAMPLE_RATE 44100
-// Higher ample count means higher sound quality but lower emulation smoothness.
-// 256 seems to be the safe minimum (512 for the wasm port)
-// FIXME can't go lower than 512 anymore -> identify guilty commit and fix (+ make apu->audio_buffer a pointer and malloc/free it)
-#define GB_APU_SAMPLE_COUNT 512
+// this is the number of samples needed per frame at a 44100Hz sample rate (735)
+#define GB_APU_SAMPLE_COUNT (GB_APU_SAMPLE_RATE / 60)
 
 /**
  * Runs the emulator for one cpu step.
