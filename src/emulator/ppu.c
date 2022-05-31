@@ -51,6 +51,33 @@ static inline dmg_color_t get_color_dmg(mmu_t *mmu, byte_t color_id, word_t pale
 }
 
 /**
+ * @returns cgb colors in r, g, b arguments after applying palette.
+ */
+static inline void get_color_cgb(word_t color_palette_data, byte_t *r, byte_t *g, byte_t *b) {
+    *r = color_palette_data & 0x1F;
+    *g = (color_palette_data & 0x3E0) >> 5;
+    *b = (color_palette_data & 0x7C00) >> 10;
+
+    // TODO instead of dmg palettes choice in ui, in cgb do color correction choice (from orig, gray to raw, dim(or fix))
+    // r = (r << 3) | (r >> 2);
+    // g = (g << 3) | (g >> 2);
+    // b = (b << 3) | (b >> 2);
+
+    // color correction
+    int R = color_palette_data & 0x1F;
+    int G = (color_palette_data & 0x3E0) >> 5;
+    int B = (color_palette_data & 0x7C00) >> 10;
+
+    R = (26 * *r) + (4 * *g) + (2 * *b);
+    G = (24 * *g) + (8 * *b);
+    B = (6 * *r) + (4 * *g) + (22 * *b);
+
+    *r = MIN(960, R) >> 2;
+    *g = MIN(960, G) >> 2;
+    *b = MIN(960, B) >> 2;
+}
+
+/**
  * Draws background and window pixels of line LY
  */
 static void draw_bg_win(emulator_t *emu) {
@@ -331,27 +358,8 @@ static void draw_bg_win_cgb(emulator_t *emu) {
         byte_t color_palette_address = color_palette_id * 8 + color_id * 2;
         word_t color_palette_data = (mmu->cram_bg[color_palette_address + 1] << 8) | mmu->cram_bg[color_palette_address];
 
-        byte_t r = color_palette_data & 0x1F;
-        byte_t g = (color_palette_data & 0x3E0) >> 5;
-        byte_t b = (color_palette_data & 0x7C00) >> 10;
-
-        // TODO instead of dmg palettes choice in ui, in cgb do color correction choice (from orig, gray to raw, dim(or fix))
-        // r = (r << 3) | (r >> 2);
-        // g = (g << 3) | (g >> 2);
-        // b = (b << 3) | (b >> 2);
-
-        // color correction
-        int R = r;
-        int G = g;
-        int B = b;
-
-		R = (26 * r) + (4 * g) + (2 * b);
-		G = (24 * g) + (8 * b);
-		B = (6 * r) + (4 * g) + (22 * b);
-
-        r = MIN(960, R) >> 2;
-        g = MIN(960, G) >> 2;
-        b = MIN(960, B) >> 2;
+        byte_t r, g, b;
+        get_color_cgb(color_palette_data, &r, &g, &b);
 
         // set pixel color using BG (for background and window) palette data
         SET_PIXEL_CGB(ppu, x, y, r, g, b);
@@ -464,27 +472,8 @@ static void draw_objects_cgb(emulator_t *emu) {
             byte_t color_palette_address = color_palette_id * 8 + color_id * 2;
             word_t color_palette_data = (mmu->cram_obj[color_palette_address + 1] << 8) | mmu->cram_obj[color_palette_address];
 
-            byte_t r = color_palette_data & 0x1F;
-            byte_t g = (color_palette_data & 0x3E0) >> 5;
-            byte_t b = (color_palette_data & 0x7C00) >> 10;
-
-            // no color correction
-            // r = (r << 3) | (r >> 2);
-            // g = (g << 3) | (g >> 2);
-            // b = (b << 3) | (b >> 2);
-
-            // color correction
-            int R = r;
-            int G = g;
-            int B = b;
-
-            R = (26 * r) + (4 * g) + (2 * b);
-            G = (24 * g) + (8 * b);
-            B = (6 * r) + (4 * g) + (22 * b);
-
-            r = MIN(960, R) >> 2;
-            g = MIN(960, G) >> 2;
-            b = MIN(960, B) >> 2;
+            byte_t r, g, b;
+            get_color_cgb(color_palette_data, &r, &g, &b);
 
             // set pixel color using BG (for background and window) palette data
             SET_PIXEL_CGB(ppu, pixel_x, y, r, g, b);
@@ -537,9 +526,11 @@ void ppu_step(emulator_t *emu, int cycles) {
             for (int i = 0; i < GB_SCREEN_WIDTH; i++) {
                 for (int j = 0; j < GB_SCREEN_HEIGHT; j++) {
                     if (emu->mode == DMG) {
-                        SET_PIXEL_DMG(ppu, i, j, DMG_WHITE);
+                        SET_PIXEL_DMG(ppu, i, j, get_color_dmg(mmu, DMG_WHITE, BGP));
                     } else {
-                        SET_PIXEL_CGB(ppu, i, j, 0xFF, 0xFF, 0xFF);
+                        byte_t r, g, b;
+                        get_color_cgb(0xFFFF, &r, &g, &b);
+                        SET_PIXEL_CGB(ppu, i, j, r, g, b);
                     }
                 }
 
