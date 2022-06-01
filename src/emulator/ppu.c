@@ -526,7 +526,7 @@ void ppu_step(emulator_t *emu, int cycles) {
             for (int i = 0; i < GB_SCREEN_WIDTH; i++) {
                 for (int j = 0; j < GB_SCREEN_HEIGHT; j++) {
                     if (emu->mode == DMG) {
-                        SET_PIXEL_DMG(ppu, i, j, get_color_dmg(mmu, DMG_WHITE, BGP));
+                        SET_PIXEL_DMG(ppu, i, j, DMG_WHITE);
                     } else {
                         byte_t r, g, b;
                         get_color_cgb(0xFFFF, &r, &g, &b);

@@ -18,6 +18,10 @@
 
 // TODO IMPORTANT check dmg only game in cgb mode to see if it works
 
+// TODO fix audio sync: it's "working" but I don't really know how and it's not perfect
+// make audio sync to video (effectively replacing the audio sdl_delay by the vsync delay)
+// TODO a cpu_step which do only 1 cycle at a time instead of instructions can improve audio syncing because a frame will always be the same ammount of cycles
+
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
 SDL_bool is_rom_loaded = SDL_FALSE;
@@ -82,8 +86,7 @@ static void ppu_vblank_cb(byte_t *pixels) {
 }
 
 static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
-    // keep this delay just in case even if the condition is never true (the audio and video should be synced but better safe than sorry)
-    while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size)
+    while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 8)
         SDL_Delay(1);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }

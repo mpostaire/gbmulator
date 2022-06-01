@@ -40,7 +40,7 @@ debug_wasm: wasm
 	emrun docs/index.html
 
 index.html: $(OBJ) template.html
-	$(CC) -o docs/$@ $(OBJ) $(CFLAGS) -sINITIAL_MEMORY=32MB -sWASM=1 -sUSE_SDL=2 -sEXPORTED_RUNTIME_METHODS=[ccall] --shell-file template.html -lidbfs.js
+	$(CC) -o docs/$@ $(OBJ) $(CFLAGS) -sINITIAL_MEMORY=32MB -sWASM=1 -sUSE_SDL=2 -sEXPORTED_RUNTIME_METHODS=[ccall] -sASYNCIFY --shell-file template.html -lidbfs.js
 
 docs:
 	mkdir -p $@
@@ -56,7 +56,7 @@ $(ODIR_STRUCTURE):
 	mkdir -p $@
 
 run: all
-	./$(EXEC)
+	./$(EXEC) "roms/tests/cgb-acid2.gbc"
 
 check: $(SDIR)/*.c
 	cppcheck --enable=all --suppress=missingIncludeSystem $(SDIR)

@@ -44,6 +44,8 @@ static void ppu_vblank_cb(byte_t *pixels) {
 }
 
 static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
+    while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 8)
+        emscripten_sleep(1);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
 
@@ -347,7 +349,7 @@ int main(int argc, char **argv) {
     SDL_AudioSpec audio_settings = {
         .freq = GB_APU_SAMPLE_RATE,
         .format = AUDIO_F32SYS,
-        .channels = 2,
+        .channels = GB_APU_CHANNELS,
         .samples = GB_APU_SAMPLE_COUNT
     };
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);

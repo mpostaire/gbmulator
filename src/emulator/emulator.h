@@ -16,7 +16,8 @@
 #define GB_APU_CHANNELS 2
 #define GB_APU_SAMPLE_RATE 44100
 // this is the number of samples needed per frame at a 44100Hz sample rate (735)
-#define GB_APU_SAMPLE_COUNT (GB_APU_SAMPLE_RATE / 60)
+#define GB_APU_SAMPLES_PER_FRAME (GB_APU_SAMPLE_RATE / 60)
+#define GB_APU_SAMPLE_COUNT 512
 
 /**
  * Runs the emulator for one cpu step.
