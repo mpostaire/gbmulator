@@ -155,10 +155,10 @@
             document.documentElement.className = theme === 0 ? 'theme-dmg' : 'theme-cgb';
         }
 
-        let config = localStorage.getItem('config').split('\n');
+        let config = localStorage.getItem('config');
+        let done = false;
         if (config) {
-            let done = true;
-            config.every(element => {
+            config.split('\n').every(element => {
                 let option = element.split("=");
                 if (option[0] === "mode") {
                     setTheme(parseInt(option[1], 10));
@@ -167,13 +167,9 @@
                 }
                 return true;
             });
-            // if there is a config but no mode option
-            if (!done)
-                setTheme(1);
-        } else {
-            // if no config or no mode option in config
-            setTheme(1);
         }
+        if (!done)
+            setTheme(1);
 
         Module.setStatus('Downloading...');
         window.onerror = function () {
