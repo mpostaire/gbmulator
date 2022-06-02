@@ -374,6 +374,7 @@ static void open_rom(void) {
         return;
     }
     fgets(filepath, 1024, f);
+    pclose(f);
     filepath[strcspn(filepath, "\r\n")] = '\0';
     if (strlen(filepath))
         gbmulator_load_cartridge(filepath);

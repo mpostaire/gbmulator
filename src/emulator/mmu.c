@@ -86,6 +86,7 @@ static int parse_cartridge(emulator_t *emu) {
         mmu->mbc = MBC3;
         mmu->has_rtc = 1;
         mmu->has_battery = 1;
+        break;
     case 0x10:
         mmu->mbc = MBC3;
         mmu->has_rtc = 1;
@@ -264,7 +265,13 @@ int mmu_init(emulator_t *emu, char *rom_path, char *save_path) {
     memcpy(mmu->cartridge, buf, mmu->cartridge_size);
     free(buf);
     emu->mmu = mmu;
-    return parse_cartridge(emu);
+
+    if (parse_cartridge(emu)) {
+        return 1;
+    } else {
+        mmu_quit(emu);
+        return 0;
+    }
 }
 
 int mmu_init_from_data(emulator_t *emu, const byte_t *rom_data, size_t size, char *save_path) {
@@ -280,10 +287,16 @@ int mmu_init_from_data(emulator_t *emu, const byte_t *rom_data, size_t size, cha
     mmu->cartridge_size = size;
     memcpy(mmu->cartridge, rom_data, mmu->cartridge_size);
     emu->mmu = mmu;
-    return parse_cartridge(emu);
+
+    if (parse_cartridge(emu)) {
+        return 1;
+    } else {
+        mmu_quit(emu);
+        return 0;
+    }
 }
 
-static int save(emulator_t *emu) {
+static int save_battery_and_rtc(emulator_t *emu) {
     // don't save if the cartridge has no battery or no save path has been given or their is no rtc and no eram banks
     if (!emu->mmu->has_battery || !emu->save_filepath || (!emu->mmu->has_rtc && emu->mmu->eram_banks == 0))
         return 0;
@@ -317,7 +330,7 @@ static int save(emulator_t *emu) {
 }
 
 void mmu_quit(emulator_t *emu) {
-    save(emu);
+    save_battery_and_rtc(emu);
 
     if (emu->rom_filepath)
         free(emu->rom_filepath);

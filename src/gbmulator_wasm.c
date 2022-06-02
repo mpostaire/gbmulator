@@ -131,6 +131,8 @@ EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
     SDL_DestroyTexture(ppu_texture);
     SDL_DestroyTexture(ui_texture);
 
+    SDL_CloseAudioDevice(audio_device);
+
     SDL_Quit();
 }
 
