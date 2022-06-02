@@ -149,19 +149,21 @@ EMSCRIPTEN_KEEPALIVE void on_gui_button_up(joypad_button_t button) {
 }
 
 EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {
+    char *new_rom_title = emulator_get_rom_title_from_data(rom_data, rom_size);
+    for (int i = 0; i < 16; i++)
+        if (new_rom_title[i] == ' ')
+            new_rom_title[i] = '_';
+
+    emulator_t *new_emu = emulator_init_from_data(config.mode, rom_data, rom_size, NULL, ppu_vblank_cb, apu_samples_ready_cb);
+    if (!new_emu) return;
+
     if (emu) {
-        save();
         free(rom_title);
+        save();
         emulator_quit(emu);
     }
-
-    rom_title = emulator_get_rom_title_from_data(rom_data, rom_size);
-    for (int i = 0; i < 16; i++)
-        if (rom_title[i] == ' ')
-            rom_title[i] = '_';
-
-    emu = emulator_init_from_data(config.mode, rom_data, rom_size, NULL, ppu_vblank_cb, apu_samples_ready_cb);
-    if (!emu) return;
+    rom_title = new_rom_title;
+    emu = new_emu;
 
     size_t save_length;
     unsigned char *save = local_storage_get_item(rom_title, &save_length);
@@ -199,17 +201,21 @@ void gbmulator_reset(void) {
     byte_t *rom_data = xmalloc(rom_size);
     memcpy(rom_data, cart, rom_size);
 
-    save();
-    free(rom_title);
-    emulator_quit(emu);
-
-    rom_title = emulator_get_rom_title_from_data(rom_data, rom_size);
+    char *new_rom_title = emulator_get_rom_title_from_data(rom_data, rom_size);
     for (int i = 0; i < 16; i++)
-        if (rom_title[i] == ' ')
-            rom_title[i] = '_';
+        if (new_rom_title[i] == ' ')
+            new_rom_title[i] = '_';
 
-    emu = emulator_init_from_data(config.mode, rom_data, rom_size, NULL, ppu_vblank_cb, apu_samples_ready_cb);
-    if (!emu) return;
+    emulator_t *new_emu = emulator_init_from_data(config.mode, rom_data, rom_size, NULL, ppu_vblank_cb, apu_samples_ready_cb);
+    if (!new_emu) return;
+
+    if (emu) {
+        free(rom_title);
+        save();
+        emulator_quit(emu);
+    }
+    rom_title = new_rom_title;
+    emu = new_emu;
 
     size_t save_length;
     unsigned char *save = local_storage_get_item(rom_title, &save_length);

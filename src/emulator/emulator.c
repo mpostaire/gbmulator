@@ -32,7 +32,7 @@ emulator_t *emulator_init(emulator_mode_t mode, char *rom_path, char *save_path,
     emu->mode = mode;
 
     if (!mmu_init(emu, rom_path, save_path))
-        return 0;
+        return NULL;
     cpu_init(emu);
     apu_init(emu, 1.0f, 1.0f, apu_samples_ready_cb);
     ppu_init(emu, ppu_vblank_cb);
@@ -48,7 +48,7 @@ emulator_t *emulator_init_from_data(emulator_mode_t mode, const byte_t *rom_data
     emu->mode = mode;
 
     if (!mmu_init_from_data(emu, rom_data, size, save_path))
-        return 0;
+        return NULL;
     cpu_init(emu);
     apu_init(emu, 1.0f, 1.0f, apu_samples_ready_cb);
     ppu_init(emu, ppu_vblank_cb);

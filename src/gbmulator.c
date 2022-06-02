@@ -34,8 +34,6 @@ SDL_AudioDeviceID audio_device;
 SDL_GameController *pad;
 SDL_bool is_controller_present = SDL_FALSE;
 
-char *rom_path;
-
 char window_title[sizeof(EMULATOR_NAME) + 19];
 
 emulator_t *emu;
@@ -166,9 +164,9 @@ static void handle_input(void) {
             case SDLK_F3: case SDLK_F4:
             case SDLK_F5: case SDLK_F6:
             case SDLK_F7: case SDLK_F8:
-                if (!rom_path)
+                if (!emu)
                     break;
-                savestate_path = get_savestate_path(rom_path, event.key.keysym.sym - SDLK_F1);
+                savestate_path = get_savestate_path(emulator_get_rom_path(emu), event.key.keysym.sym - SDLK_F1);
                 if (event.key.keysym.mod & KMOD_SHIFT)
                     emulator_save_state(emu, savestate_path);
                 else
@@ -220,20 +218,23 @@ static void handle_input(void) {
     }
 }
 
-void gbmulator_load_cartridge(const char *path) {
-    if (emu)
-        emulator_quit(emu);
-
-    if (path) {
-        size_t len = strlen(path);
-        rom_path = xrealloc(rom_path, len + 2);
-        snprintf(rom_path, len + 1, "%s", path);
-    }
+void gbmulator_load_cartridge(char *path) {
+    char *rom_path;
+    if (path)
+        rom_path = path;
+    else if (emu)
+        rom_path = emulator_get_rom_path(emu);
+    else
+        return;
 
     char *save_path = get_save_path(rom_path);
-    emu = emulator_init(config.mode, rom_path, save_path, ppu_vblank_cb, apu_samples_ready_cb);
+    emulator_t *new_emu = emulator_init(config.mode, rom_path, save_path, ppu_vblank_cb, apu_samples_ready_cb);
     free(save_path);
-    if (!emu) return;
+    if (!new_emu) return;
+
+    if (emu)
+        emulator_quit(emu);
+    emu = new_emu;
 
     emulator_set_apu_speed(emu, config.speed);
     emulator_set_apu_sound_level(emu, config.sound);
@@ -256,7 +257,6 @@ int main(int argc, char **argv) {
     config_load(config_path);
     byte_t *ui_pixels = ui_init();
     emu = NULL;
-    rom_path = NULL;
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
 
@@ -362,8 +362,6 @@ int main(int argc, char **argv) {
 
     if (emu)
         emulator_quit(emu);
-    if (rom_path)
-        free(rom_path);
 
     config_save(config_path);
 
