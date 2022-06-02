@@ -97,7 +97,7 @@
                 }
             },
             canvas: (function () {
-                var canvas = document.getElementById('canvas');
+                let canvas = document.getElementById('canvas');
 
                 // As a default initial behavior, pop up an alert when webgl context is lost. To make your
                 // application robust, you may want to override this behavior before shipping!
@@ -109,8 +109,8 @@
             setStatus: function (text) {
                 if (!Module.setStatus.last) Module.setStatus.last = { time: Date.now(), text: '' };
                 if (text === Module.setStatus.last.text) return;
-                var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
-                var now = Date.now();
+                let m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+                let now = Date.now();
                 if (m && now - Module.setStatus.last.time < 30) return; // if this is a progress update, skip it if too soon
                 Module.setStatus.last.time = now;
                 Module.setStatus.last.text = text;
@@ -135,7 +135,7 @@
             }
         };
 
-        var open_file = function(e) {
+        var openFile = function(e) {
             const file_reader = new FileReader();
             file_reader.onload = (event) => {
                 const uint8Arr = new Uint8Array(event.target.result);
@@ -150,6 +150,24 @@
             else
                 Module.printErr("Invalid file extension");
         };
+
+        var setTheme = function(theme) {
+            document.documentElement.className = theme === 0 ? 'theme-dmg' : 'theme-cgb';
+        }
+
+        let config = localStorage.getItem('config').split('\n');
+        if (config) {
+            config.every(element => {
+                let option = element.split("=");
+                if (option[0] === "mode") {
+                    setTheme(parseInt(option[1], 10));
+                    return false;
+                }
+                return true;
+            });
+        } else {
+            setTheme(1);
+        }
 
         Module.setStatus('Downloading...');
         window.onerror = function () {

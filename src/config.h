@@ -5,6 +5,7 @@
 #include "emulator/emulator.h"
 
 struct config {
+    emulator_mode_t mode;
     color_palette_t color_palette;
     byte_t scale;
     float speed;

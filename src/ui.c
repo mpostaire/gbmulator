@@ -1,10 +1,13 @@
 #include <stdlib.h>
 #include <string.h>
+
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
+#include "gbmulator_wasm.h"
+#else
+#include "gbmulator.h"
 #endif
 
-#include "gbmulator.h"
 #include "config.h"
 #include "emulator/emulator.h"
 
@@ -134,14 +137,13 @@ static void choose_win_scale(menu_entry_t *entry);
 static void choose_speed(menu_entry_t *entry);
 static void choose_sound(menu_entry_t *entry);
 static void choose_color(menu_entry_t *entry);
+static void choose_mode(menu_entry_t *entry);
 static void choose_link_mode(menu_entry_t *entry);
 static void on_input_link_host(menu_entry_t *entry);
 static void on_input_link_port(menu_entry_t *entry);
 static void start_link(void);
 static void open_rom(void);
-#ifndef __EMSCRIPTEN__
 static void reset_rom(void);
-#endif
 static void on_input_set_keybind(menu_entry_t *entry, SDL_Keycode key);
 static void back_to_prev_menu(void);
 
@@ -156,6 +158,7 @@ struct menu_entry {
             void (*choose)(menu_entry_t *);
             byte_t length;
             byte_t position;
+            char *description;
         } choices;
         struct {
             char *input;
@@ -206,6 +209,7 @@ menu_t options_menu = {
         { "Speed:      |1.0x,1.5x,2.0x,2.5x,3.0x,3.5x,4.0x", CHOICE, .choices = { choose_speed, 7, 0 } },
         { "Sound:      | OFF, 25%, 50%, 75%,100%", CHOICE, .choices = { choose_sound, 5, 4 } },
         { "Color:      |gray,orig", CHOICE, .choices = { choose_color, 2, 0 } },
+        { "Mode:       | DMG, CGB", CHOICE, .choices = { choose_mode, 2, 1 } },
         { "Back...", ACTION, .action = back_to_prev_menu }
     }
 };
@@ -229,16 +233,14 @@ menu_t keybindings_menu = {
 menu_t main_menu = {
     .title = "GBmulator",
     #ifdef __EMSCRIPTEN__
-    .length = 5,
+    .length = 6,
     #else
     .length = 7,
     #endif
     .entries = {
         { "Resume", ACTION, .disabled = 1, .action = gbmulator_unpause },
         { "Open ROM...", ACTION, .action = open_rom },
-        #ifndef __EMSCRIPTEN__
         { "Reset ROM", ACTION, .disabled = 1, .action = reset_rom },
-        #endif
         { "Link cable...", SUBMENU, .disabled = 1, .submenu = &link_menu },
         { "Options...", SUBMENU, .submenu = &options_menu },
         { "Keybindings...", SUBMENU, .submenu = &keybindings_menu },
@@ -320,6 +322,10 @@ static void choose_color(menu_entry_t *entry) {
     }
 }
 
+static void choose_mode(menu_entry_t *entry) {
+    config.mode = entry->choices.position;
+}
+
 static void choose_link_mode(menu_entry_t *entry) {
     link_menu.entries[1].disabled = !entry->choices.position;
 }
@@ -356,7 +362,7 @@ static void open_rom(void) {
     EM_ASM(
         var file_selector = document.createElement('input');
         file_selector.setAttribute('type', 'file');
-        file_selector.setAttribute('onchange','open_file(event)');
+        file_selector.setAttribute('onchange','openFile(event)');
         file_selector.setAttribute('accept','.gb,.gbc'); // optional - limit accepted file types
         file_selector.click();
     );
@@ -374,11 +380,13 @@ static void open_rom(void) {
     #endif
 }
 
-#ifndef __EMSCRIPTEN__
 static void reset_rom(void) {
+    #ifdef __EMSCRIPTEN__
+    gbmulator_reset();
+    #else
     gbmulator_load_cartridge(NULL);
+    #endif
 }
-#endif
 
 static void on_input_set_keybind(menu_entry_t *entry, SDL_Keycode key) {
     int same = -1;
@@ -434,6 +442,9 @@ byte_t *ui_init(void) {
     options_menu.entries[1].choices.position = config.speed / 0.5f - 2;
     options_menu.entries[2].choices.position = config.sound * 4;
     options_menu.entries[3].choices.position = config.color_palette;
+    options_menu.entries[4].choices.position = config.mode;
+    options_menu.entries[4].choices.description = xmalloc(16);
+    snprintf(options_menu.entries[4].choices.description, 16, "Effect on reset");
 
     link_menu.entries[1].user_input.input = xmalloc(40);
     snprintf(link_menu.entries[1].user_input.input, sizeof(config.link_host), "%s", config.link_host);
@@ -535,6 +546,8 @@ void ui_draw_menu(void) {
             delim_index = strcspn(entry->label, "|");
             char *choices = &entry->label[delim_index + 1];
             print_choice(choices, (delim_index * 8) + 8, y, entry->choices.position, text_color, entry->disabled ? DMG_DARK_GRAY : DMG_LIGHT_GRAY);
+            if (current_menu->position == i && entry->choices.description)
+                print_text(entry->choices.description, (GB_SCREEN_WIDTH / 2) - ((strlen(entry->choices.description) * 8) / 2), GB_SCREEN_HEIGHT - 16, DMG_LIGHT_GRAY);
             break;
         case KEY_SETTER:
             if (!entry->setter.editing)
@@ -824,9 +837,9 @@ void ui_enable_resume_button(void) {
 }
 
 void ui_enable_link_button(void) {
-    main_menu.entries[2].disabled = 0;
+    main_menu.entries[3].disabled = 0;
 }
 
 void ui_enable_reset_button(void) {
-    main_menu.entries[3].disabled = 0;
+    main_menu.entries[2].disabled = 0;
 }

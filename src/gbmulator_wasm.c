@@ -158,7 +158,7 @@ EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {
         if (rom_title[i] == ' ')
             rom_title[i] = '_';
 
-    emu = emulator_init_from_data(rom_data, rom_size, NULL, ppu_vblank_cb, apu_samples_ready_cb);
+    emu = emulator_init_from_data(config.mode, rom_data, rom_size, NULL, ppu_vblank_cb, apu_samples_ready_cb);
     if (!emu) return;
 
     size_t save_length;
@@ -176,11 +176,64 @@ EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {
     SDL_SetWindowTitle(window, window_title);
     is_rom_loaded = SDL_TRUE;
     ui_enable_resume_button();
+    ui_enable_reset_button();
     ui_back_to_main_menu();
     is_paused = SDL_FALSE;
 
     free(rom_data);
     rom_size = 0;
+
+    EM_ASM({
+        setTheme($0);
+    }, config.mode);
+}
+
+void gbmulator_reset(void) {
+    if (!emu)
+        return;
+
+    size_t rom_size;
+    byte_t *cart = emulator_get_rom_data(emu, &rom_size);
+    byte_t *rom_data = xmalloc(rom_size);
+    memcpy(rom_data, cart, rom_size);
+
+    save();
+    free(rom_title);
+    emulator_quit(emu);
+
+    rom_title = emulator_get_rom_title_from_data(rom_data, rom_size);
+    for (int i = 0; i < 16; i++)
+        if (rom_title[i] == ' ')
+            rom_title[i] = '_';
+
+    emu = emulator_init_from_data(config.mode, rom_data, rom_size, NULL, ppu_vblank_cb, apu_samples_ready_cb);
+    if (!emu) return;
+
+    size_t save_length;
+    unsigned char *save = local_storage_get_item(rom_title, &save_length);
+    if (save) {
+        emulator_load_save_data(emu, save, save_length);
+        free(save);
+    }
+
+    emulator_set_apu_speed(emu, config.speed);
+    emulator_set_apu_sound_level(emu, config.sound);
+    emulator_set_color_palette(emu, config.color_palette);
+
+    snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
+    SDL_SetWindowTitle(window, window_title);
+    is_rom_loaded = SDL_TRUE;
+    ui_enable_resume_button();
+    ui_enable_reset_button();
+    ui_back_to_main_menu();
+    is_paused = SDL_FALSE;
+
+    free(rom_data);
+    rom_size = 0;
+
+    EM_ASM({
+        setTheme($0);
+    }, config.mode);
 }
 
 static void handle_input(void) {

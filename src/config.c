@@ -8,6 +8,7 @@
 #include "emulator/emulator.h"
 
 struct config config = {
+    .mode = CGB,
     #ifdef __EMSCRIPTEN__
     .color_palette = PPU_COLOR_PALETTE_ORIG,
     .scale = 2,
@@ -54,7 +55,7 @@ static void parse_config_line(const char *line) {
     byte_t scale, color_palette;
     float speed, sound;
     char link_host[40];
-    int link_port;
+    int link_port, mode;
 
     char left[16], right[16], up[16], down[16], a[16], b[16], start[16], select[16];
 
@@ -63,6 +64,9 @@ static void parse_config_line(const char *line) {
     if (sscanf(line, "scale=%hhu", &scale)) {
         if (scale >= 1 && scale <= 5)
             config.scale = scale;
+    } else if (sscanf(line, "mode=%d", &mode)) {
+        if (mode == CGB || mode == DMG)
+            config.mode = mode;
     } else if (sscanf(line, "speed=%f", &speed)) {
         if (speed == 1.0f || speed == 1.5f || speed == 2.0f ||
             speed == 2.5f || speed == 3.0f || speed == 3.5f ||
@@ -159,8 +163,9 @@ void config_save(const char* config_path) {
     #ifdef __EMSCRIPTEN__
     char buf[512];
     snprintf(buf, sizeof(buf),
-        "scale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%d\n" \
+        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%d\n" \
         "left=%s\nright=%s\nup=%s\ndown=%s\na=%s\nb=%s\nstart=%s\nselect=%s\n",
+        config.mode,
         config.scale,
         config.speed,
         config.sound,
@@ -190,8 +195,9 @@ void config_save(const char* config_path) {
     }
 
     fprintf(f,
-        "scale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%d\n" \
+        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%d\n" \
         "left=%s\nright=%s\nup=%s\ndown=%s\na=%s\nb=%s\nstart=%s\nselect=%s\n",
+        config.mode,
         config.scale,
         config.speed,
         config.sound,

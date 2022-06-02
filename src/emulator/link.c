@@ -31,8 +31,9 @@ void link_init(emulator_t *emu) {
 }
 
 void link_quit(emulator_t *emu) {
-    close(emu->link->other_sfd);
-    if (emu->link->is_server)
+    if (emu->link->other_sfd >= 0)
+        close(emu->link->other_sfd);
+    if (emu->link->is_server && emu->link->sfd >= 0)
         close(emu->link->sfd);
     free(emu->link);
 }

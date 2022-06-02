@@ -116,6 +116,7 @@ typedef struct {
 
 typedef struct {
     byte_t cartridge[8400000];
+    size_t cartridge_size;
     // do not move the 'mem' member (savestate.c uses offsetof mem on this struct)
     // everything that is below this line will be saved in the savestates
     byte_t mem[0x10000];
@@ -236,11 +237,11 @@ typedef enum {
 } emulator_mode_t;
 
 typedef struct {
+    emulator_mode_t mode;
+
     char *rom_filepath;
     char *save_filepath;
     char rom_title[17];
-
-    emulator_mode_t mode;
 
     cpu_t *cpu;
     mmu_t *mmu;

@@ -158,12 +158,8 @@ static int parse_cartridge(emulator_t *emu) {
     // get rom title
     memcpy(emu->rom_title, (char *) &mmu->cartridge[0x134], 16);
     emu->rom_title[16] = '\0';
-    if (mmu->cartridge[0x0143] == 0xC0 || mmu->cartridge[0x0143] == 0x80) {
+    if (mmu->cartridge[0x0143] == 0xC0 || mmu->cartridge[0x0143] == 0x80)
         emu->rom_title[15] = '\0';
-        emu->mode = CGB;
-    } else {
-        emu->mode = DMG;
-    }
 
     printf("[%s] Playing %s\n", emu->mode == DMG ? "DMG" : "CGB", emu->rom_title);
 
@@ -254,18 +250,18 @@ int mmu_init(emulator_t *emu, char *rom_path, char *save_path) {
     }
 
     fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
+    mmu->cartridge_size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    char *buf = xmalloc(sizeof(mmu->cartridge));
-    if (!fread(buf, fsize, 1, f)) {
+    char *buf = xmalloc(mmu->cartridge_size);
+    if (!fread(buf, mmu->cartridge_size, 1, f)) {
         errnoprintf("reading %s", rom_path);
         fclose(f);
         return 0;
     }
     fclose(f);
 
-    memcpy(mmu->cartridge, buf, fsize);
+    memcpy(mmu->cartridge, buf, mmu->cartridge_size);
     free(buf);
     emu->mmu = mmu;
     return parse_cartridge(emu);
@@ -281,7 +277,8 @@ int mmu_init_from_data(emulator_t *emu, const byte_t *rom_data, size_t size, cha
         snprintf(emu->save_filepath, len + 1, "%s", save_path);
     }
 
-    memcpy(mmu->cartridge, rom_data, size);
+    mmu->cartridge_size = size;
+    memcpy(mmu->cartridge, rom_data, mmu->cartridge_size);
     emu->mmu = mmu;
     return parse_cartridge(emu);
 }
@@ -347,6 +344,12 @@ void mmu_step(emulator_t *emu, int cycles) {
 
         // TODO update OAM DMA
         // mmu->oam_dma_cycles_counter++;
+
+        if (emu->mode == CGB) {
+            // TODO update HDMA
+
+            // TODO update GDMA
+        }
     }
 }
 
@@ -680,7 +683,6 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         word_t src_address = ((mmu->mem[HDMA1] << 8) | mmu->mem[HDMA2]) & 0xFFF0;
         word_t dest_address = ((mmu->mem[HDMA3] << 8) | mmu->mem[HDMA4]) & 0x1FF0;
         word_t len = ((data & 0x7F) + 1) * 0x10;
-        printf("hdma length=%d, vram bank=%d, src=%x, dest=%x\n", len, mmu->mem[VBK] & 0x01, src_address, dest_address + VRAM);
         // TODO both these DMA should not be instantaneous and HBLANK DMA can even be cancelled
         //      instantaneous HDMA/GDMA will cause visual glitches
         if (CHECK_BIT(data, 7)) { // HBLANK DMA (HDMA)
@@ -689,12 +691,14 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
             else
                 memcpy(&mmu->mem[VRAM + dest_address], &mmu->mem[src_address], len);
             mmu->mem[address] = 0xFF;
+            printf("HDMA length=%d, vram bank=%d, src=%x, dest=%x\n", len, mmu->mem[VBK] & 0x01, src_address, dest_address + VRAM);
         } else { // General purpose DMA (GDMA)
             if (CHECK_BIT(mmu->mem[VBK], 0))
                 memcpy(&mmu->vram_extra[dest_address], &mmu->mem[src_address], len);
             else
                 memcpy(&mmu->mem[VRAM + dest_address], &mmu->mem[src_address], len);
             mmu->mem[address] = 0xFF;
+            printf("GDMA length=%d, vram bank=%d, src=%x, dest=%x\n", len, mmu->mem[VBK] & 0x01, src_address, dest_address + VRAM);
         }
     } else if (address == P1) {
         // prevent writes to the lower nibble of the P1 register (joypad)

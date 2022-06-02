@@ -12,6 +12,8 @@ void gbmulator_unpause(void);
 
 void gbmulator_load_cartridge_from_data(void);
 
+void gbmulator_reset(void);
+
 int sdl_key_to_joypad(SDL_Keycode key);
 
 int sdl_controller_to_joypad(int button);

@@ -6,6 +6,28 @@ html, body {
     font-family: Arial, sans-serif;
 }
 
+.theme-dmg {
+    --color-gb: #d2d6cd;
+    --color-gb-screen-border: #a4a6af;
+    --color-round-buttons: #b90866;
+    --color-round-buttons-label: #eecede;
+    --color-rectangle-buttons: #535353;
+    --color-rectangle-button-label: #797c77;
+    --color-direction-buttons: #2a2e30;
+    --color-direction-button-circle: #3c4446;
+}
+
+.theme-cgb {
+    --color-gb: #e6ca2d;
+    --color-gb-screen-border: #383c3f;
+    --color-round-buttons: #2a2e30;
+    --color-round-buttons-label: #919da3;
+    --color-rectangle-buttons: #2a2e30;
+    --color-rectangle-button-label: #636661;
+    --color-direction-buttons: #2a2e30;
+    --color-direction-button-circle: #3c4446;
+}
+
 .emscripten {
     padding-right: 0;
     margin-left: auto;
@@ -86,7 +108,7 @@ canvas.emscripten {
     position: fixed;
     top: 50%;
     left: 50%;
-    background-color: #d2d6cd;
+    background-color: var(--color-gb);
     padding: 2em 2em 0 2em;
     border-radius: 2%;
 
@@ -107,7 +129,7 @@ canvas.emscripten {
 #gb-screen-border {
     padding: 2em;
     border-radius: 3%;
-    background-color: #a4a6af;
+    background-color: var(--color-gb-screen-border);
 }
 
 #gb-controls {
@@ -137,8 +159,8 @@ canvas.emscripten {
 
 .gb-round-button {
     position: absolute;
-    color: #eecede;
-    background-color: #b90866;
+    color: var(--color-round-buttons-label);
+    background-color: var(--color-round-buttons);
     filter: brightness(80%);
     text-align: center;
     line-height: 3em;
@@ -164,7 +186,7 @@ canvas.emscripten {
 
 .gb-direction-button-circle {
     position: absolute;
-    background-color: #3c4446;
+    background-color: var(--color-direction-button-circle);
     width: 1em;
     height: 1em;
     border-radius: 1em;
@@ -174,7 +196,7 @@ canvas.emscripten {
 
 .gb-direction-button {
     position: absolute;
-    background-color: #2a2e30;
+    background-color: var(--color-direction-buttons);
     filter: brightness(80%);
     width: 2em;
     height: 2em;
@@ -210,7 +232,7 @@ canvas.emscripten {
 
 #gb-center {
     position: absolute;
-    background-color: #2a2e30;
+    background-color: var(--color-direction-buttons);
     filter: brightness(80%);
     width: 2em;
     height: 2em;
@@ -238,7 +260,7 @@ canvas.emscripten {
     width: 3.5em;
     height: 0.8em;
     border-radius: 0.4em;
-    background-color: #535353;
+    background-color: var(--color-rectangle-buttons);
     filter: brightness(80%);
 }
 
@@ -252,7 +274,7 @@ canvas.emscripten {
 
 .gb-button-label {
     position: absolute;
-    color: #797c77;
+    color: var(--color-rectangle-button-label);
     text-align: center;
     bottom: -2.1em;
 }

@@ -27,8 +27,9 @@ void emulator_run_cycles(emulator_t *emu, int cycles_limit) {
     for (int cycles_count = 0; cycles_count < cycles_limit; cycles_count += emulator_step(emu));
 }
 
-emulator_t *emulator_init(char *rom_path, char *save_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
+emulator_t *emulator_init(emulator_mode_t mode, char *rom_path, char *save_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
     emulator_t *emu = xmalloc(sizeof(emulator_t));
+    emu->mode = mode;
 
     int ret = mmu_init(emu, rom_path, save_path);
     if (!ret) return 0;
@@ -42,8 +43,9 @@ emulator_t *emulator_init(char *rom_path, char *save_path, void (*ppu_vblank_cb)
     return emu;
 }
 
-emulator_t *emulator_init_from_data(const byte_t *rom_data, size_t size, char *save_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
+emulator_t *emulator_init_from_data(emulator_mode_t mode, const byte_t *rom_data, size_t size, char *save_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
     emulator_t *emu = xmalloc(sizeof(emulator_t));
+    emu->mode = mode;
 
     int ret = mmu_init_from_data(emu, rom_data, size, save_path);
     if (!ret) return 0;
@@ -131,6 +133,12 @@ char *emulator_get_rom_path(emulator_t *emu) {
 
 char *emulator_get_rom_title(emulator_t *emu) {
     return emu->rom_title;
+}
+
+byte_t *emulator_get_rom_data(emulator_t *emu, size_t *rom_size) {
+    if (rom_size)
+        *rom_size = emu->mmu->cartridge_size;
+    return emu->mmu->cartridge;
 }
 
 char *emulator_get_rom_title_from_data(byte_t *rom_data, size_t size) {

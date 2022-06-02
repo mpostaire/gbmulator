@@ -14,13 +14,17 @@
 //       turning lcd on and it don't show for the other frames (as the ppu doesn't draw the first frame after lcd on,
 //       it isn't visible). cgb-adic2 doesn't have this problem, the exclamation mark works well.
 
-// TODO switch gb/gbc mode in settings -- if a rom is already running, reset gameboy
-
-// TODO IMPORTANT check dmg only game in cgb mode to see if it works
-
 // TODO fix audio sync: it's "working" but I don't really know how and it's not perfect
 // make audio sync to video (effectively replacing the audio sdl_delay by the vsync delay)
 // TODO a cpu_step which do only 1 cycle at a time instead of instructions can improve audio syncing because a frame will always be the same ammount of cycles
+
+// TODO pokemon red on gbc mode has wrong palettes
+
+// TODO in cgb color option changes between raw and fix, in dmg between gray and orig
+
+// TODO check boot rom code to pop sound while animation is going like regular gbc boot rom
+
+// MEMLEAK plutot grosse quand reset multiple time une cartridge
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
@@ -103,7 +107,7 @@ static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
     return buf;
 }
 
-static const char *get_config_path(void) {
+static char *get_config_path(void) {
     char *xdg_config = get_xdg_path("XDG_CONFIG_HOME", ".config");
 
     char *config_path = xmalloc(strlen(xdg_config) + 27);
@@ -233,7 +237,8 @@ void gbmulator_load_cartridge(const char *path) {
     }
 
     char *save_path = get_save_path(rom_path);
-    emu = emulator_init(rom_path, save_path, ppu_vblank_cb, apu_samples_ready_cb);
+    emu = emulator_init(config.mode, rom_path, save_path, ppu_vblank_cb, apu_samples_ready_cb);
+    free(save_path);
     if (!emu) return;
 
     emulator_set_apu_speed(emu, config.speed);
@@ -253,7 +258,7 @@ void gbmulator_load_cartridge(const char *path) {
 
 int main(int argc, char **argv) {
     // must be called before emulator_init
-    const char *config_path = get_config_path();
+    char *config_path = get_config_path();
     config_load(config_path);
     byte_t *ui_pixels = ui_init();
     emu = NULL;
@@ -367,6 +372,8 @@ int main(int argc, char **argv) {
         free(rom_path);
 
     config_save(config_path);
+
+    free(config_path);
 
     if (is_controller_present)
         SDL_GameControllerClose(pad);
