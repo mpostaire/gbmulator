@@ -58,10 +58,10 @@ static inline void get_color_cgb(word_t color_palette_data, byte_t *r, byte_t *g
     *g = (color_palette_data & 0x3E0) >> 5;
     *b = (color_palette_data & 0x7C00) >> 10;
 
-    // TODO instead of dmg palettes choice in ui, in cgb do color correction choice (from orig, gray to raw, dim(or fix))
-    // r = (r << 3) | (r >> 2);
-    // g = (g << 3) | (g >> 2);
-    // b = (b << 3) | (b >> 2);
+    // from 5 bit depth to 8 bit depth (no color correction)
+    // *r = (*r << 3) | (*r >> 2);
+    // *g = (*g << 3) | (*g >> 2);
+    // *b = (*b << 3) | (*b >> 2);
 
     // color correction
     int R = (26 * *r) + (4 * *g) + (2 * *b);
@@ -89,11 +89,12 @@ static void draw_bg_win(emulator_t *emu) {
     byte_t win_in_scanline = 0;
 
     for (int x = 0; x < GB_SCREEN_WIDTH; x++) {
-        // background and window disabled, draw white pixel
-        // TODO this may be not the cause but dmg-acid2 test fails at the exclamation marks
+        // TODO this condition below may be not the cause but dmg-acid2 test fails at the exclamation marks
         //      it's displayed only for one frame and after the bg/win enable bit (LCDC.0) is 0 and it doesn't show anymore
         //      it's as if the LCDC.0 reset happens 8 scanlines too soon (1 tile height) as it should be 1 at scanline 0 and 0 at scanline 8
         //      see https://i.imgur.com/x2R66WQ.png for an image showing the lines at which the LYC=LY STAT interrupt should fire
+        //      the problem doesn't come from sprite limit over 10 because this limit is correctly implemented
+        // background and window disabled, draw white pixel
         if (!CHECK_BIT(mmu->mem[LCDC], 0)) {
             SET_PIXEL_DMG(ppu, x, y, get_color_dmg(mmu, DMG_WHITE, BGP));
             continue;
@@ -247,7 +248,7 @@ static void draw_objects(emulator_t *emu) {
             // store current object x coordinate in priority array
             obj_pixel_priority[pixel_x] = pos_x;
 
-            // if object is below background, object can only be drawn current if background/window color (before applying palette) is 0
+            // if object is below background, object can only be drawn if the current background/window color (before applying palette) is 0
             if (CHECK_BIT(flags, 7) && ppu->scanline_cache_color_data[pixel_x])
                 continue;
 
@@ -273,7 +274,18 @@ static void draw_bg_win_cgb(emulator_t *emu) {
     byte_t win_in_scanline = 0;
 
     for (int x = 0; x < GB_SCREEN_WIDTH; x++) {
-        // TODO in dmg compatibility mode (use KEY0 register to check compat mode), set white pixel if lcdc.0 is 0
+        // TODO this condition below may be not the cause but dmg-acid2 test fails at the exclamation marks
+        //      it's displayed only for one frame and after the bg/win enable bit (LCDC.0) is 0 and it doesn't show anymore
+        //      it's as if the LCDC.0 reset happens 8 scanlines too soon (1 tile height) as it should be 1 at scanline 0 and 0 at scanline 8
+        //      see https://i.imgur.com/x2R66WQ.png for an image showing the lines at which the LYC=LY STAT interrupt should fire
+        //      the problem doesn't come from sprite limit over 10 because this limit is correctly implemented
+        // if in cgb compatibility mode and background and window disabled, draw white pixel
+        if (((mmu->mem[KEY0] >> 2) & 0x03) == 1 && !CHECK_BIT(mmu->mem[LCDC], 0)) {
+            byte_t r, g, b;
+            get_color_cgb(0xFFFF, &r, &g, &b);
+            SET_PIXEL_CGB(ppu, x, y, r, g, b);
+            continue;
+        }
 
         // 1. FIND TILE DATA
 
@@ -349,6 +361,9 @@ static void draw_bg_win_cgb(emulator_t *emu) {
         byte_t color_id = (GET_BIT(pixel_data_2, relevant_bit) << 1) | GET_BIT(pixel_data_1, relevant_bit);
         // cache color_id to be used for objects rendering
         ppu->scanline_cache_color_data[x] = color_id;
+        // if tile attributes bg-over-oam bit is set, also set it in the cache for use in draw_objects_cgb() later
+        if (CHECK_BIT(tile_attributes, 7))
+            SET_BIT(ppu->scanline_cache_color_data[x], 7);
 
         byte_t color_palette_id = tile_attributes & 0x07;
         byte_t color_palette_address = color_palette_id * 8 + color_id * 2;
@@ -461,9 +476,17 @@ static void draw_objects_cgb(emulator_t *emu) {
                 ppu->obj_pixel_priority[pixel_x] = pos_x;
             }
 
-            // if object is below background, object can only be drawn current if background/window color (before applying palette) is 0
-            if (CHECK_BIT(flags, 7) && ppu->scanline_cache_color_data[pixel_x])
-                continue;
+            // if color data of bg/win tile at this position is 0...
+            if (ppu->scanline_cache_color_data[pixel_x] & 0x03) {
+                // ...and this object is below the background, don't draw this pixel (only the color 0 of the object can be drawn)
+                if (CHECK_BIT(flags, 7))
+                    continue;
+
+                // in CGB mode and if lcdc bit 0 is 1 (no master priority override) and if bg/win tile at this position has bg-to-oam
+                // bit set, don't draw this pixel (only the color 0 of the object will be over the bg/win)
+                if (((mmu->mem[KEY0] >> 2) & 0x03) == 0 && CHECK_BIT(mmu->mem[LCDC], 0) && CHECK_BIT(ppu->scanline_cache_color_data[pixel_x], 7))
+                    continue;
+            }
 
             byte_t color_palette_address = color_palette_id * 8 + color_id * 2;
             word_t color_palette_data = (mmu->cram_obj[color_palette_address + 1] << 8) | mmu->cram_obj[color_palette_address];

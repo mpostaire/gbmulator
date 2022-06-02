@@ -12,17 +12,13 @@
 
 // FIXME dmg-acid2 test: everything good but missing exclamation mark. In fact it works for the 1st frame after
 //       turning lcd on and it don't show for the other frames (as the ppu doesn't draw the first frame after lcd on,
-//       it isn't visible). cgb-adic2 doesn't have this problem, the exclamation mark works well.
+//       it isn't visible). cgb-acid2 doesn't have this problem, the exclamation mark works well.
 
 // TODO fix audio sync: it's "working" but I don't really know how and it's not perfect (good enough compromise of audio/video smoothness and sync)
 // make audio sync to video (effectively replacing the audio sdl_delay by the vsync delay)
 // TODO a cpu_step which do only 1 cycle at a time instead of instructions can improve audio syncing because a frame will always be the same ammount of cycles
 
 // TODO pokemon red on gbc mode has wrong palettes
-
-// TODO in cgb color option changes between raw and fix, in dmg between gray and orig
-
-// TODO check boot rom code to pop sound while animation is going like regular gbc boot rom
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
