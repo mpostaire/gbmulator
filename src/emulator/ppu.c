@@ -64,13 +64,9 @@ static inline void get_color_cgb(word_t color_palette_data, byte_t *r, byte_t *g
     // b = (b << 3) | (b >> 2);
 
     // color correction
-    int R = color_palette_data & 0x1F;
-    int G = (color_palette_data & 0x3E0) >> 5;
-    int B = (color_palette_data & 0x7C00) >> 10;
-
-    R = (26 * *r) + (4 * *g) + (2 * *b);
-    G = (24 * *g) + (8 * *b);
-    B = (6 * *r) + (4 * *g) + (22 * *b);
+    int R = (26 * *r) + (4 * *g) + (2 * *b);
+    int G = (24 * *g) + (8 * *b);
+    int B = (6 * *r) + (4 * *g) + (22 * *b);
 
     *r = MIN(960, R) >> 2;
     *g = MIN(960, G) >> 2;
