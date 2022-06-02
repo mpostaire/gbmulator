@@ -324,6 +324,13 @@ static void choose_color(menu_entry_t *entry) {
 
 static void choose_mode(menu_entry_t *entry) {
     config.mode = entry->choices.position;
+    #ifdef __EMSCRIPTEN__
+    if (!emu) {
+        EM_ASM({
+            setTheme($0);
+        }, config.mode);
+    }
+    #endif
 }
 
 static void choose_link_mode(menu_entry_t *entry) {

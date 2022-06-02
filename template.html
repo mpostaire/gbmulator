@@ -157,15 +157,21 @@
 
         let config = localStorage.getItem('config').split('\n');
         if (config) {
+            let done = true;
             config.every(element => {
                 let option = element.split("=");
                 if (option[0] === "mode") {
                     setTheme(parseInt(option[1], 10));
+                    done = true;
                     return false;
                 }
                 return true;
             });
+            // if there is a config but no mode option
+            if (!done)
+                setTheme(1);
         } else {
+            // if no config or no mode option in config
             setTheme(1);
         }
 

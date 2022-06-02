@@ -24,8 +24,6 @@
 
 // TODO check boot rom code to pop sound while animation is going like regular gbc boot rom
 
-// TODO wasm: when no rom loaded, change mode in ui = instant change theme
-
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
 SDL_bool is_rom_loaded = SDL_FALSE;

@@ -60,7 +60,7 @@ There is also support for gamepad controllers but the buttons aren't configurabl
 ## TODO
 
 - fix mbc bugs + implement MBC6, MBC7, HuC1 and multicart MBCs
-- fix apu bugs
+- better audio/video sync
 - rewrite ppu from scanline rendering to cycle accurate rendering
 - fix buggy serial data transfer
 
