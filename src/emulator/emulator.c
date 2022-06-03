@@ -14,7 +14,13 @@ int emulator_step(emulator_t *emu) {
     // TODO make timings accurate by forcing each cpu_step() to take 4 cycles: if it's not enough to finish an instruction,
     // the next cpu_step() will resume the previous instruction. This will makes the timer "hack" (increment within a loop and not an if)
     // obsolete while allowing accurate memory timings emulation.
-    int cycles = cpu_step(emu);
+
+    // stop execution of the program while a GDMA is active
+    int cycles;
+    if (emu->mmu->hdma.is_active && emu->mmu->hdma.type == GDMA) // implies that the emulator is running in CGB mode
+        cycles = 4;
+    else
+        cycles = cpu_step(emu);
     mmu_step(emu, cycles);
     timer_step(emu, cycles);
     link_step(emu, cycles);

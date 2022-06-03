@@ -340,28 +340,51 @@ void mmu_quit(emulator_t *emu) {
 }
 
 void mmu_step(emulator_t *emu, int cycles) {
+    mmu_t *mmu = emu->mmu;
+
     while (cycles-- > 0) {
         // step rtc clock if it's present and is not halted
-        if (emu->mmu->has_rtc && !CHECK_BIT(emu->mmu->rtc.dh, 6)) {
-            emu->mmu->rtc.cpu_cycles_counter++;
-            if (emu->mmu->rtc.cpu_cycles_counter >= GB_CPU_FREQ / 32768) { // 32768 Hz
-                emu->mmu->rtc.cpu_cycles_counter = 0;
+        if (mmu->has_rtc && !CHECK_BIT(mmu->rtc.dh, 6)) {
+            mmu->rtc.cpu_cycles_counter++;
+            if (mmu->rtc.cpu_cycles_counter >= GB_CPU_FREQ / 32768) { // 32768 Hz
+                mmu->rtc.cpu_cycles_counter = 0;
 
-                emu->mmu->rtc.rtc_cycles_counter++;
-                if (CHECK_BIT(emu->mmu->rtc.rtc_cycles_counter, 15)) {
-                    emu->mmu->rtc.rtc_cycles_counter = 0;
-                    rtc_update(&emu->mmu->rtc);
+                mmu->rtc.rtc_cycles_counter++;
+                if (CHECK_BIT(mmu->rtc.rtc_cycles_counter, 15)) {
+                    mmu->rtc.rtc_cycles_counter = 0;
+                    rtc_update(&mmu->rtc);
                 }
             }
         }
 
-        // TODO update OAM DMA
-        // mmu->oam_dma_cycles_counter++;
+        // TODO do OAM DMA
 
-        if (emu->mode == CGB) {
-            // TODO update HDMA
+        // do GDMA/HDMA
+        if (emu->mode == CGB && mmu->hdma.is_active) {
+            // 2 cycles to transfer 1 byte
+            if (mmu->hdma.step++) {
+                mmu->hdma.step = 0;
 
-            // TODO update GDMA
+                // copy from src to dest
+                *mmu->hdma.dest = *mmu->hdma.src;
+
+                mmu->hdma.src++;
+                mmu->hdma.dest++;
+
+                // HDMA src and dest registers need to increase as the transfer progresses
+                mmu->hdma.src_address++;
+                mmu->hdma.dest_address++;
+                mmu->mem[HDMA1] = mmu->hdma.src_address >> 8;
+                mmu->mem[HDMA2] = mmu->hdma.src_address;
+                mmu->mem[HDMA3] = mmu->hdma.dest_address >> 8;
+                mmu->mem[HDMA4] = mmu->hdma.dest_address;
+
+                mmu->hdma.progress++;
+                mmu->hdma.is_active = mmu->hdma.progress != mmu->hdma.size;
+
+                // HDMA5 register contains the size remaining or 0xFF if it's finished
+                mmu->mem[HDMA5] = mmu->hdma.is_active ? ((mmu->hdma.size - mmu->hdma.progress) / 0x10) - 1 : 0xFF;
+            }
         }
     }
 }
@@ -607,14 +630,6 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
         if (address == 0xFF75)
             return mmu->mem[address] & 0x70;
 
-        // TODO The low nibble is a copy of sound channel #1’s PCM amplitude, the high nibble a copy of sound channel #2’s.
-        // if (address == PCM12)
-        //     return 0xFF;
-
-        // TODO The low nibble is a copy of sound channel #3’s PCM amplitude, the high nibble a copy of sound channel #4’s.
-        // if (address == PCM34)
-        //     return 0xFF;
-
         if (address == VBK)
             return 0xFE | (mmu->mem[address] & 0x01);
 
@@ -693,25 +708,35 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         mmu->mem[address] = data;
     } else if (address == HDMA5 && emu->mode == CGB) {
         // writing to this register starts a VRAM DMA transfer
-        word_t src_address = ((mmu->mem[HDMA1] << 8) | mmu->mem[HDMA2]) & 0xFFF0;
-        word_t dest_address = ((mmu->mem[HDMA3] << 8) | mmu->mem[HDMA4]) & 0x1FF0;
-        word_t len = ((data & 0x7F) + 1) * 0x10;
-        // TODO both these DMA should not be instantaneous and HBLANK DMA can even be cancelled
-        //      instantaneous HDMA/GDMA will cause visual glitches
-        if (CHECK_BIT(data, 7)) { // HBLANK DMA (HDMA)
-            if (CHECK_BIT(mmu->mem[VBK], 0))
-                memcpy(&mmu->vram_extra[dest_address], &mmu->mem[src_address], len);
-            else
-                memcpy(&mmu->mem[VRAM + dest_address], &mmu->mem[src_address], len);
-            mmu->mem[address] = 0xFF;
-            printf("HDMA length=%d, vram bank=%d, src=%x, dest=%x\n", len, mmu->mem[VBK] & 0x01, src_address, dest_address + VRAM);
+
+        mmu->hdma.is_active = 1;
+        mmu->hdma.step = 0;
+        mmu->hdma.progress = 0;
+        mmu->hdma.type = GET_BIT(data, 7);
+        mmu->hdma.size = ((data & 0x7F) + 1) * 0x10;
+
+        mmu->hdma.src_address = ((mmu->mem[HDMA1] << 8) | mmu->mem[HDMA2]) & 0xFFF0;
+        mmu->hdma.dest_address = ((mmu->mem[HDMA3] << 8) | mmu->mem[HDMA4]) & 0x1FF0;
+
+        if (mmu->hdma.src_address >= ROM_BANKN && mmu->hdma.src_address < VRAM) {
+            mmu->hdma.src = &mmu->cartridge[(mmu->hdma.src_address - ROM_BANKN) + (mmu->current_rom_bank * 0x4000)];
+        } else if (mmu->hdma.src_address >= WRAM_BANKN && mmu->hdma.src_address < ECHO) {
+            byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
+            if (current_wram_bank == 0)
+                current_wram_bank = 1;
+            mmu->hdma.src = &mmu->wram_extra[(mmu->hdma.src_address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)];
+        } else {
+            mmu->hdma.src = &mmu->mem[mmu->hdma.src_address];
+        }
+
+        mmu->hdma.dest = CHECK_BIT(mmu->mem[VBK], 0) ? &mmu->vram_extra[mmu->hdma.dest_address] : &mmu->mem[VRAM + mmu->hdma.dest_address];
+
+        mmu->mem[address] = data & 0x7F;
+
+        if (mmu->hdma.type) { // HBLANK DMA (HDMA)
+            printf("HDMA size=%d, vram bank=%d, src=%x, dest=%x\n", mmu->hdma.size, mmu->mem[VBK] & 0x01, mmu->hdma.src_address, mmu->hdma.dest_address + VRAM);
         } else { // General purpose DMA (GDMA)
-            if (CHECK_BIT(mmu->mem[VBK], 0))
-                memcpy(&mmu->vram_extra[dest_address], &mmu->mem[src_address], len);
-            else
-                memcpy(&mmu->mem[VRAM + dest_address], &mmu->mem[src_address], len);
-            mmu->mem[address] = 0xFF;
-            printf("GDMA length=%d, vram bank=%d, src=%x, dest=%x\n", len, mmu->mem[VBK] & 0x01, src_address, dest_address + VRAM);
+            printf("GDMA size=%d, vram bank=%d, src=%x, dest=%x\n", mmu->hdma.size, mmu->mem[VBK] & 0x01, mmu->hdma.src_address, mmu->hdma.dest_address + VRAM);
         }
     } else if (address == P1) {
         // prevent writes to the lower nibble of the P1 register (joypad)

@@ -88,6 +88,11 @@ typedef enum {
     HuC1
 } mbc_type_t;
 
+typedef enum {
+    GDMA,
+    HDMA
+} hdma_type_t;
+
 typedef struct {
     int cpu_cycles_counter;
     word_t rtc_cycles_counter;
@@ -125,6 +130,18 @@ typedef struct {
     byte_t vram_extra[0x2000]; // 1 extra bank of wram of size 0x1000 for a total of 2 banks
     byte_t cram_bg[0x40]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
     byte_t cram_obj[0x40]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
+
+    struct {
+        byte_t step;
+        byte_t is_active;
+        hdma_type_t type;
+        word_t size;
+        word_t progress;
+        word_t src_address;
+        word_t dest_address;
+        byte_t *src;
+        byte_t *dest;
+    } hdma;
 
     mbc_type_t mbc;
     byte_t rom_banks;
