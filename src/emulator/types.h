@@ -134,6 +134,14 @@ typedef struct {
     struct {
         byte_t step;
         byte_t is_active;
+        word_t progress;
+        byte_t *src;
+        byte_t *dest;
+    } oam_dma;
+
+    struct {
+        byte_t step;
+        byte_t is_active;
         hdma_type_t type;
         word_t size;
         word_t progress;

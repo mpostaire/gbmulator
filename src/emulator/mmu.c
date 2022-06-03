@@ -357,13 +357,30 @@ void mmu_step(emulator_t *emu, int cycles) {
             }
         }
 
-        // TODO do OAM DMA
+        // do OAM DMA
+        if (mmu->oam_dma.is_active) {
+            // 4 cycles to transfer 1 byte
+            if (mmu->oam_dma.step == 0) {
+                mmu->oam_dma.step = 3;
+
+                // copy from src to dest
+                *mmu->oam_dma.dest = *mmu->oam_dma.src;
+
+                mmu->oam_dma.src++;
+                mmu->oam_dma.dest++;
+
+                mmu->oam_dma.progress++;
+                mmu->oam_dma.is_active = mmu->oam_dma.progress != 0xA0;
+            } else {
+                mmu->oam_dma.step--;
+            }
+        }
 
         // do GDMA/HDMA
         if (emu->mode == CGB && mmu->hdma.is_active) {
             // 2 cycles to transfer 1 byte
-            if (mmu->hdma.step++) {
-                mmu->hdma.step = 0;
+            if (mmu->hdma.step == 0) {
+                mmu->hdma.step = 1;
 
                 // copy from src to dest
                 *mmu->hdma.dest = *mmu->hdma.src;
@@ -384,6 +401,8 @@ void mmu_step(emulator_t *emu, int cycles) {
 
                 // HDMA5 register contains the size remaining or 0xFF if it's finished
                 mmu->mem[HDMA5] = mmu->hdma.is_active ? ((mmu->hdma.size - mmu->hdma.progress) / 0x10) - 1 : 0xFF;
+            } else {
+                mmu->hdma.step--;
             }
         }
     }
@@ -518,6 +537,9 @@ static void write_mbc_eram(mmu_t *mmu, word_t address, byte_t data) {
 
 byte_t mmu_read(emulator_t *emu, word_t address) {
     mmu_t *mmu = emu->mmu;
+
+    if (mmu->oam_dma.is_active)
+        return (address >= HRAM && address < IE) ? mmu->mem[address] : 0xFF;
 
     if (mmu->mbc >= MBC1 && mmu->mbc <= MBC5) {
         if (address >= ROM_BANKN && address < VRAM) // ROM_BANKN
@@ -661,6 +683,12 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
 void mmu_write(emulator_t* emu, word_t address, byte_t data) {
     mmu_t *mmu = emu->mmu;
 
+    if (mmu->oam_dma.is_active) {
+        if (address >= HRAM && address < IE)
+            mmu->mem[address] = data;
+        return;
+    }
+
     if (address < VRAM) {
         write_mbc_registers(mmu, address, data);
     } else if (address >= VRAM && address < ERAM) {
@@ -693,9 +721,29 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         mmu->mem[address] = data;
         ppu_ly_lyc_compare(emu);
     } else if (address == DMA) {
-        // OAM DMA transfer
-        // TODO this should not be instantaneous (it takes 640 cycles to complete and during that time the cpu can only access HRAM)
-        memcpy(&mmu->mem[OAM], &mmu->mem[data * 0x100], 0xA0);
+        // writing to this register starts an OAM DMA transfer
+
+        mmu->oam_dma.is_active = 1;
+        mmu->oam_dma.step = 0;
+        mmu->oam_dma.progress = 0;
+
+        word_t src_address = data * 0x100;
+
+        // get src pointer
+        if (src_address >= ROM_BANKN && src_address < VRAM) {
+            mmu->oam_dma.src = &mmu->cartridge[(src_address - ROM_BANKN) + (mmu->current_rom_bank * 0x4000)];
+        } else if (src_address >= WRAM_BANKN && src_address < ECHO) {
+            byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
+            if (current_wram_bank == 0)
+                current_wram_bank = 1;
+            mmu->oam_dma.src = &mmu->wram_extra[(src_address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)];
+        } else {
+            mmu->oam_dma.src = &mmu->mem[src_address];
+        }
+
+        // get dest pointer
+        mmu->oam_dma.dest = &mmu->mem[OAM];
+
         mmu->mem[address] = data;
     } else if (address == BANK) {
         // disable boot rom
@@ -709,6 +757,8 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
     } else if (address == HDMA5 && emu->mode == CGB) {
         // writing to this register starts a VRAM DMA transfer
 
+        // TODO HDMA (HBLANK)
+
         mmu->hdma.is_active = 1;
         mmu->hdma.step = 0;
         mmu->hdma.progress = 0;
@@ -718,6 +768,7 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         mmu->hdma.src_address = ((mmu->mem[HDMA1] << 8) | mmu->mem[HDMA2]) & 0xFFF0;
         mmu->hdma.dest_address = ((mmu->mem[HDMA3] << 8) | mmu->mem[HDMA4]) & 0x1FF0;
 
+        // get src pointer
         if (mmu->hdma.src_address >= ROM_BANKN && mmu->hdma.src_address < VRAM) {
             mmu->hdma.src = &mmu->cartridge[(mmu->hdma.src_address - ROM_BANKN) + (mmu->current_rom_bank * 0x4000)];
         } else if (mmu->hdma.src_address >= WRAM_BANKN && mmu->hdma.src_address < ECHO) {
@@ -729,6 +780,7 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
             mmu->hdma.src = &mmu->mem[mmu->hdma.src_address];
         }
 
+        // get dest pointer
         mmu->hdma.dest = CHECK_BIT(mmu->mem[VBK], 0) ? &mmu->vram_extra[mmu->hdma.dest_address] : &mmu->mem[VRAM + mmu->hdma.dest_address];
 
         mmu->mem[address] = data & 0x7F;
