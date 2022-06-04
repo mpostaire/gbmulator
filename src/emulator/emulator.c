@@ -15,9 +15,9 @@ int emulator_step(emulator_t *emu) {
     // the next cpu_step() will resume the previous instruction. This will makes the timer "hack" (increment within a loop and not an if)
     // obsolete while allowing accurate memory timings emulation.
 
-    // stop execution of the program while a GDMA is active
+    // stop execution of the program while a VBLANK DMA is active
     int cycles;
-    if (emu->mmu->hdma.is_active && emu->mmu->hdma.type == GDMA) // implies that the emulator is running in CGB mode
+    if (emu->mmu->hdma.lock_cpu) // implies that the emulator is running in CGB mode
         cycles = 4;
     else
         cycles = cpu_step(emu);

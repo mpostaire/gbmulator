@@ -135,20 +135,16 @@ typedef struct {
         byte_t step;
         byte_t is_active;
         word_t progress;
-        byte_t *src;
-        byte_t *dest;
+        word_t src_address;
     } oam_dma;
 
     struct {
         byte_t step;
-        byte_t is_active;
+        byte_t hdma_ly;
+        byte_t lock_cpu;
         hdma_type_t type;
-        word_t size;
-        word_t progress;
         word_t src_address;
         word_t dest_address;
-        byte_t *src;
-        byte_t *dest;
     } hdma;
 
     mbc_type_t mbc;
