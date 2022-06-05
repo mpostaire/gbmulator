@@ -37,17 +37,8 @@ extern inline void ppu_ly_lyc_compare(emulator_t *emu);
  * @returns dmg color after applying palette.
  */
 static inline dmg_color_t get_color_dmg(mmu_t *mmu, byte_t color_id, word_t palette_address) {
-    // get relevant bits of the color palette the color_id maps to
-    byte_t filter = 0; // initialize to 0 to shut gcc warnings
-    switch (color_id) {
-        case 0: filter = 0x03; break;
-        case 1: filter = 0x0C; break;
-        case 2: filter = 0x30; break;
-        case 3: filter = 0xC0; break;
-    }
-
     // return the color using the palette
-    return (mmu->mem[palette_address] & filter) >> (color_id * 2);
+    return (mmu->mem[palette_address] >> (color_id << 1)) & 0x03;
 }
 
 /**
@@ -178,9 +169,7 @@ static void draw_objects(emulator_t *emu) {
         return;
 
     // are objects 8x8 or 8x16?
-    byte_t obj_height = 8;
-    if (CHECK_BIT(mmu->mem[LCDC], 2))
-        obj_height = 16;
+    byte_t obj_height = CHECK_BIT(mmu->mem[LCDC], 2) ? 16 : 8;
 
     // store the x position of each pixel drawn by the highest priority object
     byte_t obj_pixel_priority[GB_SCREEN_WIDTH];
@@ -204,9 +193,7 @@ static void draw_objects(emulator_t *emu) {
         byte_t flags = mmu->mem[obj_address + 3];
 
         // palette address
-        word_t palette = OBP0;
-        if (CHECK_BIT(flags, 4))
-            palette = OBP1;
+        word_t palette = CHECK_BIT(flags, 4) ? OBP1 : OBP0;
 
         // find line of the object we are currently on
         byte_t obj_line = y - pos_y;
@@ -365,12 +352,21 @@ static void draw_bg_win_cgb(emulator_t *emu) {
         if (CHECK_BIT(tile_attributes, 7))
             SET_BIT(ppu->scanline_cache_color_data[x], 7);
 
-        byte_t color_palette_id = tile_attributes & 0x07;
-        byte_t color_palette_address = color_palette_id * 8 + color_id * 2;
-        word_t color_palette_data = (mmu->cram_bg[color_palette_address + 1] << 8) | mmu->cram_bg[color_palette_address];
+        byte_t color_palette_id;
+        if (((mmu->mem[KEY0] >> 2) & 0x03) == 1) {
+            // in CGB compatibility mode: bg/win palette ram id is always 0 and use BGP to get the color_id in the cgb palette ram
+            color_palette_id = 0;
+            color_id = get_color_dmg(mmu, color_id, BGP);
+        } else {
+            // in CGB mode
+            color_palette_id = tile_attributes & 0x07;
+        }
+
+        byte_t color_address = color_palette_id * 8 + color_id * 2;
+        word_t color_data = (mmu->cram_bg[color_address + 1] << 8) | mmu->cram_bg[color_address];
 
         byte_t r, g, b;
-        get_color_cgb(color_palette_data, &r, &g, &b);
+        get_color_cgb(color_data, &r, &g, &b);
 
         // set pixel color using BG (for background and window) palette data
         SET_PIXEL_CGB(ppu, x, y, r, g, b);
@@ -466,6 +462,19 @@ static void draw_objects_cgb(emulator_t *emu) {
             if (color_id == DMG_WHITE) // DMG_WHITE is the transparent color for objects, don't draw it (this needs to be done BEFORE palette conversion).
                 continue;
 
+            byte_t is_cgb_compat = ((mmu->mem[KEY0] >> 2) & 0x03) == 1;
+
+            // if in cgb compatibility mode, color palette id is 0 (OPB0) or 1 (OPB1) following bit 4 of attributes and color id is in OBP0/OBP1
+            if (is_cgb_compat) {
+                if (CHECK_BIT(flags, 4)) {
+                    color_palette_id = 1;
+                    color_id = get_color_dmg(mmu, color_id, OBP1);
+                } else {
+                    color_palette_id = 0;
+                    color_id = get_color_dmg(mmu, color_id, OBP0);
+                }
+            }
+
             // if object priority bit is in dmg mode, priority is based on lower x coordinate
             if (is_using_x_priority) {
                 // if an object with lower x coordinate has already drawn this pixel, it has higher priority so we abort
@@ -482,17 +491,17 @@ static void draw_objects_cgb(emulator_t *emu) {
                 if (CHECK_BIT(flags, 7))
                     continue;
 
-                // in CGB mode and if lcdc bit 0 is 1 (no master priority override) and if bg/win tile at this position has bg-to-oam
+                // in CGB mode (not compatibility mode) and if lcdc bit 0 is 1 (no master priority override) and if bg/win tile at this position has bg-to-oam
                 // bit set, don't draw this pixel (only the color 0 of the object will be over the bg/win)
-                if (((mmu->mem[KEY0] >> 2) & 0x03) == 0 && CHECK_BIT(mmu->mem[LCDC], 0) && CHECK_BIT(ppu->scanline_cache_color_data[pixel_x], 7))
+                if (!is_cgb_compat && CHECK_BIT(mmu->mem[LCDC], 0) && CHECK_BIT(ppu->scanline_cache_color_data[pixel_x], 7))
                     continue;
             }
 
-            byte_t color_palette_address = color_palette_id * 8 + color_id * 2;
-            word_t color_palette_data = (mmu->cram_obj[color_palette_address + 1] << 8) | mmu->cram_obj[color_palette_address];
+            byte_t color_address = color_palette_id * 8 + color_id * 2;
+            word_t color_data = (mmu->cram_obj[color_address + 1] << 8) | mmu->cram_obj[color_address];
 
             byte_t r, g, b;
-            get_color_cgb(color_palette_data, &r, &g, &b);
+            get_color_cgb(color_data, &r, &g, &b);
 
             // set pixel color using BG (for background and window) palette data
             SET_PIXEL_CGB(ppu, pixel_x, y, r, g, b);

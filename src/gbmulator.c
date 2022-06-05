@@ -18,8 +18,6 @@
 // make audio sync to video (effectively replacing the audio sdl_delay by the vsync delay)
 // TODO a cpu_step which do only 1 cycle at a time instead of instructions can improve audio syncing because a frame will always be the same ammount of cycles
 
-// TODO pokemon red on gbc mode has wrong palettes
-
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
 SDL_bool is_rom_loaded = SDL_FALSE;

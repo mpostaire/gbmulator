@@ -300,40 +300,50 @@ static inline void hdma_gdma(emulator_t *emu, byte_t *src, byte_t *dest) {
             mmu->hdma.step--;
         }
     } else {
-        if (PPU_IS_MODE(emu, PPU_MODE_HBLANK) && mmu->hdma.hdma_ly == mmu->mem[LY]) {
+        if (PPU_IS_MODE(emu, PPU_MODE_HBLANK)) {
             // TODO hdma still not perfect? pokemon crystal shows some visual glitches when displaying menus/text windows
-            mmu->hdma.lock_cpu = 1;
-            // 32 cycles to transfer 0x10 bytes
-            if (mmu->hdma.step == 0) {
-                mmu->hdma.step = 31;
+            if (mmu->hdma.hdma_ly == mmu->mem[LY]) {
+                mmu->hdma.lock_cpu = 1;
+                // 32 cycles to transfer 0x10 bytes
+                if (mmu->hdma.step == 0) {
+                    mmu->hdma.step = 31;
 
-                mmu->hdma.hdma_ly++;
-                if (mmu->hdma.hdma_ly == 144)
-                    mmu->hdma.hdma_ly = 0;
+                    mmu->hdma.hdma_ly++;
+                    if (mmu->hdma.hdma_ly == 144)
+                        mmu->hdma.hdma_ly = 0;
 
-                // copy a block of 16 bytes from src to dest
-                for (byte_t i = 0; i < 0x10; i++)
-                    dest[i] = src[i];
+                    // copy a block of 16 bytes from src to dest
+                    for (byte_t i = 0; i < 0x10; i++)
+                        dest[i] = src[i];
 
-                mmu->mem[HDMA5]--;
+                    mmu->mem[HDMA5]--;
 
-                // HDMA src and dest registers need to increase as the transfer progresses
-                mmu->hdma.src_address += 0x10;
-                mmu->hdma.dest_address += 0x10;
-                mmu->mem[HDMA1] = mmu->hdma.src_address >> 8;
-                mmu->mem[HDMA2] = mmu->hdma.src_address;
-                mmu->mem[HDMA3] = mmu->hdma.dest_address >> 8;
-                mmu->mem[HDMA4] = mmu->hdma.dest_address;
+                    // HDMA src and dest registers need to increase as the transfer progresses
+                    mmu->hdma.src_address += 0x10;
+                    mmu->hdma.dest_address += 0x10;
+                    mmu->mem[HDMA1] = mmu->hdma.src_address >> 8;
+                    mmu->mem[HDMA2] = mmu->hdma.src_address;
+                    mmu->mem[HDMA3] = mmu->hdma.dest_address >> 8;
+                    mmu->mem[HDMA4] = mmu->hdma.dest_address;
 
-                mmu->hdma.lock_cpu = 0;
+                    mmu->hdma.lock_cpu = 0;
 
-                // transfer stops if mmu->mem[HDMA5] is 0xFF or the next 16 bytes block to be copied
-                // will overflow outside the current VRAM bank
-                if (mmu->mem[HDMA5] == 0xFF || mmu->hdma.dest_address + 0x10 >= 0x2000)
-                    SET_BIT(mmu->mem[HDMA5], 7);
-            } else {
-                mmu->hdma.step--;
+                    // transfer stops if mmu->mem[HDMA5] is 0xFF or the next 16 bytes block to be copied
+                    // will overflow outside the current VRAM bank
+                    if (mmu->mem[HDMA5] == 0xFF || mmu->hdma.dest_address + 0x10 >= 0x2000)
+                        SET_BIT(mmu->mem[HDMA5], 7);
+                } else {
+                    mmu->hdma.step--;
+                }
             }
+        } else if (mmu->hdma.step != 31) {
+            // the previous tranfer had not enough time to complete (the HDMA was just started at the end of a HBLANK):
+            // retry transfer of the current 16 bytes block during the next HBLANK.
+            mmu->hdma.lock_cpu = 0;
+            mmu->hdma.step = 31;
+            mmu->hdma.hdma_ly++;
+            if (mmu->hdma.hdma_ly == 144)
+                mmu->hdma.hdma_ly = 0;
         }
     }
 }
