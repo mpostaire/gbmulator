@@ -342,21 +342,21 @@ void mmu_step(emulator_t *emu, int cycles) {
     mmu_t *mmu = emu->mmu;
 
     while (cycles-- > 0) {
-        // step rtc clock if it's present and is not halted
-        // TODO as rtc_update uses the system time there is no need to emulate the rtc clock
-        //      --> just call rtc_update when there is a mmu request to read rtc values
-        if (mmu->has_rtc && !CHECK_BIT(mmu->rtc.dh, 6)) {
-            mmu->rtc.cpu_cycles_counter++;
-            if (mmu->rtc.cpu_cycles_counter >= GB_CPU_FREQ / 32768) { // 32768 Hz
-                mmu->rtc.cpu_cycles_counter = 0;
+        // TODO as rtc_update uses the system time there is no need to emulate the rtc clock here
+        //      --> this bit of code can still be useful if rtc_update is changed emulate accuratley the rtc and not use the system time
+        // // step rtc clock if it's present and is not halted
+        // if (mmu->has_rtc && !CHECK_BIT(mmu->rtc.dh, 6)) {
+        //     mmu->rtc.cpu_cycles_counter++;
+        //     if (mmu->rtc.cpu_cycles_counter >= GB_CPU_FREQ / 32768) { // 32768 Hz
+        //         mmu->rtc.cpu_cycles_counter = 0;
 
-                mmu->rtc.rtc_cycles_counter++;
-                if (CHECK_BIT(mmu->rtc.rtc_cycles_counter, 15)) {
-                    mmu->rtc.rtc_cycles_counter = 0;
-                    rtc_update(&mmu->rtc);
-                }
-            }
-        }
+        //         mmu->rtc.rtc_cycles_counter++;
+        //         if (CHECK_BIT(mmu->rtc.rtc_cycles_counter, 15)) {
+        //             mmu->rtc.rtc_cycles_counter = 0;
+        //             rtc_update(&mmu->rtc);
+        //         }
+        //     }
+        // }
 
         if (mmu->oam_dma.is_active)
             oam_dma(mmu);
@@ -447,6 +447,7 @@ static void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) {
             }
         } else if (address < 0x8000 && mmu->has_rtc) {
             if (mmu->rtc.latch == 0x00 && data == 0x01 && !CHECK_BIT(mmu->rtc.dh, 6)) {
+                rtc_update(&mmu->rtc);
                 mmu->rtc.latched_s = mmu->rtc.s;
                 mmu->rtc.latched_m = mmu->rtc.m;
                 mmu->rtc.latched_h = mmu->rtc.h;

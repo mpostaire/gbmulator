@@ -228,7 +228,7 @@ void gbmulator_load_cartridge(char *path) {
         return;
 
     if (emu) {
-        char *save_path = get_save_path(rom_path);
+        char *save_path = get_save_path(emulator_get_rom_path(emu));
         emulator_save(emu, save_path);
         free(save_path);
     }
