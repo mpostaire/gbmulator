@@ -227,10 +227,18 @@ void gbmulator_load_cartridge(char *path) {
     else
         return;
 
-    char *save_path = get_save_path(rom_path);
-    emulator_t *new_emu = emulator_init(config.mode, rom_path, save_path, ppu_vblank_cb, apu_samples_ready_cb);
-    free(save_path);
+    if (emu) {
+        char *save_path = get_save_path(rom_path);
+        emulator_save(emu, save_path);
+        free(save_path);
+    }
+
+    emulator_t *new_emu = emulator_init(config.mode, rom_path, ppu_vblank_cb, apu_samples_ready_cb);
     if (!new_emu) return;
+
+    char *save_path = get_save_path(rom_path);
+    emulator_load_save(new_emu, save_path);
+    free(save_path);
 
     if (emu)
         emulator_quit(emu);
@@ -360,8 +368,12 @@ int main(int argc, char **argv) {
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).
     }
 
-    if (emu)
+    if (emu) {
+        char *save_path = get_save_path(emulator_get_rom_path(emu));
+        emulator_save(emu, save_path);
+        free(save_path);
         emulator_quit(emu);
+    }
 
     config_save(config_path);
 

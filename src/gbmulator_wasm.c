@@ -116,8 +116,10 @@ static void save(void) {
 }
 
 EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
-    if (emu)
+    if (emu) {
+        save();
         emulator_quit(emu);
+    }
     if (rom_title)
         free(rom_title);
 
@@ -154,12 +156,12 @@ EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {
         if (new_rom_title[i] == ' ')
             new_rom_title[i] = '_';
 
-    emulator_t *new_emu = emulator_init_from_data(config.mode, rom_data, rom_size, NULL, ppu_vblank_cb, apu_samples_ready_cb);
+    emulator_t *new_emu = emulator_init_from_data(config.mode, rom_data, rom_size, ppu_vblank_cb, apu_samples_ready_cb);
     if (!new_emu) return;
 
     if (emu) {
-        free(rom_title);
         save();
+        free(rom_title);
         emulator_quit(emu);
     }
     rom_title = new_rom_title;
@@ -206,12 +208,12 @@ void gbmulator_reset(void) {
         if (new_rom_title[i] == ' ')
             new_rom_title[i] = '_';
 
-    emulator_t *new_emu = emulator_init_from_data(config.mode, rom_data, rom_size, NULL, ppu_vblank_cb, apu_samples_ready_cb);
+    emulator_t *new_emu = emulator_init_from_data(config.mode, rom_data, rom_size, ppu_vblank_cb, apu_samples_ready_cb);
     if (!new_emu) return;
 
     if (emu) {
-        free(rom_title);
         save();
+        free(rom_title);
         emulator_quit(emu);
     }
     rom_title = new_rom_title;

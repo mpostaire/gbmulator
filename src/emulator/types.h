@@ -261,7 +261,6 @@ typedef struct {
     emulator_mode_t mode;
 
     char *rom_filepath;
-    char *save_filepath;
     char rom_title[17];
 
     cpu_t *cpu;

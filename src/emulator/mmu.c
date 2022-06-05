@@ -2,7 +2,6 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
-#include <time.h>
 
 #include "emulator.h"
 #include "mmu.h"
@@ -24,37 +23,7 @@ const char *mbc_names[] = {
     "HuC1"
 };
 
-static inline void rtc_update(rtc_t *rtc) {
-    time_t now = time(NULL);
-    time_t elapsed = now - rtc->timestamp;
-    rtc->timestamp = now;
-    rtc->value_in_seconds += elapsed;
-    time_t value_in_seconds = rtc->value_in_seconds;
-
-    word_t d = value_in_seconds / 86400;
-    value_in_seconds %= 86400;
-
-    // day overflow
-    if (d >= 0x0200) {
-        SET_BIT(rtc->dh, 7);
-        d %= 0x0200;
-    }
-
-    rtc->dh |= (d & 0x100) >> 8;
-    rtc->dl = d & 0xFF;
-
-    rtc->h = value_in_seconds / 3600;
-    value_in_seconds %= 3600;
-
-    rtc->m = value_in_seconds / 60;
-    value_in_seconds %= 60;
-
-    rtc->s = value_in_seconds;
-
-    // if there was a day overflow, emulate the overflow on rtc->value_in_seconds
-    if (CHECK_BIT(rtc->dh, 7))
-        rtc->value_in_seconds = rtc->s + rtc->m * 60 + rtc->h * 3600 + d * 86400;
-}
+extern inline void rtc_update(rtc_t *rtc);
 
 static int parse_cartridge(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
@@ -202,29 +171,10 @@ static int parse_cartridge(emulator_t *emu) {
         memcpy(&mmu->mem[0x200], &cgb_boot[0x200], sizeof(cgb_boot) - 0x200);
     }
 
-    // load save into ERAM
-    if (emu->mmu->has_battery && emu->save_filepath) {
-        FILE *f = fopen(emu->save_filepath, "rb");
-        // if there is a save file, load it into eram
-        if (f) {
-            // no fread checks because a missing/invalid save file is not an error
-
-            if (mmu->eram_banks > 0)
-                fread(mmu->eram, 0x2000 * mmu->eram_banks, 1, f);
-
-            if (mmu->has_rtc) {
-                fread(&mmu->rtc.value_in_seconds, sizeof(rtc_t) - offsetof(rtc_t, value_in_seconds), 1, f);
-                rtc_update(&mmu->rtc);
-            }
-
-            fclose(f);
-        }
-    }
-
     return 1;
 }
 
-int mmu_init(emulator_t *emu, char *rom_path, char *save_path) {
+int mmu_init(emulator_t *emu, char *rom_path) {
     const char *dot = strrchr(rom_path, '.');
     if (!dot || (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) && strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))))) {
         eprintf("%s: wrong file extension (expected .gb or .gbc)\n", rom_path);
@@ -233,12 +183,6 @@ int mmu_init(emulator_t *emu, char *rom_path, char *save_path) {
 
     mmu_t *mmu = xcalloc(1, sizeof(mmu_t));
     mmu->current_rom_bank = 1;
-
-    if (save_path) {
-        size_t len = strlen(save_path);
-        emu->save_filepath = xmalloc(len + 2);
-        snprintf(emu->save_filepath, len + 1, "%s", save_path);
-    }
 
     size_t len = strlen(rom_path);
     emu->rom_filepath = xmalloc(len + 2);
@@ -274,15 +218,9 @@ int mmu_init(emulator_t *emu, char *rom_path, char *save_path) {
     }
 }
 
-int mmu_init_from_data(emulator_t *emu, const byte_t *rom_data, size_t size, char *save_path) {
+int mmu_init_from_data(emulator_t *emu, const byte_t *rom_data, size_t size) {
     mmu_t *mmu = xcalloc(1, sizeof(mmu_t));
     mmu->current_rom_bank = 1;
-
-    if (save_path) {
-        size_t len = strlen(save_path);
-        emu->save_filepath = xmalloc(len + 2);
-        snprintf(emu->save_filepath, len + 1, "%s", save_path);
-    }
 
     mmu->cartridge_size = size;
     memcpy(mmu->cartridge, rom_data, mmu->cartridge_size);
@@ -296,46 +234,9 @@ int mmu_init_from_data(emulator_t *emu, const byte_t *rom_data, size_t size, cha
     }
 }
 
-static int save_battery_and_rtc(emulator_t *emu) {
-    // don't save if the cartridge has no battery or no save path has been given or their is no rtc and no eram banks
-    if (!emu->mmu->has_battery || !emu->save_filepath || (!emu->mmu->has_rtc && emu->mmu->eram_banks == 0))
-        return 0;
-
-    make_parent_dirs(emu->rom_filepath);
-
-    FILE *f = fopen(emu->save_filepath, "wb");
-    if (!f) {
-        errnoprintf("opening the save file");
-        return 0;
-    }
-
-    if (emu->mmu->eram_banks > 0) {
-        if (!fwrite(emu->mmu->eram, 0x2000 * emu->mmu->eram_banks, 1, f)) {
-            eprintf("writing eram to save file\n");
-            fclose(f);
-            return 0;
-        }
-    }
-
-    if (emu->mmu->has_rtc) {
-        if (!fwrite(&emu->mmu->rtc.value_in_seconds, sizeof(rtc_t) - offsetof(rtc_t, value_in_seconds), 1, f)) {
-            eprintf("writing rtc to save file\n");
-            fclose(f);
-            return 0;
-        }
-    }
-
-    fclose(f);
-    return 1;
-}
-
 void mmu_quit(emulator_t *emu) {
-    save_battery_and_rtc(emu);
-
     if (emu->rom_filepath)
         free(emu->rom_filepath);
-    if (emu->save_filepath)
-        free(emu->save_filepath);
     free(emu->mmu);
 }
 

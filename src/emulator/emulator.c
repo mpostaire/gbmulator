@@ -33,11 +33,11 @@ void emulator_run_cycles(emulator_t *emu, int cycles_limit) {
     for (int cycles_count = 0; cycles_count < cycles_limit; cycles_count += emulator_step(emu));
 }
 
-emulator_t *emulator_init(emulator_mode_t mode, char *rom_path, char *save_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
+emulator_t *emulator_init(emulator_mode_t mode, char *rom_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
     emulator_t *emu = xcalloc(1, sizeof(emulator_t));
     emu->mode = mode;
 
-    if (!mmu_init(emu, rom_path, save_path))
+    if (!mmu_init(emu, rom_path))
         return NULL;
     cpu_init(emu);
     apu_init(emu, 1.0f, 1.0f, apu_samples_ready_cb);
@@ -49,11 +49,11 @@ emulator_t *emulator_init(emulator_mode_t mode, char *rom_path, char *save_path,
     return emu;
 }
 
-emulator_t *emulator_init_from_data(emulator_mode_t mode, const byte_t *rom_data, size_t size, char *save_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
+emulator_t *emulator_init_from_data(emulator_mode_t mode, const byte_t *rom_data, size_t size, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
     emulator_t *emu = xcalloc(1, sizeof(emulator_t));
     emu->mode = mode;
 
-    if (!mmu_init_from_data(emu, rom_data, size, save_path))
+    if (!mmu_init_from_data(emu, rom_data, size))
         return NULL;
     cpu_init(emu);
     apu_init(emu, 1.0f, 1.0f, apu_samples_ready_cb);
@@ -90,6 +90,62 @@ void emulator_joypad_press(emulator_t *emu, joypad_button_t key) {
 
 void emulator_joypad_release(emulator_t *emu, joypad_button_t key) {
     joypad_release(emu, key);
+}
+
+int emulator_save(emulator_t *emu, const char *path) {
+    // don't save if the cartridge has no battery or there is no rtc and no eram banks
+    if (!emu->mmu->has_battery || (!emu->mmu->has_rtc && emu->mmu->eram_banks == 0))
+        return 0;
+
+    make_parent_dirs(path);
+
+    FILE *f = fopen(path, "wb");
+    if (!f) {
+        errnoprintf("opening the save file");
+        return 0;
+    }
+
+    if (emu->mmu->eram_banks > 0) {
+        if (!fwrite(emu->mmu->eram, 0x2000 * emu->mmu->eram_banks, 1, f)) {
+            eprintf("writing eram to save file\n");
+            fclose(f);
+            return 0;
+        }
+    }
+
+    if (emu->mmu->has_rtc) {
+        if (!fwrite(&emu->mmu->rtc.value_in_seconds, sizeof(rtc_t) - offsetof(rtc_t, value_in_seconds), 1, f)) {
+            eprintf("writing rtc to save file\n");
+            fclose(f);
+            return 0;
+        }
+    }
+
+    fclose(f);
+    return 1;
+}
+
+void emulator_load_save(emulator_t *emu, const char *path) {
+    // don't load save if the cartridge has no battery or there is no rtc and no eram banks
+    if (!emu->mmu->has_battery || (!emu->mmu->has_rtc && emu->mmu->eram_banks == 0))
+        return;
+
+    // load save into ERAM
+    FILE *f = fopen(path, "rb");
+    // if there is a save file, load it into eram
+    if (f) {
+        // no fread checks because a missing/invalid save file is not an error
+
+        if (emu->mmu->eram_banks > 0)
+            fread(emu->mmu->eram, 0x2000 * emu->mmu->eram_banks, 1, f);
+
+        if (emu->mmu->has_rtc) {
+            fread(&emu->mmu->rtc.value_in_seconds, sizeof(rtc_t) - offsetof(rtc_t, value_in_seconds), 1, f);
+            rtc_update(&emu->mmu->rtc);
+        }
+
+        fclose(f);
+    }
 }
 
 byte_t *emulator_get_save_data(emulator_t *emu, size_t *save_length) {
