@@ -27,7 +27,11 @@ struct config config = {
     .up = SDLK_UP,
     .down = SDLK_DOWN,
     .a = SDLK_KP_0,
+    #ifdef __EMSCRIPTEN__
+    .b = SDLK_PERIOD,
+    #else
     .b = SDLK_KP_PERIOD,
+    #endif
     .start = SDLK_KP_1,
     .select = SDLK_KP_2
 };

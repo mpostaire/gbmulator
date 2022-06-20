@@ -199,7 +199,7 @@ menu_t link_menu = {
 
 menu_t options_menu = {
     .title = "Options",
-    .length = 5,
+    .length = 6,
     .entries = {
         #ifdef __EMSCRIPTEN__
         { "Scale:      | 2x, 3x , 4x ", CHOICE, .choices = { choose_win_scale, 3, 0 } },
