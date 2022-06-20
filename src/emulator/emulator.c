@@ -18,7 +18,7 @@ int emulator_step(emulator_t *emu) {
     // stop execution of the program while a VBLANK DMA is active
     int cycles;
     if (emu->mmu->hdma.lock_cpu) // implies that the emulator is running in CGB mode
-        cycles = 4;
+        cycles = 1;
     else
         cycles = cpu_step(emu);
     mmu_step(emu, cycles);
@@ -27,10 +27,6 @@ int emulator_step(emulator_t *emu) {
     ppu_step(emu, cycles);
     apu_step(emu, cycles);
     return cycles;
-}
-
-void emulator_run_cycles(emulator_t *emu, int cycles_limit) {
-    for (int cycles_count = 0; cycles_count < cycles_limit; cycles_count += emulator_step(emu));
 }
 
 emulator_t *emulator_init(emulator_mode_t mode, char *rom_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {

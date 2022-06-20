@@ -280,70 +280,69 @@ static inline void hdma_gdma(emulator_t *emu, byte_t *src, byte_t *dest) {
             for (byte_t i = 0; i < 0x10; i++)
                 dest[i] = src[i];
 
-            mmu->mem[HDMA5]--;
-
             // HDMA src and dest registers need to increase as the transfer progresses
             mmu->hdma.src_address += 0x10;
+            // TODO src can't be inside vram, is this the correct way to handle this case?
+            if (mmu->hdma.src_address >= VRAM && mmu->hdma.src_address < ERAM)
+                mmu->hdma.src_address += ERAM - mmu->hdma.src_address;
+
             mmu->hdma.dest_address += 0x10;
+            // vram overflow
+            if (mmu->hdma.dest_address >= 0x2000) // 0x2000 is the size of a VRAM bank
+                mmu->hdma.dest_address = 0x0000;
+
             mmu->mem[HDMA1] = mmu->hdma.src_address >> 8;
             mmu->mem[HDMA2] = mmu->hdma.src_address;
             mmu->mem[HDMA3] = mmu->hdma.dest_address >> 8;
             mmu->mem[HDMA4] = mmu->hdma.dest_address;
 
-            // transfer stops if mmu->mem[HDMA5] is 0xFF or the next 16 bytes block to be copied
-            // will overflow outside the current VRAM bank
-            if (mmu->mem[HDMA5] == 0xFF || mmu->hdma.dest_address + 0x10 >= 0x2000) {
+            mmu->mem[HDMA5]--;
+
+            // transfer stops if mmu->mem[HDMA5] is 0xFF
+            if (mmu->mem[HDMA5] == 0xFF)
                 mmu->hdma.lock_cpu = 0;
-                SET_BIT(mmu->mem[HDMA5], 7);
-            }
         } else {
             mmu->hdma.step--;
         }
-    } else {
-        if (PPU_IS_MODE(emu, PPU_MODE_HBLANK)) {
-            // TODO hdma still not perfect? pokemon crystal shows some visual glitches when displaying menus/text windows
-            if (mmu->hdma.hdma_ly == mmu->mem[LY]) {
-                mmu->hdma.lock_cpu = 1;
-                // 32 cycles to transfer 0x10 bytes
-                if (mmu->hdma.step == 0) {
-                    mmu->hdma.step = 31;
-
-                    mmu->hdma.hdma_ly++;
-                    if (mmu->hdma.hdma_ly == 144)
-                        mmu->hdma.hdma_ly = 0;
-
-                    // copy a block of 16 bytes from src to dest
-                    for (byte_t i = 0; i < 0x10; i++)
-                        dest[i] = src[i];
-
-                    mmu->mem[HDMA5]--;
-
-                    // HDMA src and dest registers need to increase as the transfer progresses
-                    mmu->hdma.src_address += 0x10;
-                    mmu->hdma.dest_address += 0x10;
-                    mmu->mem[HDMA1] = mmu->hdma.src_address >> 8;
-                    mmu->mem[HDMA2] = mmu->hdma.src_address;
-                    mmu->mem[HDMA3] = mmu->hdma.dest_address >> 8;
-                    mmu->mem[HDMA4] = mmu->hdma.dest_address;
-
-                    mmu->hdma.lock_cpu = 0;
-
-                    // transfer stops if mmu->mem[HDMA5] is 0xFF or the next 16 bytes block to be copied
-                    // will overflow outside the current VRAM bank
-                    if (mmu->mem[HDMA5] == 0xFF || mmu->hdma.dest_address + 0x10 >= 0x2000)
-                        SET_BIT(mmu->mem[HDMA5], 7);
-                } else {
-                    mmu->hdma.step--;
-                }
-            }
-        } else if (mmu->hdma.step != 31) {
-            // the previous tranfer had not enough time to complete (the HDMA was just started at the end of a HBLANK):
-            // retry transfer of the current 16 bytes block during the next HBLANK.
-            mmu->hdma.lock_cpu = 0;
+    } else if (CHECK_BIT(mmu->mem[LCDC], 7) && PPU_IS_MODE(emu, PPU_MODE_HBLANK) && mmu->hdma.hdma_ly == mmu->mem[LY]) {
+        // TODO hdma still not perfect? pokemon crystal/zelda link's awakening dx have some visual glitches when displaying menus/text windows
+        // TODO vram viewer like bgb to see what's happening in vram for these glitches to happen
+        mmu->hdma.lock_cpu = 1;
+        // 32 cycles to transfer 0x10 bytes
+        if (mmu->hdma.step == 0) {
             mmu->hdma.step = 31;
+
             mmu->hdma.hdma_ly++;
-            if (mmu->hdma.hdma_ly == 144)
+            if (mmu->hdma.hdma_ly == GB_SCREEN_HEIGHT)
                 mmu->hdma.hdma_ly = 0;
+
+            // copy a block of 16 bytes from src to dest
+            for (byte_t i = 0; i < 0x10; i++)
+                dest[i] = src[i];
+
+            // HDMA src and dest registers need to increase as the transfer progresses
+            mmu->hdma.src_address += 0x10;
+            // TODO src can't be inside vram, is this the correct way to handle this case?
+            if (mmu->hdma.src_address >= VRAM && mmu->hdma.src_address < ERAM)
+                mmu->hdma.src_address += ERAM - mmu->hdma.src_address;
+
+            mmu->hdma.dest_address += 0x10;
+            // vram overflow
+            if (mmu->hdma.dest_address >= 0x2000) // 0x2000 is the size of a VRAM bank
+                mmu->hdma.dest_address = 0x0000;
+
+            mmu->mem[HDMA1] = mmu->hdma.src_address >> 8;
+            mmu->mem[HDMA2] = mmu->hdma.src_address;
+            mmu->mem[HDMA3] = mmu->hdma.dest_address >> 8;
+            mmu->mem[HDMA4] = mmu->hdma.dest_address;
+
+            mmu->hdma.lock_cpu = 0;
+
+            mmu->mem[HDMA5]--;
+
+            // transfer stops if mmu->mem[HDMA5] is 0xFF
+        } else {
+            mmu->hdma.step--;
         }
     }
 }
@@ -728,7 +727,7 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         // writing to this register starts a VRAM DMA transfer
 
         if (!CHECK_BIT(mmu->mem[HDMA5], 7) && mmu->hdma.type == HDMA && GET_BIT(data, 7))
-            eprintf("TODO cancel HDMA\n"); // TODO
+            eprintf("TODO cancel HDMA\n"); // TODO cancel HDMA at next HBLANK
 
         mmu->hdma.type = GET_BIT(data, 7);
         mmu->hdma.lock_cpu = mmu->hdma.type == GDMA || (mmu->hdma.type == HDMA && PPU_IS_MODE(emu, PPU_MODE_HBLANK));
@@ -737,8 +736,11 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         mmu->mem[address] = data & 0x7F;
 
         mmu->hdma.step = 31;
-        if (mmu->hdma.type == HDMA)
-            mmu->hdma.hdma_ly = mmu->mem[LY];
+        if (mmu->hdma.type == HDMA) {
+            mmu->hdma.hdma_ly = mmu->mem[LY] + 1; // start HDMA at next HBLANK
+            if (mmu->hdma.hdma_ly == GB_SCREEN_HEIGHT)
+                mmu->hdma.hdma_ly = 0;
+        }
 
         mmu->hdma.src_address = ((mmu->mem[HDMA1] << 8) | mmu->mem[HDMA2]) & 0xFFF0;
         mmu->hdma.dest_address = ((mmu->mem[HDMA3] << 8) | mmu->mem[HDMA4]) & 0x1FF0;
