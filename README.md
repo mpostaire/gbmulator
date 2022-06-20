@@ -5,8 +5,6 @@ You can compile and run it on your machine or use it in your browser [here](http
 
 ## Screenshots
 
-TODO gameboy color screenshots
-
 GBmulator running some games:
 
 ![games](images/games.png)
