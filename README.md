@@ -30,7 +30,7 @@ sudo make uninstall
 
 ## Usage
 
-To launch the emulator you must call it from the command line with the path of a rom as the first argument.
+To launch the emulator you must call it from the command line with the (optional) path of a rom as the first argument.
 ```sh
 gbmulator path/to/rom.gb
 ```
