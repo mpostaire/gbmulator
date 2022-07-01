@@ -338,12 +338,13 @@ static void choose_link_mode(menu_entry_t *entry) {
 }
 
 static void on_input_link_host(menu_entry_t *entry) {
-    strncpy(config.link_host, entry->user_input.input, 39);
-    config.link_host[39] = '\0';
+    strncpy(config.link_host, entry->user_input.input, INET6_ADDRSTRLEN);
+    config.link_host[INET6_ADDRSTRLEN - 1] = '\0';
 }
 
 static void on_input_link_port(menu_entry_t *entry) {
-    config.link_port = atoi(entry->user_input.input);
+    strncpy(config.link_port, entry->user_input.input, 6);
+    config.link_port[5] = '\0';
 }
 
 static void start_link(void) {
@@ -454,7 +455,7 @@ byte_t *ui_init(void) {
     options_menu.entries[4].choices.description = xmalloc(16);
     snprintf(options_menu.entries[4].choices.description, 16, "Effect on reset");
 
-    link_menu.entries[1].user_input.input = xmalloc(40);
+    link_menu.entries[1].user_input.input = xmalloc(INET6_ADDRSTRLEN);
     snprintf(link_menu.entries[1].user_input.input, sizeof(config.link_host), "%s", config.link_host);
 
     link_menu.entries[1].user_input.cursor = strlen(config.link_host);
@@ -464,7 +465,7 @@ byte_t *ui_init(void) {
     char **link_port_buf = &link_menu.entries[2].user_input.input;
     *link_port_buf = xmalloc(6);
 
-    link_menu.entries[2].user_input.cursor = snprintf(*link_port_buf, 6, "%d", config.link_port);
+    link_menu.entries[2].user_input.cursor = snprintf(*link_port_buf, 6, "%s", config.link_port);
     link_menu.entries[2].user_input.input = *link_port_buf;
     link_menu.entries[2].user_input.max_length = 5;
     link_menu.entries[2].user_input.visible_hi = 5;

@@ -20,7 +20,7 @@ struct config config = {
     #endif
     .speed = 1.0f,
     .link_host = "127.0.0.1",
-    .link_port = 7777,
+    .link_port = "7777",
 
     .left = SDLK_LEFT,
     .right = SDLK_RIGHT,
@@ -54,8 +54,8 @@ int config_verif_key(SDL_Keycode key) {
 static void parse_config_line(const char *line) {
     byte_t scale, color_palette;
     float speed, sound;
-    char link_host[40];
-    int link_port, mode;
+    char link_host[INET6_ADDRSTRLEN], link_port[6];
+    int mode;
 
     char left[16], right[16], up[16], down[16], a[16], b[16], start[16], select[16];
 
@@ -83,10 +83,10 @@ static void parse_config_line(const char *line) {
     } else if (sscanf(line, "color_palette=%hhu", &color_palette)) {
         if (color_palette < PPU_COLOR_PALETTE_MAX)
             config.color_palette = color_palette;
-    } else if (sscanf(line, "link_host=%39s", link_host)) {
-        strncpy(config.link_host, link_host, 40);
-    } else if (sscanf(line, "link_port=%d", &link_port)) {
-        config.link_port = link_port;
+    } else if (sscanf(line, "link_host=%45s", link_host)) {
+        strncpy(config.link_host, link_host, INET6_ADDRSTRLEN);
+    } else if (sscanf(line, "link_port=%5s", link_port)) {
+        strncpy(config.link_port, link_port, 6);
     } else if (sscanf(line, "left=%15[^\t\n]", left)) {
         key = SDL_GetKeyFromName(left);
         if (config_verif_key(key))
@@ -163,7 +163,7 @@ void config_save(const char* config_path) {
     #ifdef __EMSCRIPTEN__
     char buf[512];
     snprintf(buf, sizeof(buf),
-        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%d\n" \
+        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%s\n" \
         "left=%s\nright=%s\nup=%s\ndown=%s\na=%s\nb=%s\nstart=%s\nselect=%s\n",
         config.mode,
         config.scale,
@@ -195,7 +195,7 @@ void config_save(const char* config_path) {
     }
 
     fprintf(f,
-        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%d\n" \
+        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%s\n" \
         "left=%s\nright=%s\nup=%s\ndown=%s\na=%s\nb=%s\nstart=%s\nselect=%s\n",
         config.mode,
         config.scale,

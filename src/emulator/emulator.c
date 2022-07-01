@@ -15,6 +15,8 @@ int emulator_step(emulator_t *emu) {
     // the next cpu_step() will resume the previous instruction. This will makes the timer "hack" (increment within a loop and not an if)
     // obsolete while allowing accurate memory timings emulation.
 
+    // each instruction is multiple steps where each memory access is one step in the instruction
+
     // stop execution of the program while a VBLANK DMA is active
     int cycles;
     if (emu->mmu->hdma.lock_cpu) // implies that the emulator is running in CGB mode
@@ -72,11 +74,11 @@ void emulator_quit(emulator_t *emu) {
     free(emu);
 }
 
-int emulator_start_link(emulator_t *emu, const int port) {
+int emulator_start_link(emulator_t *emu, const char *port) {
     return link_start_server(emu, port);
 }
 
-int emulator_connect_to_link(emulator_t *emu, const char* address, const int port) {
+int emulator_connect_to_link(emulator_t *emu, const char *address, const char *port) {
     return link_connect_to_server(emu, address, port);
 }
 

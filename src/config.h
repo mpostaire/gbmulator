@@ -10,8 +10,8 @@ struct config {
     byte_t scale;
     float speed;
     float sound;
-    char link_host[40];
-    int link_port;
+    char link_host[INET6_ADDRSTRLEN];
+    char link_port[6];
 
     SDL_Keycode left;
     SDL_Keycode right;

@@ -5,6 +5,7 @@
 #include <poll.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netdb.h>
 #include <arpa/inet.h>
 
 #include <stdlib.h>
@@ -24,8 +25,22 @@ typedef struct {
     byte_t transfer;
 } pkt_t;
 
+static void print_connected_to(struct sockaddr *other_addr) {
+    char buf[INET6_ADDRSTRLEN];
+    int port;
+    if (other_addr->sa_family == AF_INET) {
+        inet_ntop(other_addr->sa_family, &((struct sockaddr_in *) other_addr)->sin_addr, buf, INET6_ADDRSTRLEN);
+        port = ((struct sockaddr_in *) other_addr)->sin_port;
+    } else {
+        inet_ntop(other_addr->sa_family, &((struct sockaddr_in6 *) other_addr)->sin6_addr, buf, INET6_ADDRSTRLEN);
+        port = ((struct sockaddr_in6 *) other_addr)->sin6_port;
+    }
+    printf("Connected to %s:%d\n", buf, ntohs(port));
+}
+
 void link_init(emulator_t *emu) {
     emu->link = xcalloc(1, sizeof(link_t));
+    emu->link->other_addr = xcalloc(1, sizeof(struct sockaddr));
     emu->link->other_sfd = -1;
     emu->link->sfd = -1;
 }
@@ -38,17 +53,43 @@ void link_quit(emulator_t *emu) {
     free(emu->link);
 }
 
-int link_start_server(emulator_t *emu, const int port) {
+int link_start_server(emulator_t *emu, const char *port) {
     link_t *link = emu->link;
 
     if (link->sfd != -1 || link->is_server)
         return 0;
 
-    link->sfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP);
-    if (link->sfd == -1) {
-        errnoprintf("socket");
+    struct addrinfo hints = {
+        .ai_family = AF_UNSPEC,
+        .ai_socktype = SOCK_STREAM,
+        .ai_protocol = IPPROTO_TCP
+    };
+    struct addrinfo *res;
+    int ret;
+    if ((ret = getaddrinfo(NULL, port, &hints, &res)) != 0) {
+        eprintf("getaddrinfo: %s\n", gai_strerror(ret));
         return 0;
     }
+
+    for (; res != NULL; res = res->ai_next) {
+        // TODO MPTCP
+        if ((link->sfd = socket(res->ai_family, res->ai_socktype | SOCK_NONBLOCK, res->ai_protocol)) == -1)
+            continue;
+
+        if (!bind(link->sfd, res->ai_addr, res->ai_addrlen))
+            break;
+
+        close(link->sfd);
+    }
+
+    if (res == NULL) {
+        eprintf("bind: Could not bind\n");
+        link->sfd = -1;
+        return 0;
+    }
+
+    freeaddrinfo(res);
+
     int option = 1;
     if (setsockopt(link->sfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option))) {
         errnoprintf("setsockopt");
@@ -56,18 +97,6 @@ int link_start_server(emulator_t *emu, const int port) {
         link->sfd = -1;
         return 0;
     };
-
-    struct sockaddr_in addr = { 0 };
-    addr.sin_addr.s_addr = htonl(INADDR_ANY); // use INADDR_LOOPBACK for local host only
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-
-    if (bind(link->sfd, (struct sockaddr *) &addr, sizeof(addr)) == -1) {
-        errnoprintf("bind");
-        close(link->sfd);
-        link->sfd = -1;
-        return 0;
-    }
 
     if (listen(link->sfd, 1) == -1) {
         errnoprintf("listen");
@@ -78,38 +107,58 @@ int link_start_server(emulator_t *emu, const int port) {
 
     link->is_server = 1;
 
-    printf("Link server waiting for client on port %d...\n", port);
+    printf("Link server waiting for client on port %s...\n", port);
 
     return 1;
 }
 
-int link_connect_to_server(emulator_t *emu, const char* address, const int port) {
+// TODO make network code separate form the emulator core
+int link_connect_to_server(emulator_t *emu, const char *address, const char *port) {
     link_t *link = emu->link;
 
     if (link->other_sfd != -1 || link->is_server)
         return 0;
 
-    link->other_sfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP);
-    if (link->other_sfd == -1) {
-        errnoprintf("socket");
+    struct addrinfo hints = {
+        .ai_family = AF_UNSPEC,
+        .ai_socktype = SOCK_STREAM,
+        .ai_protocol = IPPROTO_TCP
+    };
+    struct addrinfo *res;
+    int ret;
+    if ((ret = getaddrinfo(address, port, &hints, &res)) != 0) {
+        eprintf("getaddrinfo: %s\n", gai_strerror(ret));
         return 0;
     }
 
-    link->other_addr.sin_addr.s_addr = inet_addr(address); // local host
-    link->other_addr.sin_family = AF_INET;
-    link->other_addr.sin_port = htons(port);
+    for (; res != NULL; res = res->ai_next) {
+        // TODO MPTCP
+        if ((link->other_sfd = socket(res->ai_family, res->ai_socktype | SOCK_NONBLOCK, res->ai_protocol)) == -1)
+            continue;
 
-    int ret = connect(link->other_sfd, (struct sockaddr *) &link->other_addr, sizeof(link->other_addr));
-    if (ret == -1 && errno != EINPROGRESS) {
-        errnoprintf("connect");
+        int ret = connect(link->other_sfd, res->ai_addr, res->ai_addrlen);
+        if (ret == -1 && errno != EINPROGRESS) {
+
+        } else {
+            break;
+        }
+
         close(link->other_sfd);
+    }
+
+    if (res == NULL) {
+        eprintf("connect: Could not connect\n");
+        errnoprintf("connect");
         link->other_sfd = -1;
         return 0;
     }
 
+    link->other_addr = res->ai_addr;
+    freeaddrinfo(res);
+
     link->is_server = 0;
 
-    printf("Link client connecting to server %s:%d...\n", address, port);
+    printf("Link client connecting to server %s:%s...\n", address, port);
 
     return 1;
 }
@@ -119,8 +168,8 @@ int link_connect_to_server(emulator_t *emu, const char* address, const int port)
  */
 static void complete_connection(link_t *link) {
     if (link->is_server) {
-        socklen_t other_addr_len = sizeof(link->other_addr);
-        link->other_sfd = accept(link->sfd, (struct sockaddr *) &link->other_addr, &other_addr_len);
+        socklen_t other_addr_len = link->other_addr->sa_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+        link->other_sfd = accept(link->sfd, link->other_addr, &other_addr_len);
         if (link->other_sfd == -1) {
             if (errno != EAGAIN)
                 errnoprintf("accept");
@@ -128,7 +177,7 @@ static void complete_connection(link_t *link) {
         }
         fcntl(link->other_sfd, F_SETFL, 0); // make other_sfd blocking
         link->connected = 1;
-        printf("Connected to %s:%d\n", inet_ntoa(link->other_addr.sin_addr), ntohs(link->other_addr.sin_port));
+        print_connected_to(link->other_addr);
     } else {
         struct pollfd fds;
         fds.fd = link->other_sfd;
@@ -137,7 +186,7 @@ static void complete_connection(link_t *link) {
             char buf;
             if (send(link->other_sfd, &buf, 0, MSG_NOSIGNAL) == 0) {
                 link->connected = 1;
-                printf("Connected to %s:%d\n", inet_ntoa(link->other_addr.sin_addr), ntohs(link->other_addr.sin_port));
+                print_connected_to(link->other_addr);
                 fcntl(link->other_sfd, F_SETFL, 0); // make other_sfd blocking
             } else {
                 close(link->other_sfd);

@@ -249,7 +249,7 @@ typedef struct {
     int is_server;
     int other_sfd;
     int connected;
-    struct sockaddr_in other_addr;
+    struct sockaddr *other_addr;
 } link_t;
 
 typedef enum {

@@ -49,9 +49,9 @@ emulator_t *emulator_init_from_data(emulator_mode_t mode, const byte_t *rom_data
  */
 void emulator_quit(emulator_t *emu);
 
-int emulator_start_link(emulator_t *emu, const int port);
+int emulator_start_link(emulator_t *emu, const char *port);
 
-int emulator_connect_to_link(emulator_t *emu, const char* address, const int port);
+int emulator_connect_to_link(emulator_t *emu, const char *address, const char *port);
 
 void emulator_joypad_press(emulator_t *emu, joypad_button_t key);
 
