@@ -12,6 +12,8 @@ struct config {
     float sound;
     char link_host[INET6_ADDRSTRLEN];
     char link_port[6];
+    byte_t is_ipv6;
+    byte_t mptcp_enabled;
 
     SDL_Keycode left;
     SDL_Keycode right;

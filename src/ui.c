@@ -139,6 +139,8 @@ static void choose_sound(menu_entry_t *entry);
 static void choose_color(menu_entry_t *entry);
 static void choose_mode(menu_entry_t *entry);
 static void choose_link_mode(menu_entry_t *entry);
+static void choose_link_ip(menu_entry_t *entry);
+static void choose_link_protocol(menu_entry_t *entry);
 static void on_input_link_host(menu_entry_t *entry);
 static void on_input_link_port(menu_entry_t *entry);
 static void start_link(void);
@@ -187,9 +189,11 @@ struct menu {
 
 menu_t link_menu = {
     .title = "Link cable",
-    .length = 5,
+    .length = 7,
     .entries = {
         { "Mode:     |server,client", CHOICE, .choices = { choose_link_mode, 2, 0 } },
+        { "IP:           |v4,v6", CHOICE, .choices = { choose_link_ip, 2, 0 } },
+        { "Protocol:  | TCP ,MPTCP", CHOICE, .choices = { choose_link_protocol, 2, 0 } },
         { "Host: ", INPUT, .disabled = 1, .user_input.on_input = on_input_link_host },
         { "Port: ", INPUT, .user_input = { .is_numeric = 1, .on_input = on_input_link_port } },
         { "Start link", ACTION, .action = start_link },
@@ -334,7 +338,15 @@ static void choose_mode(menu_entry_t *entry) {
 }
 
 static void choose_link_mode(menu_entry_t *entry) {
-    link_menu.entries[1].disabled = !entry->choices.position;
+    link_menu.entries[3].disabled = !entry->choices.position;
+}
+
+static void choose_link_ip(menu_entry_t *entry) {
+    config.is_ipv6 = entry->choices.position;
+}
+
+static void choose_link_protocol(menu_entry_t *entry) {
+    config.mptcp_enabled = entry->choices.position;
 }
 
 static void on_input_link_host(menu_entry_t *entry) {
@@ -352,16 +364,18 @@ static void start_link(void) {
 
     int success;
     if (link_menu.entries[0].choices.position)
-        success = emulator_connect_to_link(emu, config.link_host, config.link_port);
+        success = emulator_connect_to_link(emu, config.link_host, config.link_port, config.is_ipv6, config.mptcp_enabled);
     else
-        success = emulator_start_link(emu, config.link_port);
+        success = emulator_start_link(emu, config.link_port, config.is_ipv6, config.mptcp_enabled);
     
     if (success){
         link_menu.entries[0].disabled = 1;
         link_menu.entries[1].disabled = 1;
         link_menu.entries[2].disabled = 1;
         link_menu.entries[3].disabled = 1;
-        link_menu.position = 4;
+        link_menu.entries[4].disabled = 1;
+        link_menu.entries[5].disabled = 1;
+        link_menu.position = 6;
     }
 }
 
@@ -455,20 +469,23 @@ byte_t *ui_init(void) {
     options_menu.entries[4].choices.description = xmalloc(16);
     snprintf(options_menu.entries[4].choices.description, 16, "Effect on reset");
 
-    link_menu.entries[1].user_input.input = xmalloc(INET6_ADDRSTRLEN);
-    snprintf(link_menu.entries[1].user_input.input, sizeof(config.link_host), "%s", config.link_host);
+    link_menu.entries[3].user_input.input = xmalloc(INET6_ADDRSTRLEN);
+    snprintf(link_menu.entries[3].user_input.input, sizeof(config.link_host), "%s", config.link_host);
 
-    link_menu.entries[1].user_input.cursor = strlen(config.link_host);
-    link_menu.entries[1].user_input.max_length = 39;
-    link_menu.entries[1].user_input.visible_hi = 12;
+    link_menu.entries[1].choices.position = config.is_ipv6;
+    link_menu.entries[2].choices.position = config.mptcp_enabled;
 
-    char **link_port_buf = &link_menu.entries[2].user_input.input;
+    link_menu.entries[3].user_input.cursor = strlen(config.link_host);
+    link_menu.entries[3].user_input.max_length = 39;
+    link_menu.entries[3].user_input.visible_hi = 12;
+
+    char **link_port_buf = &link_menu.entries[4].user_input.input;
     *link_port_buf = xmalloc(6);
 
-    link_menu.entries[2].user_input.cursor = snprintf(*link_port_buf, 6, "%s", config.link_port);
-    link_menu.entries[2].user_input.input = *link_port_buf;
-    link_menu.entries[2].user_input.max_length = 5;
-    link_menu.entries[2].user_input.visible_hi = 5;
+    link_menu.entries[4].user_input.cursor = snprintf(*link_port_buf, 6, "%s", config.link_port);
+    link_menu.entries[4].user_input.input = *link_port_buf;
+    link_menu.entries[4].user_input.max_length = 5;
+    link_menu.entries[4].user_input.visible_hi = 5;
 
     for (int i = 0; i < keybindings_menu.length - 1; i++){
         keybindings_menu.entries[i].setter.config_key = get_config_pointer(i);

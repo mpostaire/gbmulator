@@ -21,6 +21,8 @@ struct config config = {
     .speed = 1.0f,
     .link_host = "127.0.0.1",
     .link_port = "7777",
+    .is_ipv6 = 0,
+    .mptcp_enabled = 0,
 
     .left = SDLK_LEFT,
     .right = SDLK_RIGHT,
@@ -52,10 +54,10 @@ int config_verif_key(SDL_Keycode key) {
 }
 
 static void parse_config_line(const char *line) {
-    byte_t scale, color_palette;
+    byte_t scale, color_palette, is_ipv6, mptcp_enabled;
     float speed, sound;
     char link_host[INET6_ADDRSTRLEN], link_port[6];
-    int mode;
+    byte_t mode;
 
     char left[16], right[16], up[16], down[16], a[16], b[16], start[16], select[16];
 
@@ -64,7 +66,7 @@ static void parse_config_line(const char *line) {
     if (sscanf(line, "scale=%hhu", &scale)) {
         if (scale >= 1 && scale <= 5)
             config.scale = scale;
-    } else if (sscanf(line, "mode=%d", &mode)) {
+    } else if (sscanf(line, "mode=%hhu", &mode)) {
         if (mode == CGB || mode == DMG)
             config.mode = mode;
     } else if (sscanf(line, "speed=%f", &speed)) {
@@ -87,6 +89,10 @@ static void parse_config_line(const char *line) {
         strncpy(config.link_host, link_host, INET6_ADDRSTRLEN);
     } else if (sscanf(line, "link_port=%5s", link_port)) {
         strncpy(config.link_port, link_port, 6);
+    } else if (sscanf(line, "ipv6=%hhu", &is_ipv6)) {
+        config.is_ipv6 = is_ipv6;
+    } else if (sscanf(line, "mptcp=%hhu", &mptcp_enabled)) {
+        config.mptcp_enabled = mptcp_enabled;
     } else if (sscanf(line, "left=%15[^\t\n]", left)) {
         key = SDL_GetKeyFromName(left);
         if (config_verif_key(key))
@@ -163,7 +169,7 @@ void config_save(const char* config_path) {
     #ifdef __EMSCRIPTEN__
     char buf[512];
     snprintf(buf, sizeof(buf),
-        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%s\n" \
+        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%s\nipv6=%d\nmptcp=%d\n" \
         "left=%s\nright=%s\nup=%s\ndown=%s\na=%s\nb=%s\nstart=%s\nselect=%s\n",
         config.mode,
         config.scale,
@@ -172,6 +178,8 @@ void config_save(const char* config_path) {
         config.color_palette,
         config.link_host,
         config.link_port,
+        config.is_ipv6,
+        config.mptcp_enabled,
         SDL_GetKeyName(config.left),
         SDL_GetKeyName(config.right),
         SDL_GetKeyName(config.up),
@@ -195,7 +203,7 @@ void config_save(const char* config_path) {
     }
 
     fprintf(f,
-        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%s\n" \
+        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%s\nipv6=%d\nmptcp=%d\n" \
         "left=%s\nright=%s\nup=%s\ndown=%s\na=%s\nb=%s\nstart=%s\nselect=%s\n",
         config.mode,
         config.scale,
@@ -204,6 +212,8 @@ void config_save(const char* config_path) {
         config.color_palette,
         config.link_host,
         config.link_port,
+        config.is_ipv6,
+        config.mptcp_enabled,
         SDL_GetKeyName(config.left),
         SDL_GetKeyName(config.right),
         SDL_GetKeyName(config.up),

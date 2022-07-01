@@ -74,12 +74,12 @@ void emulator_quit(emulator_t *emu) {
     free(emu);
 }
 
-int emulator_start_link(emulator_t *emu, const char *port) {
-    return link_start_server(emu, port);
+int emulator_start_link(emulator_t *emu, const char *port, int is_ipv6, int mptcp_enabled) {
+    return link_start_server(emu, port, is_ipv6, mptcp_enabled);
 }
 
-int emulator_connect_to_link(emulator_t *emu, const char *address, const char *port) {
-    return link_connect_to_server(emu, address, port);
+int emulator_connect_to_link(emulator_t *emu, const char *address, const char *port, int is_ipv6, int mptcp_enabled) {
+    return link_connect_to_server(emu, address, port, is_ipv6, mptcp_enabled);
 }
 
 void emulator_joypad_press(emulator_t *emu, joypad_button_t key) {

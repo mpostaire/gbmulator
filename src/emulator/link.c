@@ -53,14 +53,14 @@ void link_quit(emulator_t *emu) {
     free(emu->link);
 }
 
-int link_start_server(emulator_t *emu, const char *port) {
+int link_start_server(emulator_t *emu, const char *port, int is_ipv6, int mptcp_enabled) {
     link_t *link = emu->link;
 
     if (link->sfd != -1 || link->is_server)
         return 0;
 
     struct addrinfo hints = {
-        .ai_family = AF_UNSPEC,
+        .ai_family = is_ipv6 ? AF_INET6 : AF_INET,
         .ai_socktype = SOCK_STREAM,
         .ai_protocol = IPPROTO_TCP
     };
@@ -72,8 +72,8 @@ int link_start_server(emulator_t *emu, const char *port) {
     }
 
     for (; res != NULL; res = res->ai_next) {
-        // TODO MPTCP
-        if ((link->sfd = socket(res->ai_family, res->ai_socktype | SOCK_NONBLOCK, res->ai_protocol)) == -1)
+        // getaddrinfo doesn't work with IPPROTO_MPTCP
+        if ((link->sfd = socket(res->ai_family, res->ai_socktype | SOCK_NONBLOCK, mptcp_enabled ? IPPROTO_MPTCP : res->ai_protocol)) == -1)
             continue;
 
         if (!bind(link->sfd, res->ai_addr, res->ai_addrlen))
@@ -113,14 +113,15 @@ int link_start_server(emulator_t *emu, const char *port) {
 }
 
 // TODO make network code separate form the emulator core
-int link_connect_to_server(emulator_t *emu, const char *address, const char *port) {
+// TODO make ipv4 or ipv6 option in link options menu 
+int link_connect_to_server(emulator_t *emu, const char *address, const char *port, int is_ipv6, int mptcp_enabled) {
     link_t *link = emu->link;
 
     if (link->other_sfd != -1 || link->is_server)
         return 0;
 
     struct addrinfo hints = {
-        .ai_family = AF_UNSPEC,
+        .ai_family = is_ipv6 ? AF_INET6 : AF_INET,
         .ai_socktype = SOCK_STREAM,
         .ai_protocol = IPPROTO_TCP
     };
@@ -132,8 +133,8 @@ int link_connect_to_server(emulator_t *emu, const char *address, const char *por
     }
 
     for (; res != NULL; res = res->ai_next) {
-        // TODO MPTCP
-        if ((link->other_sfd = socket(res->ai_family, res->ai_socktype | SOCK_NONBLOCK, res->ai_protocol)) == -1)
+        // getaddrinfo doesn't work with IPPROTO_MPTCP
+        if ((link->other_sfd = socket(res->ai_family, res->ai_socktype | SOCK_NONBLOCK, mptcp_enabled ? IPPROTO_MPTCP : res->ai_protocol)) == -1)
             continue;
 
         int ret = connect(link->other_sfd, res->ai_addr, res->ai_addrlen);
