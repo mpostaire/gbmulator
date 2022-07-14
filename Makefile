@@ -33,7 +33,7 @@ debug: all
 
 wasm: CC:=emcc
 wasm: LDLIBS:=
-wasm: CFLAGS+=-O3
+wasm: CFLAGS+=-O3 -sUSE_SDL=2
 wasm: $(ODIR_STRUCTURE) docs index.html
 
 debug_wasm: wasm
