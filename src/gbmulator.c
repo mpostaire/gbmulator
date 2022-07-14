@@ -34,13 +34,14 @@ SDL_bool is_controller_present = SDL_FALSE;
 
 char window_title[sizeof(EMULATOR_NAME) + 19];
 
+ui_t *ui;
 emulator_t *emu;
 
-void gbmulator_exit(void) {
+static void gbmulator_exit(menu_entry_t *entry) {
     is_running = SDL_FALSE;
 }
 
-void gbmulator_unpause(void) {
+static void gbmulator_unpause(menu_entry_t *entry) {
     if (is_rom_loaded)
         is_paused = SDL_FALSE;
 }
@@ -143,12 +144,19 @@ static void handle_input(void) {
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
         case SDL_TEXTINPUT:
-            if (is_paused)
-                ui_text_input(event.text.text);
+            if (is_paused) {
+                if (is_rom_loaded && (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE))
+                    is_paused = SDL_FALSE;
+                else
+                    ui_text_input(ui, event.text.text);
+            }
             break;
         case SDL_KEYDOWN:
             if (is_paused) {
-                ui_keyboard_press(&event.key);
+                if (is_rom_loaded && (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE))
+                    is_paused = SDL_FALSE;
+                else
+                    ui_keyboard_press(ui, &event.key);
                 break;
             }
             if (event.key.repeat)
@@ -157,6 +165,8 @@ static void handle_input(void) {
             case SDLK_PAUSE:
             case SDLK_ESCAPE:
                 is_paused = SDL_TRUE;
+                ui->current_menu = ui->root_menu;
+                ui_set_position(ui, 0, 0);
                 break;
             case SDLK_F1: case SDLK_F2:
             case SDLK_F3: case SDLK_F4:
@@ -181,11 +191,16 @@ static void handle_input(void) {
             break;
         case SDL_CONTROLLERBUTTONDOWN:
             if (is_paused) {
-                ui_controller_press(event.cbutton.button);
+                if (is_rom_loaded && (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE))
+                    is_paused = SDL_FALSE;
+                else
+                    ui_controller_press(ui, event.cbutton.button);
                 break;
             }
             if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
                 is_paused = SDL_TRUE;
+                ui->current_menu = ui->root_menu;
+                ui_set_position(ui, 0, 0);
                 break;
             }
             if (!is_paused)
@@ -218,17 +233,15 @@ static void handle_input(void) {
 
 void gbmulator_load_cartridge(char *path) {
     char *rom_path;
-    if (path)
+    if (path) {
         rom_path = path;
-    else if (emu)
+    } else if (emu) {
         rom_path = emulator_get_rom_path(emu);
-    else
-        return;
-
-    if (emu) {
         char *save_path = get_save_path(emulator_get_rom_path(emu));
         emulator_save(emu, save_path);
         free(save_path);
+    } else {
+        return;
     }
 
     emulator_t *new_emu = emulator_init(config.mode, rom_path, ppu_vblank_cb, apu_samples_ready_cb);
@@ -249,20 +262,259 @@ void gbmulator_load_cartridge(char *path) {
     char *rom_title = emulator_get_rom_title(emu);
     snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
     SDL_SetWindowTitle(window, window_title);
+
+    ui->root_menu->entries[0].disabled = 0; // enable resume menu entry
+    ui->root_menu->entries[2].disabled = 0; // enable reset rom menu entry
+    ui->root_menu->entries[3].disabled = 0; // enable link cable menu entry
+
     is_rom_loaded = SDL_TRUE;
-    ui_enable_resume_button();
-    ui_enable_link_button();
-    ui_enable_reset_button();
-    ui_back_to_main_menu();
     is_paused = SDL_FALSE;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+static void choose_scale(menu_entry_t *entry) {
+    #ifdef __EMSCRIPTEN__
+    config.scale = entry->choices.position + 2;
+    #else
+    config.scale = entry->choices.position;
+    #endif
+}
+
+static void choose_speed(menu_entry_t *entry) {
+    config.speed = (entry->choices.position * 0.5f) + 1;
+    if (emu)
+        emulator_set_apu_speed(emu, config.speed);
+}
+
+static void choose_sound(menu_entry_t *entry) {
+    config.sound = entry->choices.position * 0.25f;
+    if (emu)
+        emulator_set_apu_sound_level(emu, config.sound);
+}
+
+static void choose_color(menu_entry_t *entry) {
+    config.color_palette = entry->choices.position;
+    if (emu) {
+        emulator_update_pixels_with_palette(emu, config.color_palette);
+        emulator_set_color_palette(emu, config.color_palette);
+    }
+}
+
+static void choose_mode(menu_entry_t *entry) {
+    config.mode = entry->choices.position;
+    #ifdef __EMSCRIPTEN__
+    if (!emu) {
+        EM_ASM({
+            setTheme($0);
+        }, config.mode);
+    }
+    #endif
+}
+
+static void choose_link_mode(menu_entry_t *entry) {
+    entry->parent->entries[3].disabled = !entry->choices.position;
+}
+
+static void choose_link_ip(menu_entry_t *entry) {
+    config.is_ipv6 = entry->choices.position;
+}
+
+static void choose_link_protocol(menu_entry_t *entry) {
+    config.mptcp_enabled = entry->choices.position;
+}
+
+static void on_input_link_host(menu_entry_t *entry) {
+    strncpy(config.link_host, entry->user_input.input, INET6_ADDRSTRLEN);
+    config.link_host[INET6_ADDRSTRLEN - 1] = '\0';
+}
+
+static void on_input_link_port(menu_entry_t *entry) {
+    strncpy(config.link_port, entry->user_input.input, 6);
+    config.link_port[5] = '\0';
+}
+
+static void start_link(menu_entry_t *entry) {
+    if (!emu) return;
+
+    int success;
+    if (entry->parent->entries[0].choices.position)
+        success = emulator_connect_to_link(emu, config.link_host, config.link_port, config.is_ipv6, config.mptcp_enabled);
+    else
+        success = emulator_start_link(emu, config.link_port, config.is_ipv6, config.mptcp_enabled);
+
+    if (success) {
+        entry->parent->entries[0].disabled = 1;
+        entry->parent->entries[1].disabled = 1;
+        entry->parent->entries[2].disabled = 1;
+        entry->parent->entries[3].disabled = 1;
+        entry->parent->entries[4].disabled = 1;
+        entry->parent->entries[5].disabled = 1;
+        entry->parent->position = 6;
+    }
+}
+
+static void open_rom(menu_entry_t *entry) {
+    #ifdef __EMSCRIPTEN__
+    EM_ASM(
+        var file_selector = document.createElement('input');
+        file_selector.setAttribute('type', 'file');
+        file_selector.setAttribute('onchange','openFile(event)');
+        file_selector.setAttribute('accept','.gb,.gbc'); // optional - limit accepted file types
+        file_selector.click();
+    );
+    #else
+    char filepath[1024] = { 0 };
+    FILE *f = popen("zenity --file-selection", "r");
+    if (!f) {
+        errnoprintf("zenity");
+        return;
+    }
+    fgets(filepath, 1024, f);
+    pclose(f);
+    filepath[strcspn(filepath, "\r\n")] = '\0';
+    if (strlen(filepath))
+        gbmulator_load_cartridge(filepath);
+    #endif
+}
+
+static void reset_rom(menu_entry_t *entry) {
+    #ifdef __EMSCRIPTEN__
+    gbmulator_reset();
+    #else
+    gbmulator_load_cartridge(NULL);
+    #endif
+}
+
+
+menu_t link_menu = {
+    .title = "Link cable",
+    .length = 7,
+    .entries = {
+        { "Mode:     |server,client", UI_CHOICE, .choices = { choose_link_mode, 2, 0 } },
+        { "IP:           |v4,v6", UI_CHOICE, .choices = { choose_link_ip, 2, 0 } },
+        { "Protocol:  | TCP ,MPTCP", UI_CHOICE, .choices = { choose_link_protocol, 2, 0 } },
+        { "Host: ", UI_INPUT, .disabled = 1, .user_input.on_input = on_input_link_host },
+        { "Port: ", UI_INPUT, .user_input = { .is_numeric = 1, .on_input = on_input_link_port } },
+        { "Start link", UI_ACTION, .action = start_link },
+        { "Back...", UI_BACK }
+    }
+};
+
+menu_t options_menu = {
+    .title = "Options",
+    .length = 6,
+    .entries = {
+        { "Scale:      |Full, 1x , 2x , 3x , 4x , 5x ", UI_CHOICE, .choices = { choose_scale, 6, 0 } },
+        { "Speed:      |1.0x,1.5x,2.0x,2.5x,3.0x,3.5x,4.0x", UI_CHOICE, .choices = { choose_speed, 7, 0 } },
+        { "Sound:      | OFF, 25%, 50%, 75%,100%", UI_CHOICE, .choices = { choose_sound, 5, 0 } },
+        { "Color:      |gray,orig", UI_CHOICE, .choices = { choose_color, 2, 0 } },
+        { "Mode:       | DMG, CGB", UI_CHOICE, .choices = { choose_mode, 2, 0 } },
+        { "Back...", UI_BACK }
+    }
+};
+
+menu_t keybindings_menu = {
+    .title = "Keybindings",
+    .length = 9,
+    .entries = {
+        { "LEFT:", UI_KEY_SETTER, .setter.config_key = &config.left },
+        { "RIGHT:", UI_KEY_SETTER, .setter.config_key = &config.right },
+        { "UP:", UI_KEY_SETTER, .setter.config_key = &config.up },
+        { "DOWN:", UI_KEY_SETTER, .setter.config_key = &config.down },
+        { "A:", UI_KEY_SETTER, .setter.config_key = &config.a },
+        { "B:", UI_KEY_SETTER, .setter.config_key = &config.b },
+        { "START:", UI_KEY_SETTER, .setter.config_key = &config.start },
+        { "SELECT:", UI_KEY_SETTER, .setter.config_key = &config.select },
+        { "Back...", UI_BACK }
+    }
+};
+
+menu_t main_menu = {
+    .title = "GBmulator",
+    .length = 7,
+    .entries = {
+        { "Resume", UI_ACTION, .disabled = 1, .action = gbmulator_unpause },
+        { "Open ROM...", UI_ACTION, .action = open_rom },
+        { "Reset ROM", UI_ACTION, .disabled = 1, .action = reset_rom },
+        { "Link cable...", UI_SUBMENU, .disabled = 1, .submenu = &link_menu },
+        { "Options...", UI_SUBMENU, .submenu = &options_menu },
+        { "Keybindings...", UI_SUBMENU, .submenu = &keybindings_menu },
+        { "Exit", UI_ACTION, .action = gbmulator_exit }
+    }
+};
+
+
+
+
+
+
 
 int main(int argc, char **argv) {
     // must be called before emulator_init
     char *config_path = get_config_path();
     config_load(config_path);
-    byte_t *ui_pixels = ui_init();
     emu = NULL;
+
+
+
+
+
+    ui = ui_init(&main_menu, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    #ifdef __EMSCRIPTEN__
+    options_menu.entries[0].choices.position = config.scale - 2;
+    #else
+    options_menu.entries[0].choices.position = config.scale;
+    #endif
+    options_menu.entries[1].choices.position = config.speed / 0.5f - 2;
+    options_menu.entries[2].choices.position = config.sound * 4;
+    options_menu.entries[3].choices.position = config.color_palette;
+    options_menu.entries[4].choices.position = config.mode;
+    options_menu.entries[4].choices.description = xmalloc(16);
+    snprintf(options_menu.entries[4].choices.description, 16, "Effect on reset");
+
+    link_menu.entries[3].user_input.input = xmalloc(INET6_ADDRSTRLEN);
+    snprintf(link_menu.entries[3].user_input.input, sizeof(config.link_host), "%s", config.link_host);
+
+    link_menu.entries[1].choices.position = config.is_ipv6;
+    link_menu.entries[2].choices.position = config.mptcp_enabled;
+
+    link_menu.entries[3].user_input.cursor = strlen(config.link_host);
+    link_menu.entries[3].user_input.max_length = 39;
+    link_menu.entries[3].user_input.visible_hi = 12;
+
+    char **link_port_buf = &link_menu.entries[4].user_input.input;
+    *link_port_buf = xmalloc(6);
+
+    link_menu.entries[4].user_input.cursor = snprintf(*link_port_buf, 6, "%s", config.link_port);
+    link_menu.entries[4].user_input.input = *link_port_buf;
+    link_menu.entries[4].user_input.max_length = 5;
+    link_menu.entries[4].user_input.visible_hi = 5;
+
+
+
+
+
+
+
+
+
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
 
@@ -315,8 +567,8 @@ int main(int argc, char **argv) {
             if (!is_paused) // if user input disable pause, don't draw ui
                 continue;
 
-            // display menu
-            ui_draw_menu();
+            // display ui
+            ui_draw(ui);
 
             if (scale != config.scale) {
                 scale = config.scale;
@@ -341,7 +593,7 @@ int main(int argc, char **argv) {
                 SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
             }
 
-            SDL_UpdateTexture(ui_texture, NULL, ui_pixels, ui_texture_pitch);
+            SDL_UpdateTexture(ui_texture, NULL, ui->pixels, ui_texture_pitch);
             SDL_RenderCopy(renderer, ui_texture, NULL, NULL);
 
             SDL_RenderPresent(renderer);
@@ -376,6 +628,8 @@ int main(int argc, char **argv) {
     config_save(config_path);
 
     free(config_path);
+
+    ui_free(ui);
 
     if (is_controller_present)
         SDL_GameControllerClose(pad);

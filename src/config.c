@@ -9,12 +9,11 @@
 
 struct config config = {
     .mode = CGB,
-    #ifdef __EMSCRIPTEN__
     .color_palette = PPU_COLOR_PALETTE_ORIG,
+    #ifdef __EMSCRIPTEN__
     .scale = 2,
     .sound = 0.25f,
     #else
-    .color_palette = PPU_COLOR_PALETTE_GRAY,
     .scale = 3,
     .sound = 0.5f,
     #endif
