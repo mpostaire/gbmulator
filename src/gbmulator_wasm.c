@@ -17,7 +17,6 @@ SDL_Window *window;
 SDL_Texture *ppu_texture;
 int ppu_texture_pitch;
 
-byte_t *ui_pixels_buffer;
 SDL_Texture *ui_texture;
 int ui_texture_pitch;
 
@@ -32,9 +31,10 @@ byte_t scale;
 
 char window_title[sizeof(EMULATOR_NAME) + 19];
 
+ui_t *ui;
 emulator_t *emu;
 
-void gbmulator_unpause(void) {
+void gbmulator_unpause(menu_entry_t *entry) {
     if (is_rom_loaded)
         is_paused = SDL_FALSE;
 }
@@ -140,7 +140,7 @@ EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
 
 EMSCRIPTEN_KEEPALIVE void on_gui_button_down(joypad_button_t button) {
     if (is_paused)
-        ui_press_joypad(button);
+        ui_press_joypad(ui, button);
     else
         emulator_joypad_press(emu, button);
 }
@@ -180,11 +180,12 @@ EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {
 
     snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
     SDL_SetWindowTitle(window, window_title);
+
     is_rom_loaded = SDL_TRUE;
-    ui_enable_resume_button();
-    ui_enable_reset_button();
-    ui_back_to_main_menu();
     is_paused = SDL_FALSE;
+
+    ui->root_menu->entries[0].disabled = 0; // enable resume menu entry
+    ui->root_menu->entries[2].disabled = 0; // enable reset rom menu entry
 
     free(rom_data);
     rom_size = 0;
@@ -232,11 +233,12 @@ void gbmulator_reset(void) {
 
     snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
     SDL_SetWindowTitle(window, window_title);
+
     is_rom_loaded = SDL_TRUE;
-    ui_enable_resume_button();
-    ui_enable_reset_button();
-    ui_back_to_main_menu();
     is_paused = SDL_FALSE;
+
+    ui->root_menu->entries[0].disabled = 0; // enable resume menu entry
+    ui->root_menu->entries[2].disabled = 0; // enable reset rom menu entry
 
     free(rom_data);
     rom_size = 0;
@@ -253,12 +255,19 @@ static void handle_input(void) {
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
         case SDL_TEXTINPUT:
-            if (is_paused)
-                ui_text_input(event.text.text);
+            if (is_paused) {
+                if (is_rom_loaded && (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE))
+                    is_paused = SDL_FALSE;
+                else
+                    ui_text_input(ui, event.text.text);
+            }
             break;
         case SDL_KEYDOWN:
             if (is_paused) {
-                ui_keyboard_press(&event.key);
+                if (is_rom_loaded && (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE))
+                    is_paused = SDL_FALSE;
+                else
+                    ui_keyboard_press(ui, &event.key);
                 break;
             }
             if (event.key.repeat)
@@ -267,6 +276,8 @@ static void handle_input(void) {
             case SDLK_PAUSE:
             case SDLK_ESCAPE:
                 is_paused = SDL_TRUE;
+                ui->current_menu = ui->root_menu;
+                ui_set_position(ui, 0, 0);
                 break;
             case SDLK_F1: case SDLK_F2:
             case SDLK_F3: case SDLK_F4:
@@ -302,11 +313,16 @@ static void handle_input(void) {
             break;
         case SDL_CONTROLLERBUTTONDOWN:
             if (is_paused) {
-                ui_controller_press(event.cbutton.button);
+                if (is_rom_loaded && (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE))
+                    is_paused = SDL_FALSE;
+                else
+                    ui_controller_press(ui, event.cbutton.button);
                 break;
             }
             if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
                 is_paused = SDL_TRUE;
+                ui->current_menu = ui->root_menu;
+                ui_set_position(ui, 0, 0);
                 break;
             }
             if (!is_paused)
@@ -348,7 +364,7 @@ static void paused_loop(void) {
     }
 
     // display menu
-    ui_draw_menu();
+    ui_draw(ui);
 
     if (scale != config.scale) {
         scale = config.scale;
@@ -361,7 +377,7 @@ static void paused_loop(void) {
         SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
     }
 
-    SDL_UpdateTexture(ui_texture, NULL, ui_pixels_buffer, ui_texture_pitch);
+    SDL_UpdateTexture(ui_texture, NULL, ui->pixels, ui_texture_pitch);
     SDL_RenderCopy(renderer, ui_texture, NULL, NULL);
 
     SDL_RenderPresent(renderer);
@@ -381,6 +397,113 @@ static void loop(void) {
     emulator_run_cycles(emu, GB_CPU_CYCLES_PER_FRAME * config.speed);
 }
 
+
+
+
+
+
+
+
+static void choose_scale(menu_entry_t *entry) {
+    config.scale = entry->choices.position + 2;
+}
+
+static void choose_speed(menu_entry_t *entry) {
+    config.speed = (entry->choices.position * 0.5f) + 1;
+    if (emu)
+        emulator_set_apu_speed(emu, config.speed);
+}
+
+static void choose_sound(menu_entry_t *entry) {
+    config.sound = entry->choices.position * 0.25f;
+    if (emu)
+        emulator_set_apu_sound_level(emu, config.sound);
+}
+
+static void choose_color(menu_entry_t *entry) {
+    config.color_palette = entry->choices.position;
+    if (emu) {
+        emulator_update_pixels_with_palette(emu, config.color_palette);
+        emulator_set_color_palette(emu, config.color_palette);
+    }
+}
+
+static void choose_mode(menu_entry_t *entry) {
+    config.mode = entry->choices.position;
+    if (!emu) {
+        EM_ASM({
+            setTheme($0);
+        }, config.mode);
+    }
+}
+
+static void open_rom(menu_entry_t *entry) {
+    EM_ASM(
+        var file_selector = document.createElement('input');
+        file_selector.setAttribute('type', 'file');
+        file_selector.setAttribute('onchange','openFile(event)');
+        file_selector.setAttribute('accept','.gb,.gbc'); // optional - limit accepted file types
+        file_selector.click();
+    );
+}
+
+static void reset_rom(menu_entry_t *entry) {
+    gbmulator_reset();
+}
+
+
+menu_t options_menu = {
+    .title = "Options",
+    .length = 6,
+    .entries = {
+        { "Scale:      | 2x, 3x , 4x ", UI_CHOICE, .choices = { choose_scale, 3, 0 } },
+        { "Speed:      |1.0x,1.5x,2.0x,2.5x,3.0x,3.5x,4.0x", UI_CHOICE, .choices = { choose_speed, 7, 0 } },
+        { "Sound:      | OFF, 25%, 50%, 75%,100%", UI_CHOICE, .choices = { choose_sound, 5, 0 } },
+        { "Color:      |gray,orig", UI_CHOICE, .choices = { choose_color, 2, 0 } },
+        { "Mode:       | DMG, CGB", UI_CHOICE, .choices = { choose_mode, 2, 0 } },
+        { "Back...", UI_BACK }
+    }
+};
+
+menu_t keybindings_menu = {
+    .title = "Keybindings",
+    .length = 9,
+    .entries = {
+        { "LEFT:", UI_KEY_SETTER, .setter.config_key = &config.left },
+        { "RIGHT:", UI_KEY_SETTER, .setter.config_key = &config.right },
+        { "UP:", UI_KEY_SETTER, .setter.config_key = &config.up },
+        { "DOWN:", UI_KEY_SETTER, .setter.config_key = &config.down },
+        { "A:", UI_KEY_SETTER, .setter.config_key = &config.a },
+        { "B:", UI_KEY_SETTER, .setter.config_key = &config.b },
+        { "START:", UI_KEY_SETTER, .setter.config_key = &config.start },
+        { "SELECT:", UI_KEY_SETTER, .setter.config_key = &config.select },
+        { "Back...", UI_BACK }
+    }
+};
+
+menu_t main_menu = {
+    .title = "GBmulator",
+    .length = 5,
+    .entries = {
+        { "Resume", UI_ACTION, .disabled = 1, .action = gbmulator_unpause },
+        { "Open ROM...", UI_ACTION, .action = open_rom },
+        { "Reset ROM", UI_ACTION, .disabled = 1, .action = reset_rom },
+        { "Options...", UI_SUBMENU, .submenu = &options_menu },
+        { "Keybindings...", UI_SUBMENU, .submenu = &keybindings_menu },
+    }
+};
+
+
+
+
+
+
+
+
+
+
+
+
 int main(int argc, char **argv) {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
 
@@ -388,7 +511,22 @@ int main(int argc, char **argv) {
     emu = NULL;
     rom_title = NULL;
 
-    ui_pixels_buffer = ui_init();
+
+
+
+
+    ui = ui_init(&main_menu, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    options_menu.entries[0].choices.position = config.scale - 2;
+    options_menu.entries[1].choices.position = config.speed / 0.5f - 2;
+    options_menu.entries[2].choices.position = config.sound * 4;
+    options_menu.entries[3].choices.position = config.color_palette;
+    options_menu.entries[4].choices.position = config.mode;
+    options_menu.entries[4].choices.description = xmalloc(16);
+    snprintf(options_menu.entries[4].choices.description, 16, "Effect on reset");
+
+
+
+
 
     scale = config.scale;
 

@@ -168,8 +168,7 @@ void config_save(const char* config_path) {
     #ifdef __EMSCRIPTEN__
     char buf[512];
     snprintf(buf, sizeof(buf),
-        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%s\nipv6=%d\nmptcp=%d\n" \
-        "left=%s\nright=%s\nup=%s\ndown=%s\na=%s\nb=%s\nstart=%s\nselect=%s\n",
+        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%s\nipv6=%d\nmptcp=%d\n",
         config.mode,
         config.scale,
         config.speed,
@@ -178,16 +177,17 @@ void config_save(const char* config_path) {
         config.link_host,
         config.link_port,
         config.is_ipv6,
-        config.mptcp_enabled,
-        SDL_GetKeyName(config.left),
-        SDL_GetKeyName(config.right),
-        SDL_GetKeyName(config.up),
-        SDL_GetKeyName(config.down),
-        SDL_GetKeyName(config.a),
-        SDL_GetKeyName(config.b),
-        SDL_GetKeyName(config.start),
-        SDL_GetKeyName(config.select)
+        config.mptcp_enabled
     );
+
+    snprintf(&buf[strlen(buf)], sizeof(buf), "left=%s\n", SDL_GetKeyName(config.left));
+    snprintf(&buf[strlen(buf)], sizeof(buf), "right=%s\n", SDL_GetKeyName(config.right));
+    snprintf(&buf[strlen(buf)], sizeof(buf), "up=%s\n", SDL_GetKeyName(config.up));
+    snprintf(&buf[strlen(buf)], sizeof(buf), "down=%s\n", SDL_GetKeyName(config.down));
+    snprintf(&buf[strlen(buf)], sizeof(buf), "a=%s\n", SDL_GetKeyName(config.a));
+    snprintf(&buf[strlen(buf)], sizeof(buf), "b=%s\n", SDL_GetKeyName(config.b));
+    snprintf(&buf[strlen(buf)], sizeof(buf), "start=%s\n", SDL_GetKeyName(config.start));
+    snprintf(&buf[strlen(buf)], sizeof(buf), "select=%s\n", SDL_GetKeyName(config.select));
 
     EM_ASM({
         localStorage.setItem(UTF8ToString($0), UTF8ToString($1));
@@ -202,8 +202,7 @@ void config_save(const char* config_path) {
     }
 
     fprintf(f,
-        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%s\nipv6=%d\nmptcp=%d\n" \
-        "left=%s\nright=%s\nup=%s\ndown=%s\na=%s\nb=%s\nstart=%s\nselect=%s\n",
+        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%s\nipv6=%d\nmptcp=%d\n",
         config.mode,
         config.scale,
         config.speed,
@@ -212,16 +211,18 @@ void config_save(const char* config_path) {
         config.link_host,
         config.link_port,
         config.is_ipv6,
-        config.mptcp_enabled,
-        SDL_GetKeyName(config.left),
-        SDL_GetKeyName(config.right),
-        SDL_GetKeyName(config.up),
-        SDL_GetKeyName(config.down),
-        SDL_GetKeyName(config.a),
-        SDL_GetKeyName(config.b),
-        SDL_GetKeyName(config.start),
-        SDL_GetKeyName(config.select)
+        config.mptcp_enabled
     );
+
+    // separate fprintfs as SDL_GetKeyName returns a pointer which contents get overwritten at each call
+    fprintf(f, "left=%s\n", SDL_GetKeyName(config.left));
+    fprintf(f, "right=%s\n", SDL_GetKeyName(config.right));
+    fprintf(f, "up=%s\n", SDL_GetKeyName(config.up));
+    fprintf(f, "down=%s\n", SDL_GetKeyName(config.down));
+    fprintf(f, "a=%s\n", SDL_GetKeyName(config.a));
+    fprintf(f, "b=%s\n", SDL_GetKeyName(config.b));
+    fprintf(f, "start=%s\n", SDL_GetKeyName(config.start));
+    fprintf(f, "select=%s\n", SDL_GetKeyName(config.select));
 
     printf("Saving config to %s\n", config_path);
 

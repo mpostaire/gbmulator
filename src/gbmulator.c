@@ -18,6 +18,10 @@
 // make audio sync to video (effectively replacing the audio sdl_delay by the vsync delay)
 // TODO a cpu_step which do only 1 cycle at a time instead of instructions can improve audio syncing because a frame will always be the same ammount of cycles
 
+
+// TODO platform dir with common, desktop and web subdirs containing their relevant code
+
+
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
 SDL_bool is_rom_loaded = SDL_FALSE;
@@ -290,11 +294,7 @@ void gbmulator_load_cartridge(char *path) {
 
 
 static void choose_scale(menu_entry_t *entry) {
-    #ifdef __EMSCRIPTEN__
-    config.scale = entry->choices.position + 2;
-    #else
     config.scale = entry->choices.position;
-    #endif
 }
 
 static void choose_speed(menu_entry_t *entry) {
@@ -319,13 +319,6 @@ static void choose_color(menu_entry_t *entry) {
 
 static void choose_mode(menu_entry_t *entry) {
     config.mode = entry->choices.position;
-    #ifdef __EMSCRIPTEN__
-    if (!emu) {
-        EM_ASM({
-            setTheme($0);
-        }, config.mode);
-    }
-    #endif
 }
 
 static void choose_link_mode(menu_entry_t *entry) {
@@ -371,15 +364,6 @@ static void start_link(menu_entry_t *entry) {
 }
 
 static void open_rom(menu_entry_t *entry) {
-    #ifdef __EMSCRIPTEN__
-    EM_ASM(
-        var file_selector = document.createElement('input');
-        file_selector.setAttribute('type', 'file');
-        file_selector.setAttribute('onchange','openFile(event)');
-        file_selector.setAttribute('accept','.gb,.gbc'); // optional - limit accepted file types
-        file_selector.click();
-    );
-    #else
     char filepath[1024] = { 0 };
     FILE *f = popen("zenity --file-selection", "r");
     if (!f) {
@@ -391,15 +375,10 @@ static void open_rom(menu_entry_t *entry) {
     filepath[strcspn(filepath, "\r\n")] = '\0';
     if (strlen(filepath))
         gbmulator_load_cartridge(filepath);
-    #endif
 }
 
 static void reset_rom(menu_entry_t *entry) {
-    #ifdef __EMSCRIPTEN__
-    gbmulator_reset();
-    #else
     gbmulator_load_cartridge(NULL);
-    #endif
 }
 
 
@@ -477,11 +456,7 @@ int main(int argc, char **argv) {
 
 
     ui = ui_init(&main_menu, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    #ifdef __EMSCRIPTEN__
-    options_menu.entries[0].choices.position = config.scale - 2;
-    #else
     options_menu.entries[0].choices.position = config.scale;
-    #endif
     options_menu.entries[1].choices.position = config.speed / 0.5f - 2;
     options_menu.entries[2].choices.position = config.sound * 4;
     options_menu.entries[3].choices.position = config.color_palette;

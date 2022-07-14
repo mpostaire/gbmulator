@@ -137,7 +137,7 @@ int link_connect_to_server(emulator_t *emu, const char *address, const char *por
         if ((link->other_sfd = socket(res->ai_family, res->ai_socktype | SOCK_NONBLOCK, mptcp_enabled ? IPPROTO_MPTCP : res->ai_protocol)) == -1)
             continue;
 
-        int ret = connect(link->other_sfd, res->ai_addr, res->ai_addrlen);
+        ret = connect(link->other_sfd, res->ai_addr, res->ai_addrlen);
         if (ret == -1 && errno != EINPROGRESS) {
 
         } else {

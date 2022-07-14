@@ -355,6 +355,26 @@ static void delete_char_at(char **text, byte_t n) {
     (*text)[i] = '\0';
 }
 
+
+
+
+
+
+
+// TODO universal ui_press function that first converts keyboard/controller inputs into ui inputs
+// needs a controller to test so this needs to wait until I can get my controller back
+typedef enum {
+    VALIDATE, // enter menu, activate action entry, etc.
+    CANCEL, // leave menu
+    LEFT,
+    RIGHT,
+    UP,
+    DOWN,
+} ui_input_t;
+
+
+
+
 void ui_press_joypad(ui_t *ui, joypad_button_t key) {
     int new_pos, new_cursor, len;
     menu_entry_t *entry = &ui->current_menu->entries[ui->current_menu->position];
@@ -429,15 +449,6 @@ static void ui_press(ui_t *ui, int key, int repeat, int is_controller) {
 
     int new_pos, new_cursor, len;
     switch (key) {
-    // TODO
-    // case SDLK_PAUSE:
-    // case SDLK_ESCAPE:
-    //     if (!repeat) {
-    //         ui->on_hide();
-    //         ui->current_menu = ui->root_menu;
-    //         ui_set_position(ui, 0, 0);
-    //     }
-    //     break;
     case JOYPAD_RIGHT:
     case JOYPAD_LEFT:
         switch (ui->current_menu->entries[ui->current_menu->position].type) {
@@ -540,13 +551,6 @@ void ui_keyboard_press(ui_t *ui, SDL_KeyboardEvent *keyevent) {
 }
 
 void ui_controller_press(ui_t *ui, int button) {
-    // TODO
-    // if (button == SDL_CONTROLLER_BUTTON_GUIDE) {
-    //     ui->on_hide();
-    //     ui->current_menu = ui->root_menu;
-    //     ui_set_position(ui, 0, 0);
-    //     return;
-    // }
     ui_press(ui, sdl_controller_to_joypad(button), 0, 1);
 }
 
