@@ -6,27 +6,31 @@ LDLIBS=-lSDL2
 CC=gcc
 EXEC=gbmulator
 
-# exclude $(SRC)/platform/desktop/* if 'make web' or 'make debug_web' is called, else exclude $(SRC)/platform/web/*
+# exclude $(SDIR)/platform/desktop/* if 'make web' or 'make debug_web' is called, else exclude $(SDIR)/platform/web/*
 ifneq (,$(findstring web,$(MAKECMDGOALS)))
 EXCLUDES:=$(wildcard $(SDIR)/platform/desktop/*)
+PLATFORM_ODIR=$(ODIR)/web
 else
 EXCLUDES:=$(wildcard $(SDIR)/platform/web/*)
+PLATFORM_ODIR=$(ODIR)/desktop
 endif
 
 # recursive wildcard that goes into all subdirectories
 rwildcard=$(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
 SRC=$(filter-out $(EXCLUDES),$(call rwildcard,$(SDIR),*.c))
-OBJ=$(SRC:$(SDIR)/%.c=$(ODIR)/%.o)
+OBJ=$(SRC:$(SDIR)/%.c=$(PLATFORM_ODIR)/%.o)
 
 HEADERS=$(call rwildcard,$(IDIR),*.h)
-HEADERS:=$(HEADERS:$(IDIR)/%=$(ODIR)/%)
-# ODIR and its subdirectories structure to mkdir if they don't exist
-ODIR_STRUCTURE:=$(sort $(foreach d,$(OBJ) $(HEADERS),$(subst /$(lastword $(subst /, ,$d)),,$d)))
+HEADERS:=$(HEADERS:$(IDIR)/%=$(PLATFORM_ODIR)/%)
+# PLATFORM_ODIR and its subdirectories structure to mkdir if they don't exist
+PLATFORM_ODIR_STRUCTURE:=$(sort $(foreach d,$(OBJ) $(HEADERS),$(subst /$(lastword $(subst /, ,$d)),,$d)))
 
 ICONDIR=icons
 ICONS=$(ICONDIR)/128x128/${EXEC}.png $(ICONDIR)/64x64/${EXEC}.png $(ICONDIR)/48x48/${EXEC}.png $(ICONDIR)/32x32/${EXEC}.png $(ICONDIR)/16x16/${EXEC}.png
 
-all: $(ODIR_STRUCTURE) $(EXEC) $(ICONS)
+all: desktop
+
+desktop: $(PLATFORM_ODIR_STRUCTURE) $(EXEC) $(ICONS)
 
 debug: CFLAGS+=-g -O0
 debug: all
@@ -34,7 +38,7 @@ debug: all
 web: CC:=emcc
 web: LDLIBS:=
 web: CFLAGS+=-O3 -sUSE_SDL=2
-web: $(ODIR_STRUCTURE) docs docs/index.html $(ICONS)
+web: $(PLATFORM_ODIR_STRUCTURE) docs docs/index.html $(ICONS)
 
 debug_web: web
 	emrun docs/index.html
@@ -45,11 +49,11 @@ docs/index.html: $(SDIR)/platform/web/template.html $(OBJ)
 $(EXEC): $(OBJ)
 	$(CC) -o $(EXEC) $^ $(CFLAGS) $(LDLIBS)
 
-$(ODIR)/%.o: $(SDIR)/%.c
+$(PLATFORM_ODIR)/%.o: $(SDIR)/%.c
 	$(CC) -o $@ $< $(CFLAGS) -c -MMD
 	$(CC) -o $@ -c $< $(CFLAGS) $(LDLIBS)
 
-$(ODIR_STRUCTURE):
+$(PLATFORM_ODIR_STRUCTURE):
 	mkdir -p $@
 
 docs:
@@ -60,7 +64,7 @@ $(ICONS): $(ICONDIR)/${EXEC}.svg
 	convert -background none -resize $(patsubst $(ICONDIR)/%/${EXEC}.png,%,$@) $^ $(ICONDIR)/$(patsubst $(ICONDIR)/%/${EXEC}.png,%,$@)/${EXEC}.png
 	[ $(patsubst $(ICONDIR)/%/${EXEC}.png,%,$@) = 16x16 ] && cp $(ICONDIR)/16x16/${EXEC}.png docs/favicon.png || true
 
-run: all
+run: desktop
 	./$(EXEC) "roms/tests/cgb-acid2.gbc"
 
 check: $(SDIR)/**/*.c
@@ -92,6 +96,6 @@ uninstall:
 	gtk-update-icon-cache
 	update-desktop-database
 
--include $(foreach d,$(ODIR_STRUCTURE),$d/*.d)
+-include $(foreach d,$(PLATFORM_ODIR_STRUCTURE),$d/*.d)
 
 .PHONY: all clean run install uninstall debug web debug_web
