@@ -117,6 +117,43 @@ static void save(void) {
     free(save_data);
 }
 
+void load_cartridge(const byte_t *rom_data, size_t rom_size, char *new_rom_title) {
+    emulator_t *new_emu = emulator_init_from_data(config.mode, rom_data, rom_size, ppu_vblank_cb, apu_samples_ready_cb);
+    if (!new_emu) return;
+
+    if (emu) {
+        save();
+        free(rom_title);
+        emulator_quit(emu);
+    }
+    rom_title = new_rom_title;
+    emu = new_emu;
+
+    size_t save_length;
+    unsigned char *save = local_storage_get_item(rom_title, &save_length, 1);
+    if (save) {
+        emulator_load_save_data(emu, save, save_length);
+        free(save);
+    }
+
+    emulator_set_apu_speed(emu, config.speed);
+    emulator_set_apu_sound_level(emu, config.sound);
+    emulator_set_color_palette(emu, config.color_palette);
+
+    snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
+    SDL_SetWindowTitle(window, window_title);
+
+    is_rom_loaded = SDL_TRUE;
+    is_paused = SDL_FALSE;
+
+    ui->root_menu->entries[0].disabled = 0; // enable resume menu entry
+    ui->root_menu->entries[2].disabled = 0; // enable reset rom menu entry
+
+    EM_ASM({
+        setTheme($0);
+    }, config.mode);
+}
+
 EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
     if (emu) {
         save();
@@ -160,43 +197,8 @@ EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {
         if (new_rom_title[i] == ' ')
             new_rom_title[i] = '_';
 
-    emulator_t *new_emu = emulator_init_from_data(config.mode, rom_data, rom_size, ppu_vblank_cb, apu_samples_ready_cb);
-    if (!new_emu) return;
-
-    if (emu) {
-        save();
-        free(rom_title);
-        emulator_quit(emu);
-    }
-    rom_title = new_rom_title;
-    emu = new_emu;
-
-    size_t save_length;
-    unsigned char *save = local_storage_get_item(rom_title, &save_length, 1);
-    if (save) {
-        emulator_load_save_data(emu, save, save_length);
-        free(save);
-    }
-
-    emulator_set_apu_speed(emu, config.speed);
-    emulator_set_apu_sound_level(emu, config.sound);
-    emulator_set_color_palette(emu, config.color_palette);
-
-    snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
-    SDL_SetWindowTitle(window, window_title);
-
-    is_rom_loaded = SDL_TRUE;
-    is_paused = SDL_FALSE;
-
-    ui->root_menu->entries[0].disabled = 0; // enable resume menu entry
-    ui->root_menu->entries[2].disabled = 0; // enable reset rom menu entry
-
+    load_cartridge(rom_data, rom_size, new_rom_title);
     free(rom_data);
-    rom_size = 0;
-
-    EM_ASM({
-        setTheme($0);
-    }, config.mode);
 }
 
 void gbmulator_reset(void) {
@@ -213,43 +215,8 @@ void gbmulator_reset(void) {
         if (new_rom_title[i] == ' ')
             new_rom_title[i] = '_';
 
-    emulator_t *new_emu = emulator_init_from_data(config.mode, rom_data, rom_size, ppu_vblank_cb, apu_samples_ready_cb);
-    if (!new_emu) return;
-
-    if (emu) {
-        save();
-        free(rom_title);
-        emulator_quit(emu);
-    }
-    rom_title = new_rom_title;
-    emu = new_emu;
-
-    size_t save_length;
-    unsigned char *save = local_storage_get_item(rom_title, &save_length, 1);
-    if (save) {
-        emulator_load_save_data(emu, save, save_length);
-        free(save);
-    }
-
-    emulator_set_apu_speed(emu, config.speed);
-    emulator_set_apu_sound_level(emu, config.sound);
-    emulator_set_color_palette(emu, config.color_palette);
-
-    snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
-    SDL_SetWindowTitle(window, window_title);
-
-    is_rom_loaded = SDL_TRUE;
-    is_paused = SDL_FALSE;
-
-    ui->root_menu->entries[0].disabled = 0; // enable resume menu entry
-    ui->root_menu->entries[2].disabled = 0; // enable reset rom menu entry
-
+    load_cartridge(rom_data, rom_size, new_rom_title);
     free(rom_data);
-    rom_size = 0;
-
-    EM_ASM({
-        setTheme($0);
-    }, config.mode);
 }
 
 static void handle_input(void) {
