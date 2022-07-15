@@ -4,16 +4,13 @@ IDIR=$(SDIR)
 CFLAGS=-std=gnu11 -Wall -O2 -I$(IDIR)
 LDLIBS=-lSDL2
 CC=gcc
-MAIN=gbmulator
-EXEC=$(MAIN)
+EXEC=gbmulator
 
-# exclude $(MAIN).c if 'make wasm' or 'make debug_wasm' is called, else exclude $(SDIR)/$(MAIN)_wasm.c
-ifneq (,$(findstring wasm,$(MAKECMDGOALS)))
-EXCLUDES:=$(SDIR)/$(MAIN).c
-else ifneq (,$(findstring debug_wasm,$(MAKECMDGOALS)))
-EXCLUDES:=$(SDIR)/$(MAIN).c
+# exclude $(SRC)/platform/desktop/* if 'make web' or 'make debug_web' is called, else exclude $(SRC)/platform/web/*
+ifneq (,$(findstring web,$(MAKECMDGOALS)))
+EXCLUDES:=$(wildcard $(SDIR)/platform/desktop/*)
 else
-EXCLUDES:=$(SDIR)/gbmulator_wasm.c $(SDIR)/base64.c
+EXCLUDES:=$(wildcard $(SDIR)/platform/web/*)
 endif
 
 # recursive wildcard that goes into all subdirectories
@@ -26,26 +23,23 @@ HEADERS:=$(HEADERS:$(IDIR)/%=$(ODIR)/%)
 # ODIR and its subdirectories structure to mkdir if they don't exist
 ODIR_STRUCTURE:=$(sort $(foreach d,$(OBJ) $(HEADERS),$(subst /$(lastword $(subst /, ,$d)),,$d)))
 
-all: $(ODIR_STRUCTURE) $(MAIN)
+all: $(ODIR_STRUCTURE) $(EXEC)
 
 debug: CFLAGS+=-g -O0
 debug: all
 
-wasm: CC:=emcc
-wasm: LDLIBS:=
-wasm: CFLAGS+=-O3 -sUSE_SDL=2
-wasm: $(ODIR_STRUCTURE) docs index.html
+web: CC:=emcc
+web: LDLIBS:=
+web: CFLAGS+=-O3 -sUSE_SDL=2
+web: $(ODIR_STRUCTURE) docs docs/index.html
 
-debug_wasm: wasm
+debug_web: web
 	emrun docs/index.html
 
-index.html: $(OBJ) template.html
-	$(CC) -o docs/$@ $(OBJ) $(CFLAGS) -sINITIAL_MEMORY=32MB -sWASM=1 -sUSE_SDL=2 -sEXPORTED_RUNTIME_METHODS=[ccall] -sASYNCIFY --shell-file template.html -lidbfs.js
+docs/index.html: $(SDIR)/platform/web/template.html $(OBJ)
+	$(CC) -o $@ $(OBJ) $(CFLAGS) -sINITIAL_MEMORY=32MB -sWASM=1 -sUSE_SDL=2 -sEXPORTED_RUNTIME_METHODS=[ccall] -sASYNCIFY --shell-file $< -lidbfs.js
 
-docs:
-	mkdir -p $@
-
-$(MAIN): $(OBJ)
+$(EXEC): $(OBJ)
 	$(CC) -o $(EXEC) $^ $(CFLAGS) $(LDLIBS)
 
 $(ODIR)/%.o: $(SDIR)/%.c
@@ -55,10 +49,13 @@ $(ODIR)/%.o: $(SDIR)/%.c
 $(ODIR_STRUCTURE):
 	mkdir -p $@
 
+docs:
+	mkdir -p $@
+
 run: all
 	./$(EXEC) "roms/tests/cgb-acid2.gbc"
 
-check: $(SDIR)/*.c
+check: $(SDIR)/**/*.c
 	cppcheck --enable=all --suppress=missingIncludeSystem $(SDIR)
 
 clean:
@@ -69,10 +66,12 @@ cleaner: clean
 
 install:
 	install -m 0755 $(EXEC) /usr/bin
+	install -m 0644 $(SDIR)/platform/desktop/gbmulator.desktop /usr/share/applications
 
 uninstall:
 	rm -f /usr/bin/$(EXEC)
+	rm -f /usr/share/applications/gbmulator.desktop
 
 -include $(foreach d,$(ODIR_STRUCTURE),$d/*.d)
 
-.PHONY: all clean run install uninstall debug wasm debug_wasm
+.PHONY: all clean run install uninstall debug web debug_web

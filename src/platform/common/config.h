@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stddef.h>
 #include <SDL2/SDL.h>
 
 #include "emulator/emulator.h"
@@ -27,6 +28,6 @@ struct config {
 
 int config_verif_key(SDL_Keycode key);
 
-void config_load(const char* config_path);
+void config_load_from_buffer(const char *buf);
 
-void config_save(const char* config_path);
+char *config_save_to_buffer(size_t *len);

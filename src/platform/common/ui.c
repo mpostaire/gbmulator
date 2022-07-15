@@ -1,15 +1,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef __EMSCRIPTEN__
-#include <emscripten.h>
-#include "gbmulator_wasm.h"
-#else
-#include "gbmulator.h"
-#endif
-
 #include "config.h"
 #include "ui.h"
+#include "utils.h"
 #include "emulator/emulator.h"
 
 // TODO fix this file (it's ugly code with lots of copy pasted repetitions).

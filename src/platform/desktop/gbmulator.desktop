@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=GBmulator
+Comment=A Game Boy Color emulator with link cable support over TCP.
+Exec=gbmulator
+Icon=gbmulator
+Keywords=game;boy;gameboy;color;emulator
+Categories=Game;Emulator;
+MimeType=application/x-gameboy-rom;application/x-gameboy-color-rom

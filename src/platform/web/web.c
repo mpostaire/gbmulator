@@ -3,8 +3,9 @@
 #include <SDL2/SDL.h>
 #include <emscripten.h>
 
-#include "ui.h"
-#include "config.h"
+#include "../common/ui.h"
+#include "../common/config.h"
+#include "../common/utils.h"
 #include "emulator/emulator.h"
 #include "base64.h"
 
@@ -49,7 +50,7 @@ static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
 
-static byte_t *local_storage_get_item(const char *key, size_t *data_length) {
+static byte_t *local_storage_get_item(const char *key, size_t *data_length, byte_t decode) {
     unsigned char *data = (unsigned char *) EM_ASM_INT({
         var item = localStorage.getItem(UTF8ToString($0));
         if (item === null)
@@ -60,59 +61,60 @@ static byte_t *local_storage_get_item(const char *key, size_t *data_length) {
         stringToUTF8(item, ret, itemLength);
         return ret;
     }, key);
+
+
     if (!data) {
-        *data_length = 0;
+        if (data_length) *data_length = 0;
         return NULL;
     }
-    unsigned char *decoded_data = base64_decode(data, strlen((char *) data), data_length);
+
+    if (!decode) {
+        if (data_length) *data_length = strlen((char *) data);
+        return data;
+    }
+
+    size_t out_len;
+    unsigned char *decoded_data = base64_decode(data, strlen((char *) data), &out_len);
+    if (data_length) *data_length = out_len;
     free(data);
     return decoded_data;
 }
 
-static void local_storage_set_item(const char *key, const byte_t *data) {
-    EM_ASM({
-        localStorage.setItem(UTF8ToString($0), UTF8ToString($1));
-    }, key, data);
-}
-
-int sdl_key_to_joypad(SDL_Keycode key) {
-    if (key == config.left) return JOYPAD_LEFT;
-    if (key == config.right) return JOYPAD_RIGHT;
-    if (key == config.up) return JOYPAD_UP;
-    if (key == config.down) return JOYPAD_DOWN;
-    if (key == config.a) return JOYPAD_A;
-    if (key == config.b) return JOYPAD_B;
-    if (key == config.start) return JOYPAD_START;
-    if (key == config.select) return JOYPAD_SELECT;
-    return key;
-}
-
-int sdl_controller_to_joypad(int button) {
-    switch (button) {
-    case SDL_CONTROLLER_BUTTON_DPAD_LEFT: return JOYPAD_LEFT;
-    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return JOYPAD_RIGHT;
-    case SDL_CONTROLLER_BUTTON_DPAD_UP: return JOYPAD_UP;
-    case SDL_CONTROLLER_BUTTON_DPAD_DOWN: return JOYPAD_DOWN;
-    case SDL_CONTROLLER_BUTTON_A: return JOYPAD_A;
-    case SDL_CONTROLLER_BUTTON_B: return JOYPAD_B;
-    case SDL_CONTROLLER_BUTTON_START:
-    case SDL_CONTROLLER_BUTTON_X:
-        return JOYPAD_START;
-    case SDL_CONTROLLER_BUTTON_BACK:
-    case SDL_CONTROLLER_BUTTON_Y:
-        return JOYPAD_SELECT;
+static void local_storage_set_item(const char *key, const byte_t *data, byte_t encode, size_t len) {
+    if (encode) {
+        byte_t *encoded_data = base64_encode(data, len, NULL);
+        EM_ASM({
+            localStorage.setItem(UTF8ToString($0), UTF8ToString($1));
+        }, key, encoded_data);
+        free(encoded_data);
+    } else {
+        EM_ASM({
+            localStorage.setItem(UTF8ToString($0), UTF8ToString($1));
+        }, key, data);
     }
-    return -1;
+}
+
+void load_config(char *path) {
+    byte_t *data = local_storage_get_item(path, NULL, 0);
+    if (!data)
+        return;
+    config_load_from_buffer((const char *) data);
+    free(data);
+}
+
+static void save_config(const char *path) {
+    size_t len;
+    char *config_buf = config_save_to_buffer(&len);
+    local_storage_set_item(path, (byte_t *) config_buf, 0, len);
+    free(config_buf);
 }
 
 static void save(void) {
     size_t save_length;
     byte_t *save_data = emulator_get_save_data(emu, &save_length);
     if (!save_data) return;
-    byte_t *save = base64_encode(save_data, save_length, NULL);
-    local_storage_set_item(rom_title, save);
+    local_storage_set_item(rom_title, save_data, 1, save_length);
     free(save_data);
-    free(save);
 }
 
 EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
@@ -123,7 +125,8 @@ EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
     if (rom_title)
         free(rom_title);
 
-    config_save("config");
+    // save config
+    save_config("config");
 
     if (is_controller_present)
         SDL_GameControllerClose(pad);
@@ -150,6 +153,7 @@ EMSCRIPTEN_KEEPALIVE void on_gui_button_up(joypad_button_t button) {
         emulator_joypad_release(emu, button);
 }
 
+// TODO receive_rom_data() and gbmulator_reset() are very similar: a lot of code can be made into another function
 EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {
     char *new_rom_title = emulator_get_rom_title_from_data(rom_data, rom_size);
     for (int i = 0; i < 16; i++)
@@ -168,7 +172,7 @@ EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {
     emu = new_emu;
 
     size_t save_length;
-    unsigned char *save = local_storage_get_item(rom_title, &save_length);
+    unsigned char *save = local_storage_get_item(rom_title, &save_length, 1);
     if (save) {
         emulator_load_save_data(emu, save, save_length);
         free(save);
@@ -221,7 +225,7 @@ void gbmulator_reset(void) {
     emu = new_emu;
 
     size_t save_length;
-    unsigned char *save = local_storage_get_item(rom_title, &save_length);
+    unsigned char *save = local_storage_get_item(rom_title, &save_length, 1);
     if (save) {
         emulator_load_save_data(emu, save, save_length);
         free(save);
@@ -256,18 +260,30 @@ static void handle_input(void) {
         switch (event.type) {
         case SDL_TEXTINPUT:
             if (is_paused) {
-                if (is_rom_loaded && (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE))
-                    is_paused = SDL_FALSE;
-                else
+                if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
+                    if (is_rom_loaded) {
+                        is_paused = SDL_FALSE;
+                    } else {
+                        ui->current_menu = ui->root_menu;
+                        ui_set_position(ui, 0, 0);
+                    }
+                } else {
                     ui_text_input(ui, event.text.text);
+                }
             }
             break;
         case SDL_KEYDOWN:
             if (is_paused) {
-                if (is_rom_loaded && (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE))
-                    is_paused = SDL_FALSE;
-                else
+                if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
+                    if (is_rom_loaded) {
+                        is_paused = SDL_FALSE;
+                    } else {
+                        ui->current_menu = ui->root_menu;
+                        ui_set_position(ui, 0, 0);
+                    }
+                } else {
                     ui_keyboard_press(ui, &event.key);
+                }
                 break;
             }
             if (event.key.repeat)
@@ -291,13 +307,11 @@ static void handle_input(void) {
                 if (event.key.keysym.mod & KMOD_SHIFT) {
                     size_t savestate_length;
                     byte_t *savestate = emulator_get_state_data(emu, &savestate_length);
-                    byte_t *encoded_savestate = base64_encode(savestate, savestate_length, NULL);
-                    local_storage_set_item(savestate_path, encoded_savestate);
-                    free(encoded_savestate);
+                    local_storage_set_item(savestate_path, savestate, 1, savestate_length);
                     free(savestate);
                 } else {
                     size_t savestate_length;
-                    byte_t *savestate = local_storage_get_item(savestate_path, &savestate_length);
+                    byte_t *savestate = local_storage_get_item(savestate_path, &savestate_length, 1);
                     emulator_load_state_data(emu, savestate, savestate_length);
                     free(savestate);
                 }
@@ -313,10 +327,16 @@ static void handle_input(void) {
             break;
         case SDL_CONTROLLERBUTTONDOWN:
             if (is_paused) {
-                if (is_rom_loaded && (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE))
-                    is_paused = SDL_FALSE;
-                else
+                if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
+                    if (is_rom_loaded) {
+                        is_paused = SDL_FALSE;
+                    } else {
+                        ui->current_menu = ui->root_menu;
+                        ui_set_position(ui, 0, 0);
+                    }
+                } else {
                     ui_controller_press(ui, event.cbutton.button);
+                }
                 break;
             }
             if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
@@ -456,7 +476,7 @@ menu_t options_menu = {
     .title = "Options",
     .length = 6,
     .entries = {
-        { "Scale:      | 2x, 3x , 4x ", UI_CHOICE, .choices = { choose_scale, 3, 0 } },
+        { "Scale:      | 2x , 3x , 4x ", UI_CHOICE, .choices = { choose_scale, 3, 0 } },
         { "Speed:      |1.0x,1.5x,2.0x,2.5x,3.0x,3.5x,4.0x", UI_CHOICE, .choices = { choose_speed, 7, 0 } },
         { "Sound:      | OFF, 25%, 50%, 75%,100%", UI_CHOICE, .choices = { choose_sound, 5, 0 } },
         { "Color:      |gray,orig", UI_CHOICE, .choices = { choose_color, 2, 0 } },
@@ -505,9 +525,9 @@ menu_t main_menu = {
 
 
 int main(int argc, char **argv) {
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
-
-    config_load("config");
+    // load_config() must be called before emulator_init() and ui_init()
+    config.b = SDLK_PERIOD; // change default B key to SDLK_PERIOD as SDLK_KP_PERIOD doesn't work for web
+    load_config("config");
     emu = NULL;
     rom_title = NULL;
 
@@ -527,6 +547,8 @@ int main(int argc, char **argv) {
 
 
 
+
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
 
     scale = config.scale;
 

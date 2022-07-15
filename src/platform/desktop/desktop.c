@@ -2,8 +2,9 @@
 #include <stdio.h>
 #include <SDL2/SDL.h>
 
-#include "ui.h"
-#include "config.h"
+#include "../common/ui.h"
+#include "../common/config.h"
+#include "../common/utils.h"
 #include "emulator/emulator.h"
 
 // TODO fix pause menu when starting game link connexion while pause menu is still active (it's working but weirdly so low priority)
@@ -19,8 +20,8 @@
 // TODO a cpu_step which do only 1 cycle at a time instead of instructions can improve audio syncing because a frame will always be the same ammount of cycles
 
 
-// TODO platform dir with common, desktop and web subdirs containing their relevant code
-
+// TODO make desktop and web platforms as similar as possible (same "API": function names/signatures and calls) for better code readability  
+//      --> put the most things possible into src/platform/common/
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
@@ -48,36 +49,6 @@ static void gbmulator_exit(menu_entry_t *entry) {
 static void gbmulator_unpause(menu_entry_t *entry) {
     if (is_rom_loaded)
         is_paused = SDL_FALSE;
-}
-
-int sdl_key_to_joypad(SDL_Keycode key) {
-    if (key == config.left) return JOYPAD_LEFT;
-    if (key == config.right) return JOYPAD_RIGHT;
-    if (key == config.up) return JOYPAD_UP;
-    if (key == config.down) return JOYPAD_DOWN;
-    if (key == config.a) return JOYPAD_A;
-    if (key == config.b) return JOYPAD_B;
-    if (key == config.start) return JOYPAD_START;
-    if (key == config.select) return JOYPAD_SELECT;
-    return key;
-}
-
-int sdl_controller_to_joypad(int button) {
-    switch (button) {
-    case SDL_CONTROLLER_BUTTON_DPAD_LEFT: return JOYPAD_LEFT;
-    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return JOYPAD_RIGHT;
-    case SDL_CONTROLLER_BUTTON_DPAD_UP: return JOYPAD_UP;
-    case SDL_CONTROLLER_BUTTON_DPAD_DOWN: return JOYPAD_DOWN;
-    case SDL_CONTROLLER_BUTTON_A: return JOYPAD_A;
-    case SDL_CONTROLLER_BUTTON_B: return JOYPAD_B;
-    case SDL_CONTROLLER_BUTTON_START:
-    case SDL_CONTROLLER_BUTTON_X:
-        return JOYPAD_START;
-    case SDL_CONTROLLER_BUTTON_BACK:
-    case SDL_CONTROLLER_BUTTON_Y:
-        return JOYPAD_SELECT;
-    }
-    return -1;
 }
 
 static void ppu_vblank_cb(byte_t *pixels) {
@@ -110,6 +81,31 @@ static char *get_config_path(void) {
 
     free(xdg_config);
     return config_path;
+}
+
+void load_config(char *path) {
+    FILE *f = fopen(path, "r");
+    if (f) {
+        char buf[512];
+        fread(buf, sizeof(buf), 1, f);
+        config_load_from_buffer(buf);
+        fclose(f);
+    }
+}
+
+static void save_config(const char *path) {
+    size_t len;
+    char *config_buf = config_save_to_buffer(&len);
+    make_parent_dirs(path);
+    FILE *f = fopen(path, "w");
+    if (!f) {
+        errnoprintf("opening file");
+        free(config_buf);
+        return;
+    }
+    fwrite(config_buf, len, 1, f);
+    fclose(f);
+    free(config_buf);
 }
 
 static char *get_save_path(const char *rom_filepath) {
@@ -149,18 +145,30 @@ static void handle_input(void) {
         switch (event.type) {
         case SDL_TEXTINPUT:
             if (is_paused) {
-                if (is_rom_loaded && (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE))
-                    is_paused = SDL_FALSE;
-                else
+                if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
+                    if (is_rom_loaded) {
+                        is_paused = SDL_FALSE;
+                    } else {
+                        ui->current_menu = ui->root_menu;
+                        ui_set_position(ui, 0, 0);
+                    }
+                } else {
                     ui_text_input(ui, event.text.text);
+                }
             }
             break;
         case SDL_KEYDOWN:
             if (is_paused) {
-                if (is_rom_loaded && (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE))
-                    is_paused = SDL_FALSE;
-                else
+                if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
+                    if (is_rom_loaded) {
+                        is_paused = SDL_FALSE;
+                    } else {
+                        ui->current_menu = ui->root_menu;
+                        ui_set_position(ui, 0, 0);
+                    }
+                } else {
                     ui_keyboard_press(ui, &event.key);
+                }
                 break;
             }
             if (event.key.repeat)
@@ -195,10 +203,16 @@ static void handle_input(void) {
             break;
         case SDL_CONTROLLERBUTTONDOWN:
             if (is_paused) {
-                if (is_rom_loaded && (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE))
-                    is_paused = SDL_FALSE;
-                else
+                if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
+                    if (is_rom_loaded) {
+                        is_paused = SDL_FALSE;
+                    } else {
+                        ui->current_menu = ui->root_menu;
+                        ui_set_position(ui, 0, 0);
+                    }
+                } else {
                     ui_controller_press(ui, event.cbutton.button);
+                }
                 break;
             }
             if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
@@ -235,6 +249,10 @@ static void handle_input(void) {
     }
 }
 
+/**
+ * Load and play a cartridge. 
+ * @param path the path of the rom to load or NULL to reload the currently playing rom
+ */
 void gbmulator_load_cartridge(char *path) {
     char *rom_path;
     if (path) {
@@ -381,7 +399,6 @@ static void reset_rom(menu_entry_t *entry) {
     gbmulator_load_cartridge(NULL);
 }
 
-
 menu_t link_menu = {
     .title = "Link cable",
     .length = 7,
@@ -445,10 +462,11 @@ menu_t main_menu = {
 
 
 
+
 int main(int argc, char **argv) {
-    // must be called before emulator_init
     char *config_path = get_config_path();
-    config_load(config_path);
+    // load_config() must be called before emulator_init() and ui_init()
+    load_config(config_path);
     emu = NULL;
 
 
@@ -600,8 +618,7 @@ int main(int argc, char **argv) {
         emulator_quit(emu);
     }
 
-    config_save(config_path);
-
+    save_config(config_path);
     free(config_path);
 
     ui_free(ui);

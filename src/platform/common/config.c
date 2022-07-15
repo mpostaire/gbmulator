@@ -1,22 +1,15 @@
 #include <stdlib.h>
 #include <string.h>
-#ifdef __EMSCRIPTEN__
-#include <emscripten.h>
-#endif
 
 #include "config.h"
 #include "emulator/emulator.h"
 
+// defaults
 struct config config = {
     .mode = CGB,
     .color_palette = PPU_COLOR_PALETTE_ORIG,
-    #ifdef __EMSCRIPTEN__
     .scale = 2,
     .sound = 0.25f,
-    #else
-    .scale = 3,
-    .sound = 0.5f,
-    #endif
     .speed = 1.0f,
     .link_host = "127.0.0.1",
     .link_port = "7777",
@@ -28,11 +21,7 @@ struct config config = {
     .up = SDLK_UP,
     .down = SDLK_DOWN,
     .a = SDLK_KP_0,
-    #ifdef __EMSCRIPTEN__
-    .b = SDLK_PERIOD,
-    #else
     .b = SDLK_KP_PERIOD,
-    #endif
     .start = SDLK_KP_1,
     .select = SDLK_KP_2
 };
@@ -127,47 +116,18 @@ static void parse_config_line(const char *line) {
     }
 }
 
-void config_load(const char* config_path) {
-    #ifdef __EMSCRIPTEN__
-    unsigned char *data = (unsigned char *) EM_ASM_INT({
-        var item = localStorage.getItem(UTF8ToString($0));
-        if (item === null)
-            return null;
-        var itemLength = lengthBytesUTF8(item) + 1;
-
-        var ret = _malloc(itemLength);
-        stringToUTF8(item, ret, itemLength);
-        return ret;
-    }, config_path);
-
-    if (!data)
-        return;
-
+void config_load_from_buffer(const char *buf) {
     char *p, *temp;
-    p = strtok_r((char *) data, "\n", &temp);
+    p = strtok_r((char *) buf, "\n", &temp);
     do {
         parse_config_line(p);
     } while ((p = strtok_r(NULL, "\n", &temp)) != NULL);
-
-    free(data);
-    #else
-    FILE *f = fopen(config_path, "r");
-    if (f) {
-        printf("Loading config from %s\n", config_path);
-
-        char line[64];
-        while (fgets(line, sizeof(line), f))
-            parse_config_line(line);
-
-        fclose(f);
-    }
-    #endif
 }
 
-void config_save(const char* config_path) {
-    #ifdef __EMSCRIPTEN__
-    char buf[512];
-    snprintf(buf, sizeof(buf),
+char *config_save_to_buffer(size_t *len) {
+    char *buf = xmalloc(512);
+
+    snprintf(buf, 512,
         "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%s\nipv6=%d\nmptcp=%d\n",
         config.mode,
         config.scale,
@@ -180,52 +140,24 @@ void config_save(const char* config_path) {
         config.mptcp_enabled
     );
 
-    snprintf(&buf[strlen(buf)], sizeof(buf), "left=%s\n", SDL_GetKeyName(config.left));
-    snprintf(&buf[strlen(buf)], sizeof(buf), "right=%s\n", SDL_GetKeyName(config.right));
-    snprintf(&buf[strlen(buf)], sizeof(buf), "up=%s\n", SDL_GetKeyName(config.up));
-    snprintf(&buf[strlen(buf)], sizeof(buf), "down=%s\n", SDL_GetKeyName(config.down));
-    snprintf(&buf[strlen(buf)], sizeof(buf), "a=%s\n", SDL_GetKeyName(config.a));
-    snprintf(&buf[strlen(buf)], sizeof(buf), "b=%s\n", SDL_GetKeyName(config.b));
-    snprintf(&buf[strlen(buf)], sizeof(buf), "start=%s\n", SDL_GetKeyName(config.start));
-    snprintf(&buf[strlen(buf)], sizeof(buf), "select=%s\n", SDL_GetKeyName(config.select));
+    // separate snprintfs as SDL_GetKeyName() returns a pointer which contents get overwritten at each call
+    *len = strlen(buf);
+    snprintf(&buf[*len], 512 - *len, "left=%s\n", SDL_GetKeyName(config.left));
+    *len = strlen(buf);
+    snprintf(&buf[*len], 512 - *len, "right=%s\n", SDL_GetKeyName(config.right));
+    *len = strlen(buf);
+    snprintf(&buf[*len], 512 - *len, "up=%s\n", SDL_GetKeyName(config.up));
+    *len = strlen(buf);
+    snprintf(&buf[*len], 512 - *len, "down=%s\n", SDL_GetKeyName(config.down));
+    *len = strlen(buf);
+    snprintf(&buf[*len], 512 - *len, "a=%s\n", SDL_GetKeyName(config.a));
+    *len = strlen(buf);
+    snprintf(&buf[*len], 512 - *len, "b=%s\n", SDL_GetKeyName(config.b));
+    *len = strlen(buf);
+    snprintf(&buf[*len], 512 - *len, "start=%s\n", SDL_GetKeyName(config.start));
+    *len = strlen(buf);
+    snprintf(&buf[*len], 512 - *len, "select=%s\n", SDL_GetKeyName(config.select));
+    *len = strlen(buf);
 
-    EM_ASM({
-        localStorage.setItem(UTF8ToString($0), UTF8ToString($1));
-    }, config_path, buf);
-    #else
-    make_parent_dirs(config_path);
-
-    FILE *f = fopen(config_path, "w");
-    if (!f) {
-        errnoprintf("opening file");
-        return;
-    }
-
-    fprintf(f,
-        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%s\nipv6=%d\nmptcp=%d\n",
-        config.mode,
-        config.scale,
-        config.speed,
-        config.sound,
-        config.color_palette,
-        config.link_host,
-        config.link_port,
-        config.is_ipv6,
-        config.mptcp_enabled
-    );
-
-    // separate fprintfs as SDL_GetKeyName returns a pointer which contents get overwritten at each call
-    fprintf(f, "left=%s\n", SDL_GetKeyName(config.left));
-    fprintf(f, "right=%s\n", SDL_GetKeyName(config.right));
-    fprintf(f, "up=%s\n", SDL_GetKeyName(config.up));
-    fprintf(f, "down=%s\n", SDL_GetKeyName(config.down));
-    fprintf(f, "a=%s\n", SDL_GetKeyName(config.a));
-    fprintf(f, "b=%s\n", SDL_GetKeyName(config.b));
-    fprintf(f, "start=%s\n", SDL_GetKeyName(config.start));
-    fprintf(f, "select=%s\n", SDL_GetKeyName(config.select));
-
-    printf("Saving config to %s\n", config_path);
-
-    fclose(f);
-    #endif
+    return buf;
 }
