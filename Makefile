@@ -23,7 +23,10 @@ HEADERS:=$(HEADERS:$(IDIR)/%=$(ODIR)/%)
 # ODIR and its subdirectories structure to mkdir if they don't exist
 ODIR_STRUCTURE:=$(sort $(foreach d,$(OBJ) $(HEADERS),$(subst /$(lastword $(subst /, ,$d)),,$d)))
 
-all: $(ODIR_STRUCTURE) $(EXEC)
+ICONDIR=icons
+ICONS=$(ICONDIR)/128x128/${EXEC}.png $(ICONDIR)/64x64/${EXEC}.png $(ICONDIR)/48x48/${EXEC}.png $(ICONDIR)/32x32/${EXEC}.png $(ICONDIR)/16x16/${EXEC}.png
+
+all: $(ODIR_STRUCTURE) $(EXEC) $(ICONS)
 
 debug: CFLAGS+=-g -O0
 debug: all
@@ -31,7 +34,7 @@ debug: all
 web: CC:=emcc
 web: LDLIBS:=
 web: CFLAGS+=-O3 -sUSE_SDL=2
-web: $(ODIR_STRUCTURE) docs docs/index.html
+web: $(ODIR_STRUCTURE) docs docs/index.html $(ICONS)
 
 debug_web: web
 	emrun docs/index.html
@@ -52,6 +55,11 @@ $(ODIR_STRUCTURE):
 docs:
 	mkdir -p $@
 
+$(ICONS): $(ICONDIR)/${EXEC}.svg
+	mkdir -p $(ICONDIR)/$(patsubst $(ICONDIR)/%/${EXEC}.png,%,$@)
+	convert -background none -resize $(patsubst $(ICONDIR)/%/${EXEC}.png,%,$@) $^ $(ICONDIR)/$(patsubst $(ICONDIR)/%/${EXEC}.png,%,$@)/${EXEC}.png
+	[ $(patsubst $(ICONDIR)/%/${EXEC}.png,%,$@) = 16x16 ] && cp $(ICONDIR)/16x16/${EXEC}.png docs/favicon.png || true
+
 run: all
 	./$(EXEC) "roms/tests/cgb-acid2.gbc"
 
@@ -59,18 +67,30 @@ check: $(SDIR)/**/*.c
 	cppcheck --enable=all --suppress=missingIncludeSystem $(SDIR)
 
 clean:
-	rm -rf $(ODIR) index.{html,js,wasm}
+	rm -rf $(ODIR)
 
 cleaner: clean
 	rm -f $(EXEC)
 
 install:
 	install -m 0755 $(EXEC) /usr/bin
-	install -m 0644 $(SDIR)/platform/desktop/gbmulator.desktop /usr/share/applications
+	install -m 0644 $(SDIR)/platform/desktop/$(EXEC).desktop /usr/share/applications
+	install -m 0644 $(ICONDIR)/${EXEC}.svg /usr/share/icons/hicolor/scalable/apps
+	install -m 0644 $(ICONDIR)/128x128/${EXEC}.png /usr/share/icons/hicolor/128x128/apps
+	install -m 0644 $(ICONDIR)/64x64/${EXEC}.png /usr/share/icons/hicolor/64x64/apps
+	install -m 0644 $(ICONDIR)/48x48/${EXEC}.png /usr/share/icons/hicolor/48x48/apps
+	install -m 0644 $(ICONDIR)/32x32/${EXEC}.png /usr/share/icons/hicolor/32x32/apps
+	install -m 0644 $(ICONDIR)/16x16/${EXEC}.png /usr/share/icons/hicolor/16x16/apps
+	gtk-update-icon-cache
+	update-desktop-database
 
 uninstall:
 	rm -f /usr/bin/$(EXEC)
-	rm -f /usr/share/applications/gbmulator.desktop
+	rm -f /usr/share/applications/$(EXEC).desktop
+	rm -f /usr/share/icons/hicolor/scalable/apps/$(EXEC).svg
+	rm -f /usr/share/icons/hicolor/{128x128,64x64,48x48,32x32,16x16}/apps/$(EXEC).png
+	gtk-update-icon-cache
+	update-desktop-database
 
 -include $(foreach d,$(ODIR_STRUCTURE),$d/*.d)
 
