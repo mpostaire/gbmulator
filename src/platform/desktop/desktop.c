@@ -19,10 +19,6 @@
 // make audio sync to video (effectively replacing the audio sdl_delay by the vsync delay)
 // TODO a cpu_step which do only 1 cycle at a time instead of instructions can improve audio syncing because a frame will always be the same ammount of cycles
 
-
-// TODO make desktop and web platforms as similar as possible (same "API": function names/signatures and calls) for better code readability  
-//      --> put the most things possible into src/platform/common/
-
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
 SDL_bool is_rom_loaded = SDL_FALSE;
@@ -253,7 +249,7 @@ static void handle_input(void) {
  * Load and play a cartridge. 
  * @param path the path of the rom to load or NULL to reload the currently playing rom
  */
-void gbmulator_load_cartridge(char *path) {
+void load_cartridge(char *path) {
     char *rom_path;
     if (path) {
         rom_path = path;
@@ -392,11 +388,11 @@ static void open_rom(menu_entry_t *entry) {
     pclose(f);
     filepath[strcspn(filepath, "\r\n")] = '\0';
     if (strlen(filepath))
-        gbmulator_load_cartridge(filepath);
+        load_cartridge(filepath);
 }
 
 static void reset_rom(menu_entry_t *entry) {
-    gbmulator_load_cartridge(NULL);
+    load_cartridge(NULL);
 }
 
 menu_t link_menu = {
@@ -523,7 +519,7 @@ int main(int argc, char **argv) {
     );
 
     if (argc == 2)
-        gbmulator_load_cartridge(argv[1]);
+        load_cartridge(argv[1]);
 
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_RenderSetLogicalSize(renderer, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
