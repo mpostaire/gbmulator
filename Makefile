@@ -22,7 +22,7 @@ OBJ=$(SRC:$(SDIR)/%.c=$(PLATFORM_ODIR)/%.o)
 
 HEADERS=$(call rwildcard,$(IDIR),*.h)
 HEADERS:=$(HEADERS:$(IDIR)/%=$(PLATFORM_ODIR)/%)
-# PLATFORM_ODIR and its subdirectories structure to mkdir if they don't exist
+# PLATFORM_ODIR and its subdirectories' structure to mkdir if they don't exist
 PLATFORM_ODIR_STRUCTURE:=$(sort $(foreach d,$(OBJ) $(HEADERS),$(subst /$(lastword $(subst /, ,$d)),,$d)))
 
 ICONDIR=icons
