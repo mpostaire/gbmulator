@@ -142,12 +142,10 @@ static void handle_input(void) {
         case SDL_TEXTINPUT:
             if (is_paused) {
                 if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
-                    if (is_rom_loaded) {
+                    if (is_rom_loaded)
                         is_paused = SDL_FALSE;
-                    } else {
-                        ui->current_menu = ui->root_menu;
-                        ui_set_position(ui, 0, 0);
-                    }
+                    else
+                        ui_back_to_root_menu(ui);
                 } else {
                     ui_text_input(ui, event.text.text);
                 }
@@ -156,12 +154,10 @@ static void handle_input(void) {
         case SDL_KEYDOWN:
             if (is_paused) {
                 if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
-                    if (is_rom_loaded) {
+                    if (is_rom_loaded)
                         is_paused = SDL_FALSE;
-                    } else {
-                        ui->current_menu = ui->root_menu;
-                        ui_set_position(ui, 0, 0);
-                    }
+                    else
+                        ui_back_to_root_menu(ui);
                 } else {
                     ui_keyboard_press(ui, &event.key);
                 }
@@ -173,8 +169,7 @@ static void handle_input(void) {
             case SDLK_PAUSE:
             case SDLK_ESCAPE:
                 is_paused = SDL_TRUE;
-                ui->current_menu = ui->root_menu;
-                ui_set_position(ui, 0, 0);
+                ui_back_to_root_menu(ui);
                 break;
             case SDLK_F1: case SDLK_F2:
             case SDLK_F3: case SDLK_F4:
@@ -200,12 +195,10 @@ static void handle_input(void) {
         case SDL_CONTROLLERBUTTONDOWN:
             if (is_paused) {
                 if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
-                    if (is_rom_loaded) {
+                    if (is_rom_loaded)
                         is_paused = SDL_FALSE;
-                    } else {
-                        ui->current_menu = ui->root_menu;
-                        ui_set_position(ui, 0, 0);
-                    }
+                    else
+                        ui_back_to_root_menu(ui);
                 } else {
                     ui_controller_press(ui, event.cbutton.button);
                 }
@@ -213,8 +206,7 @@ static void handle_input(void) {
             }
             if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
                 is_paused = SDL_TRUE;
-                ui->current_menu = ui->root_menu;
-                ui_set_position(ui, 0, 0);
+                ui_back_to_root_menu(ui);
                 break;
             }
             if (!is_paused)
@@ -399,9 +391,9 @@ menu_t link_menu = {
     .title = "Link cable",
     .length = 7,
     .entries = {
-        { "Mode:     |server,client", UI_CHOICE, .choices = { choose_link_mode, 2, 0 } },
-        { "IP:           |v4,v6", UI_CHOICE, .choices = { choose_link_ip, 2, 0 } },
-        { "Protocol:  | TCP ,MPTCP", UI_CHOICE, .choices = { choose_link_protocol, 2, 0 } },
+        { "Mode:     |server,client", UI_CHOICE, .choices = { choose_link_mode, 0 } },
+        { "IP:           |v4,v6", UI_CHOICE, .choices = { choose_link_ip, 0 } },
+        { "Protocol:  | TCP ,MPTCP", UI_CHOICE, .choices = { choose_link_protocol, 0 } },
         { "Host: ", UI_INPUT, .disabled = 1, .user_input.on_input = on_input_link_host },
         { "Port: ", UI_INPUT, .user_input = { .is_numeric = 1, .on_input = on_input_link_port } },
         { "Start link", UI_ACTION, .action = start_link },
@@ -413,14 +405,16 @@ menu_t options_menu = {
     .title = "Options",
     .length = 6,
     .entries = {
-        { "Scale:      |Full, 1x , 2x , 3x , 4x , 5x ", UI_CHOICE, .choices = { choose_scale, 6, 0 } },
-        { "Speed:      |1.0x,1.5x,2.0x,2.5x,3.0x,3.5x,4.0x", UI_CHOICE, .choices = { choose_speed, 7, 0 } },
-        { "Sound:      | OFF, 25%, 50%, 75%,100%", UI_CHOICE, .choices = { choose_sound, 5, 0 } },
-        { "Color:      |gray,orig", UI_CHOICE, .choices = { choose_color, 2, 0 } },
-        { "Mode:       | DMG, CGB", UI_CHOICE, .choices = { choose_mode, 2, 0 } },
+        { "Scale:      |Full, 1x , 2x , 3x , 4x , 5x ", UI_CHOICE, .choices = { choose_scale, 0 } },
+        { "Speed:      |1.0x,1.5x,2.0x,2.5x,3.0x,3.5x,4.0x", UI_CHOICE, .choices = { choose_speed, 0 } },
+        { "Sound:      | OFF, 25%, 50%, 75%,100%", UI_CHOICE, .choices = { choose_sound, 0 } },
+        { "Color:      |gray,orig", UI_CHOICE, .choices = { choose_color, 0 } },
+        { "Mode:       | DMG, CGB", UI_CHOICE, .choices = { choose_mode, 0 } },
         { "Back...", UI_BACK }
     }
 };
+
+// FIXME: in keybindings menu: enter edit mode (keybind blinks) then escape: this should reset the menu_entry_t's editing boolean
 
 menu_t keybindings_menu = {
     .title = "Keybindings",

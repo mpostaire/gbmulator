@@ -26,8 +26,8 @@ struct menu_entry_t {
         menu_t *submenu;
         struct {
             void (*choose)(menu_entry_t *);
-            byte_t length;
             byte_t position;
+            byte_t length;
             char *description;
         } choices;
         struct {
@@ -69,6 +69,8 @@ ui_t *ui_init(menu_t *menu, int w, int h);
 void ui_free(ui_t *ui);
 
 void ui_draw(ui_t *ui);
+
+void ui_back_to_root_menu(ui_t *ui);
 
 void ui_set_position(ui_t *ui, int pos, int go_up);
 

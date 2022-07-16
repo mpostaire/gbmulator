@@ -113,17 +113,6 @@ const byte_t font[0x5F][0x8] = {
     { 0x00, 0x00, 0x00, 0x10, 0x2A, 0x04, 0x00, 0x00 }
 };
 
-
-
-
-
-
-
-
-
-
-
-
 static void key_setter_set_key(menu_entry_t *entry, SDL_Keycode key) {
     for (int i = 0; i < entry->parent->length - 1; i++) {
         if (entry == &entry->parent->entries[i]) {
@@ -153,13 +142,6 @@ static void key_setter_set_keybind(menu_entry_t *entry, SDL_Keycode key) {
     key_setter_set_key(entry, key);
 }
 
-
-
-
-
-
-
-
 void ui_set_position(ui_t *ui, int pos, int go_up) {
     if (pos < 0)
         ui->current_menu->position = ui->current_menu->length - 1;
@@ -174,6 +156,13 @@ void ui_set_position(ui_t *ui, int pos, int go_up) {
         else
             ui->current_menu->position = (ui->current_menu->position + 1) % ui->current_menu->length;
     }
+}
+
+void ui_back_to_root_menu(ui_t *ui) {
+    if (ui->current_menu->entries[ui->current_menu->position].type == UI_KEY_SETTER)
+        ui->current_menu->entries[ui->current_menu->position].setter.editing = 0;
+    ui->current_menu = ui->root_menu;
+    ui_set_position(ui, 0, 0);
 }
 
 static void back_to_prev_menu(ui_t *ui) {
@@ -202,6 +191,19 @@ static void init_keysetters(menu_t *menu) {
     }
 }
 
+static void init_choices(menu_t *menu) {
+    for (int i = 0; i < menu->length; i++) {
+        if (menu->entries[i].type == UI_SUBMENU)
+            init_choices(menu->entries[i].submenu);
+        if (menu->entries[i].type == UI_CHOICE) {
+            menu->entries[i].choices.length = 1;
+            char *str = strchr(menu->entries[i].label, '|');
+            for (int j = 0; str[j]; j++)
+                menu->entries[i].choices.length += str[j] == ',';
+        }
+    }
+}
+
 ui_t *ui_init(menu_t *menu, int w, int h) {
     ui_t *ui = xmalloc(sizeof(ui_t));
     ui->pixels = xmalloc(w * h * 4);
@@ -213,6 +215,7 @@ ui_t *ui_init(menu_t *menu, int w, int h) {
     ui->root_menu->parent = NULL;
     menu_set_parents(ui->root_menu);
     init_keysetters(ui->root_menu);
+    init_choices(ui->root_menu);
     ui_set_position(ui, 0, 0);
     return ui;
 }
@@ -357,7 +360,6 @@ static void delete_char_at(char **text, byte_t n) {
 
 // TODO universal ui_press function that first converts keyboard/controller inputs into ui inputs
 // needs a controller to test so this needs to wait until I can get my controller back
-// TODO inside ui_init autocompute the choices length instead of declaring them in the menu_t struct
 typedef enum {
     VALIDATE, // enter menu, activate action entry, etc.
     CANCEL, // leave menu
