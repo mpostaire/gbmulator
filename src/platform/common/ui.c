@@ -357,6 +357,7 @@ static void delete_char_at(char **text, byte_t n) {
 
 // TODO universal ui_press function that first converts keyboard/controller inputs into ui inputs
 // needs a controller to test so this needs to wait until I can get my controller back
+// TODO inside ui_init autocompute the choices length instead of declaring them in the menu_t struct
 typedef enum {
     VALIDATE, // enter menu, activate action entry, etc.
     CANCEL, // leave menu

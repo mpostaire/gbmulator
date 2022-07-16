@@ -522,14 +522,12 @@ int main(int argc, char **argv) {
         load_cartridge(argv[1]);
 
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    SDL_RenderSetLogicalSize(renderer, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
 
     if (scale == 0) {
         is_fullscreen = SDL_TRUE;
         SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
     }
 
-    SDL_RenderClear(renderer);
     SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
 
     ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
@@ -564,6 +562,7 @@ int main(int argc, char **argv) {
                 if (scale == 0) {
                     is_fullscreen = SDL_TRUE;
                     SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+                    SDL_RenderSetLogicalSize(renderer, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
                 } else {
                     if (is_fullscreen) {
                         is_fullscreen = SDL_FALSE;
@@ -573,8 +572,7 @@ int main(int argc, char **argv) {
                 }
             }
 
-            if (is_fullscreen)
-                SDL_RenderClear(renderer);
+            SDL_RenderClear(renderer);
 
             // update ppu_texture to show color palette changes behind the menu
             if (is_rom_loaded) {
@@ -594,8 +592,7 @@ int main(int argc, char **argv) {
         // handle_input is a slow function: don't call it every step
         if (cycles >= GB_CPU_CYCLES_PER_FRAME * config.speed) {
             cycles = 0;
-            if (is_fullscreen)
-                SDL_RenderClear(renderer);
+            SDL_RenderClear(renderer);
             SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
             SDL_RenderPresent(renderer);
             handle_input(); // keep this the closest possible before emulator_step() to reduce input inaccuracies
