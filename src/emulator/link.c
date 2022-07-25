@@ -20,6 +20,13 @@
 // TODO handle disconnection
 // TODO this may cause glitches in sound emulation due to the blocking send and recv (investigate when sound is implemented)
 
+// TODO put socket code logic in platform specific code section and leave here only the transfer logic.
+//      --> callback when data needs to be transfered, then platform handles this data and the transfer
+
+#ifndef IPPROTO_MPTCP
+#define IPPROTO_MPTCP 262
+#endif
+
 typedef struct {
     byte_t data;
     byte_t transfer;

@@ -120,10 +120,11 @@ int emulator_load_state(emulator_t *emu, const char *path) {
     // resets apu's internal state to prevent glitchy audio if resuming from state without sound playing from state with sound playing
     float sound = emu->apu->global_sound_level;
     float speed = emu->apu->speed;
+    int sample_count = emu->apu->sample_count;
     void (*cb)(float *, int);
     cb = emu->apu->samples_ready_cb;
     apu_quit(emu);
-    apu_init(emu, sound, speed, cb);
+    apu_init(emu, sound, speed, sample_count, cb);
 
     free(savestate);
     return 1;
@@ -172,10 +173,11 @@ int emulator_load_state_data(emulator_t *emu, const byte_t *data, size_t length)
     // resets apu's internal state to prevent glitchy audio if resuming from state without sound playing from state with sound playing
     float sound = emu->apu->global_sound_level;
     float speed = emu->apu->speed;
+    int sample_count = emu->apu->sample_count;
     void (*cb)(float *, int);
     cb = emu->apu->samples_ready_cb;
     apu_quit(emu);
-    apu_init(emu, sound, speed, cb);
+    apu_init(emu, sound, speed, sample_count, cb);
 
     return 1;
 }

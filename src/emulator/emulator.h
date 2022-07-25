@@ -17,7 +17,7 @@
 #define GB_APU_SAMPLE_RATE 44100
 // this is the number of samples needed per frame at a 44100Hz sample rate (735)
 #define GB_APU_SAMPLES_PER_FRAME (GB_APU_SAMPLE_RATE / 60)
-#define GB_APU_SAMPLE_COUNT 512
+#define GB_APU_DEFAULT_SAMPLE_COUNT 512
 
 /**
  * Runs the emulator for one cpu step.
@@ -40,9 +40,9 @@ inline void emulator_run_cycles(emulator_t *emu, int cycles_limit) {
  * @param new_frame_cb the function called whenever the ppu has finished rendering a new frame
  * @param apu_samples_ready_cb the function called whenever the samples buffer of the apu is full
  */
-emulator_t *emulator_init(emulator_mode_t mode, char *rom_path, void (*new_frame_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
+emulator_t *emulator_init(emulator_mode_t mode, char *rom_path, int apu_sample_count, void (*new_frame_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
 
-emulator_t *emulator_init_from_data(emulator_mode_t mode, const byte_t *rom_data, size_t size, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
+emulator_t *emulator_init_from_data(emulator_mode_t mode, const byte_t *rom_data, size_t size, int apu_sample_count, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
 
 /**
  * Quits the emulator gracefully (save eram into a '.sav' file, ...).

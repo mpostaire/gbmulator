@@ -21,6 +21,6 @@ void apu_step(emulator_t *emu, int cycles);
  * @param speed the configurable multiplier to increase the sampling rate (should be the same as the emulation speed multiplier)
  * @param samples_ready_cb the function called whenever the samples buffer is full
  */
-void apu_init(emulator_t *emu, float global_sound_level, float speed, void (*samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
+void apu_init(emulator_t *emu, float global_sound_level, float speed, int sample_count, void (*samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
 
 void apu_quit(emulator_t *emu);

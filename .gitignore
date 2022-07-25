@@ -9,3 +9,4 @@
 !icons
 !icons/**
 !docs
+src/platform/android/android-project/.*

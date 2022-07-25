@@ -4,9 +4,9 @@
 #include <arpa/inet.h>
 
 typedef unsigned char byte_t;
-typedef char s_byte_t;
+typedef signed char s_byte_t;
 typedef unsigned short word_t;
-typedef short s_word_t;
+typedef signed short s_word_t;
 
 // TODO? LCD off special bright white color
 typedef enum {
@@ -215,6 +215,8 @@ typedef struct {
 
 typedef struct {
     float global_sound_level;
+
+    int sample_count;
 
     int take_sample_cycles_count;
     float speed;

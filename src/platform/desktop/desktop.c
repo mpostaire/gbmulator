@@ -19,6 +19,16 @@
 // make audio sync to video (effectively replacing the audio sdl_delay by the vsync delay)
 // TODO a cpu_step which do only 1 cycle at a time instead of instructions can improve audio syncing because a frame will always be the same ammount of cycles
 
+// TODO: in pokemon gold (in CGB and DMG modes) at the beginning animation of a battle, when the wild pokemon slides to the
+// right, at the last moment, the top of the pokemon's sprite will appear for a few frames where the combat menu should be located
+
+// TODO remove all emulator functions that make file operations (fopen, fread, fwrite) because it should be handled
+// by the individual platforms.
+// TODO??? also remove all printfs etc and make a errno-like system so the prints are handled by the platforms???
+
+// TODO make emulator_init arguments a emulator_options_t struct that takes all the arguments and fills NULL members by their defaults
+//      (like SDL does with audio open device)
+
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
 SDL_bool is_rom_loaded = SDL_FALSE;
@@ -254,7 +264,7 @@ void load_cartridge(char *path) {
         return;
     }
 
-    emulator_t *new_emu = emulator_init(config.mode, rom_path, ppu_vblank_cb, apu_samples_ready_cb);
+    emulator_t *new_emu = emulator_init(config.mode, rom_path, GB_APU_DEFAULT_SAMPLE_COUNT, ppu_vblank_cb, apu_samples_ready_cb);
     if (!new_emu) return;
 
     char *save_path = get_save_path(rom_path);
@@ -414,8 +424,6 @@ menu_t options_menu = {
     }
 };
 
-// FIXME: in keybindings menu: enter edit mode (keybind blinks) then escape: this should reset the menu_entry_t's editing boolean
-
 menu_t keybindings_menu = {
     .title = "Keybindings",
     .length = 9,
@@ -534,7 +542,7 @@ int main(int argc, char **argv) {
         .freq = GB_APU_SAMPLE_RATE,
         .format = AUDIO_F32SYS,
         .channels = GB_APU_CHANNELS,
-        .samples = GB_APU_SAMPLE_COUNT
+        .samples = GB_APU_DEFAULT_SAMPLE_COUNT
     };
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
     SDL_PauseAudioDevice(audio_device, 0);
@@ -578,16 +586,18 @@ int main(int argc, char **argv) {
             SDL_RenderCopy(renderer, ui_texture, NULL, NULL);
 
             SDL_RenderPresent(renderer);
-            // delay to aim 30 fps (and avoid 100% CPU use) here because the normal delay is done by the sound emulation which is paused
-            SDL_Delay(1.0f / 30.0f);
+            // wait for the next event (not consuming it) to avoid CPU usage
+            SDL_WaitEvent(NULL);
             continue;
         }
 
         // handle_input is a slow function: don't call it every step
         if (cycles >= GB_CPU_CYCLES_PER_FRAME * config.speed) {
-            cycles = 0;
+            cycles = 0; // TODO: cycles -= GB_CPU_CYCLES_PER_FRAME * config.speed
             SDL_RenderClear(renderer);
             SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
+            // this SDL_Delay() isn't needed as the audio sync adds it's own delay
+            // SDL_Delay(1.0f / 60.0f); // even with SDL waiting for vsync, delay here for monitors with different refresh rates than 60Hz
             SDL_RenderPresent(renderer);
             handle_input(); // keep this the closest possible before emulator_step() to reduce input inaccuracies
         }

@@ -31,14 +31,14 @@ int emulator_step(emulator_t *emu) {
     return cycles;
 }
 
-emulator_t *emulator_init(emulator_mode_t mode, char *rom_path, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
+emulator_t *emulator_init(emulator_mode_t mode, char *rom_path, int apu_sample_count, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
     emulator_t *emu = xcalloc(1, sizeof(emulator_t));
     emu->mode = mode;
 
     if (!mmu_init(emu, rom_path))
         return NULL;
     cpu_init(emu);
-    apu_init(emu, 1.0f, 1.0f, apu_samples_ready_cb);
+    apu_init(emu, 1.0f, 1.0f, apu_sample_count, apu_samples_ready_cb);
     ppu_init(emu, ppu_vblank_cb);
     timer_init(emu);
     link_init(emu);
@@ -47,14 +47,14 @@ emulator_t *emulator_init(emulator_mode_t mode, char *rom_path, void (*ppu_vblan
     return emu;
 }
 
-emulator_t *emulator_init_from_data(emulator_mode_t mode, const byte_t *rom_data, size_t size, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
+emulator_t *emulator_init_from_data(emulator_mode_t mode, const byte_t *rom_data, size_t size, int apu_sample_count, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
     emulator_t *emu = xcalloc(1, sizeof(emulator_t));
     emu->mode = mode;
 
     if (!mmu_init_from_data(emu, rom_data, size))
         return NULL;
     cpu_init(emu);
-    apu_init(emu, 1.0f, 1.0f, apu_samples_ready_cb);
+    apu_init(emu, 1.0f, 1.0f, apu_sample_count, apu_samples_ready_cb);
     ppu_init(emu, ppu_vblank_cb);
     timer_init(emu);
     link_init(emu);

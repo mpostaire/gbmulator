@@ -118,7 +118,7 @@ static void save(void) {
 }
 
 void load_cartridge(const byte_t *rom_data, size_t rom_size, char *new_rom_title) {
-    emulator_t *new_emu = emulator_init_from_data(config.mode, rom_data, rom_size, ppu_vblank_cb, apu_samples_ready_cb);
+    emulator_t *new_emu = emulator_init_from_data(config.mode, rom_data, rom_size, GB_APU_DEFAULT_SAMPLE_COUNT, ppu_vblank_cb, apu_samples_ready_cb);
     if (!new_emu) return;
 
     if (emu) {
@@ -165,6 +165,8 @@ EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
     // save config
     save_config("config");
 
+    ui_free(ui);
+
     if (is_controller_present)
         SDL_GameControllerClose(pad);
 
@@ -190,26 +192,7 @@ EMSCRIPTEN_KEEPALIVE void on_gui_button_up(joypad_button_t button) {
         emulator_joypad_release(emu, button);
 }
 
-// TODO receive_rom_data() and gbmulator_reset() are very similar: a lot of code can be made into another function
 EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {
-    char *new_rom_title = emulator_get_rom_title_from_data(rom_data, rom_size);
-    for (int i = 0; i < 16; i++)
-        if (new_rom_title[i] == ' ')
-            new_rom_title[i] = '_';
-
-    load_cartridge(rom_data, rom_size, new_rom_title);
-    free(rom_data);
-}
-
-void gbmulator_reset(void) {
-    if (!emu)
-        return;
-
-    size_t rom_size;
-    byte_t *cart = emulator_get_rom_data(emu, &rom_size);
-    byte_t *rom_data = xmalloc(rom_size);
-    memcpy(rom_data, cart, rom_size);
-
     char *new_rom_title = emulator_get_rom_title_from_data(rom_data, rom_size);
     for (int i = 0; i < 16; i++)
         if (new_rom_title[i] == ' ')
@@ -427,9 +410,22 @@ static void open_rom(menu_entry_t *entry) {
 }
 
 static void reset_rom(menu_entry_t *entry) {
-    gbmulator_reset();
-}
+    if (!emu)
+        return;
 
+    size_t rom_size;
+    byte_t *cart = emulator_get_rom_data(emu, &rom_size);
+    byte_t *rom_data = xmalloc(rom_size);
+    memcpy(rom_data, cart, rom_size);
+
+    char *new_rom_title = emulator_get_rom_title_from_data(rom_data, rom_size);
+    for (int i = 0; i < 16; i++)
+        if (new_rom_title[i] == ' ')
+            new_rom_title[i] = '_';
+
+    load_cartridge(rom_data, rom_size, new_rom_title);
+    free(rom_data);
+}
 
 menu_t options_menu = {
     .title = "Options",
@@ -532,7 +528,7 @@ int main(int argc, char **argv) {
         .freq = GB_APU_SAMPLE_RATE,
         .format = AUDIO_F32SYS,
         .channels = GB_APU_CHANNELS,
-        .samples = GB_APU_SAMPLE_COUNT
+        .samples = GB_APU_DEFAULT_SAMPLE_COUNT
     };
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
     SDL_PauseAudioDevice(audio_device, 0);
