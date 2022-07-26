@@ -11,7 +11,7 @@ android {
     compileSdkVersion 31
     defaultConfig {
         if (buildAsApplication) {
-            applicationId "com.mpostaire.gbmulator"
+            applicationId "io.github.mpostaire.gbmulator"
         }
         minSdkVersion 16
         targetSdkVersion 31

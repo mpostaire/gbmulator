@@ -1,4 +1,4 @@
-package com.mpostaire.gbmulator;
+package io.github.mpostaire.gbmulator;
 
 import android.content.Intent;
 import android.content.pm.ActivityInfo;

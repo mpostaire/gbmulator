@@ -748,7 +748,7 @@ static void choose_mode(menu_entry_t *entry) {
 
 
 
-JNIEXPORT void JNICALL Java_com_mpostaire_gbmulator_GBmulator_receiveROMData(JNIEnv* env, jobject thiz, jbyteArray data, jsize size) {
+JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_GBmulator_receiveROMData(JNIEnv* env, jobject thiz, jbyteArray data, jsize size) {
     jboolean is_copy;
     jbyte *rom_data = (*env)->GetByteArrayElements(env, data, &is_copy);
 

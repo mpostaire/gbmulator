@@ -51,7 +51,7 @@ android: $(ICONS)
 
 debug_android: android
 	cd $(SDIR)/platform/android/android-project && ./gradlew installDebug
-	adb shell am start -n com.mpostaire.gbmulator/.GBmulator
+	adb shell am start -n io.github.mpostaire.gbmulator/.GBmulator
 
 web: CC:=emcc
 web: LDLIBS:=
