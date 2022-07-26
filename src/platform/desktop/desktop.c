@@ -1,5 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <dirent.h>
 #include <SDL2/SDL.h>
 
 #include "../common/ui.h"
@@ -22,12 +25,9 @@
 // TODO: in pokemon gold (in CGB and DMG modes) at the beginning animation of a battle, when the wild pokemon slides to the
 // right, at the last moment, the top of the pokemon's sprite will appear for a few frames where the combat menu should be located
 
-// TODO remove all emulator functions that make file operations (fopen, fread, fwrite) because it should be handled
-// by the individual platforms.
-// TODO ---> emulator_init_from_data should be the only way to init and rename to emulator_init
 // TODO replace all emulator getter/setter of configs (like sound level/palette/...) by emulator_get_opt() and emulator_set_opt() that uses
 //      the emulator_options_t struct like in emulator_init()
-// TODO??? also remove all printfs etc and make a errno-like system so the prints are handled by the platforms???
+// TODO refactor all platform specific code and put the shared code in src/platform/common/
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
@@ -67,6 +67,56 @@ static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
     while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 8)
         SDL_Delay(1);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
+}
+
+int dir_exists(const char *directory_path) {
+    DIR *dir = opendir(directory_path);
+	if (dir == NULL) {
+		if (errno == ENOENT)
+			return 0;
+		errnoprintf("opendir");
+        exit(EXIT_FAILURE);
+	}
+	closedir(dir);
+	return 1;
+}
+
+void mkdirp(const char *directory_path) {
+    char buf[256];
+    snprintf(buf, sizeof(buf), "%s", directory_path);
+    size_t len = strlen(buf);
+
+    if (buf[len - 1] == '/')
+        buf[len - 1] = 0;
+
+    for (char *p = buf + 1; *p; p++) {
+        if (*p == '/') {
+            *p = 0;
+            if (mkdir(buf, S_IRWXU | S_IRGRP | S_IROTH) && errno != EEXIST) {
+                errnoprintf("mkdir");
+                exit(EXIT_FAILURE);
+            }
+            *p = '/';
+        }
+    }
+
+    if (mkdir(buf, S_IRWXU | S_IRGRP | S_IROTH) && errno != EEXIST) {
+        errnoprintf("mkdir");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void make_parent_dirs(const char *filepath) {
+    char *last_slash = strrchr(filepath, '/');
+    int last_slash_index = last_slash ? (int) (last_slash - filepath) : -1;
+
+    if (last_slash_index != -1) {
+        char directory_path[last_slash_index + 1];
+        snprintf(directory_path, last_slash_index + 1, "%s", filepath);
+
+        if (!dir_exists(directory_path))
+            mkdirp(directory_path);
+    }
 }
 
 static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
@@ -146,6 +196,55 @@ static char *get_savestate_path(const char *rom_filepath, int slot) {
     return save_path;
 }
 
+static int save_state(emulator_t *emu, const char *path) {
+    make_parent_dirs(path);
+
+    size_t len;
+    byte_t *buf = emulator_get_savestate(emu, &len);
+
+    FILE *f = fopen(path, "wb");
+    if (!f) {
+        errnoprintf("opening %s", path);
+        return 0;
+    }
+
+    if (!fwrite(buf, len, 1, f)) {
+        eprintf("writing savestate to %s\n", path);
+        fclose(f);
+        free(buf);
+        return 0;
+    }
+
+    fclose(f);
+    free(buf);
+    return 1;
+}
+
+static int load_state(emulator_t *emu, const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        errnoprintf("opening %s", path);
+        return 0;
+    }
+
+    fseek(f, 0, SEEK_END);
+    size_t len = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    byte_t *buf = xmalloc(len);
+    if (!fread(buf, len, 1, f)) {
+        errnoprintf("reading savestate from %s", path);
+        fclose(f);
+        free(buf);
+        return 0;
+    }
+
+    emulator_load_savestate(emu, buf, len);
+    fclose(f);
+    free(buf);
+    return 1;
+}
+
 static void handle_input(void) {
     SDL_Event event;
     char *savestate_path;
@@ -191,9 +290,9 @@ static void handle_input(void) {
                     break;
                 savestate_path = get_savestate_path(rom_path, event.key.keysym.sym - SDLK_F1);
                 if (event.key.keysym.mod & KMOD_SHIFT)
-                    emulator_save_state(emu, savestate_path);
+                    save_state(emu, savestate_path);
                 else
-                    emulator_load_state(emu, savestate_path);
+                    load_state(emu, savestate_path);
                 free(savestate_path);
                 break;
             }
@@ -279,6 +378,51 @@ static byte_t *get_rom_data(const char *path, size_t *rom_size) {
     return buf;
 }
 
+static void load_save(emulator_t *emu, const char *path) {
+    // load save into ERAM
+    FILE *f = fopen(path, "rb");
+    // if there is a save file, load it into eram
+    if (f) {
+        // no fread checks because a missing/invalid save file is not an error
+
+        fseek(f, 0, SEEK_END);
+        size_t len = ftell(f);
+        fseek(f, 0, SEEK_SET);
+
+        byte_t *buf = xmalloc(len);
+        if (!fread(buf, len, 1, f)) {
+            errnoprintf("reading %s", path);
+            fclose(f);
+            return;
+        }
+        fclose(f);
+        emulator_load_save(emu, buf, len);
+    }
+}
+
+static int save(emulator_t *emu, const char *path) {
+    size_t len;
+    byte_t *save_data = emulator_get_save(emu, &len);
+    if (!save_data) return 0;
+
+    make_parent_dirs(path);
+
+    FILE *f = fopen(path, "wb");
+    if (!f) {
+        errnoprintf("opening the save file");
+        return 0;
+    }
+
+    if (!fwrite(save_data, len, 1, f)) {
+        eprintf("writing to save file\n");
+        fclose(f);
+        return 0;
+    }
+
+    fclose(f);
+    return 1;
+}
+
 /**
  * Load and play a cartridge. 
  * @param path the path of the rom to load or NULL to reload the currently playing rom
@@ -288,7 +432,7 @@ static void load_cartridge(char *path) {
 
     if (emu) {
         char *save_path = get_save_path(rom_path);
-        emulator_save(emu, save_path);
+        save(emu, save_path);
         free(save_path);
     }
 
@@ -306,7 +450,7 @@ static void load_cartridge(char *path) {
             return;
         }
     } else {
-        byte_t *data = emulator_get_rom_data(emu, &rom_size);
+        byte_t *data = emulator_get_rom(emu, &rom_size);
         rom_data = xmalloc(rom_size);
         memcpy(rom_data, data, rom_size);
     }
@@ -321,7 +465,7 @@ static void load_cartridge(char *path) {
     if (!new_emu) return;
 
     char *save_path = get_save_path(rom_path);
-    emulator_load_save(new_emu, save_path);
+    load_save(new_emu, save_path);
     free(save_path);
 
     if (emu)
@@ -663,7 +807,7 @@ int main(int argc, char **argv) {
 
     if (emu) {
         char *save_path = get_save_path(rom_path);
-        emulator_save(emu, save_path);
+        save(emu, save_path);
         free(save_path);
         emulator_quit(emu);
     }

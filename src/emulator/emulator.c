@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stddef.h>
+#include <string.h>
 
 #include "emulator.h"
 #include "mmu.h"
@@ -9,6 +10,20 @@
 #include "joypad.h"
 #include "link.h"
 #include "apu.h"
+
+#define FORMAT_STRING EMULATOR_NAME"-sav"
+
+typedef struct __attribute__((packed)) {
+    char identifier[sizeof(FORMAT_STRING)];
+    char rom_title[16];
+} save_header_t;
+
+typedef struct __attribute__((packed)) {
+    save_header_t header;
+    cpu_t cpu;
+    byte_t mmu[sizeof(mmu_t) - offsetof(mmu_t, mem)];
+    gbtimer_t timer;
+} savestate_data_t;
 
 int emulator_step(emulator_t *emu) {
     // TODO make timings accurate by forcing each cpu_step() to take 4 cycles: if it's not enough to finish an instruction,
@@ -78,64 +93,8 @@ void emulator_joypad_release(emulator_t *emu, joypad_button_t key) {
     joypad_release(emu, key);
 }
 
-int emulator_save(emulator_t *emu, const char *path) {
-    // don't save if the cartridge has no battery or there is no rtc and no eram banks
-    if (!emu->mmu->has_battery || (!emu->mmu->has_rtc && emu->mmu->eram_banks == 0))
-        return 0;
-
-    make_parent_dirs(path);
-
-    FILE *f = fopen(path, "wb");
-    if (!f) {
-        errnoprintf("opening the save file");
-        return 0;
-    }
-
-    if (emu->mmu->eram_banks > 0) {
-        if (!fwrite(emu->mmu->eram, 0x2000 * emu->mmu->eram_banks, 1, f)) {
-            eprintf("writing eram to save file\n");
-            fclose(f);
-            return 0;
-        }
-    }
-
-    if (emu->mmu->has_rtc) {
-        if (!fwrite(&emu->mmu->rtc.value_in_seconds, sizeof(rtc_t) - offsetof(rtc_t, value_in_seconds), 1, f)) {
-            eprintf("writing rtc to save file\n");
-            fclose(f);
-            return 0;
-        }
-    }
-
-    fclose(f);
-    return 1;
-}
-
-void emulator_load_save(emulator_t *emu, const char *path) {
-    // don't load save if the cartridge has no battery or there is no rtc and no eram banks
-    if (!emu->mmu->has_battery || (!emu->mmu->has_rtc && emu->mmu->eram_banks == 0))
-        return;
-
-    // load save into ERAM
-    FILE *f = fopen(path, "rb");
-    // if there is a save file, load it into eram
-    if (f) {
-        // no fread checks because a missing/invalid save file is not an error
-
-        if (emu->mmu->eram_banks > 0)
-            fread(emu->mmu->eram, 0x2000 * emu->mmu->eram_banks, 1, f);
-
-        if (emu->mmu->has_rtc) {
-            fread(&emu->mmu->rtc.value_in_seconds, sizeof(rtc_t) - offsetof(rtc_t, value_in_seconds), 1, f);
-            rtc_update(&emu->mmu->rtc);
-        }
-
-        fclose(f);
-    }
-}
-
-byte_t *emulator_get_save_data(emulator_t *emu, size_t *save_length) {
-    if (!emu->mmu->mbc) {
+byte_t *emulator_get_save(emulator_t *emu, size_t *save_length) {
+    if (!emu->mmu->has_battery || (!emu->mmu->has_rtc && emu->mmu->eram_banks == 0)) {
         *save_length = 0;
         return NULL;
     }
@@ -160,26 +119,32 @@ byte_t *emulator_get_save_data(emulator_t *emu, size_t *save_length) {
     return save_data;
 }
 
-void emulator_load_save_data(emulator_t *emu, byte_t *save_data, size_t save_len) {
+int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_len) {
+    // don't load save if the cartridge has no battery or there is no rtc and no eram banks
+    if (!emu->mmu->has_battery || (!emu->mmu->has_rtc && emu->mmu->eram_banks == 0))
+        return 0;
+
     size_t eram_len = emu->mmu->has_battery ? 0x2000 * emu->mmu->eram_banks : 0;
     size_t rtc_len = emu->mmu->has_rtc ? sizeof(rtc_t) - offsetof(rtc_t, value_in_seconds) : 0;
     size_t total_len = eram_len + rtc_len;
 
     if (total_len != save_len || total_len == 0)
-        return;
+        return 0;
 
     if (eram_len > 0)
         memcpy(emu->mmu->eram, save_data, eram_len);
 
     if (rtc_len > 0)
         memcpy(&emu->mmu->rtc.value_in_seconds, &save_data[eram_len], rtc_len);
+
+    return 1;
 }
 
 char *emulator_get_rom_title(emulator_t *emu) {
     return emu->rom_title;
 }
 
-byte_t *emulator_get_rom_data(emulator_t *emu, size_t *rom_size) {
+byte_t *emulator_get_rom(emulator_t *emu, size_t *rom_size) {
     if (rom_size)
         *rom_size = emu->mmu->cartridge_size;
     return emu->mmu->cartridge;
@@ -247,4 +212,56 @@ void emulator_set_apu_speed(emulator_t *emu, float speed) {
 
 void emulator_set_apu_sound_level(emulator_t *emu, float level) {
     emu->apu->global_sound_level = CLAMP(level, 0.0f, 1.0f);
+}
+
+byte_t *emulator_get_savestate(emulator_t *emu, size_t *length) {
+    savestate_data_t *savestate = xmalloc(sizeof(savestate_data_t));
+
+    memcpy(savestate->header.identifier, FORMAT_STRING, sizeof(savestate->header.identifier));
+
+    memcpy(savestate->header.rom_title, emu->rom_title, sizeof(savestate->header.rom_title));
+
+    memcpy(&savestate->cpu, emu->cpu, sizeof(cpu_t));
+
+    memcpy(&savestate->mmu, &emu->mmu->mem, sizeof(mmu_t) - offsetof(mmu_t, mem));
+
+    memcpy(&savestate->timer, emu->timer, sizeof(gbtimer_t));
+
+    *length = sizeof(savestate_data_t);
+    return (byte_t *) savestate;
+}
+
+int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) {
+    if (length != sizeof(savestate_data_t)) {
+        eprintf("invalid data length\n");
+        return 0;
+    }
+
+    savestate_data_t *savestate = (savestate_data_t *) data;
+
+    if (strncmp(savestate->header.identifier, FORMAT_STRING, sizeof(FORMAT_STRING))) {
+        eprintf("invalid format\n");
+        return 0;
+    }
+    if (strncmp(savestate->header.rom_title, emu->rom_title, sizeof(savestate->header.rom_title))) {
+        eprintf("rom title mismatch (expected: [%.16s]; got: [%.16s])\n", emu->rom_title, savestate->header.rom_title);
+        return 0;
+    }
+
+    memcpy(emu->cpu, &savestate->cpu, sizeof(cpu_t));
+
+    memcpy(&emu->mmu->mem, &savestate->mmu, sizeof(mmu_t) - offsetof(mmu_t, mem));
+
+    memcpy(emu->timer, &savestate->timer, sizeof(gbtimer_t));
+
+    // resets apu's internal state to prevent glitchy audio if resuming from state without sound playing from state with sound playing
+    float sound = emu->apu->global_sound_level;
+    float speed = emu->apu->speed;
+    int sample_count = emu->apu->sample_count;
+    void (*cb)(float *, int);
+    cb = emu->apu->samples_ready_cb;
+    apu_quit(emu);
+    apu_init(emu, sound, speed, sample_count, cb);
+
+    return 1;
 }

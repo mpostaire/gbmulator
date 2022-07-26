@@ -541,7 +541,7 @@ static void save_config(const char *path) {
 
 static void save(void) {
     size_t save_length;
-    byte_t *save_data = emulator_get_save_data(emu, &save_length);
+    byte_t *save_data = emulator_get_save(emu, &save_length);
     if (!save_data) return;
 
     SDL_RWops *f = SDL_RWFromFile(rom_title, "w");
@@ -666,7 +666,7 @@ static void load_cartridge(const byte_t *rom_data, size_t rom_size, char *new_ro
         size_t save_length = SDL_RWsize(f);
         byte_t *save_data = xmalloc(save_length);
         SDL_RWread(f, save_data, save_length, 1);
-        emulator_load_save_data(emu, save_data, save_length);
+        emulator_load_save(emu, save_data, save_length);
         SDL_RWclose(f);
         free(save_data);
     }
@@ -788,7 +788,7 @@ static void reset_rom(menu_entry_t *entry) {
         return;
 
     size_t rom_size;
-    byte_t *cart = emulator_get_rom_data(emu, &rom_size);
+    byte_t *cart = emulator_get_rom(emu, &rom_size);
     byte_t *rom_data = xmalloc(rom_size);
     memcpy(rom_data, cart, rom_size);
 

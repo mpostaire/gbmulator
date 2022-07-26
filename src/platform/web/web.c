@@ -111,7 +111,7 @@ static void save_config(const char *path) {
 
 static void save(void) {
     size_t save_length;
-    byte_t *save_data = emulator_get_save_data(emu, &save_length);
+    byte_t *save_data = emulator_get_save(emu, &save_length);
     if (!save_data) return;
     local_storage_set_item(rom_title, save_data, 1, save_length);
     free(save_data);
@@ -137,7 +137,7 @@ void load_cartridge(const byte_t *rom_data, size_t rom_size, char *new_rom_title
     size_t save_length;
     unsigned char *save = local_storage_get_item(rom_title, &save_length, 1);
     if (save) {
-        emulator_load_save_data(emu, save, save_length);
+        emulator_load_save(emu, save, save_length);
         free(save);
     }
 
@@ -256,13 +256,13 @@ static void handle_input(void) {
                 snprintf(savestate_path, len + 9, "%s-state-%d", rom_title, event.key.keysym.sym - SDLK_F1);
                 if (event.key.keysym.mod & KMOD_SHIFT) {
                     size_t savestate_length;
-                    byte_t *savestate = emulator_get_state_data(emu, &savestate_length);
+                    byte_t *savestate = emulator_get_savestate(emu, &savestate_length);
                     local_storage_set_item(savestate_path, savestate, 1, savestate_length);
                     free(savestate);
                 } else {
                     size_t savestate_length;
                     byte_t *savestate = local_storage_get_item(savestate_path, &savestate_length, 1);
-                    emulator_load_state_data(emu, savestate, savestate_length);
+                    emulator_load_savestate(emu, savestate, savestate_length);
                     free(savestate);
                 }
                 free(savestate_path);
@@ -419,7 +419,7 @@ static void reset_rom(menu_entry_t *entry) {
         return;
 
     size_t rom_size;
-    byte_t *cart = emulator_get_rom_data(emu, &rom_size);
+    byte_t *cart = emulator_get_rom(emu, &rom_size);
     byte_t *rom_data = xmalloc(rom_size);
     memcpy(rom_data, cart, rom_size);
 

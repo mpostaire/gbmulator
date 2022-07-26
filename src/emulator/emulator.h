@@ -2,7 +2,6 @@
 
 #include "types.h"
 #include "utils.h"
-#include "savestate.h"
 
 #define EMULATOR_NAME "GBmulator"
 
@@ -54,19 +53,15 @@ void emulator_joypad_press(emulator_t *emu, joypad_button_t key);
 
 void emulator_joypad_release(emulator_t *emu, joypad_button_t key);
 
-int emulator_save(emulator_t *emu, const char *path);
+byte_t *emulator_get_save(emulator_t *emu, size_t *save_length);
 
-void emulator_load_save(emulator_t *emu, const char *path);
-
-byte_t *emulator_get_save_data(emulator_t *emu, size_t *save_length);
-
-void emulator_load_save_data(emulator_t *emu, byte_t *save_data, size_t save_len);
+int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_len);
 
 char *emulator_get_rom_title(emulator_t *emu);
 
 char *emulator_get_rom_title_from_data(byte_t *rom_data, size_t size);
 
-byte_t *emulator_get_rom_data(emulator_t *emu, size_t *rom_size);
+byte_t *emulator_get_rom(emulator_t *emu, size_t *rom_size);
 
 /**
  * convert the pixels buffer from the color values of the old emulation palette to the new color values of the new palette
@@ -86,3 +81,7 @@ byte_t *emulator_get_pixels(emulator_t *emu);
 void emulator_set_apu_speed(emulator_t *emu, float speed);
 
 void emulator_set_apu_sound_level(emulator_t *emu, float level);
+
+byte_t *emulator_get_savestate(emulator_t *emu, size_t *length);
+
+int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length);
