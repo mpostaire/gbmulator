@@ -35,14 +35,11 @@ inline void emulator_run_cycles(emulator_t *emu, int cycles_limit) {
 
 /**
  * Inits the emulator.
- * @param mode either `DMG` for original game boy emulation or `CGB` for game boy color emulation
- * @param rom_path the path to the rom the emulator will play
- * @param new_frame_cb the function called whenever the ppu has finished rendering a new frame
- * @param apu_samples_ready_cb the function called whenever the samples buffer of the apu is full
+ * @param rom_data a buffer containing the rom the emulator will play
+ * @param rom_size the size of the `rom_data`
+ * @param opts the initialization options of the emulator 
  */
-emulator_t *emulator_init(emulator_mode_t mode, char *rom_path, int apu_sample_count, void (*new_frame_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
-
-emulator_t *emulator_init_from_data(emulator_mode_t mode, const byte_t *rom_data, size_t size, int apu_sample_count, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
+emulator_t *emulator_init(const byte_t *rom_data, size_t rom_size, emulator_options_t *opts);
 
 /**
  * Quits the emulator gracefully (save eram into a '.sav' file, ...).
@@ -64,8 +61,6 @@ void emulator_load_save(emulator_t *emu, const char *path);
 byte_t *emulator_get_save_data(emulator_t *emu, size_t *save_length);
 
 void emulator_load_save_data(emulator_t *emu, byte_t *save_data, size_t save_len);
-
-char *emulator_get_rom_path(emulator_t *emu);
 
 char *emulator_get_rom_title(emulator_t *emu);
 

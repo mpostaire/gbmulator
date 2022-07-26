@@ -564,7 +564,8 @@ void ppu_step(emulator_t *emu, int cycles) {
 
             }
 
-            ppu->new_frame_cb(ppu->pixels);
+            if (ppu->new_frame_cb)
+                ppu->new_frame_cb(ppu->pixels);
             ppu->is_lcd_turning_on = 1;
         }
 
@@ -618,7 +619,7 @@ void ppu_step(emulator_t *emu, int cycles) {
                     cpu_request_interrupt(emu, IRQ_STAT);
 
                 cpu_request_interrupt(emu, IRQ_VBLANK);
-                
+
                 // skip first screen rendering after the LCD was just turned on
                 if (ppu->is_lcd_turning_on) {
                     ppu->is_lcd_turning_on = 0;

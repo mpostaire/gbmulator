@@ -174,55 +174,11 @@ static int parse_cartridge(emulator_t *emu) {
     return 1;
 }
 
-int mmu_init(emulator_t *emu, char *rom_path) {
-    const char *dot = strrchr(rom_path, '.');
-    if (!dot || (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) && strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))))) {
-        eprintf("%s: wrong file extension (expected .gb or .gbc)\n", rom_path);
-        return 0;
-    }
-
+int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size) {
     mmu_t *mmu = xcalloc(1, sizeof(mmu_t));
     mmu->current_rom_bank = 1;
 
-    size_t len = strlen(rom_path);
-    emu->rom_filepath = xmalloc(len + 2);
-    snprintf(emu->rom_filepath, len + 1, "%s", rom_path);
-
-    FILE *f = fopen(rom_path, "rb");
-    if (!f) {
-        errnoprintf("opening file %s", rom_path);
-        return 0;
-    }
-
-    fseek(f, 0, SEEK_END);
-    mmu->cartridge_size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    char *buf = xmalloc(mmu->cartridge_size);
-    if (!fread(buf, mmu->cartridge_size, 1, f)) {
-        errnoprintf("reading %s", rom_path);
-        fclose(f);
-        return 0;
-    }
-    fclose(f);
-
-    memcpy(mmu->cartridge, buf, mmu->cartridge_size);
-    free(buf);
-    emu->mmu = mmu;
-
-    if (parse_cartridge(emu)) {
-        return 1;
-    } else {
-        mmu_quit(emu);
-        return 0;
-    }
-}
-
-int mmu_init_from_data(emulator_t *emu, const byte_t *rom_data, size_t size) {
-    mmu_t *mmu = xcalloc(1, sizeof(mmu_t));
-    mmu->current_rom_bank = 1;
-
-    mmu->cartridge_size = size;
+    mmu->cartridge_size = rom_size;
     memcpy(mmu->cartridge, rom_data, mmu->cartridge_size);
     emu->mmu = mmu;
 
@@ -235,8 +191,6 @@ int mmu_init_from_data(emulator_t *emu, const byte_t *rom_data, size_t size) {
 }
 
 void mmu_quit(emulator_t *emu) {
-    if (emu->rom_filepath)
-        free(emu->rom_filepath);
     free(emu->mmu);
 }
 

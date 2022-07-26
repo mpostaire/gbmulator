@@ -8,6 +8,8 @@
 
 // going higher than 2048 starts to add noticeable audio lag
 #define APU_SAMPLE_COUNT 2048
+#define SCREEN_WIDTH 160
+#define SCREEN_HEIGHT 284
 
 // TODO make ui in an android activity with android ui api (no need for keybindings/scale configs but need for landscape/portrait layouts config)
 // TODO savestates ui
@@ -32,6 +34,7 @@ SDL_bool is_paused;
 SDL_bool is_rom_loaded;
 SDL_bool is_landscape;
 
+SDL_Renderer *renderer;
 SDL_Window *window;
 
 SDL_Texture *ppu_texture;
@@ -47,12 +50,7 @@ char *rom_title;
 ui_t *ui;
 emulator_t *emu;
 
-SDL_Rect gb_screen_rect = {
-    .w = 1080, // TODO make smallest possible size and let SDL stretch to screen OR use phone actual width OR do not change
-    .h = GB_SCREEN_HEIGHT * (1080 / GB_SCREEN_WIDTH),
-    .x = 0,
-    .y = 0,
-};
+SDL_Rect gb_screen_rect;
 
 typedef struct {
     SDL_Rect shape;
@@ -65,8 +63,8 @@ typedef struct {
 button_t buttons[] = {
     {
         .shape = {
-            .h = 128,
-            .w = 128
+            .h = 18,
+            .w = 18
         },
         .r = 255,
         .g = 0,
@@ -75,8 +73,8 @@ button_t buttons[] = {
     },
     {
         .shape = {
-            .h = 128,
-            .w = 128
+            .h = 18,
+            .w = 18
         },
         .r = 255,
         .g = 0,
@@ -85,8 +83,8 @@ button_t buttons[] = {
     },
     {
         .shape = {
-            .h = 128,
-            .w = 128
+            .h = 18,
+            .w = 18
         },
         .r = 255,
         .g = 0,
@@ -95,8 +93,8 @@ button_t buttons[] = {
     },
     {
         .shape = {
-            .h = 128,
-            .w = 128
+            .h = 18,
+            .w = 18
         },
         .r = 255,
         .g = 0,
@@ -105,8 +103,8 @@ button_t buttons[] = {
     },
     {
         .shape = {
-            .h = 128,
-            .w = 128
+            .h = 18,
+            .w = 18
         },
         .r = 255,
         .g = 0,
@@ -115,8 +113,8 @@ button_t buttons[] = {
     },
     {
         .shape = {
-            .h = 128,
-            .w = 128
+            .h = 18,
+            .w = 18
         },
         .r = 255,
         .g = 0,
@@ -125,8 +123,8 @@ button_t buttons[] = {
     },
     {
         .shape = {
-            .h = 128,
-            .w = 128
+            .h = 18,
+            .w = 18
         },
         .r = 255,
         .g = 0,
@@ -135,8 +133,8 @@ button_t buttons[] = {
     },
     {
         .shape = {
-            .h = 128,
-            .w = 128
+            .h = 18,
+            .w = 18
         },
         .r = 255,
         .g = 0,
@@ -146,8 +144,8 @@ button_t buttons[] = {
 
     {
         .shape = {
-            .h = 128,
-            .w = 128,
+            .h = 18,
+            .w = 18,
         },
         .r = 0,
         .g = 0,
@@ -156,8 +154,8 @@ button_t buttons[] = {
     },
     {
         .shape = {
-            .h = 128,
-            .w = 128
+            .h = 18,
+            .w = 18
         },
         .r = 0,
         .g = 0,
@@ -166,8 +164,8 @@ button_t buttons[] = {
     },
     {
         .shape = {
-            .h = 128,
-            .w = 128
+            .h = 18,
+            .w = 18
         },
         .r = 0,
         .g = 0,
@@ -176,8 +174,8 @@ button_t buttons[] = {
     },
     {
         .shape = {
-            .h = 128,
-            .w = 128
+            .h = 18,
+            .w = 18
         },
         .r = 0,
         .g = 0,
@@ -198,11 +196,11 @@ static void draw_buttons(SDL_Renderer *renderer) {
 
 static inline s_byte_t is_finger_over_button(float x, float y) {
     if (is_landscape) {
-        x *= 1980;
-        y *= 1080;
+        x *= SCREEN_HEIGHT;
+        y *= SCREEN_WIDTH;
     } else {
-        x *= 1080;
-        y *= 1920;
+        x *= SCREEN_WIDTH;
+        y *= SCREEN_HEIGHT;
     }
 
     for (int i = 0; i < 12; i++) {
@@ -361,88 +359,92 @@ static void set_layout(int layout) {
     switch (layout) {
     case 0:
         // portrait
-        gb_screen_rect.w = 1080;
-        gb_screen_rect.h = GB_SCREEN_HEIGHT * (1080 / GB_SCREEN_WIDTH);
+        SDL_RenderSetLogicalSize(renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
+        gb_screen_rect.w = SCREEN_WIDTH;
+        gb_screen_rect.h = GB_SCREEN_HEIGHT * (SCREEN_WIDTH / (float) GB_SCREEN_WIDTH);
         gb_screen_rect.x = 0;
+        gb_screen_rect.y = 0;
 
         // physical buttons
-        buttons[0].shape.x = 128 - 128;
-        buttons[0].shape.y = 1200 + 128;
+        buttons[0].shape.x = 18 - 18;
+        buttons[0].shape.y = 178 + 18;
 
-        buttons[1].shape.x = 128 + 128;
-        buttons[1].shape.y = 1200 + 128;
+        buttons[1].shape.x = 18 + 18;
+        buttons[1].shape.y = 178 + 18;
 
-        buttons[2].shape.x = 128;
-        buttons[2].shape.y = 1200;
+        buttons[2].shape.x = 18;
+        buttons[2].shape.y = 178;
 
-        buttons[3].shape.x = 128;
-        buttons[3].shape.y = 1200 + 128 * 2;
+        buttons[3].shape.x = 18;
+        buttons[3].shape.y = 178 + 18 * 2;
 
-        buttons[4].shape.x = 1080 - 128;
-        buttons[4].shape.y = 1200 + 128 / 2;
+        buttons[4].shape.x = 160 - 18;
+        buttons[4].shape.y = 178 + 18 / 2;
 
-        buttons[5].shape.x = 1080 - 128 * 2;
-        buttons[5].shape.y = 1200 + 128 + 128 / 2;
+        buttons[5].shape.x = 160 - 18 * 2;
+        buttons[5].shape.y = 178 + 18 + 18 / 2;
 
-        buttons[6].shape.x = 1080 / 2 + 128;
-        buttons[6].shape.y = 1920 - 128;
+        buttons[6].shape.x = 160 / 2 + 18;
+        buttons[6].shape.y = 284 - 18;
 
-        buttons[7].shape.x = 1080 / 2 - 128 * 2;
-        buttons[7].shape.y = 1920 - 128;
+        buttons[7].shape.x = 160 / 2 - 18 * 2;
+        buttons[7].shape.y = 284 - 18;
 
         // virtual buttons
-        buttons[8].shape.x = 128 - 128;
-        buttons[8].shape.y = 1200;
+        buttons[8].shape.x = 18 - 18;
+        buttons[8].shape.y = 178;
 
-        buttons[9].shape.x = 128 + 128;
-        buttons[9].shape.y = 1200;
+        buttons[9].shape.x = 18 + 18;
+        buttons[9].shape.y = 178;
 
-        buttons[10].shape.x = 128 - 128;
-        buttons[10].shape.y = 1200 + 128 * 2;
+        buttons[10].shape.x = 18 - 18;
+        buttons[10].shape.y = 178 + 18 * 2;
 
-        buttons[11].shape.x = 128 + 128;
-        buttons[11].shape.y = 1200 + 128 * 2;
+        buttons[11].shape.x = 18 + 18;
+        buttons[11].shape.y = 178 + 18 * 2;
         break;
     case 1:
         // landscape
-        gb_screen_rect.h = 1080;
-        gb_screen_rect.w = GB_SCREEN_WIDTH * (1080 / GB_SCREEN_HEIGHT);
-        gb_screen_rect.x = 1920 / 2 - gb_screen_rect.w / 2;
+        SDL_RenderSetLogicalSize(renderer, SCREEN_HEIGHT, SCREEN_WIDTH);
+        gb_screen_rect.w = GB_SCREEN_WIDTH * (SCREEN_WIDTH / (float) GB_SCREEN_HEIGHT);
+        gb_screen_rect.h = SCREEN_WIDTH;
+        gb_screen_rect.x = SCREEN_HEIGHT / 2 - gb_screen_rect.w / 2;
+        gb_screen_rect.y = 0;
 
         // physical buttons
-        buttons[0].shape.x = 128 - 128;
-        buttons[0].shape.y = 1080 - 128 * 4;
+        buttons[0].shape.x = 18 - 18;
+        buttons[0].shape.y = 160 - 18 * 4;
 
-        buttons[1].shape.x = 128 + 128;
-        buttons[1].shape.y = 1080 - 128 * 4;
+        buttons[1].shape.x = 18 + 18;
+        buttons[1].shape.y = 160 - 18 * 4;
 
-        buttons[2].shape.x = 128;
-        buttons[2].shape.y = 1080 - 128 * 5;
+        buttons[2].shape.x = 18;
+        buttons[2].shape.y = 160 - 18 * 5;
 
-        buttons[3].shape.x = 128;
-        buttons[3].shape.y = 1080 - 128 * 3;
+        buttons[3].shape.x = 18;
+        buttons[3].shape.y = 160 - 18 * 3;
 
-        buttons[4].shape.x = 1920 - 128;
-        buttons[4].shape.y = 1080 - 128 * 4 - 128 / 2;
+        buttons[4].shape.x = 284 - 18;
+        buttons[4].shape.y = 160 - 18 * 4 - 18 / 2;
 
-        buttons[5].shape.x = 1920 - 128 * 2;
-        buttons[5].shape.y = 1080 - 128 * 3 - 128 / 2;
+        buttons[5].shape.x = 284 - 18 * 2;
+        buttons[5].shape.y = 160 - 18 * 3 - 18 / 2;
 
-        buttons[6].shape.x = 1920 - 128 * 3;
-        buttons[6].shape.y = 1080 - 128;
+        buttons[6].shape.x = 284 - 18 * 3 + 1;
+        buttons[6].shape.y = 160 - 18;
 
-        buttons[7].shape.x = 128 * 2;
-        buttons[7].shape.y = 1080 - 128;
+        buttons[7].shape.x = 18 * 2;
+        buttons[7].shape.y = 160 - 18;
 
         // virtual buttons
-        buttons[8].shape.x = 128 - 128;
-        buttons[8].shape.y = 1080 - 128 * 5;
+        buttons[8].shape.x = 18 - 18;
+        buttons[8].shape.y = 160 - 18 * 5;
 
-        buttons[9].shape.x = 128 + 128;
-        buttons[9].shape.y = 1080 - 128 * 5;
+        buttons[9].shape.x = 18 + 18;
+        buttons[9].shape.y = 160 - 18 * 5;
 
-        buttons[10].shape.x = 128 - 128;
-        buttons[10].shape.y = 1080 - 128 * 3;
+        buttons[10].shape.x = 18 - 18;
+        buttons[10].shape.y = 160 - 18 * 3;
 
         buttons[11].shape.x = 128 + 128;
         buttons[11].shape.y = 1080 - 128 * 3;
@@ -481,6 +483,12 @@ static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
     // find and algorithm to balance this (maybe take the time it took to render a frame a change the sample rate
     //                                      accordingly or don't change the rate but the sample count)
     // ----> changing the sample count seems better than changing the sample rate
+
+    // TODO
+    // the culprit is sdl rendercopy is slow on my phone... causing the audio buffer to starve and needing refills as
+    // the apu can't function when the rendering is taking place.
+    //  --> make the apu vary it's sample freq or sample size depending on the time the previous frame took to render
+    //  --> OR make the entire emulator into another thread: may complicate things a lot
 
     // if (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 4)
     //     log("need delay");
@@ -636,7 +644,13 @@ static void handle_input(void) {
 }
 
 static void load_cartridge(const byte_t *rom_data, size_t rom_size, char *new_rom_title) {
-    emulator_t *new_emu = emulator_init_from_data(config.mode, rom_data, rom_size, APU_SAMPLE_COUNT, ppu_vblank_cb, apu_samples_ready_cb);
+    emulator_options_t opts = {
+        .mode = config.mode,
+        .apu_sample_count = APU_SAMPLE_COUNT,
+        .apu_samples_ready_cb = apu_samples_ready_cb,
+        .ppu_vblank_cb = ppu_vblank_cb
+    };
+    emulator_t *new_emu = emulator_init(rom_data, rom_size, &opts);
     if (!new_emu) return;
 
     if (emu) {
@@ -849,14 +863,13 @@ int main(int argc, char **argv) {
 
 
 
-
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
 
     window = SDL_CreateWindow(
         EMULATOR_NAME,
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        1080, // TODO use phone actual width
-        1920, // TODO use phone actual height
+        SCREEN_WIDTH, // TODO use phone actual width
+        SCREEN_HEIGHT, // TODO use phone actual height
         SDL_WINDOW_FULLSCREEN | SDL_WINDOW_RESIZABLE
     );
 
@@ -867,7 +880,7 @@ int main(int argc, char **argv) {
 
     // TODO vsync or not vsync?? see what audio/video syncing does...
     // TODO also compare desktop and android platforms speeds at config.speed == 1.0f to see if it's equivalent
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
     ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
     ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 3;

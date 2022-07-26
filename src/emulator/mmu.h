@@ -101,21 +101,19 @@ typedef enum {
     IE = 0xFFFF // Interrupt Enable
 } mem_map_t;
 
-int mmu_init(emulator_t *emu, char *rom_path);
-
-int mmu_init_from_data(emulator_t *emu, const byte_t *rom_data, size_t size);
+int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size);
 
 void mmu_quit(emulator_t *emu);
 
 void mmu_step(emulator_t *emu, int cycles);
 
 /**
- * only used in instructions (opcode execution)
+ * only used in cpu instructions (opcode execution)
  */
 byte_t mmu_read(emulator_t *emu, word_t address);
 
 /**
- * only used in instructions (opcode execution)
+ * only used in cpu instructions (opcode execution)
  */
 void mmu_write(emulator_t *emu, word_t address, byte_t data);
 

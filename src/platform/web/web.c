@@ -118,7 +118,12 @@ static void save(void) {
 }
 
 void load_cartridge(const byte_t *rom_data, size_t rom_size, char *new_rom_title) {
-    emulator_t *new_emu = emulator_init_from_data(config.mode, rom_data, rom_size, GB_APU_DEFAULT_SAMPLE_COUNT, ppu_vblank_cb, apu_samples_ready_cb);
+    emulator_options_t opts = {
+        .mode = config.mode,
+        .apu_samples_ready_cb = apu_samples_ready_cb,
+        .ppu_vblank_cb = ppu_vblank_cb
+    };
+    emulator_t *new_emu = emulator_init(rom_data, rom_size, &opts);
     if (!new_emu) return;
 
     if (emu) {

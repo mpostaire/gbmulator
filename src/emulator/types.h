@@ -261,8 +261,6 @@ typedef enum {
 
 typedef struct {
     emulator_mode_t mode;
-
-    char *rom_filepath;
     char rom_title[17];
 
     cpu_t *cpu;
@@ -273,3 +271,10 @@ typedef struct {
     joypad_t *joypad;
     link_t *link;
 } emulator_t;
+
+typedef struct {
+    emulator_mode_t mode; // either `DMG` for original game boy emulation or `CGB` for game boy color emulation
+    int apu_sample_count;
+    void (*ppu_vblank_cb)(byte_t *pixels); // the function called whenever the ppu has finished rendering a new frame
+    void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size); // the function called whenever the samples buffer of the apu is full
+} emulator_options_t;

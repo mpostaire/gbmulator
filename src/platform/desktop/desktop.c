@@ -24,10 +24,10 @@
 
 // TODO remove all emulator functions that make file operations (fopen, fread, fwrite) because it should be handled
 // by the individual platforms.
+// TODO ---> emulator_init_from_data should be the only way to init and rename to emulator_init
+// TODO replace all emulator getter/setter of configs (like sound level/palette/...) by emulator_get_opt() and emulator_set_opt() that uses
+//      the emulator_options_t struct like in emulator_init()
 // TODO??? also remove all printfs etc and make a errno-like system so the prints are handled by the platforms???
-
-// TODO make emulator_init arguments a emulator_options_t struct that takes all the arguments and fills NULL members by their defaults
-//      (like SDL does with audio open device)
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
@@ -46,6 +46,8 @@ SDL_bool is_controller_present = SDL_FALSE;
 char window_title[sizeof(EMULATOR_NAME) + 19];
 
 ui_t *ui;
+char *rom_path;
+
 emulator_t *emu;
 
 static void gbmulator_exit(menu_entry_t *entry) {
@@ -187,7 +189,7 @@ static void handle_input(void) {
             case SDLK_F7: case SDLK_F8:
                 if (!emu)
                     break;
-                savestate_path = get_savestate_path(emulator_get_rom_path(emu), event.key.keysym.sym - SDLK_F1);
+                savestate_path = get_savestate_path(rom_path, event.key.keysym.sym - SDLK_F1);
                 if (event.key.keysym.mod & KMOD_SHIFT)
                     emulator_save_state(emu, savestate_path);
                 else
@@ -247,24 +249,75 @@ static void handle_input(void) {
     }
 }
 
+static byte_t *get_rom_data(const char *path, size_t *rom_size) {
+    const char *dot = strrchr(path, '.');
+    if (!dot || (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) && strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))))) {
+        eprintf("%s: wrong file extension (expected .gb or .gbc)\n", path);
+        return NULL;
+    }
+
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        errnoprintf("opening file %s", path);
+        return NULL;
+    }
+
+    fseek(f, 0, SEEK_END);
+    size_t len = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    byte_t *buf = xmalloc(len);
+    if (!fread(buf, len, 1, f)) {
+        errnoprintf("reading %s", path);
+        fclose(f);
+        return NULL;
+    }
+    fclose(f);
+
+    if (rom_size)
+        *rom_size = len;
+    return buf;
+}
+
 /**
  * Load and play a cartridge. 
  * @param path the path of the rom to load or NULL to reload the currently playing rom
  */
-void load_cartridge(char *path) {
-    char *rom_path;
-    if (path) {
-        rom_path = path;
-    } else if (emu) {
-        rom_path = emulator_get_rom_path(emu);
-        char *save_path = get_save_path(emulator_get_rom_path(emu));
+static void load_cartridge(char *path) {
+    if (!emu && !path) return;
+
+    if (emu) {
+        char *save_path = get_save_path(rom_path);
         emulator_save(emu, save_path);
         free(save_path);
-    } else {
-        return;
     }
 
-    emulator_t *new_emu = emulator_init(config.mode, rom_path, GB_APU_DEFAULT_SAMPLE_COUNT, ppu_vblank_cb, apu_samples_ready_cb);
+    size_t rom_size;
+    byte_t *rom_data;
+    if (path) {
+        size_t len = strlen(path);
+        rom_path = xrealloc(rom_path, len + 2);
+        snprintf(rom_path, len + 1, "%s", path);
+
+        rom_data = get_rom_data(rom_path, &rom_size);
+        if (!rom_data) {
+            free(rom_path);
+            rom_path = NULL;
+            return;
+        }
+    } else {
+        byte_t *data = emulator_get_rom_data(emu, &rom_size);
+        rom_data = xmalloc(rom_size);
+        memcpy(rom_data, data, rom_size);
+    }
+
+    emulator_options_t opts = {
+        .mode = config.mode,
+        .apu_samples_ready_cb = apu_samples_ready_cb,
+        .ppu_vblank_cb = ppu_vblank_cb
+    };
+    emulator_t *new_emu = emulator_init(rom_data, rom_size, &opts);
+    free(rom_data);
     if (!new_emu) return;
 
     char *save_path = get_save_path(rom_path);
@@ -609,7 +662,7 @@ int main(int argc, char **argv) {
     }
 
     if (emu) {
-        char *save_path = get_save_path(emulator_get_rom_path(emu));
+        char *save_path = get_save_path(rom_path);
         emulator_save(emu, save_path);
         free(save_path);
         emulator_quit(emu);

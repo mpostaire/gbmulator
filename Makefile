@@ -95,10 +95,10 @@ check: $(SDIR)/**/*.c
 
 clean:
 	rm -rf $(ODIR)
-	cd $(SDIR)/platform/android/android-project && ./gradlew clean
 
 cleaner: clean
 	rm -f $(EXEC)
+	cd $(SDIR)/platform/android/android-project && ./gradlew clean
 
 install:
 	install -m 0755 $(EXEC) /usr/bin

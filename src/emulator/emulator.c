@@ -31,31 +31,19 @@ int emulator_step(emulator_t *emu) {
     return cycles;
 }
 
-emulator_t *emulator_init(emulator_mode_t mode, char *rom_path, int apu_sample_count, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
+emulator_t *emulator_init(const byte_t *rom_data, size_t rom_size, emulator_options_t *opts) {
     emulator_t *emu = xcalloc(1, sizeof(emulator_t));
-    emu->mode = mode;
+    emu->mode = opts->mode >= DMG && opts->mode <= CGB ? opts->mode : DMG;
 
-    if (!mmu_init(emu, rom_path))
+    if (!mmu_init(emu, rom_data, rom_size)) {
+        free(emu);
         return NULL;
+    }
     cpu_init(emu);
-    apu_init(emu, 1.0f, 1.0f, apu_sample_count, apu_samples_ready_cb);
-    ppu_init(emu, ppu_vblank_cb);
-    timer_init(emu);
-    link_init(emu);
-    joypad_init(emu);
-
-    return emu;
-}
-
-emulator_t *emulator_init_from_data(emulator_mode_t mode, const byte_t *rom_data, size_t size, int apu_sample_count, void (*ppu_vblank_cb)(byte_t *pixels), void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
-    emulator_t *emu = xcalloc(1, sizeof(emulator_t));
-    emu->mode = mode;
-
-    if (!mmu_init_from_data(emu, rom_data, size))
-        return NULL;
-    cpu_init(emu);
-    apu_init(emu, 1.0f, 1.0f, apu_sample_count, apu_samples_ready_cb);
-    ppu_init(emu, ppu_vblank_cb);
+    apu_init(emu, 1.0f, 1.0f,
+        opts->apu_sample_count >= 128 ? opts->apu_sample_count : GB_APU_DEFAULT_SAMPLE_COUNT,
+        opts->apu_samples_ready_cb);
+    ppu_init(emu, opts->ppu_vblank_cb);
     timer_init(emu);
     link_init(emu);
     joypad_init(emu);
@@ -185,10 +173,6 @@ void emulator_load_save_data(emulator_t *emu, byte_t *save_data, size_t save_len
 
     if (rtc_len > 0)
         memcpy(&emu->mmu->rtc.value_in_seconds, &save_data[eram_len], rtc_len);
-}
-
-char *emulator_get_rom_path(emulator_t *emu) {
-    return emu->rom_filepath;
 }
 
 char *emulator_get_rom_title(emulator_t *emu) {
