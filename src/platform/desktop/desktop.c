@@ -1,8 +1,5 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <dirent.h>
 #include <SDL2/SDL.h>
 
 #include "../common/ui.h"
@@ -65,56 +62,6 @@ static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
 
-int dir_exists(const char *directory_path) {
-    DIR *dir = opendir(directory_path);
-	if (dir == NULL) {
-		if (errno == ENOENT)
-			return 0;
-		errnoprintf("opendir");
-        exit(EXIT_FAILURE);
-	}
-	closedir(dir);
-	return 1;
-}
-
-void mkdirp(const char *directory_path) {
-    char buf[256];
-    snprintf(buf, sizeof(buf), "%s", directory_path);
-    size_t len = strlen(buf);
-
-    if (buf[len - 1] == '/')
-        buf[len - 1] = 0;
-
-    for (char *p = buf + 1; *p; p++) {
-        if (*p == '/') {
-            *p = 0;
-            if (mkdir(buf, S_IRWXU | S_IRGRP | S_IROTH) && errno != EEXIST) {
-                errnoprintf("mkdir");
-                exit(EXIT_FAILURE);
-            }
-            *p = '/';
-        }
-    }
-
-    if (mkdir(buf, S_IRWXU | S_IRGRP | S_IROTH) && errno != EEXIST) {
-        errnoprintf("mkdir");
-        exit(EXIT_FAILURE);
-    }
-}
-
-void make_parent_dirs(const char *filepath) {
-    char *last_slash = strrchr(filepath, '/');
-    int last_slash_index = last_slash ? (int) (last_slash - filepath) : -1;
-
-    if (last_slash_index != -1) {
-        char directory_path[last_slash_index + 1];
-        snprintf(directory_path, last_slash_index + 1, "%s", filepath);
-
-        if (!dir_exists(directory_path))
-            mkdirp(directory_path);
-    }
-}
-
 static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
     char *xdg = getenv(xdg_variable);
     if (xdg) return xdg;
@@ -135,31 +82,6 @@ static char *get_config_path(void) {
 
     free(xdg_config);
     return config_path;
-}
-
-void load_config(char *path) {
-    FILE *f = fopen(path, "r");
-    if (f) {
-        char buf[512];
-        fread(buf, sizeof(buf), 1, f);
-        config_load_from_buffer(buf);
-        fclose(f);
-    }
-}
-
-static void save_config(const char *path) {
-    size_t len;
-    char *config_buf = config_save_to_buffer(&len);
-    make_parent_dirs(path);
-    FILE *f = fopen(path, "w");
-    if (!f) {
-        errnoprintf("opening file");
-        free(config_buf);
-        return;
-    }
-    fwrite(config_buf, len, 1, f);
-    fclose(f);
-    free(config_buf);
 }
 
 static char *get_save_path(const char *rom_filepath) {
@@ -190,55 +112,6 @@ static char *get_savestate_path(const char *rom_filepath, int slot) {
 
     free(xdg_data);
     return save_path;
-}
-
-static int save_state(emulator_t *emu, const char *path) {
-    make_parent_dirs(path);
-
-    size_t len;
-    byte_t *buf = emulator_get_savestate(emu, &len);
-
-    FILE *f = fopen(path, "wb");
-    if (!f) {
-        errnoprintf("opening %s", path);
-        return 0;
-    }
-
-    if (!fwrite(buf, len, 1, f)) {
-        eprintf("writing savestate to %s\n", path);
-        fclose(f);
-        free(buf);
-        return 0;
-    }
-
-    fclose(f);
-    free(buf);
-    return 1;
-}
-
-static int load_state(emulator_t *emu, const char *path) {
-    FILE *f = fopen(path, "rb");
-    if (!f) {
-        errnoprintf("opening %s", path);
-        return 0;
-    }
-
-    fseek(f, 0, SEEK_END);
-    size_t len = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    byte_t *buf = xmalloc(len);
-    if (!fread(buf, len, 1, f)) {
-        errnoprintf("reading savestate from %s", path);
-        fclose(f);
-        free(buf);
-        return 0;
-    }
-
-    emulator_load_savestate(emu, buf, len);
-    fclose(f);
-    free(buf);
-    return 1;
 }
 
 static void handle_input(void) {
@@ -286,9 +159,9 @@ static void handle_input(void) {
                     break;
                 savestate_path = get_savestate_path(rom_path, event.key.keysym.sym - SDLK_F1);
                 if (event.key.keysym.mod & KMOD_SHIFT)
-                    save_state(emu, savestate_path);
+                    save_state_to_file(emu, savestate_path);
                 else
-                    load_state(emu, savestate_path);
+                    load_state_from_file(emu, savestate_path);
                 free(savestate_path);
                 break;
             }
@@ -374,61 +247,12 @@ static byte_t *get_rom_data(const char *path, size_t *rom_size) {
     return buf;
 }
 
-static void load_save(emulator_t *emu, const char *path) {
-    // load save into ERAM
-    FILE *f = fopen(path, "rb");
-    // if there is a save file, load it into eram
-    if (f) {
-        // no fread checks because a missing/invalid save file is not an error
-
-        fseek(f, 0, SEEK_END);
-        size_t len = ftell(f);
-        fseek(f, 0, SEEK_SET);
-
-        byte_t *buf = xmalloc(len);
-        if (!fread(buf, len, 1, f)) {
-            errnoprintf("reading %s", path);
-            fclose(f);
-            return;
-        }
-        fclose(f);
-        emulator_load_save(emu, buf, len);
-    }
-}
-
-static int save(emulator_t *emu, const char *path) {
-    size_t len;
-    byte_t *save_data = emulator_get_save(emu, &len);
-    if (!save_data) return 0;
-
-    make_parent_dirs(path);
-
-    FILE *f = fopen(path, "wb");
-    if (!f) {
-        errnoprintf("opening the save file");
-        return 0;
-    }
-
-    if (!fwrite(save_data, len, 1, f)) {
-        eprintf("writing to save file\n");
-        fclose(f);
-        return 0;
-    }
-
-    fclose(f);
-    return 1;
-}
-
-/**
- * Load and play a cartridge. 
- * @param path the path of the rom to load or NULL to reload the currently playing rom
- */
 static void load_cartridge(char *path) {
     if (!emu && !path) return;
 
     if (emu) {
         char *save_path = get_save_path(rom_path);
-        save(emu, save_path);
+        save_battery_to_file(emu, save_path);
         free(save_path);
     }
 
@@ -464,15 +288,14 @@ static void load_cartridge(char *path) {
     if (!new_emu) return;
 
     char *save_path = get_save_path(rom_path);
-    load_save(new_emu, save_path);
+    load_battery_from_file(new_emu, save_path);
     free(save_path);
 
     if (emu)
         emulator_quit(emu);
     emu = new_emu;
 
-    char *rom_title = emulator_get_rom_title(emu);
-    snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
+    snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", emulator_get_rom_title(emu));
     SDL_SetWindowTitle(window, window_title);
 
     ui->root_menu->entries[0].disabled = 0; // enable resume menu entry
@@ -584,7 +407,10 @@ static void open_rom(menu_entry_t *entry) {
 }
 
 static void reset_rom(menu_entry_t *entry) {
-    load_cartridge(NULL);
+    if (!emu)
+        return;
+    emulator_reset(emu, config.mode);
+    is_paused = SDL_FALSE;
 }
 
 menu_t link_menu = {
@@ -653,8 +479,8 @@ menu_t main_menu = {
 
 int main(int argc, char **argv) {
     char *config_path = get_config_path();
-    // load_config() must be called before emulator_init() and ui_init()
-    load_config(config_path);
+    // must be called before emulator_init() and ui_init()
+    config_load_from_file(config_path);
     emu = NULL;
 
 
@@ -800,12 +626,12 @@ int main(int argc, char **argv) {
 
     if (emu) {
         char *save_path = get_save_path(rom_path);
-        save(emu, save_path);
+        save_battery_to_file(emu, save_path);
         free(save_path);
         emulator_quit(emu);
     }
 
-    save_config(config_path);
+    config_save_to_file(config_path);
     free(config_path);
 
     ui_free(ui);

@@ -161,3 +161,28 @@ char *config_save_to_buffer(size_t *len) {
 
     return buf;
 }
+
+void config_load_from_file(const char *path) {
+    SDL_RWops *f = SDL_RWFromFile(path, "r");
+    if (f) {
+        char buf[512];
+        SDL_RWread(f, buf, sizeof(buf), 1);
+        config_load_from_buffer(buf);
+        SDL_RWclose(f);
+    }
+}
+
+void config_save_to_file(const char *path) {
+    size_t len;
+    char *config_buf = config_save_to_buffer(&len);
+    make_parent_dirs(path);
+    SDL_RWops *f = SDL_RWFromFile(path, "w");
+    if (!f) {
+        errnoprintf("error opening config file");
+        free(config_buf);
+        return;
+    }
+    SDL_RWwrite(f, config_buf, len, 1);
+    SDL_RWclose(f);
+    free(config_buf);
+}

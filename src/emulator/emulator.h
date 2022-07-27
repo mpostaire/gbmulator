@@ -45,6 +45,8 @@ emulator_t *emulator_init(const byte_t *rom_data, size_t rom_size, emulator_opti
  */
 void emulator_quit(emulator_t *emu);
 
+void emulator_reset(emulator_t *emu, emulator_mode_t mode);
+
 int emulator_start_link(emulator_t *emu, const char *port, int is_ipv6, int mptcp_enabled);
 
 int emulator_connect_to_link(emulator_t *emu, const char *address, const char *port, int is_ipv6, int mptcp_enabled);
@@ -55,7 +57,7 @@ void emulator_joypad_release(emulator_t *emu, joypad_button_t key);
 
 byte_t *emulator_get_save(emulator_t *emu, size_t *save_length);
 
-int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_len);
+int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length);
 
 byte_t *emulator_get_savestate(emulator_t *emu, size_t *length);
 

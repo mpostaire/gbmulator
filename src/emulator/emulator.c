@@ -85,6 +85,44 @@ void emulator_quit(emulator_t *emu) {
     free(emu);
 }
 
+
+void emulator_reset(emulator_t *emu, emulator_mode_t mode) {
+    size_t rom_size = emu->mmu->cartridge_size;
+    byte_t *rom_data = xmalloc(rom_size);
+    memcpy(rom_data, emu->mmu->cartridge, rom_size);
+
+    emu->mode = 0;
+    emulator_options_t opts;
+    emulator_get_options(emu, &opts);
+    opts.mode = mode;
+    emulator_set_options(emu, &opts);
+
+    size_t save_len;
+    byte_t *save_data = emulator_get_save(emu, &save_len);
+
+    cpu_quit(emu);
+    apu_quit(emu);
+    mmu_quit(emu);
+    ppu_quit(emu);
+    timer_quit(emu);
+    link_quit(emu);
+    joypad_quit(emu);
+
+    mmu_init(emu, rom_data, rom_size);
+    cpu_init(emu);
+    apu_init(emu);
+    ppu_init(emu);
+    timer_init(emu);
+    link_init(emu);
+    joypad_init(emu);
+
+    if (save_data)
+        emulator_load_save(emu, save_data, save_len);
+
+    free(rom_data);
+}
+
+
 int emulator_start_link(emulator_t *emu, const char *port, int is_ipv6, int mptcp_enabled) {
     return link_start_server(emu, port, is_ipv6, mptcp_enabled);
 }
@@ -127,7 +165,7 @@ byte_t *emulator_get_save(emulator_t *emu, size_t *save_length) {
     return save_data;
 }
 
-int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_len) {
+int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
     // don't load save if the cartridge has no battery or there is no rtc and no eram banks
     if (!emu->mmu->has_battery || (!emu->mmu->has_rtc && emu->mmu->eram_banks == 0))
         return 0;
@@ -136,7 +174,7 @@ int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_len) {
     size_t rtc_len = emu->mmu->has_rtc ? sizeof(rtc_t) - offsetof(rtc_t, value_in_seconds) : 0;
     size_t total_len = eram_len + rtc_len;
 
-    if (total_len != save_len || total_len == 0)
+    if (total_len != save_length || total_len == 0)
         return 0;
 
     if (eram_len > 0)

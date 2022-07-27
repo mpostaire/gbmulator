@@ -35,3 +35,7 @@ int config_verif_key(SDL_Keycode key);
 void config_load_from_buffer(const char *buf);
 
 char *config_save_to_buffer(size_t *len);
+
+void config_load_from_file(const char *path);
+
+void config_save_to_file(const char *path);

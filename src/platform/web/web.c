@@ -120,8 +120,11 @@ static void save(void) {
 void load_cartridge(const byte_t *rom_data, size_t rom_size, char *new_rom_title) {
     emulator_options_t opts = {
         .mode = config.mode,
-        .apu_samples_ready_cb = apu_samples_ready_cb,
-        .ppu_vblank_cb = ppu_vblank_cb
+        .on_apu_samples_ready = apu_samples_ready_cb,
+        .on_new_frame = ppu_vblank_cb,
+        .apu_speed = config.speed,
+        .apu_sound_level = config.sound,
+        .palette = config.color_palette
     };
     emulator_t *new_emu = emulator_init(rom_data, rom_size, &opts);
     if (!new_emu) return;
@@ -140,10 +143,6 @@ void load_cartridge(const byte_t *rom_data, size_t rom_size, char *new_rom_title
         emulator_load_save(emu, save, save_length);
         free(save);
     }
-
-    emulator_set_apu_speed(emu, config.speed);
-    emulator_set_apu_sound_level(emu, config.sound);
-    emulator_set_color_palette(emu, config.color_palette);
 
     snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
     SDL_SetWindowTitle(window, window_title);
@@ -400,7 +399,7 @@ static void choose_mode(menu_entry_t *entry) {
     if (!emu) {
         EM_ASM({
             setTheme($0);
-        }, config.mode);
+        }, entry->choices.position);
     }
 }
 
@@ -417,19 +416,8 @@ static void open_rom(menu_entry_t *entry) {
 static void reset_rom(menu_entry_t *entry) {
     if (!emu)
         return;
-
-    size_t rom_size;
-    byte_t *cart = emulator_get_rom(emu, &rom_size);
-    byte_t *rom_data = xmalloc(rom_size);
-    memcpy(rom_data, cart, rom_size);
-
-    char *new_rom_title = emulator_get_rom_title_from_data(rom_data, rom_size);
-    for (int i = 0; i < 16; i++)
-        if (new_rom_title[i] == ' ')
-            new_rom_title[i] = '_';
-
-    load_cartridge(rom_data, rom_size, new_rom_title);
-    free(rom_data);
+    emulator_reset(emu, config.mode);
+    is_paused = SDL_FALSE;
 }
 
 menu_t options_menu = {
@@ -500,7 +488,7 @@ int main(int argc, char **argv) {
     options_menu.entries[1].choices.position = config.speed / 0.5f - 2;
     options_menu.entries[2].choices.position = config.sound * 4;
     options_menu.entries[3].choices.position = config.color_palette;
-    options_menu.entries[4].choices.position = config.mode;
+    options_menu.entries[4].choices.position = config.mode - 1;
     options_menu.entries[4].choices.description = xmalloc(16);
     snprintf(options_menu.entries[4].choices.description, 16, "Effect on reset");
 

@@ -46,8 +46,6 @@ SDL_AudioDeviceID audio_device;
 SDL_GameController *pad;
 SDL_bool is_controller_present;
 
-char *rom_title;
-
 ui_t *ui;
 emulator_t *emu;
 
@@ -501,60 +499,6 @@ static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
 
-void load_config(char *path) {
-    SDL_RWops *f = SDL_RWFromFile(path, "r");
-    if (f) {
-        char buf[512];
-        SDL_RWread(f, buf, sizeof(buf), 1);
-        config_load_from_buffer(buf);
-        SDL_RWclose(f);
-    }
-}
-
-static void save_config(const char *path) {
-    size_t len;
-    char *config_buf = config_save_to_buffer(&len);
-    SDL_RWops *f = SDL_RWFromFile(path, "w");
-    if (!f) {
-        log("error opening config file");
-        free(config_buf);
-        return;
-    }
-    SDL_RWwrite(f, config_buf, len, 1);
-    SDL_RWclose(f);
-    free(config_buf);
-}
-
-// static char *get_savestate_path(const char *rom_filepath, int slot) {
-//     char *xdg_data = get_xdg_path("XDG_DATA_HOME", ".local/share");
-
-//     char *last_slash = strrchr(rom_filepath, '/');
-//     char *last_period = strrchr(last_slash ? last_slash : rom_filepath, '.');
-//     int last_period_index = last_period ? (int) (last_period - last_slash) : strlen(rom_filepath);
-
-//     size_t len = strlen(xdg_data) + strlen(last_slash);
-//     char *save_path = xmalloc(len + 33);
-//     snprintf(save_path, len + 32, "%s/gbmulator/savestates%.*s-%d.gbstate", xdg_data, last_period_index, last_slash, slot);
-
-//     free(xdg_data);
-//     return save_path;
-// }
-
-static void save(void) {
-    size_t save_length;
-    byte_t *save_data = emulator_get_save(emu, &save_length);
-    if (!save_data) return;
-
-    SDL_RWops *f = SDL_RWFromFile(rom_title, "w");
-    if (!f) {
-        log("error opening save file");
-        return;
-    }
-    SDL_RWwrite(f, save_data, save_length, 1);
-    SDL_RWclose(f);
-    free(save_data);
-}
-
 static void handle_input(void) {
     SDL_Event event;
     char *savestate_path;
@@ -625,8 +569,8 @@ static void handle_input(void) {
             is_paused = SDL_TRUE;
             ui_back_to_root_menu(ui);
             if (emu)
-                save();
-            save_config("config");
+                save_battery_to_file(emu, emulator_get_rom_title(emu));
+            config_save_to_file("config");
             break;
         case SDL_APP_DIDENTERFOREGROUND:
             break;
@@ -644,37 +588,26 @@ static void handle_input(void) {
     }
 }
 
-static void load_cartridge(const byte_t *rom_data, size_t rom_size, char *new_rom_title) {
+static void load_cartridge(const byte_t *rom_data, size_t rom_size) {
     emulator_options_t opts = {
-        .mode = config.mode,
         .apu_sample_count = APU_SAMPLE_COUNT,
-        .apu_samples_ready_cb = apu_samples_ready_cb,
-        .ppu_vblank_cb = ppu_vblank_cb
+        .mode = config.mode,
+        .on_apu_samples_ready = apu_samples_ready_cb,
+        .on_new_frame = ppu_vblank_cb,
+        .apu_speed = config.speed,
+        .apu_sound_level = config.sound,
+        .palette = config.color_palette
     };
     emulator_t *new_emu = emulator_init(rom_data, rom_size, &opts);
     if (!new_emu) return;
 
     if (emu) {
-        save();
-        free(rom_title);
+        save_battery_to_file(emu, emulator_get_rom_title(emu));
         emulator_quit(emu);
     }
-    rom_title = new_rom_title;
     emu = new_emu;
 
-    SDL_RWops *f = SDL_RWFromFile(rom_title, "r");
-    if (f) {
-        size_t save_length = SDL_RWsize(f);
-        byte_t *save_data = xmalloc(save_length);
-        SDL_RWread(f, save_data, save_length, 1);
-        emulator_load_save(emu, save_data, save_length);
-        SDL_RWclose(f);
-        free(save_data);
-    }
-
-    emulator_set_apu_speed(emu, config.speed);
-    emulator_set_apu_sound_level(emu, config.sound);
-    emulator_set_color_palette(emu, config.color_palette);
+    load_battery_from_file(emu, emulator_get_rom_title(emu));
 
     is_rom_loaded = SDL_TRUE;
     is_paused = SDL_FALSE;
@@ -751,12 +684,7 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_GBmulator_receiveROMDa
     jboolean is_copy;
     jbyte *rom_data = (*env)->GetByteArrayElements(env, data, &is_copy);
 
-    char *new_rom_title = emulator_get_rom_title_from_data((byte_t *) rom_data, size);
-    for (int i = 0; i < 16; i++)
-        if (new_rom_title[i] == ' ')
-            new_rom_title[i] = '_';
-
-    load_cartridge((byte_t *) rom_data, size, new_rom_title);
+    load_cartridge((byte_t *) rom_data, size);
 
     (*env)->ReleaseByteArrayElements(env, data, rom_data, JNI_ABORT);
 }
@@ -785,19 +713,8 @@ static void open_rom(menu_entry_t *entry) {
 static void reset_rom(menu_entry_t *entry) {
     if (!emu)
         return;
-
-    size_t rom_size;
-    byte_t *cart = emulator_get_rom(emu, &rom_size);
-    byte_t *rom_data = xmalloc(rom_size);
-    memcpy(rom_data, cart, rom_size);
-
-    char *new_rom_title = emulator_get_rom_title_from_data(rom_data, rom_size);
-    for (int i = 0; i < 16; i++)
-        if (new_rom_title[i] == ' ')
-            new_rom_title[i] = '_';
-
-    load_cartridge(rom_data, rom_size, new_rom_title);
-    free(rom_data);
+    emulator_reset(emu, config.mode);
+    is_paused = SDL_FALSE;
 }
 
 menu_t options_menu = {
@@ -831,9 +748,8 @@ menu_t main_menu = {
 
 
 int main(int argc, char **argv) {
-    char *config_path = "config";
-    // load_config() must be called before emulator_init() and ui_init()
-    load_config(config_path);
+    // must be called before emulator_init() and ui_init()
+    config_load_from_file("config");
     emu = NULL;
 
     // initialize global variables here and not at their initialization as they can still have their
@@ -853,7 +769,7 @@ int main(int argc, char **argv) {
     options_menu.entries[0].choices.position = config.speed / 0.5f - 2;
     options_menu.entries[1].choices.position = config.sound * 4;
     options_menu.entries[2].choices.position = config.color_palette;
-    options_menu.entries[3].choices.position = config.mode;
+    options_menu.entries[3].choices.position = config.mode - 1;
     options_menu.entries[3].choices.description = xmalloc(16);
     snprintf(options_menu.entries[3].choices.description, 16, "Effect on reset");
     ui_back_to_root_menu(ui);
@@ -949,15 +865,12 @@ int main(int argc, char **argv) {
     }
 
     if (emu) {
-        save();
+        save_battery_to_file(emu, emulator_get_rom_title(emu));
         emulator_quit(emu);
     }
 
-    if (rom_title)
-        free(rom_title);
-
     // save config
-    save_config("config");
+    config_save_to_file("config");
 
     ui_free(ui);
 
