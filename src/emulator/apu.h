@@ -17,10 +17,7 @@ void apu_step(emulator_t *emu, int cycles);
 
 /**
  * Initializes the internal state of the ppu.
- * @param global_sound_level the configurable sound output multiplier applied to all channels in stereo
- * @param speed the configurable multiplier to increase the sampling rate (should be the same as the emulation speed multiplier)
- * @param samples_ready_cb the function called whenever the samples buffer is full
  */
-void apu_init(emulator_t *emu, float global_sound_level, float speed, int sample_count, void (*samples_ready_cb)(float *audio_buffer, int audio_buffer_size));
+void apu_init(emulator_t *emu);
 
 void apu_quit(emulator_t *emu);

@@ -8,9 +8,9 @@
 
 #define PPU_SET_MODE(m) mmu->mem[STAT] = (mmu->mem[STAT] & 0xFC) | (m)
 
-#define SET_PIXEL_DMG(ppu_ptr, x, y, color) { *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = ppu_color_palettes[(ppu_ptr)->current_color_palette][(color)][0]; \
-                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 1) = ppu_color_palettes[(ppu_ptr)->current_color_palette][(color)][1]; \
-                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 2) = ppu_color_palettes[(ppu_ptr)->current_color_palette][(color)][2]; }
+#define SET_PIXEL_DMG(ppu_ptr, x, y, color, palette) { *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = ppu_color_palettes[(palette)][(color)][0]; \
+                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 1) = ppu_color_palettes[(palette)][(color)][1]; \
+                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 2) = ppu_color_palettes[(palette)][(color)][2]; }
 
 #define SET_PIXEL_CGB(ppu_ptr, x, y, r, g, b) { *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = (r); \
                             *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 1) = (g); \
@@ -87,7 +87,7 @@ static void draw_bg_win(emulator_t *emu) {
         //      the problem doesn't come from sprite limit over 10 because this limit is correctly implemented
         // background and window disabled, draw white pixel
         if (!CHECK_BIT(mmu->mem[LCDC], 0)) {
-            SET_PIXEL_DMG(ppu, x, y, get_color_dmg(mmu, DMG_WHITE, BGP));
+            SET_PIXEL_DMG(ppu, x, y, get_color_dmg(mmu, DMG_WHITE, BGP), emu->ppu_color_palette);
             continue;
         }
 
@@ -149,7 +149,7 @@ static void draw_bg_win(emulator_t *emu) {
         // cache color_id to be used for objects rendering
         ppu->scanline_cache_color_data[x] = color_id;
         // set pixel color using BG (for background and window) palette data
-        SET_PIXEL_DMG(ppu, x, y, get_color_dmg(mmu, color_id, BGP));
+        SET_PIXEL_DMG(ppu, x, y, get_color_dmg(mmu, color_id, BGP), emu->ppu_color_palette);
     }
 
     // increment ppu->wly if the window is present in this scanline
@@ -240,7 +240,7 @@ static void draw_objects(emulator_t *emu) {
                 continue;
 
             // set pixel color using palette
-            SET_PIXEL_DMG(ppu, pixel_x, y, get_color_dmg(mmu, color_id, palette));
+            SET_PIXEL_DMG(ppu, pixel_x, y, get_color_dmg(mmu, color_id, palette), emu->ppu_color_palette);
         }
     }
 }
@@ -554,7 +554,7 @@ void ppu_step(emulator_t *emu, int cycles) {
             for (int i = 0; i < GB_SCREEN_WIDTH; i++) {
                 for (int j = 0; j < GB_SCREEN_HEIGHT; j++) {
                     if (emu->mode == DMG) {
-                        SET_PIXEL_DMG(ppu, i, j, DMG_WHITE);
+                        SET_PIXEL_DMG(ppu, i, j, DMG_WHITE, emu->ppu_color_palette);
                     } else {
                         byte_t r, g, b;
                         get_color_cgb(0xFFFF, &r, &g, &b);
@@ -564,8 +564,8 @@ void ppu_step(emulator_t *emu, int cycles) {
 
             }
 
-            if (ppu->new_frame_cb)
-                ppu->new_frame_cb(ppu->pixels);
+            if (emu->on_new_frame)
+                emu->on_new_frame(ppu->pixels);
             ppu->is_lcd_turning_on = 1;
         }
 
@@ -626,8 +626,8 @@ void ppu_step(emulator_t *emu, int cycles) {
                     break;
                 }
 
-                if (ppu->new_frame_cb)
-                    ppu->new_frame_cb(ppu->pixels);
+                if (emu->on_new_frame)
+                    emu->on_new_frame(ppu->pixels);
             } else {
                 PPU_SET_MODE(PPU_MODE_OAM);
                 if (CHECK_BIT(mmu->mem[STAT], 5))
@@ -655,9 +655,8 @@ void ppu_step(emulator_t *emu, int cycles) {
     }
 }
 
-void ppu_init(emulator_t *emu, void (*new_frame_cb)(byte_t *pixels)) {
+void ppu_init(emulator_t *emu) {
     emu->ppu = xcalloc(1, sizeof(ppu_t));
-    emu->ppu->new_frame_cb = new_frame_cb;
     emu->ppu->pixels = xmalloc(GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 3);
     emu->ppu->scanline_cache_color_data = xmalloc(GB_SCREEN_WIDTH);
     emu->ppu->obj_pixel_priority = xmalloc(GB_SCREEN_WIDTH);

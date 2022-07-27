@@ -25,10 +25,6 @@
 // TODO: in pokemon gold (in CGB and DMG modes) at the beginning animation of a battle, when the wild pokemon slides to the
 // right, at the last moment, the top of the pokemon's sprite will appear for a few frames where the combat menu should be located
 
-// TODO replace all emulator getter/setter of configs (like sound level/palette/...) by emulator_get_opt() and emulator_set_opt() that uses
-//      the emulator_options_t struct like in emulator_init()
-// TODO refactor all platform specific code and put the shared code in src/platform/common/
-
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
 SDL_bool is_rom_loaded = SDL_FALSE;
@@ -457,8 +453,11 @@ static void load_cartridge(char *path) {
 
     emulator_options_t opts = {
         .mode = config.mode,
-        .apu_samples_ready_cb = apu_samples_ready_cb,
-        .ppu_vblank_cb = ppu_vblank_cb
+        .on_apu_samples_ready = apu_samples_ready_cb,
+        .on_new_frame = ppu_vblank_cb,
+        .apu_speed = config.speed,
+        .apu_sound_level = config.sound,
+        .palette = config.color_palette
     };
     emulator_t *new_emu = emulator_init(rom_data, rom_size, &opts);
     free(rom_data);
@@ -471,10 +470,6 @@ static void load_cartridge(char *path) {
     if (emu)
         emulator_quit(emu);
     emu = new_emu;
-
-    emulator_set_apu_speed(emu, config.speed);
-    emulator_set_apu_sound_level(emu, config.sound);
-    emulator_set_color_palette(emu, config.color_palette);
 
     char *rom_title = emulator_get_rom_title(emu);
     snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", rom_title);
@@ -524,14 +519,12 @@ static void choose_sound(menu_entry_t *entry) {
 
 static void choose_color(menu_entry_t *entry) {
     config.color_palette = entry->choices.position;
-    if (emu) {
-        emulator_update_pixels_with_palette(emu, config.color_palette);
-        emulator_set_color_palette(emu, config.color_palette);
-    }
+    if (emu)
+        emulator_set_palette(emu, config.color_palette);
 }
 
 static void choose_mode(menu_entry_t *entry) {
-    config.mode = entry->choices.position;
+    config.mode = entry->choices.position + 1;
 }
 
 static void choose_link_mode(menu_entry_t *entry) {
@@ -673,7 +666,7 @@ int main(int argc, char **argv) {
     options_menu.entries[1].choices.position = config.speed / 0.5f - 2;
     options_menu.entries[2].choices.position = config.sound * 4;
     options_menu.entries[3].choices.position = config.color_palette;
-    options_menu.entries[4].choices.position = config.mode;
+    options_menu.entries[4].choices.position = config.mode - 1;
     options_menu.entries[4].choices.description = xmalloc(16);
     snprintf(options_menu.entries[4].choices.description, 16, "Effect on reset");
 

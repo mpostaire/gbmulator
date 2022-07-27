@@ -25,6 +25,16 @@ typedef struct __attribute__((packed)) {
     gbtimer_t timer;
 } savestate_data_t;
 
+emulator_options_t defaults_opts = {
+    .mode = DMG,
+    .palette = PPU_COLOR_PALETTE_ORIG,
+    .apu_speed = 1.0f,
+    .apu_sound_level = 1.0f,
+    .apu_sample_count = GB_APU_DEFAULT_SAMPLE_COUNT,
+    .on_apu_samples_ready = NULL,
+    .on_new_frame = NULL
+};
+
 int emulator_step(emulator_t *emu) {
     // TODO make timings accurate by forcing each cpu_step() to take 4 cycles: if it's not enough to finish an instruction,
     // the next cpu_step() will resume the previous instruction. This will makes the timer "hack" (increment within a loop and not an if)
@@ -48,17 +58,15 @@ int emulator_step(emulator_t *emu) {
 
 emulator_t *emulator_init(const byte_t *rom_data, size_t rom_size, emulator_options_t *opts) {
     emulator_t *emu = xcalloc(1, sizeof(emulator_t));
-    emu->mode = opts->mode >= DMG && opts->mode <= CGB ? opts->mode : DMG;
+    emulator_set_options(emu, opts);
 
     if (!mmu_init(emu, rom_data, rom_size)) {
         free(emu);
         return NULL;
     }
     cpu_init(emu);
-    apu_init(emu, 1.0f, 1.0f,
-        opts->apu_sample_count >= 128 ? opts->apu_sample_count : GB_APU_DEFAULT_SAMPLE_COUNT,
-        opts->apu_samples_ready_cb);
-    ppu_init(emu, opts->ppu_vblank_cb);
+    apu_init(emu);
+    ppu_init(emu);
     timer_init(emu);
     link_init(emu);
     joypad_init(emu);
@@ -140,80 +148,6 @@ int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_len) {
     return 1;
 }
 
-char *emulator_get_rom_title(emulator_t *emu) {
-    return emu->rom_title;
-}
-
-byte_t *emulator_get_rom(emulator_t *emu, size_t *rom_size) {
-    if (rom_size)
-        *rom_size = emu->mmu->cartridge_size;
-    return emu->mmu->cartridge;
-}
-
-char *emulator_get_rom_title_from_data(byte_t *rom_data, size_t size) {
-    if (size < 0x144)
-        return NULL;
-    char *rom_title = xmalloc(17);
-    memcpy(rom_title, (char *) &rom_data[0x134], 16);
-    rom_title[16] = '\0';
-    if (rom_data[0x0143] == 0xC0 || rom_data[0x0143] == 0x80)
-        rom_title[15] = '\0';
-    return rom_title;
-}
-
-void emulator_update_pixels_with_palette(emulator_t *emu, byte_t new_palette) {
-    // replace old color values of the pixels with the new ones according to the new palette
-    for (int i = 0; i < GB_SCREEN_WIDTH; i++) {
-        for (int j = 0; j < GB_SCREEN_HEIGHT; j++) {
-            byte_t *R = (emu->ppu->pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3)) ;
-            byte_t *G = (emu->ppu->pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3) + 1);
-            byte_t *B = (emu->ppu->pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3) + 2);
-
-            // find which color is at pixel (i,j)
-            for (dmg_color_t c = DMG_WHITE; c <= DMG_BLACK; c++) {
-                if (*R == ppu_color_palettes[emu->ppu->current_color_palette][c][0] &&
-                    *G == ppu_color_palettes[emu->ppu->current_color_palette][c][1] &&
-                    *B == ppu_color_palettes[emu->ppu->current_color_palette][c][2]) {
-
-                    // replace old color value by the new one according to the new palette
-                    *R = ppu_color_palettes[new_palette][c][0];
-                    *G = ppu_color_palettes[new_palette][c][1];
-                    *B = ppu_color_palettes[new_palette][c][2];
-                    break;
-                }
-            }
-        }
-    }
-}
-
-byte_t emulator_get_color_palette(emulator_t *emu) {
-    return emu->ppu->current_color_palette;
-}
-
-void emulator_set_color_palette(emulator_t *emu, color_palette_t palette) {
-    emu->ppu->current_color_palette = palette;
-}
-
-byte_t *emulator_get_color_values(emulator_t *emu, dmg_color_t color) {
-    return ppu_color_palettes[emu->ppu->current_color_palette][color];
-}
-
-byte_t *emulator_get_color_values_from_palette(color_palette_t palette, dmg_color_t color) {
-    return ppu_color_palettes[palette][color];
-}
-
-byte_t *emulator_get_pixels(emulator_t *emu) {
-    return emu->ppu->pixels;
-}
-
-void emulator_set_apu_speed(emulator_t *emu, float speed) {
-    emu->apu->speed = speed;
-}
-
-void emulator_set_apu_sound_level(emulator_t *emu, float level) {
-    emu->apu->global_sound_level = CLAMP(level, 0.0f, 1.0f);
-}
-
 byte_t *emulator_get_savestate(emulator_t *emu, size_t *length) {
     savestate_data_t *savestate = xmalloc(sizeof(savestate_data_t));
 
@@ -255,13 +189,114 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
     memcpy(emu->timer, &savestate->timer, sizeof(gbtimer_t));
 
     // resets apu's internal state to prevent glitchy audio if resuming from state without sound playing from state with sound playing
-    float sound = emu->apu->global_sound_level;
-    float speed = emu->apu->speed;
-    int sample_count = emu->apu->sample_count;
-    void (*cb)(float *, int);
-    cb = emu->apu->samples_ready_cb;
     apu_quit(emu);
-    apu_init(emu, sound, speed, sample_count, cb);
+    apu_init(emu);
 
     return 1;
+}
+
+char *emulator_get_rom_title(emulator_t *emu) {
+    return emu->rom_title;
+}
+
+byte_t *emulator_get_rom(emulator_t *emu, size_t *rom_size) {
+    if (rom_size)
+        *rom_size = emu->mmu->cartridge_size;
+    return emu->mmu->cartridge;
+}
+
+char *emulator_get_rom_title_from_data(byte_t *rom_data, size_t size) {
+    if (size < 0x144)
+        return NULL;
+    char *rom_title = xmalloc(17);
+    memcpy(rom_title, (char *) &rom_data[0x134], 16);
+    rom_title[16] = '\0';
+    if (rom_data[0x0143] == 0xC0 || rom_data[0x0143] == 0x80)
+        rom_title[15] = '\0';
+    return rom_title;
+}
+
+void emulator_update_pixels_with_palette(emulator_t *emu, byte_t new_palette) {
+    // replace old color values of the pixels with the new ones according to the new palette
+    for (int i = 0; i < GB_SCREEN_WIDTH; i++) {
+        for (int j = 0; j < GB_SCREEN_HEIGHT; j++) {
+            byte_t *R = (emu->ppu->pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3)) ;
+            byte_t *G = (emu->ppu->pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3) + 1);
+            byte_t *B = (emu->ppu->pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3) + 2);
+
+            // find which color is at pixel (i,j)
+            for (dmg_color_t c = DMG_WHITE; c <= DMG_BLACK; c++) {
+                if (*R == ppu_color_palettes[emu->ppu_color_palette][c][0] &&
+                    *G == ppu_color_palettes[emu->ppu_color_palette][c][1] &&
+                    *B == ppu_color_palettes[emu->ppu_color_palette][c][2]) {
+
+                    // replace old color value by the new one according to the new palette
+                    *R = ppu_color_palettes[new_palette][c][0];
+                    *G = ppu_color_palettes[new_palette][c][1];
+                    *B = ppu_color_palettes[new_palette][c][2];
+                    break;
+                }
+            }
+        }
+    }
+}
+
+void emulator_get_options(emulator_t *emu, emulator_options_t *opts) {
+    opts->mode = emu->mode;
+    opts->apu_sample_count = emu->apu_sample_count;
+    opts->on_apu_samples_ready = emu->on_apu_samples_ready;
+    opts->apu_speed = emu->apu_speed;
+    opts->apu_sound_level = emu->apu_sound_level;
+    opts->on_new_frame = emu->on_new_frame;
+    opts->palette = emu->ppu_color_palette;
+}
+
+void emulator_set_options(emulator_t *emu, emulator_options_t *opts) {
+    if (!opts)
+        opts = &defaults_opts;
+
+    // allow changes of mode and apu_sample_count only once (inside emulator_init())
+    if (!emu->mode) {
+        emu->mode = opts->mode >= DMG && opts->mode <= CGB ? opts->mode : defaults_opts.mode;
+        emu->apu_sample_count = opts->apu_sample_count >= 128 ? opts->apu_sample_count : defaults_opts.apu_sample_count;
+    }
+
+    emu->on_apu_samples_ready = opts->on_apu_samples_ready;
+    emu->apu_speed = opts->apu_speed < 1.0f ? defaults_opts.apu_speed : opts->apu_speed;
+    emu->apu_sound_level = opts->apu_sound_level > 1.0f ? defaults_opts.apu_sound_level : opts->apu_sound_level;
+    emu->on_new_frame = opts->on_new_frame;
+    emu->ppu_color_palette = opts->palette >= 0 && opts->palette < PPU_COLOR_PALETTE_MAX ? opts->palette : defaults_opts.palette;
+}
+
+byte_t *emulator_get_color_values(emulator_t *emu, dmg_color_t color) {
+    return ppu_color_palettes[emu->ppu_color_palette][color];
+}
+
+byte_t *emulator_get_color_values_from_palette(color_palette_t palette, dmg_color_t color) {
+    return ppu_color_palettes[palette][color];
+}
+
+byte_t *emulator_get_pixels(emulator_t *emu) {
+    return emu->ppu->pixels;
+}
+
+void emulator_set_apu_speed(emulator_t *emu, float speed) {
+    emulator_options_t opts;
+    emulator_get_options(emu, &opts);
+    opts.apu_speed = speed;
+    emulator_set_options(emu, &opts);
+}
+
+void emulator_set_apu_sound_level(emulator_t *emu, float level) {
+    emulator_options_t opts;
+    emulator_get_options(emu, &opts);
+    opts.apu_sound_level = level;
+    emulator_set_options(emu, &opts);
+}
+
+void emulator_set_palette(emulator_t *emu, color_palette_t palette) {
+    emulator_options_t opts;
+    emulator_get_options(emu, &opts);
+    opts.palette = palette;
+    emulator_set_options(emu, &opts);
 }

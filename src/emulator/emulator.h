@@ -36,7 +36,7 @@ inline void emulator_run_cycles(emulator_t *emu, int cycles_limit) {
  * Inits the emulator.
  * @param rom_data a buffer containing the rom the emulator will play
  * @param rom_size the size of the `rom_data`
- * @param opts the initialization options of the emulator 
+ * @param opts the initialization options of the emulator or NULL for defaults.
  */
 emulator_t *emulator_init(const byte_t *rom_data, size_t rom_size, emulator_options_t *opts);
 
@@ -57,6 +57,10 @@ byte_t *emulator_get_save(emulator_t *emu, size_t *save_length);
 
 int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_len);
 
+byte_t *emulator_get_savestate(emulator_t *emu, size_t *length);
+
+int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length);
+
 char *emulator_get_rom_title(emulator_t *emu);
 
 char *emulator_get_rom_title_from_data(byte_t *rom_data, size_t size);
@@ -68,13 +72,13 @@ byte_t *emulator_get_rom(emulator_t *emu, size_t *rom_size);
  */
 void emulator_update_pixels_with_palette(emulator_t *emu, byte_t new_palette);
 
-byte_t emulator_get_color_palette(emulator_t *emu);
+void emulator_get_options(emulator_t *emu, emulator_options_t *opts);
 
-byte_t *emulator_get_color_values_from_palette(color_palette_t palette, dmg_color_t color);
-
-void emulator_set_color_palette(emulator_t *emu, color_palette_t palette);
+void emulator_set_options(emulator_t *emu, emulator_options_t *opts);
 
 byte_t *emulator_get_color_values(emulator_t *emu, dmg_color_t color);
+
+byte_t *emulator_get_color_values_from_palette(color_palette_t palette, dmg_color_t color);
 
 byte_t *emulator_get_pixels(emulator_t *emu);
 
@@ -82,6 +86,4 @@ void emulator_set_apu_speed(emulator_t *emu, float speed);
 
 void emulator_set_apu_sound_level(emulator_t *emu, float level);
 
-byte_t *emulator_get_savestate(emulator_t *emu, size_t *length);
-
-int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length);
+void emulator_set_palette(emulator_t *emu, color_palette_t palette);

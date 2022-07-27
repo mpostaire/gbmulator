@@ -391,12 +391,12 @@ static void choose_color(menu_entry_t *entry) {
     config.color_palette = entry->choices.position;
     if (emu) {
         emulator_update_pixels_with_palette(emu, config.color_palette);
-        emulator_set_color_palette(emu, config.color_palette);
+        emulator_set_palette(emu, config.color_palette);
     }
 }
 
 static void choose_mode(menu_entry_t *entry) {
-    config.mode = entry->choices.position;
+    config.mode = entry->choices.position + 1;
     if (!emu) {
         EM_ASM({
             setTheme($0);

@@ -164,9 +164,6 @@ typedef struct {
 } mmu_t;
 
 typedef struct {
-    void (*new_frame_cb)(byte_t *pixels);
-    byte_t current_color_palette;
-
     byte_t *pixels;
     byte_t *scanline_cache_color_data;
     // stores the x position of each pixel drawn by the highest priority object
@@ -214,13 +211,7 @@ typedef struct {
 } channel_t;
 
 typedef struct {
-    float global_sound_level;
-
-    int sample_count;
-
     int take_sample_cycles_count;
-    float speed;
-    void (*samples_ready_cb)(float *audio_buffer, int audio_buffer_size);
 
     int audio_buffer_index;
     float *audio_buffer;
@@ -255,12 +246,19 @@ typedef struct {
 } link_t;
 
 typedef enum {
-    DMG,
+    DMG = 1,
     CGB
 } emulator_mode_t;
 
 typedef struct {
     emulator_mode_t mode;
+    float apu_sound_level;
+    float apu_speed;
+    int apu_sample_count;
+    byte_t ppu_color_palette;
+    void (*on_apu_samples_ready)(float *audio_buffer, int audio_buffer_size);
+    void (*on_new_frame)(byte_t *pixels);
+
     char rom_title[17];
 
     cpu_t *cpu;
@@ -274,7 +272,10 @@ typedef struct {
 
 typedef struct {
     emulator_mode_t mode; // either `DMG` for original game boy emulation or `CGB` for game boy color emulation
+    color_palette_t palette;
+    float apu_speed;
+    float apu_sound_level;
     int apu_sample_count;
-    void (*ppu_vblank_cb)(byte_t *pixels); // the function called whenever the ppu has finished rendering a new frame
-    void (*apu_samples_ready_cb)(float *audio_buffer, int audio_buffer_size); // the function called whenever the samples buffer of the apu is full
+    void (*on_new_frame)(byte_t *pixels); // the function called whenever the ppu has finished rendering a new frame
+    void (*on_apu_samples_ready)(float *audio_buffer, int audio_buffer_size); // the function called whenever the samples buffer of the apu is full
 } emulator_options_t;

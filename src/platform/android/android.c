@@ -11,11 +11,12 @@
 #define SCREEN_WIDTH 160
 #define SCREEN_HEIGHT 284
 
-// TODO make ui in an android activity with android ui api (no need for keybindings/scale configs but need for landscape/portrait layouts config)
 // TODO savestates ui
 // TODO bluetooth link cable
 // TODO test with gamepad controller (PS3, ...)
 // TODO replace all printf() by __android_log_print()
+
+// TODO make ui in an android activity with android ui api (no need for keybindings/scale configs but need for landscape/portrait layouts config)
 
 // TODO button (and screen??) layout designer for both landscape and portrait (like drastic ds emulator)
 //      add to config file the layouts: each element has a normalized x,y coordinates and width/heigth.
@@ -733,14 +734,12 @@ static void choose_sound(menu_entry_t *entry) {
 
 static void choose_color(menu_entry_t *entry) {
     config.color_palette = entry->choices.position;
-    if (emu) {
-        emulator_update_pixels_with_palette(emu, config.color_palette);
-        emulator_set_color_palette(emu, config.color_palette);
-    }
+    if (emu)
+        emulator_set_palette(emu, config.color_palette);
 }
 
 static void choose_mode(menu_entry_t *entry) {
-    config.mode = entry->choices.position;
+    config.mode = entry->choices.position + 1;
 }
 
 

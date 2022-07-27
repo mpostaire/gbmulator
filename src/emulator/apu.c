@@ -231,7 +231,7 @@ void apu_step(emulator_t *emu, int cycles) {
         channel_step(&apu->channel4);
 
         apu->take_sample_cycles_count++;
-        if (apu->take_sample_cycles_count >= (GB_CPU_FREQ / GB_APU_SAMPLE_RATE) * apu->speed) { // 44100 Hz (if speed == 1.0f)
+        if (apu->take_sample_cycles_count >= (GB_CPU_FREQ / GB_APU_SAMPLE_RATE) * emu->apu_speed) { // 44100 Hz (if speed == 1.0f)
             apu->take_sample_cycles_count = 0;
 
             float S01_volume = ((mmu->mem[NR50] & 0x07) + 1) / 8.0f; // keep it between 0.0f and 1.0f
@@ -246,29 +246,25 @@ void apu_step(emulator_t *emu, int cycles) {
                                 + (CHECK_BIT(mmu->mem[NR51], APU_CHANNEL_4 + 4) ? channel_dac(emu, &apu->channel4) : 0.0f)) / 4.0f;
 
             // S02 (left)
-            apu->audio_buffer[apu->audio_buffer_index++] = S02_output * S02_volume * apu->global_sound_level;
+            apu->audio_buffer[apu->audio_buffer_index++] = S02_output * S02_volume * emu->apu_sound_level;
             // S01 (right)
-            apu->audio_buffer[apu->audio_buffer_index++] = S01_output * S01_volume * apu->global_sound_level;
+            apu->audio_buffer[apu->audio_buffer_index++] = S01_output * S01_volume * emu->apu_sound_level;
         }
 
-        if (apu->audio_buffer_index >= apu->sample_count) {
+        if (apu->audio_buffer_index >= emu->apu_sample_count) {
             apu->audio_buffer_index = 0;
-            if (apu->samples_ready_cb)
-                apu->samples_ready_cb(apu->audio_buffer, sizeof(float) * apu->sample_count);
+            if (emu->on_apu_samples_ready)
+                emu->on_apu_samples_ready(apu->audio_buffer, sizeof(float) * emu->apu_sample_count);
         }
     }
 }
 
 // TODO find a way to make speed unnecessary
-void apu_init(emulator_t *emu, float global_sound_level, float speed, int sample_count, void (*samples_ready_cb)(float *audio_buffer, int audio_buffer_size)) {
+void apu_init(emulator_t *emu) {
     apu_t *apu = xcalloc(1, sizeof(apu_t));
 
-    apu->sample_count = sample_count;
-    apu->audio_buffer = xmalloc(sizeof(float) * apu->sample_count);
+    apu->audio_buffer = xmalloc(sizeof(float) * emu->apu_sample_count);
 
-    apu->global_sound_level = CLAMP(global_sound_level, 0.0f, 1.0f);
-    apu->speed = speed;
-    apu->samples_ready_cb = samples_ready_cb;
     apu->channel1 = (channel_t) {
         .NRx0 = &emu->mmu->mem[NR10],
         .NRx1 = &emu->mmu->mem[NR11],
