@@ -54,10 +54,10 @@ public class GBmulator extends SDLActivity {
         getContentResolver().registerContentObserver(uri,true, rotationObserver);
     }
 
-    public void errorToast() {
+    public void errorToast(String msg) {
         Toast.makeText(
                 this,
-                "The selected file is not a valid ROM.",
+                msg,
                 Toast.LENGTH_SHORT
         ).show();
     }
@@ -71,13 +71,13 @@ public class GBmulator extends SDLActivity {
             String extension = uri.getLastPathSegment();
             int dotIndex = extension.lastIndexOf('.');
             if (dotIndex < 0) {
-                errorToast();
+                errorToast("The selected file is not a valid ROM.");
                 intent = null;
                 return;
             }
             extension = extension.substring(dotIndex);
             if (!(extension.equals(".gb") || extension.equals(".cgb") || extension.equals(".gbc"))) {
-                errorToast();
+                errorToast("The selected file is not a valid ROM.");
                 intent = null;
                 return;
             }
@@ -99,13 +99,14 @@ public class GBmulator extends SDLActivity {
 
                 receiveROMData(rom_data, rom_data.length);
             } catch (IOException e) {
-                errorToast();
+                errorToast("The selected file is not a valid ROM.");
             } finally {
                 // allow new file picker intents to be sent
                 intent = null;
             }
         } else {
             intent = null;
+            errorToast("Something went wrong...");
         }
     }
 
@@ -114,9 +115,9 @@ public class GBmulator extends SDLActivity {
             return;
         intent = new Intent();
         intent.setType("*/*");
-        intent.setAction(Intent.ACTION_GET_CONTENT);
+        intent.setAction(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-        startActivityForResult(Intent.createChooser(intent, "Select ROM"), 200);
+        startActivityForResult(intent, 200);
     }
 
 }
