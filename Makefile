@@ -62,7 +62,7 @@ debug_web: web
 	emrun docs/index.html
 
 docs/index.html: $(SDIR)/platform/web/template.html $(OBJ)
-	$(CC) -o $@ $(OBJ) $(CFLAGS) -sINITIAL_MEMORY=32MB -sWASM=1 -sUSE_SDL=2 -sEXPORTED_RUNTIME_METHODS=[ccall] -sASYNCIFY --shell-file $< -lidbfs.js
+	$(CC) -o $@ $(OBJ) $(CFLAGS) -sABORTING_MALLOC=0 -sINITIAL_MEMORY=32MB -sWASM=1 -sUSE_SDL=2 -sEXPORTED_RUNTIME_METHODS=[ccall] -sASYNCIFY --shell-file $< -lidbfs.js
 
 $(EXEC): $(OBJ)
 	$(CC) -o $(EXEC) $^ $(CFLAGS) $(LDLIBS)
@@ -88,7 +88,7 @@ $(ICONS): $(ICONDIR)/$(EXEC).svg
 	[ $(patsubst $(ICONDIR)/%/$(EXEC).png,%,$@) = 192x192 ] && cp $(ICONDIR)/192x192/$(EXEC).png src/platform/android/android-project/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png || true
 
 run: desktop
-	./$(EXEC) "roms/tests/cgb-acid2.gbc"
+	./$(EXEC) "roms/pokemon_gold.gbc"
 
 check: $(SDIR)/**/*.c
 	cppcheck --enable=all --suppress=missingIncludeSystem $(SDIR)
