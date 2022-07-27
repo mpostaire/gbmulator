@@ -541,16 +541,33 @@ int main(int argc, char **argv) {
 
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
+    // supported:
+    // SDL_PIXELFORMAT_ARGB8888
+    // SDL_PIXELFORMAT_ABGR8888
+    // SDL_PIXELFORMAT_RGB888
+    // SDL_PIXELFORMAT_BGR888
+    // SDL_PIXELFORMAT_YV12
+    // SDL_PIXELFORMAT_IYUV
+    // SDL_PIXELFORMAT_NV12
+    // SDL_PIXELFORMAT_NV21
+
+    // SDL_RendererInfo info;
+    // SDL_GetRendererInfo(renderer, &info);
+    // for (int i = 0; i < info.num_texture_formats; i++)
+    //     puts(SDL_GetPixelFormatName(info.texture_formats[i]));
+
     if (scale == 0) {
         is_fullscreen = SDL_TRUE;
         SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+        // TODO set render logical size for all fullscreen status changes and all window size changes
+        // to check if it fixes the broken window after fullscreen bug
     }
 
     SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
 
-    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 3;
-    SDL_Texture *ui_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
+    SDL_Texture *ui_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
     int ui_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
     SDL_SetTextureBlendMode(ui_texture, SDL_BLENDMODE_BLEND);
 

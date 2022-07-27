@@ -502,9 +502,9 @@ int main(int argc, char **argv) {
     SDL_RenderClear(renderer);
     SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
 
-    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 3;
-    ui_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
+    ui_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
     ui_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
     SDL_SetTextureBlendMode(ui_texture, SDL_BLENDMODE_BLEND);
 

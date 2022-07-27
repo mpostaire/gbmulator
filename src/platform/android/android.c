@@ -797,9 +797,26 @@ int main(int argc, char **argv) {
     // TODO also compare desktop and android platforms speeds at config.speed == 1.0f to see if it's equivalent
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
-    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 3;
-    SDL_Texture *ui_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    // supported:
+    // SDL_PIXELFORMAT_ARGB8888
+    // SDL_PIXELFORMAT_ABGR8888
+    // SDL_PIXELFORMAT_RGB888
+    // SDL_PIXELFORMAT_BGR888
+    // SDL_PIXELFORMAT_YV12
+    // SDL_PIXELFORMAT_IYUV
+    // SDL_PIXELFORMAT_NV12
+    // SDL_PIXELFORMAT_NV21
+    // SDL_PIXELFORMAT_UNKNOWN
+
+    // SDL_RendererInfo info;
+    // SDL_GetRendererInfo(renderer, &info);
+    // log("available pixel formats:");
+    // for (int i = 0; i < info.num_texture_formats; i++)
+    //     log("%s", SDL_GetPixelFormatName(info.texture_formats[i]));
+
+    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
+    SDL_Texture *ui_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
     int ui_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
     SDL_SetTextureBlendMode(ui_texture, SDL_BLENDMODE_BLEND);
 
