@@ -26,8 +26,6 @@ SDL_AudioDeviceID audio_device;
 SDL_GameController *pad;
 SDL_bool is_controller_present = SDL_FALSE;
 
-char *rom_title;
-
 byte_t scale;
 
 char window_title[sizeof(EMULATOR_NAME) + 19];
@@ -52,7 +50,7 @@ static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
 
 static byte_t *local_storage_get_item(const char *key, size_t *data_length, byte_t decode) {
     unsigned char *data = (unsigned char *) EM_ASM_INT({
-        var item = localStorage.getItem(UTF8ToString($0));
+        var item = localStorage.getItem(UTF8ToString($0).replaceAll(' ', '_'));
         if (item === null)
             return null;
         var itemLength = lengthBytesUTF8(item) + 1;
@@ -84,12 +82,12 @@ static void local_storage_set_item(const char *key, const byte_t *data, byte_t e
     if (encode) {
         byte_t *encoded_data = base64_encode(data, len, NULL);
         EM_ASM({
-            localStorage.setItem(UTF8ToString($0), UTF8ToString($1));
+            localStorage.setItem(UTF8ToString($0).replaceAll(' ', '_'), UTF8ToString($1));
         }, key, encoded_data);
         free(encoded_data);
     } else {
         EM_ASM({
-            localStorage.setItem(UTF8ToString($0), UTF8ToString($1));
+            localStorage.setItem(UTF8ToString($0).replaceAll(' ', '_'), UTF8ToString($1));
         }, key, data);
     }
 }
@@ -113,11 +111,11 @@ static void save(void) {
     size_t save_length;
     byte_t *save_data = emulator_get_save(emu, &save_length);
     if (!save_data) return;
-    local_storage_set_item(rom_title, save_data, 1, save_length);
+    local_storage_set_item(emulator_get_rom_title(emu), save_data, 1, save_length);
     free(save_data);
 }
 
-void load_cartridge(const byte_t *rom_data, size_t rom_size, char *new_rom_title) {
+void load_cartridge(const byte_t *rom_data, size_t rom_size) {
     emulator_options_t opts = {
         .mode = config.mode,
         .on_apu_samples_ready = apu_samples_ready_cb,
@@ -131,11 +129,10 @@ void load_cartridge(const byte_t *rom_data, size_t rom_size, char *new_rom_title
 
     if (emu) {
         save();
-        free(rom_title);
         emulator_quit(emu);
     }
-    rom_title = new_rom_title;
     emu = new_emu;
+    char *rom_title = emulator_get_rom_title(emu);
 
     size_t save_length;
     unsigned char *save = local_storage_get_item(rom_title, &save_length, 1);
@@ -163,8 +160,6 @@ EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
         save();
         emulator_quit(emu);
     }
-    if (rom_title)
-        free(rom_title);
 
     // save config
     save_config("config");
@@ -197,12 +192,7 @@ EMSCRIPTEN_KEEPALIVE void on_gui_button_up(joypad_button_t button) {
 }
 
 EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {
-    char *new_rom_title = emulator_get_rom_title_from_data(rom_data, rom_size);
-    for (int i = 0; i < 16; i++)
-        if (new_rom_title[i] == ' ')
-            new_rom_title[i] = '_';
-
-    load_cartridge(rom_data, rom_size, new_rom_title);
+    load_cartridge(rom_data, rom_size);
     free(rom_data);
 }
 
@@ -210,6 +200,7 @@ static void handle_input(void) {
     SDL_Event event;
     size_t len;
     char *savestate_path;
+    char *rom_title;
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
         case SDL_TEXTINPUT:
@@ -248,8 +239,9 @@ static void handle_input(void) {
             case SDLK_F3: case SDLK_F4:
             case SDLK_F5: case SDLK_F6:
             case SDLK_F7: case SDLK_F8:
-                if (!rom_title)
+                if (!emu)
                     break;
+                rom_title = emulator_get_rom_title(emu);
                 len = strlen(rom_title);
                 savestate_path = xmalloc(len + 10);
                 snprintf(savestate_path, len + 9, "%s-state-%d", rom_title, event.key.keysym.sym - SDLK_F1);
@@ -477,7 +469,6 @@ int main(int argc, char **argv) {
     config.b = SDLK_PERIOD; // change default B key to SDLK_PERIOD as SDLK_KP_PERIOD doesn't work for web
     load_config("config");
     emu = NULL;
-    rom_title = NULL;
 
 
 
