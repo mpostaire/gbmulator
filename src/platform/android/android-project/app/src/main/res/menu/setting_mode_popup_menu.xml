@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/popup_menu_mode_dmg"
+        android:title="@string/setting_mode_dmg" />
+    <item
+        android:id="@+id/popup_menu_mode_cgb"
+        android:title="@string/setting_mode_cgb" />
+</menu>

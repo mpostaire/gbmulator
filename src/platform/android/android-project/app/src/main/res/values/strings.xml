@@ -1,9 +1,17 @@
 <resources>
     <string name="app_name">GBmulator</string>
     <string name="resume_emulator_button">Resume</string>
-    <string name="load_rom_button">Load ROM…</string>
-    <string name="reset_rom_button">Reset ROM</string>
-    <string name="settings_button">Settings…</string>
+    <string name="load_rom_button">Load ROM</string>
+    <string name="reset_rom_button">Restart emulator</string>
+    <string name="settings_button">Settings</string>
     <string name="settings_title">Settings</string>
     <string name="loaded_rom_empty_text">No ROM loaded</string>
+    <string name="setting_set_mode">Emulation mode:</string>
+    <string name="setting_set_mode_label">This will restart the emulator</string>
+    <string name="setting_mode_dmg">Game Boy</string>
+    <string name="setting_mode_cgb">Game Boy Color</string>
+    <string name="setting_set_palette">Game Boy Palette:</string>
+    <string name="setting_set_palette_label">Custom Game Boy colorization</string>
+    <string name="setting_palette_orig">Original</string>
+    <string name="setting_palette_gray">Grayscale</string>
 </resources>

@@ -1,6 +1,7 @@
 package io.github.mpostaire.gbmulator;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -18,6 +19,9 @@ public class MainMenu extends AppCompatActivity {
     Button resumeButton;
     Button resetButton;
 
+    SharedPreferences preferences;
+    int emu_mode = 0;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -25,6 +29,8 @@ public class MainMenu extends AppCompatActivity {
         loadedROMName = findViewById(R.id.loadedROMName);
         resumeButton = findViewById(R.id.resumeButton);
         resetButton = findViewById(R.id.resetButton);
+
+        preferences = getSharedPreferences(UserSettings.PREFERENCES, MODE_PRIVATE);
     }
 
     public void errorToast(String msg) {
@@ -34,13 +40,19 @@ public class MainMenu extends AppCompatActivity {
     public void launchEmulator(boolean resume) {
         if (romUri == null)
             return;
+        int new_emu_mode = preferences.getInt(UserSettings.EMULATION_MODE, UserSettings.EMULATION_MODE_DEFAULT);
+        if (emu_mode != 0 && emu_mode != new_emu_mode)
+            resume = false;
+        emu_mode = new_emu_mode;
         Intent i = new Intent(MainMenu.this, Emulator.class);
         i.putExtra("rom_uri", romUri);
         i.putExtra("resume", resume);
+        i.putExtra("palette", preferences.getInt(UserSettings.EMULATION_PALETTE, UserSettings.EMULATION_PALETTE_DEFAULT));
         startActivity(i);
     }
 
     public void resumeROM(View view) {
+        // TODO check if emulation mode is still the same
         launchEmulator(true);
     }
 

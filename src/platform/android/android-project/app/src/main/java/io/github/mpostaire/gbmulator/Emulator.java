@@ -1,6 +1,6 @@
 package io.github.mpostaire.gbmulator;
 
-import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.database.ContentObserver;
 import android.net.Uri;
@@ -17,7 +17,7 @@ import org.libsdl.app.SDLActivity;
 
 public class Emulator extends SDLActivity {
 
-    public native void receiveROMData(byte[] data, int size, boolean resume);
+    public native void receiveROMData(byte[] data, int size, boolean resume, int emu_mode, int palette);
 
     public boolean canRotate() {
         try {
@@ -59,7 +59,8 @@ public class Emulator extends SDLActivity {
     public void requestROM() {
         Bundle extras = getIntent().getExtras();
         if (extras == null) {
-            receiveROMData(null, 0, false);
+            finish();
+            errorToast("Oops... Something bad happened!");
             return;
         }
 
@@ -82,7 +83,11 @@ public class Emulator extends SDLActivity {
             byteBuffer.close();
             in.close();
 
-            receiveROMData(rom_data, rom_data.length, resume);
+            SharedPreferences preferences = getSharedPreferences(UserSettings.PREFERENCES, MODE_PRIVATE);
+            int emu_mode = preferences.getInt(UserSettings.EMULATION_MODE, UserSettings.EMULATION_MODE_DEFAULT);
+            int palette = preferences.getInt(UserSettings.EMULATION_PALETTE, UserSettings.EMULATION_PALETTE_DEFAULT);
+
+            receiveROMData(rom_data, rom_data.length, resume, emu_mode, palette);
         } catch (IOException e){
             errorToast("The selected file is not a valid ROM.");
             finish();

@@ -4,7 +4,6 @@
 #include <android/log.h>
 #include <jni.h>
 
-#include "../common/config.h"
 #include "../common/utils.h"
 #include "emulator/emulator.h"
 
@@ -32,6 +31,8 @@
 SDL_bool is_running;
 SDL_bool is_rom_loaded;
 SDL_bool is_landscape;
+
+float speed;
 
 SDL_Renderer *renderer;
 SDL_Window *window;
@@ -550,7 +551,6 @@ static void handle_input(void) {
         case SDL_APP_WILLENTERBACKGROUND:
             if (emu)
                 save_battery_to_file(emu, emulator_get_rom_title(emu));
-            config_save_to_file("config");
             android_back_to_previous_activity();
             break;
         case SDL_APP_DIDENTERFOREGROUND:
@@ -569,15 +569,16 @@ static void handle_input(void) {
     }
 }
 
-static void load_cartridge(const byte_t *rom_data, size_t rom_size) {
+static void load_cartridge(const byte_t *rom_data, size_t rom_size, int emu_mode, int palette) {
     emulator_options_t opts = {
         .apu_sample_count = APU_SAMPLE_COUNT,
-        .mode = config.mode,
+        .mode = emu_mode,
         .on_apu_samples_ready = apu_samples_ready_cb,
         .on_new_frame = ppu_vblank_cb,
-        .apu_speed = config.speed,
-        .apu_sound_level = config.sound,
-        .palette = config.color_palette
+        // TODO
+        // .apu_speed = config.speed,
+        // .apu_sound_level = config.sound,
+        .palette = palette
     };
     emulator_t *new_emu = emulator_init(rom_data, rom_size, &opts);
     if (!new_emu) return;
@@ -623,11 +624,11 @@ static void request_rom(void) {
     (*env)->DeleteLocalRef(env, clazz);
 }
 
-JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMData(JNIEnv* env, jobject thiz, jbyteArray data, jsize size, jboolean resume) {
+JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMData(JNIEnv* env, jobject thiz, jbyteArray data, jsize size, jboolean resume, jint emu_mode, jint palette) {
     jboolean is_copy;
     jbyte *rom_data = (*env)->GetByteArrayElements(env, data, &is_copy);
 
-    load_cartridge((byte_t *) rom_data, size);
+    load_cartridge((byte_t *) rom_data, size, emu_mode, palette);
     if (resume)
         load_state_from_file(emu, "resume");
 
@@ -635,8 +636,6 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
 }
 
 int main(int argc, char **argv) {
-    // must be called before emulator_init() and ui_init()
-    config_load_from_file("config");
     emu = NULL;
 
     // initialize global variables here and not at their initialization as they can still have their
@@ -644,6 +643,7 @@ int main(int argc, char **argv) {
     is_running = SDL_TRUE;
     is_rom_loaded = SDL_FALSE;
     is_controller_present = SDL_FALSE;
+    speed = 1.0f;
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
 
@@ -661,7 +661,7 @@ int main(int argc, char **argv) {
 
 
     // TODO vsync or not vsync?? see what audio/video syncing does...
-    // TODO also compare desktop and android platforms speeds at config.speed == 1.0f to see if it's equivalent
+    // TODO also compare desktop and android platforms speeds at emulator speed == 1.0f to see if it's equivalent
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
     // supported:
@@ -705,7 +705,7 @@ int main(int argc, char **argv) {
     int step = 0;
     while (is_running) {
         // handle_input is a slow function: don't call it every step
-        if (cycles >= GB_CPU_CYCLES_PER_FRAME * config.speed) {
+        if (cycles >= GB_CPU_CYCLES_PER_FRAME * speed) {
             cycles = 0;
             SDL_RenderClear(renderer);
             SDL_RenderCopy(renderer, ppu_texture, NULL, &gb_screen_rect);
@@ -726,9 +726,6 @@ int main(int argc, char **argv) {
         save_battery_to_file(emu, emulator_get_rom_title(emu));
         emulator_quit(emu);
     }
-
-    // save config
-    config_save_to_file("config");
 
     if (is_controller_present)
         SDL_GameControllerClose(pad);
