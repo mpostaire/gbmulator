@@ -4,6 +4,10 @@
 #include <android/log.h>
 #include <jni.h>
 
+#include "../common/config.h"
+#include "../common/utils.h"
+#include "emulator/emulator.h"
+
 #define log(...) __android_log_print(ANDROID_LOG_INFO, "GBmulator", __VA_ARGS__)
 
 // going higher than 2048 starts to add noticeable audio lag
@@ -25,13 +29,7 @@
 // TODO ???? bigger finger hitbox (circle instead of point --> button pressed is the one closer to the center of the circle)
 //      OR maybe just bigger button hitbox (check drastic ds emulator to see how it's done)
 
-#include "../common/ui.h"
-#include "../common/config.h"
-#include "../common/utils.h"
-#include "emulator/emulator.h"
-
 SDL_bool is_running;
-SDL_bool is_paused;
 SDL_bool is_rom_loaded;
 SDL_bool is_landscape;
 
@@ -46,7 +44,6 @@ SDL_AudioDeviceID audio_device;
 SDL_GameController *pad;
 SDL_bool is_controller_present;
 
-ui_t *ui;
 emulator_t *emu;
 
 SDL_Rect gb_screen_rect;
@@ -212,31 +209,26 @@ static inline s_byte_t is_finger_over_button(float x, float y) {
 }
 
 static void button_press(emulator_t *emu, joypad_button_t button) {
-    if (is_paused) {
-        if (button < JOYPAD_SELECT)
-            ui_press_joypad(ui, button);
-    } else {
-        switch ((int) button) { // cast to int to shut compiler warnings
-        case JOYPAD_SELECT + 1:
-            emulator_joypad_press(emu, JOYPAD_UP);
-            emulator_joypad_press(emu, JOYPAD_LEFT);
-            break;
-        case JOYPAD_SELECT + 2:
-            emulator_joypad_press(emu, JOYPAD_UP);
-            emulator_joypad_press(emu, JOYPAD_RIGHT);
-            break;
-        case JOYPAD_SELECT + 3:
-            emulator_joypad_press(emu, JOYPAD_DOWN);
-            emulator_joypad_press(emu, JOYPAD_LEFT);
-            break;
-        case JOYPAD_SELECT + 4:
-            emulator_joypad_press(emu, JOYPAD_DOWN);
-            emulator_joypad_press(emu, JOYPAD_RIGHT);
-            break;
-        default:
-            emulator_joypad_press(emu, button);
-            break;
-        }
+    switch ((int) button) { // cast to int to shut compiler warnings
+    case JOYPAD_SELECT + 1:
+        emulator_joypad_press(emu, JOYPAD_UP);
+        emulator_joypad_press(emu, JOYPAD_LEFT);
+        break;
+    case JOYPAD_SELECT + 2:
+        emulator_joypad_press(emu, JOYPAD_UP);
+        emulator_joypad_press(emu, JOYPAD_RIGHT);
+        break;
+    case JOYPAD_SELECT + 3:
+        emulator_joypad_press(emu, JOYPAD_DOWN);
+        emulator_joypad_press(emu, JOYPAD_LEFT);
+        break;
+    case JOYPAD_SELECT + 4:
+        emulator_joypad_press(emu, JOYPAD_DOWN);
+        emulator_joypad_press(emu, JOYPAD_RIGHT);
+        break;
+    default:
+        emulator_joypad_press(emu, button);
+        break;
     }
 
     switch ((int) button) { // cast to int to shut compiler warnings
@@ -272,28 +264,26 @@ static void button_press(emulator_t *emu, joypad_button_t button) {
 }
 
 static void button_release(emulator_t *emu, joypad_button_t button) {
-    if (!is_paused) {
-        switch ((int) button) { // cast to int to shut compiler warnings
-        case JOYPAD_SELECT + 1:
-            emulator_joypad_release(emu, JOYPAD_UP);
-            emulator_joypad_release(emu, JOYPAD_LEFT);
-            break;
-        case JOYPAD_SELECT + 2:
-            emulator_joypad_release(emu, JOYPAD_UP);
-            emulator_joypad_release(emu, JOYPAD_RIGHT);
-            break;
-        case JOYPAD_SELECT + 3:
-            emulator_joypad_release(emu, JOYPAD_DOWN);
-            emulator_joypad_release(emu, JOYPAD_LEFT);
-            break;
-        case JOYPAD_SELECT + 4:
-            emulator_joypad_release(emu, JOYPAD_DOWN);
-            emulator_joypad_release(emu, JOYPAD_RIGHT);
-            break;
-        default:
-            emulator_joypad_release(emu, button);
-            break;
-        }
+    switch ((int) button) { // cast to int to shut compiler warnings
+    case JOYPAD_SELECT + 1:
+        emulator_joypad_release(emu, JOYPAD_UP);
+        emulator_joypad_release(emu, JOYPAD_LEFT);
+        break;
+    case JOYPAD_SELECT + 2:
+        emulator_joypad_release(emu, JOYPAD_UP);
+        emulator_joypad_release(emu, JOYPAD_RIGHT);
+        break;
+    case JOYPAD_SELECT + 3:
+        emulator_joypad_release(emu, JOYPAD_DOWN);
+        emulator_joypad_release(emu, JOYPAD_LEFT);
+        break;
+    case JOYPAD_SELECT + 4:
+        emulator_joypad_release(emu, JOYPAD_DOWN);
+        emulator_joypad_release(emu, JOYPAD_RIGHT);
+        break;
+    default:
+        emulator_joypad_release(emu, button);
+        break;
     }
 
     switch ((int) button) { // cast to int to shut compiler warnings
@@ -451,19 +441,6 @@ static void set_layout(int layout) {
     }
 }
 
-
-
-
-
-static void gbmulator_exit(menu_entry_t *entry) {
-    is_running = SDL_FALSE;
-}
-
-static void gbmulator_unpause(menu_entry_t *entry) {
-    if (is_rom_loaded)
-        is_paused = SDL_FALSE;
-}
-
 static void ppu_vblank_cb(byte_t *pixels) {
     SDL_UpdateTexture(ppu_texture, NULL, pixels, ppu_texture_pitch);
 }
@@ -499,6 +476,29 @@ static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
 
+static void android_back_to_previous_activity(void) {
+    save_state_to_file(emu, "resume");
+
+    // retrieve the JNI environment.
+    JNIEnv *env = (JNIEnv *) SDL_AndroidGetJNIEnv();
+
+    // retrieve the Java instance of the SDLActivity
+    jobject activity = (jobject) SDL_AndroidGetActivity();
+
+    // find the Java class of the activity. It should be SDLActivity or a subclass of it.
+    jclass clazz = (*env)->GetObjectClass(env, activity);
+
+    // find the identifier of the method to call
+    jmethodID method_id = (*env)->GetMethodID(env, clazz, "finish", "()V");
+
+    // effectively call the Java method
+    (*env)->CallVoidMethod(env, activity, method_id);
+
+    // clean up the local references.
+    (*env)->DeleteLocalRef(env, activity);
+    (*env)->DeleteLocalRef(env, clazz);
+}
+
 static void handle_input(void) {
     SDL_Event event;
     char *savestate_path;
@@ -514,35 +514,17 @@ static void handle_input(void) {
             touch_motion(&event.tfinger);
             break;
         case SDL_KEYDOWN:
-            if (!event.key.repeat && event.key.keysym.sym == SDLK_AC_BACK) {
-                if (is_rom_loaded)
-                    is_paused = !is_paused;
-                ui_back_to_root_menu(ui);
-            }
+            if (!event.key.repeat && event.key.keysym.sym == SDLK_AC_BACK)
+                android_back_to_previous_activity();
             break;
         case SDL_CONTROLLERBUTTONDOWN:
-            if (is_paused) {
-                if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
-                    if (is_rom_loaded)
-                        is_paused = SDL_FALSE;
-                    else
-                        ui_back_to_root_menu(ui);
-                } else {
-                    ui_controller_press(ui, event.cbutton.button);
-                }
-                break;
-            }
-            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
-                is_paused = SDL_TRUE;
-                ui_back_to_root_menu(ui);
-                break;
-            }
-            if (!is_paused)
+            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE)
+                android_back_to_previous_activity();
+            else
                 button_press(emu, sdl_controller_to_joypad(event.cbutton.button));
             break;
         case SDL_CONTROLLERBUTTONUP:
-            if (!is_paused)
-                button_release(emu, sdl_controller_to_joypad(event.cbutton.button));
+            button_release(emu, sdl_controller_to_joypad(event.cbutton.button));
             break;
         case SDL_CONTROLLERDEVICEADDED:
             if (!is_controller_present) {
@@ -566,11 +548,10 @@ static void handle_input(void) {
             }
             break;
         case SDL_APP_WILLENTERBACKGROUND:
-            is_paused = SDL_TRUE;
-            ui_back_to_root_menu(ui);
             if (emu)
                 save_battery_to_file(emu, emulator_get_rom_title(emu));
             config_save_to_file("config");
+            android_back_to_previous_activity();
             break;
         case SDL_APP_DIDENTERFOREGROUND:
             break;
@@ -610,142 +591,48 @@ static void load_cartridge(const byte_t *rom_data, size_t rom_size) {
     load_battery_from_file(emu, emulator_get_rom_title(emu));
 
     is_rom_loaded = SDL_TRUE;
-    is_paused = SDL_FALSE;
-
-    ui->root_menu->entries[0].disabled = 0; // enable resume menu entry
-    ui->root_menu->entries[2].disabled = 0; // enable reset rom menu entry
 }
 
 static void set_allowed_orientations(void) {
-    // retrieve the JNI environment.
     JNIEnv *env = (JNIEnv *) SDL_AndroidGetJNIEnv();
 
-    // retrieve the Java instance of the SDLActivity
     jobject activity = (jobject) SDL_AndroidGetActivity();
 
-    // find the Java class of the activity. It should be SDLActivity or a subclass of it.
     jclass clazz = (*env)->GetObjectClass(env, activity);
 
-    // find the identifier of the method to call
     jmethodID method_id = (*env)->GetMethodID(env, clazz, "setAllowedOrientations", "()V");
 
-    // effectively call the Java method
     (*env)->CallVoidMethod(env, activity, method_id);
 
-    // clean up the local references.
     (*env)->DeleteLocalRef(env, activity);
     (*env)->DeleteLocalRef(env, clazz);
 }
 
+static void request_rom(void) {
+    JNIEnv *env = (JNIEnv *) SDL_AndroidGetJNIEnv();
 
+    jobject activity = (jobject) SDL_AndroidGetActivity();
 
+    jclass clazz = (*env)->GetObjectClass(env, activity);
 
+    jmethodID method_id = (*env)->GetMethodID(env, clazz, "requestROM", "()V");
 
+    (*env)->CallVoidMethod(env, activity, method_id);
 
-
-
-
-
-
-
-
-
-
-
-
-static void choose_speed(menu_entry_t *entry) {
-    config.speed = (entry->choices.position * 0.5f) + 1;
-    if (emu)
-        emulator_set_apu_speed(emu, config.speed);
+    (*env)->DeleteLocalRef(env, activity);
+    (*env)->DeleteLocalRef(env, clazz);
 }
 
-static void choose_sound(menu_entry_t *entry) {
-    config.sound = entry->choices.position * 0.25f;
-    if (emu)
-        emulator_set_apu_sound_level(emu, config.sound);
-}
-
-static void choose_color(menu_entry_t *entry) {
-    config.color_palette = entry->choices.position;
-    if (emu)
-        emulator_set_palette(emu, config.color_palette);
-}
-
-static void choose_mode(menu_entry_t *entry) {
-    config.mode = entry->choices.position + 1;
-}
-
-
-
-
-
-
-JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_GBmulator_receiveROMData(JNIEnv* env, jobject thiz, jbyteArray data, jsize size) {
+JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMData(JNIEnv* env, jobject thiz, jbyteArray data, jsize size, jboolean resume) {
     jboolean is_copy;
     jbyte *rom_data = (*env)->GetByteArrayElements(env, data, &is_copy);
 
     load_cartridge((byte_t *) rom_data, size);
+    if (resume)
+        load_state_from_file(emu, "resume");
 
     (*env)->ReleaseByteArrayElements(env, data, rom_data, JNI_ABORT);
 }
-
-static void open_rom(menu_entry_t *entry) {
-    // retrieve the JNI environment.
-    JNIEnv *env = (JNIEnv *) SDL_AndroidGetJNIEnv();
-
-    // retrieve the Java instance of the SDLActivity
-    jobject activity = (jobject) SDL_AndroidGetActivity();
-
-    // find the Java class of the activity. It should be SDLActivity or a subclass of it.
-    jclass clazz = (*env)->GetObjectClass(env, activity);
-
-    // find the identifier of the method to call
-    jmethodID method_id = (*env)->GetMethodID(env, clazz, "filePicker", "()V");
-
-    // effectively call the Java method
-    (*env)->CallVoidMethod(env, activity, method_id);
-
-    // clean up the local references.
-    (*env)->DeleteLocalRef(env, activity);
-    (*env)->DeleteLocalRef(env, clazz);
-}
-
-static void reset_rom(menu_entry_t *entry) {
-    if (!emu)
-        return;
-    emulator_reset(emu, config.mode);
-    is_paused = SDL_FALSE;
-}
-
-menu_t options_menu = {
-    .title = "Options",
-    .length = 5,
-    .entries = {
-        { "Speed:      |1.0x,1.5x,2.0x,2.5x,3.0x,3.5x,4.0x", UI_CHOICE, .choices = { choose_speed, 0 } },
-        { "Sound:      | OFF, 25%, 50%, 75%,100%", UI_CHOICE, .choices = { choose_sound, 0 } },
-        { "Color:      |gray,orig", UI_CHOICE, .choices = { choose_color, 0 } },
-        { "Mode:       | DMG, CGB", UI_CHOICE, .choices = { choose_mode, 0 } },
-        { "Back...", UI_BACK }
-    }
-};
-
-menu_t main_menu = {
-    .title = "GBmulator",
-    .length = 5,
-    .entries = {
-        { "Resume", UI_ACTION, .disabled = 1, .action = gbmulator_unpause },
-        { "Open ROM...", UI_ACTION, .action = open_rom },
-        { "Reset ROM", UI_ACTION, .disabled = 1, .action = reset_rom },
-        { "Options...", UI_SUBMENU, .submenu = &options_menu },
-        { "Exit", UI_ACTION, .action = gbmulator_exit }
-    }
-};
-
-
-
-
-
-
 
 int main(int argc, char **argv) {
     // must be called before emulator_init() and ui_init()
@@ -755,28 +642,8 @@ int main(int argc, char **argv) {
     // initialize global variables here and not at their initialization as they can still have their
     // previous values because of android's activities lifecycle
     is_running = SDL_TRUE;
-    is_paused = SDL_TRUE;
     is_rom_loaded = SDL_FALSE;
     is_controller_present = SDL_FALSE;
-
-
-
-
-
-    ui = ui_init(&main_menu, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    ui->root_menu->entries[0].disabled = 1; // disable resume menu entry
-    ui->root_menu->entries[2].disabled = 1; // disable reset rom menu entry
-    options_menu.entries[0].choices.position = config.speed / 0.5f - 2;
-    options_menu.entries[1].choices.position = config.sound * 4;
-    options_menu.entries[2].choices.position = config.color_palette;
-    options_menu.entries[3].choices.position = config.mode - 1;
-    options_menu.entries[3].choices.description = xmalloc(16);
-    snprintf(options_menu.entries[3].choices.description, 16, "Effect on reset");
-    ui_back_to_root_menu(ui);
-
-
-
-
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
 
@@ -829,40 +696,14 @@ int main(int argc, char **argv) {
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
     SDL_PauseAudioDevice(audio_device, 0);
 
+    // TODO don't overcomplicate and make a request java to call a native method...
+    //      just make request_rom return the rom as a byte_t buffer
+    request_rom();
+
     // main gbmulator loop
     int cycles = 0;
     int step = 0;
     while (is_running) {
-        // emulation paused
-        if (is_paused) {
-            handle_input();
-            if (!is_paused) // if user input disable pause, don't draw ui
-                continue;
-
-            // display ui
-            ui_draw(ui);
-
-            SDL_RenderClear(renderer);
-
-            // update ppu_texture to show color palette changes behind the menu
-            if (is_rom_loaded) {
-                SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(emu), ppu_texture_pitch);
-                SDL_RenderCopy(renderer, ppu_texture, NULL, &gb_screen_rect);
-            }
-
-            SDL_UpdateTexture(ui_texture, NULL, ui->pixels, ui_texture_pitch);
-            SDL_RenderCopy(renderer, ui_texture, NULL, &gb_screen_rect);
-
-            draw_buttons(renderer);
-
-            SDL_RenderPresent(renderer);
-            // wait for the next event (not consuming it) to avoid CPU usage
-            // TODO this makes weird screen size until a key is pressed... in the mean time, use SDL_Delay()
-            // SDL_WaitEvent(NULL);
-            SDL_Delay(1.0f / 30.0f);
-            continue;
-        }
-
         // handle_input is a slow function: don't call it every step
         if (cycles >= GB_CPU_CYCLES_PER_FRAME * config.speed) {
             cycles = 0;
@@ -888,8 +729,6 @@ int main(int argc, char **argv) {
 
     // save config
     config_save_to_file("config");
-
-    ui_free(ui);
 
     if (is_controller_present)
         SDL_GameControllerClose(pad);
