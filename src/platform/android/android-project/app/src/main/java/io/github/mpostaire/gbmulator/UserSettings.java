@@ -14,4 +14,10 @@ public class UserSettings {
     public static final int EMULATION_PALETTE_ORIG = 1;
     public static final int EMULATION_PALETTE_DEFAULT = EMULATION_PALETTE_GRAY;
 
+    public static final String EMULATION_SPEED = "emulation_speed";
+    public static final float EMULATION_SPEED_DEFAULT = 1.0f;
+
+    public static final String EMULATION_SOUND = "emulation_sound";
+    public static final float EMULATION_SOUND_DEFAULT = 1.0f;
+
 }

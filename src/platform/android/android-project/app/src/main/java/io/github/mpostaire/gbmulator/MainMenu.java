@@ -15,7 +15,8 @@ public class MainMenu extends AppCompatActivity {
 
     Intent filePickerIntent = null;
     Uri romUri = null;
-    TextView loadedROMName;
+    TextView loadedROMBottom;
+    TextView loadedROMTop;
     Button resumeButton;
     Button resetButton;
 
@@ -26,7 +27,9 @@ public class MainMenu extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        loadedROMName = findViewById(R.id.loadedROMName);
+        loadedROMBottom = findViewById(R.id.loadedROMBottom);
+        loadedROMTop = findViewById(R.id.loadedROMTop);
+
         resumeButton = findViewById(R.id.resumeButton);
         resetButton = findViewById(R.id.resetButton);
 
@@ -48,6 +51,8 @@ public class MainMenu extends AppCompatActivity {
         i.putExtra("rom_uri", romUri);
         i.putExtra("resume", resume);
         i.putExtra("palette", preferences.getInt(UserSettings.EMULATION_PALETTE, UserSettings.EMULATION_PALETTE_DEFAULT));
+        i.putExtra("sound", preferences.getFloat(UserSettings.EMULATION_SOUND, UserSettings.EMULATION_SOUND_DEFAULT));
+        i.putExtra("speed", preferences.getFloat(UserSettings.EMULATION_SPEED, UserSettings.EMULATION_SPEED_DEFAULT));
         startActivity(i);
     }
 
@@ -80,15 +85,19 @@ public class MainMenu extends AppCompatActivity {
             // allow new file picker intents to be sent
             filePickerIntent = null;
 
+            loadedROMTop.setVisibility(View.VISIBLE);
+
             // TODO instead of getting filename, get actual rom title using a native function that also
             //      checks if the rom is valid (create emulator_is_valid_rom(byte_t *rom_data, size_t rom_size) function)
             //      used by the mmu parse_cartridge() function
             String fileName = uri.getLastPathSegment();
             fileName = fileName.substring(fileName.lastIndexOf('/') + 1);
-            loadedROMName.setText(fileName);
+            loadedROMBottom.setText(fileName);
 
             resumeButton.setEnabled(true);
+            resumeButton.setCompoundDrawablesWithIntrinsicBounds(R.drawable.round_play_arrow_black_24dp, 0, 0, 0);
             resetButton.setEnabled(true);
+            resetButton.setCompoundDrawablesWithIntrinsicBounds(R.drawable.round_refresh_black_24dp, 0, 0, 0);
 
             launchEmulator(false);
         } else {

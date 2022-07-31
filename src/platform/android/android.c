@@ -569,27 +569,24 @@ static void handle_input(void) {
     }
 }
 
-static void load_cartridge(const byte_t *rom_data, size_t rom_size, int emu_mode, int palette) {
+static void load_cartridge(const byte_t *rom_data, size_t rom_size, int resume, int emu_mode, int palette, float speed, float sound) {
     emulator_options_t opts = {
         .apu_sample_count = APU_SAMPLE_COUNT,
         .mode = emu_mode,
         .on_apu_samples_ready = apu_samples_ready_cb,
         .on_new_frame = ppu_vblank_cb,
-        // TODO
-        // .apu_speed = config.speed,
-        // .apu_sound_level = config.sound,
+        .apu_speed = speed,
+        .apu_sound_level = sound,
         .palette = palette
     };
-    emulator_t *new_emu = emulator_init(rom_data, rom_size, &opts);
-    if (!new_emu) return;
+    // TODO frame skip user setting
+    emu = emulator_init(rom_data, rom_size, &opts);
+    if (!emu) return;
 
-    if (emu) {
-        save_battery_to_file(emu, emulator_get_rom_title(emu));
-        emulator_quit(emu);
-    }
-    emu = new_emu;
-
-    load_battery_from_file(emu, emulator_get_rom_title(emu));
+    if (resume)
+        load_state_from_file(emu, "resume");
+    else
+        load_battery_from_file(emu, emulator_get_rom_title(emu));
 
     is_rom_loaded = SDL_TRUE;
 }
@@ -624,13 +621,11 @@ static void request_rom(void) {
     (*env)->DeleteLocalRef(env, clazz);
 }
 
-JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMData(JNIEnv* env, jobject thiz, jbyteArray data, jsize size, jboolean resume, jint emu_mode, jint palette) {
+JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMData(JNIEnv* env, jobject thiz, jbyteArray data, jsize size, jboolean resume, jint emu_mode, jint palette, jfloat speed, jfloat sound) {
     jboolean is_copy;
     jbyte *rom_data = (*env)->GetByteArrayElements(env, data, &is_copy);
 
-    load_cartridge((byte_t *) rom_data, size, emu_mode, palette);
-    if (resume)
-        load_state_from_file(emu, "resume");
+    load_cartridge((byte_t *) rom_data, size, resume, emu_mode, palette, speed, sound);
 
     (*env)->ReleaseByteArrayElements(env, data, rom_data, JNI_ABORT);
 }
@@ -706,12 +701,13 @@ int main(int argc, char **argv) {
     while (is_running) {
         // handle_input is a slow function: don't call it every step
         if (cycles >= GB_CPU_CYCLES_PER_FRAME * speed) {
+            // TODO: cycles -= GB_CPU_CYCLES_PER_FRAME * speed;
             cycles = 0;
             SDL_RenderClear(renderer);
             SDL_RenderCopy(renderer, ppu_texture, NULL, &gb_screen_rect);
             draw_buttons(renderer);
             // this SDL_Delay() isn't needed as the audio sync adds it's own delay
-            // SDL_Delay(1.0f / 60.0f); // even with SDL waiting for vsync, delay here for monitors with different refresh rates than 60Hz
+            // TODO??? SDL_Delay((1.0f / 60.0f) - time_to_render_last_frame); // even with SDL waiting for vsync, delay here for monitors with different refresh rates than 60Hz
             SDL_RenderPresent(renderer);
             handle_input(); // keep this the closest possible before emulator_step() to reduce input inaccuracies
         }

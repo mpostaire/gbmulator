@@ -6,12 +6,17 @@
     <string name="settings_button">Settings</string>
     <string name="settings_title">Settings</string>
     <string name="loaded_rom_empty_text">No ROM loaded</string>
+    <string name="playing_rom_text">Playing:</string>
     <string name="setting_set_mode">Emulation mode:</string>
-    <string name="setting_set_mode_label">This will restart the emulator</string>
+    <string name="setting_set_mode_label">This will restart the emulator any unsaved progress will be lost</string>
     <string name="setting_mode_dmg">Game Boy</string>
     <string name="setting_mode_cgb">Game Boy Color</string>
     <string name="setting_set_palette">Game Boy Palette:</string>
     <string name="setting_set_palette_label">Custom Game Boy colorization</string>
     <string name="setting_palette_orig">Original</string>
     <string name="setting_palette_gray">Grayscale</string>
+    <string name="setting_set_sound">Volume level:</string>
+    <string name="setting_set_speed">Emulation speed multiplier:</string>
+    <string name="setting_speed_label">x%1$.1f</string>
+    <string name="setting_volume_label">%1$d%%</string>
 </resources>

@@ -4,11 +4,11 @@ import android.content.SharedPreferences;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
+import android.widget.SeekBar;
 import android.widget.TextView;
 
 import java.util.Objects;
@@ -21,16 +21,23 @@ public class SettingsMenu extends AppCompatActivity {
     LinearLayout settingPaletteButton;
     TextView settingPaletteTextView;
 
+    SeekBar volumeSeekBar;
+    TextView volumeLevelTextView;
+
+    SeekBar speedSeekBar;
+    TextView speedLevelTextView;
+
     PopupMenu modePopup;
     PopupMenu palettePopup;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_settings_menu);
+        setContentView(R.layout.activity_settings);
         Objects.requireNonNull(getSupportActionBar()).setDisplayHomeAsUpEnabled(true);
 
         SharedPreferences preferences = getSharedPreferences(UserSettings.PREFERENCES, MODE_PRIVATE);
+        SharedPreferences.Editor preferencesEditor = preferences.edit();
 
         settingModeButton = findViewById(R.id.settingModeButton);
         settingModeTextView = findViewById(R.id.settingModeTextView);
@@ -61,8 +68,6 @@ public class SettingsMenu extends AppCompatActivity {
         modePopup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
             @Override
             public boolean onMenuItemClick(MenuItem menuItem) {
-                SharedPreferences.Editor preferencesEditor = preferences.edit();
-
                 switch (menuItem.getItemId()) {
                     case R.id.popup_menu_mode_dmg:
                         settingModeTextView.setText(R.string.setting_mode_dmg);
@@ -85,8 +90,6 @@ public class SettingsMenu extends AppCompatActivity {
         palettePopup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
             @Override
             public boolean onMenuItemClick(MenuItem menuItem) {
-                SharedPreferences.Editor preferencesEditor = preferences.edit();
-
                 switch (menuItem.getItemId()) {
                     case R.id.popup_menu_palette_gray:
                         settingPaletteTextView.setText(R.string.setting_palette_gray);
@@ -101,6 +104,56 @@ public class SettingsMenu extends AppCompatActivity {
                     default:
                         return false;
                 }
+            }
+        });
+
+        int volumeProgress = (int) (preferences.getFloat(UserSettings.EMULATION_SOUND, UserSettings.EMULATION_SOUND_DEFAULT) * 100);
+        volumeLevelTextView = findViewById(R.id.volumeLevelTextView);
+        volumeLevelTextView.setText(getString(R.string.setting_volume_label, volumeProgress));
+        volumeSeekBar = findViewById(R.id.volumeSeekBar);
+        volumeSeekBar.setProgress(volumeProgress);
+        volumeSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                preferencesEditor.putFloat(UserSettings.EMULATION_SOUND, i / 100.0f);
+                preferencesEditor.apply();
+                volumeLevelTextView.setText(getString(R.string.setting_volume_label, i));
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
+
+        float speed = preferences.getFloat(UserSettings.EMULATION_SPEED, UserSettings.EMULATION_SPEED_DEFAULT);
+        int speedProgress = (int) ((speed - 1) / 0.5f);
+        speedLevelTextView = findViewById(R.id.speedLevelTextView);
+        speedLevelTextView.setText(getString(R.string.setting_speed_label, speed));
+        speedSeekBar = findViewById(R.id.speedSeekBar);
+        speedSeekBar.setProgress(speedProgress);
+        speedSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                float value = i * 0.5f + 1;
+                preferencesEditor.putFloat(UserSettings.EMULATION_SPEED, value);
+                preferencesEditor.apply();
+                speedLevelTextView.setText(getString(R.string.setting_speed_label, value));
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
             }
         });
     }

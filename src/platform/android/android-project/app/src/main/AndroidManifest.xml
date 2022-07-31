@@ -28,9 +28,11 @@
         <activity
             android:name=".SettingsMenu"
             android:label="@string/settings_title"
+            android:configChanges="orientation|screenSize"
             android:exported="false" />
         <activity
             android:name=".MainMenu"
+            android:configChanges="orientation|screenSize"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
