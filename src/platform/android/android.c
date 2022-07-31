@@ -29,7 +29,6 @@
 //      OR maybe just bigger button hitbox (check drastic ds emulator to see how it's done)
 
 SDL_bool is_running;
-SDL_bool is_rom_loaded;
 SDL_bool is_landscape;
 
 float speed;
@@ -569,13 +568,13 @@ static void handle_input(void) {
     }
 }
 
-static void load_cartridge(const byte_t *rom_data, size_t rom_size, int resume, int emu_mode, int palette, float speed, float sound) {
+static void load_cartridge(const byte_t *rom_data, size_t rom_size, int resume, int emu_mode, int palette, float emu_speed, float sound) {
     emulator_options_t opts = {
         .apu_sample_count = APU_SAMPLE_COUNT,
         .mode = emu_mode,
         .on_apu_samples_ready = apu_samples_ready_cb,
         .on_new_frame = ppu_vblank_cb,
-        .apu_speed = speed,
+        .apu_speed = emu_speed,
         .apu_sound_level = sound,
         .palette = palette
     };
@@ -588,22 +587,7 @@ static void load_cartridge(const byte_t *rom_data, size_t rom_size, int resume, 
     else
         load_battery_from_file(emu, emulator_get_rom_title(emu));
 
-    is_rom_loaded = SDL_TRUE;
-}
-
-static void set_allowed_orientations(void) {
-    JNIEnv *env = (JNIEnv *) SDL_AndroidGetJNIEnv();
-
-    jobject activity = (jobject) SDL_AndroidGetActivity();
-
-    jclass clazz = (*env)->GetObjectClass(env, activity);
-
-    jmethodID method_id = (*env)->GetMethodID(env, clazz, "setAllowedOrientations", "()V");
-
-    (*env)->CallVoidMethod(env, activity, method_id);
-
-    (*env)->DeleteLocalRef(env, activity);
-    (*env)->DeleteLocalRef(env, clazz);
+    speed = emu_speed;
 }
 
 static void request_rom(void) {
@@ -621,11 +605,11 @@ static void request_rom(void) {
     (*env)->DeleteLocalRef(env, clazz);
 }
 
-JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMData(JNIEnv* env, jobject thiz, jbyteArray data, jsize size, jboolean resume, jint emu_mode, jint palette, jfloat speed, jfloat sound) {
+JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMData(JNIEnv* env, jobject thiz, jbyteArray data, jsize size, jboolean resume, jint emu_mode, jint palette, jfloat emu_speed, jfloat sound) {
     jboolean is_copy;
     jbyte *rom_data = (*env)->GetByteArrayElements(env, data, &is_copy);
 
-    load_cartridge((byte_t *) rom_data, size, resume, emu_mode, palette, speed, sound);
+    load_cartridge((byte_t *) rom_data, size, resume, emu_mode, palette, emu_speed, sound);
 
     (*env)->ReleaseByteArrayElements(env, data, rom_data, JNI_ABORT);
 }
@@ -636,7 +620,6 @@ int main(int argc, char **argv) {
     // initialize global variables here and not at their initialization as they can still have their
     // previous values because of android's activities lifecycle
     is_running = SDL_TRUE;
-    is_rom_loaded = SDL_FALSE;
     is_controller_present = SDL_FALSE;
     speed = 1.0f;
 
@@ -650,37 +633,14 @@ int main(int argc, char **argv) {
         SDL_WINDOW_FULLSCREEN | SDL_WINDOW_RESIZABLE
     );
 
-    set_allowed_orientations();
     set_layout(0);
-
-
 
     // TODO vsync or not vsync?? see what audio/video syncing does...
     // TODO also compare desktop and android platforms speeds at emulator speed == 1.0f to see if it's equivalent
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
-    // supported:
-    // SDL_PIXELFORMAT_ARGB8888
-    // SDL_PIXELFORMAT_ABGR8888
-    // SDL_PIXELFORMAT_RGB888
-    // SDL_PIXELFORMAT_BGR888
-    // SDL_PIXELFORMAT_YV12
-    // SDL_PIXELFORMAT_IYUV
-    // SDL_PIXELFORMAT_NV12
-    // SDL_PIXELFORMAT_NV21
-    // SDL_PIXELFORMAT_UNKNOWN
-
-    // SDL_RendererInfo info;
-    // SDL_GetRendererInfo(renderer, &info);
-    // log("available pixel formats:");
-    // for (int i = 0; i < info.num_texture_formats; i++)
-    //     log("%s", SDL_GetPixelFormatName(info.texture_formats[i]));
-
     ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
     ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
-    SDL_Texture *ui_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    int ui_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
-    SDL_SetTextureBlendMode(ui_texture, SDL_BLENDMODE_BLEND);
 
     SDL_AudioSpec audio_settings = {
         .freq = GB_APU_SAMPLE_RATE,
@@ -697,7 +657,6 @@ int main(int argc, char **argv) {
 
     // main gbmulator loop
     int cycles = 0;
-    int step = 0;
     while (is_running) {
         // handle_input is a slow function: don't call it every step
         if (cycles >= GB_CPU_CYCLES_PER_FRAME * speed) {
@@ -729,7 +688,6 @@ int main(int argc, char **argv) {
     SDL_DestroyWindow(window);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyTexture(ppu_texture);
-    SDL_DestroyTexture(ui_texture);
 
     SDL_CloseAudioDevice(audio_device);
 

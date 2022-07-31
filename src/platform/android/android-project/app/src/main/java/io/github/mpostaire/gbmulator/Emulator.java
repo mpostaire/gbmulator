@@ -11,13 +11,12 @@ import java.io.IOException;
 import android.os.Bundle;
 import android.os.Handler;
 import android.provider.Settings;
-import android.util.Log;
 import android.widget.Toast;
 import org.libsdl.app.SDLActivity;
 
 public class Emulator extends SDLActivity {
 
-    public native void receiveROMData(byte[] data, int size, boolean resume, int emu_mode, int palette, float speed, float sound);
+    public native void receiveROMData(byte[] data, int size, boolean resume, int emu_mode, int palette, float emu_speed, float sound);
 
     public boolean canRotate() {
         try {
@@ -68,13 +67,15 @@ public class Emulator extends SDLActivity {
             Uri rom_uri = extras.getParcelable("rom_uri");
             boolean resume = extras.getBoolean("resume");
 
+            setRequestedOrientation(extras.getInt("orientation"));
+
             InputStream in = getApplication().getContentResolver().openInputStream(rom_uri);
             ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream();
 
             int bufferSize = 1024;
             byte[] buffer = new byte[bufferSize];
 
-            int len = 0;
+            int len;
             while ((len = in.read(buffer)) != -1)
                 byteBuffer.write(buffer, 0, len);
 
