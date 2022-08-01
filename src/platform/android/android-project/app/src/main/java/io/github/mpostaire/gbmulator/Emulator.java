@@ -16,7 +16,7 @@ import org.libsdl.app.SDLActivity;
 
 public class Emulator extends SDLActivity {
 
-    public native void receiveROMData(byte[] data, int size, boolean resume, int emu_mode, int palette, float emu_speed, float sound);
+    public native void receiveROMData(byte[] data, int size, boolean resume, int emu_mode, int palette, float emu_speed, float sound, int emu_frame_skip);
 
     public boolean canRotate() {
         try {
@@ -89,8 +89,9 @@ public class Emulator extends SDLActivity {
             int palette = preferences.getInt(UserSettings.EMULATION_PALETTE, UserSettings.EMULATION_PALETTE_DEFAULT);
             float speed = preferences.getFloat(UserSettings.EMULATION_SPEED, UserSettings.EMULATION_SPEED_DEFAULT);
             float sound = preferences.getFloat(UserSettings.EMULATION_SOUND, UserSettings.EMULATION_SOUND_DEFAULT);
+            int frame_skip = preferences.getInt(UserSettings.FRAME_SKIP, UserSettings.FRAME_SKIP_DEFAULT);
 
-            receiveROMData(rom_data, rom_data.length, resume, emu_mode, palette, speed, sound);
+            receiveROMData(rom_data, rom_data.length, resume, emu_mode, palette, speed, sound, frame_skip);
         } catch (IOException e){
             errorToast("The selected file is not a valid ROM.");
             finish();

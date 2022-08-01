@@ -27,6 +27,9 @@ public class SettingsMenu extends AppCompatActivity {
     SeekBar speedSeekBar;
     TextView speedLevelTextView;
 
+    SeekBar frameSkipSeekBar;
+    TextView frameSkipTextView;
+
     PopupMenu modePopup;
     PopupMenu palettePopup;
 
@@ -144,6 +147,30 @@ public class SettingsMenu extends AppCompatActivity {
                 preferencesEditor.putFloat(UserSettings.EMULATION_SPEED, value);
                 preferencesEditor.apply();
                 speedLevelTextView.setText(getString(R.string.setting_speed_label, value));
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
+
+        int frameSkip = preferences.getInt(UserSettings.FRAME_SKIP, UserSettings.FRAME_SKIP_DEFAULT);
+        frameSkipTextView = findViewById(R.id.frameSkipTextView);
+        frameSkipTextView.setText(getString(R.string.setting_frame_skip_value, frameSkip));
+        frameSkipSeekBar = findViewById(R.id.frameSkipSeekBar);
+        frameSkipSeekBar.setProgress(frameSkip);
+        frameSkipSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                preferencesEditor.putInt(UserSettings.FRAME_SKIP, i);
+                preferencesEditor.apply();
+                frameSkipTextView.setText(getString(R.string.setting_frame_skip_value, i));
             }
 
             @Override

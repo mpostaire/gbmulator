@@ -32,6 +32,7 @@ SDL_bool is_running;
 SDL_bool is_landscape;
 
 float speed;
+int frame_skip;
 
 SDL_Renderer *renderer;
 SDL_Window *window;
@@ -471,37 +472,13 @@ static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
     // else if (SDL_GetQueuedAudioSize(audio_device) == 0)
     //     log("need refill");
 
-    // while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 4)
-    //     SDL_Delay(1);
+    while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 4)
+         SDL_Delay(1);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
-}
-
-static void android_back_to_previous_activity(void) {
-    save_state_to_file(emu, "resume");
-
-    // retrieve the JNI environment.
-    JNIEnv *env = (JNIEnv *) SDL_AndroidGetJNIEnv();
-
-    // retrieve the Java instance of the SDLActivity
-    jobject activity = (jobject) SDL_AndroidGetActivity();
-
-    // find the Java class of the activity. It should be SDLActivity or a subclass of it.
-    jclass clazz = (*env)->GetObjectClass(env, activity);
-
-    // find the identifier of the method to call
-    jmethodID method_id = (*env)->GetMethodID(env, clazz, "finish", "()V");
-
-    // effectively call the Java method
-    (*env)->CallVoidMethod(env, activity, method_id);
-
-    // clean up the local references.
-    (*env)->DeleteLocalRef(env, activity);
-    (*env)->DeleteLocalRef(env, clazz);
 }
 
 static void handle_input(void) {
     SDL_Event event;
-    char *savestate_path;
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
         case SDL_FINGERDOWN:
@@ -515,11 +492,11 @@ static void handle_input(void) {
             break;
         case SDL_KEYDOWN:
             if (!event.key.repeat && event.key.keysym.sym == SDLK_AC_BACK)
-                android_back_to_previous_activity();
+                is_running = SDL_FALSE;
             break;
         case SDL_CONTROLLERBUTTONDOWN:
             if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE)
-                android_back_to_previous_activity();
+                is_running = SDL_FALSE;
             else
                 button_press(emu, sdl_controller_to_joypad(event.cbutton.button));
             break;
@@ -548,9 +525,7 @@ static void handle_input(void) {
             }
             break;
         case SDL_APP_WILLENTERBACKGROUND:
-            if (emu)
-                save_battery_to_file(emu, emulator_get_rom_title(emu));
-            android_back_to_previous_activity();
+            is_running = SDL_FALSE;
             break;
         case SDL_APP_DIDENTERFOREGROUND:
             break;
@@ -605,11 +580,12 @@ static void request_rom(void) {
     (*env)->DeleteLocalRef(env, clazz);
 }
 
-JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMData(JNIEnv* env, jobject thiz, jbyteArray data, jsize size, jboolean resume, jint emu_mode, jint palette, jfloat emu_speed, jfloat sound) {
+JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMData(JNIEnv* env, jobject thiz, jbyteArray data, jsize size, jboolean resume, jint emu_mode, jint palette, jfloat emu_speed, jfloat sound, jint emu_frame_skip) {
     jboolean is_copy;
     jbyte *rom_data = (*env)->GetByteArrayElements(env, data, &is_copy);
 
     load_cartridge((byte_t *) rom_data, size, resume, emu_mode, palette, emu_speed, sound);
+    frame_skip = emu_frame_skip;
 
     (*env)->ReleaseByteArrayElements(env, data, rom_data, JNI_ABORT);
 }
@@ -657,17 +633,24 @@ int main(int argc, char **argv) {
 
     // main gbmulator loop
     int cycles = 0;
+    int frame_count = 0; // TODO check if using only the frame_skip variable is enough to implement frame skip
     while (is_running) {
         // handle_input is a slow function: don't call it every step
         if (cycles >= GB_CPU_CYCLES_PER_FRAME * speed) {
             // TODO: cycles -= GB_CPU_CYCLES_PER_FRAME * speed;
             cycles = 0;
-            SDL_RenderClear(renderer);
-            SDL_RenderCopy(renderer, ppu_texture, NULL, &gb_screen_rect);
-            draw_buttons(renderer);
-            // this SDL_Delay() isn't needed as the audio sync adds it's own delay
-            // TODO??? SDL_Delay((1.0f / 60.0f) - time_to_render_last_frame); // even with SDL waiting for vsync, delay here for monitors with different refresh rates than 60Hz
-            SDL_RenderPresent(renderer);
+            if (frame_count >= frame_skip) {
+                SDL_RenderClear(renderer);
+                SDL_RenderCopy(renderer, ppu_texture, NULL, &gb_screen_rect);
+                draw_buttons(renderer);
+                // this SDL_Delay() isn't needed as the audio sync adds it's own delay
+                // TODO??? SDL_Delay((1.0f / 60.0f) - time_to_render_last_frame); // even with SDL waiting for vsync, delay here for monitors with different refresh rates than 60Hz
+                SDL_RenderPresent(renderer);
+                frame_count = 0;
+            } else {
+                SDL_Delay(1.0f / 60.0f);
+            }
+            frame_count++;
             handle_input(); // keep this the closest possible before emulator_step() to reduce input inaccuracies
         }
 
@@ -679,6 +662,7 @@ int main(int argc, char **argv) {
 
     if (emu) {
         save_battery_to_file(emu, emulator_get_rom_title(emu));
+        save_state_to_file(emu, "resume");
         emulator_quit(emu);
     }
 

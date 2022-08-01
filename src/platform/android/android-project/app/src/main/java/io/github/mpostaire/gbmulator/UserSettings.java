@@ -20,4 +20,6 @@ public class UserSettings {
     public static final String EMULATION_SOUND = "emulation_sound";
     public static final float EMULATION_SOUND_DEFAULT = 1.0f;
 
+    public static final String FRAME_SKIP = "frame_skip";
+    public static final int FRAME_SKIP_DEFAULT = 0;
 }

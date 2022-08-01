@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainMenu">
+
+    <ScrollView
+        android:id="@+id/scrollView"
+        android:layout_width="0dp"
+        android:layout_height="198dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.666">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <View
+                android:id="@+id/view1"
+                style="@style/HorizontalDivider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_weight="400"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/resumeButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:drawableStart="@drawable/round_play_arrow_grey_400_24dp"
+                    android:enabled="false"
+                    android:onClick="resumeROM"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="34dp"
+                    android:text="@string/resume_emulator_button" />
+
+            </LinearLayout>
+
+            <View
+                android:id="@+id/view2"
+                style="@style/HorizontalDivider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_weight="400"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/loadROMButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:drawableStart="@drawable/round_file_open_black_24dp"
+                    android:onClick="loadROM"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="34dp"
+                    android:text="@string/load_rom_button" />
+
+            </LinearLayout>
+
+            <View
+                android:id="@+id/view3"
+                style="@style/HorizontalDivider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_weight="400"
+                android:focusable="false"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/resetButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:drawableStart="@drawable/round_refresh_grey_400_24dp"
+                    android:enabled="false"
+                    android:onClick="resetROM"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="34dp"
+                    android:text="@string/reset_rom_button" />
+
+            </LinearLayout>
+
+            <View
+                android:id="@+id/view4"
+                style="@style/HorizontalDivider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/settingsButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:drawableStart="@drawable/round_settings_black_24dp"
+                    android:onClick="openSettings"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="34dp"
+                    android:text="@string/settings_button" />
+            </LinearLayout>
+
+            <View
+                android:id="@+id/view5"
+                style="@style/HorizontalDivider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+        </LinearLayout>
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="vertical"
+        app:layout_constraintBottom_toTopOf="@+id/scrollView"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:id="@+id/loadedROMTop"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/playing_rom_text"
+            android:textSize="16sp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/loadedROMBottom"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/loaded_rom_empty_text"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+
+</android.support.constraint.ConstraintLayout>

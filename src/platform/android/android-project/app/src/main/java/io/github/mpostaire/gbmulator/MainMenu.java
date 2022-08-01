@@ -53,6 +53,7 @@ public class MainMenu extends AppCompatActivity {
         i.putExtra("palette", preferences.getInt(UserSettings.EMULATION_PALETTE, UserSettings.EMULATION_PALETTE_DEFAULT));
         i.putExtra("sound", preferences.getFloat(UserSettings.EMULATION_SOUND, UserSettings.EMULATION_SOUND_DEFAULT));
         i.putExtra("speed", preferences.getFloat(UserSettings.EMULATION_SPEED, UserSettings.EMULATION_SPEED_DEFAULT));
+        i.putExtra("frame_skip", preferences.getInt(UserSettings.FRAME_SKIP, UserSettings.FRAME_SKIP_DEFAULT));
         i.putExtra("orientation", getRequestedOrientation());
         startActivity(i);
     }

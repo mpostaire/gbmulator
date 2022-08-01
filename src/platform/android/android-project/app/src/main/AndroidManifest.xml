@@ -28,7 +28,6 @@
         <activity
             android:name=".SettingsMenu"
             android:label="@string/settings_title"
-            android:configChanges="orientation|screenSize"
             android:exported="false" />
         <activity
             android:name=".MainMenu"
@@ -49,8 +48,8 @@
             android:alwaysRetainTaskState="true"
             android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:exported="false"
-            android:launchMode="singleInstance"
             android:preferMinimalPostProcessing="true">
+            <!-- testing without 'android:launchMode="singleInstance"' in the activity properties. If there are any problems try to put it back -->
 
             <!-- Let Android know that we can handle some USB devices and should receive this event -->
             <intent-filter>

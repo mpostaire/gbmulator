@@ -114,7 +114,7 @@
 
                 <SeekBar
                     android:id="@+id/speedSeekBar"
-                    style="@style/Widget.AppCompat.SeekBar.Discrete"
+                    style="@android:style/Widget.Material.SeekBar.Discrete"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:max="6"
@@ -165,7 +165,7 @@
 
                 <SeekBar
                     android:id="@+id/frameSkipSeekBar"
-                    style="@style/Widget.AppCompat.SeekBar.Discrete"
+                    style="@android:style/Widget.Material.SeekBar.Discrete"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:max="4"
