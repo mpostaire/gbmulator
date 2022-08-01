@@ -1,11 +1,11 @@
 <resources>
     <string name="app_name">GBmulator</string>
     <string name="resume_emulator_button">Resume</string>
-    <string name="load_rom_button">Load ROM</string>
+    <string name="load_rom_button">Load cartridge</string>
     <string name="reset_rom_button">Restart emulator</string>
     <string name="settings_button">Settings</string>
     <string name="settings_title">Settings</string>
-    <string name="loaded_rom_empty_text">No ROM loaded</string>
+    <string name="loaded_rom_empty_text">Empty cartridge slot</string>
     <string name="playing_rom_text">Playing:</string>
     <string name="setting_set_mode">Emulation mode:</string>
     <string name="setting_set_mode_label">This will restart the emulator any unsaved progress will be lost</string>

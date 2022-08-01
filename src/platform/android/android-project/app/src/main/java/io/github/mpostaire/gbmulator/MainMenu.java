@@ -10,6 +10,12 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.ByteArrayOutputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
+
 
 public class MainMenu extends AppCompatActivity {
 
@@ -63,12 +69,42 @@ public class MainMenu extends AppCompatActivity {
         launchEmulator(true);
     }
 
+    public String getRomTitle(Uri uri) {
+        try {
+            InputStream in = getApplication().getContentResolver().openInputStream(uri);
+
+            int bufferSize = 0x145;
+            byte[] buffer = new byte[bufferSize];
+
+            int len = in.read(buffer);
+            if (len == -1)
+                return null;
+
+            in.close();
+
+            if (buffer[0x143] == (byte) 0x80 || buffer[0x143] == (byte) 0xC0)
+                return new String(Arrays.copyOfRange(buffer, 0x134, 0x143));
+            else
+                return new String(Arrays.copyOfRange(buffer, 0x134, 0x144));
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
         if (requestCode == 200 && resultCode == RESULT_OK && data != null) {
             Uri uri = data.getData();
+
+            String romTitle = getRomTitle(uri);
+            if (romTitle == null) {
+                errorToast("Error reading file");
+                filePickerIntent = null;
+            }
+
             String extension = uri.getLastPathSegment();
             int dotIndex = extension.lastIndexOf('.');
             if (dotIndex < 0) {
@@ -88,13 +124,7 @@ public class MainMenu extends AppCompatActivity {
             filePickerIntent = null;
 
             loadedROMTop.setVisibility(View.VISIBLE);
-
-            // TODO instead of getting filename, get actual rom title using a native function that also
-            //      checks if the rom is valid (create emulator_is_valid_rom(byte_t *rom_data, size_t rom_size) function)
-            //      used by the mmu parse_cartridge() function
-            String fileName = uri.getLastPathSegment();
-            fileName = fileName.substring(fileName.lastIndexOf('/') + 1);
-            loadedROMBottom.setText(fileName);
+            loadedROMBottom.setText(romTitle);
 
             resumeButton.setEnabled(true);
             resumeButton.setCompoundDrawablesWithIntrinsicBounds(R.drawable.round_play_arrow_black_24dp, 0, 0, 0);

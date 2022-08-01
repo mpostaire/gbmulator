@@ -80,7 +80,7 @@ public class Emulator extends SDLActivity {
                 byteBuffer.write(buffer, 0, len);
 
             // and then we can return your byte array.
-            byte[] rom_data = byteBuffer.toByteArray();
+            byte[] rom = byteBuffer.toByteArray();
             byteBuffer.close();
             in.close();
 
@@ -91,7 +91,7 @@ public class Emulator extends SDLActivity {
             float sound = preferences.getFloat(UserSettings.EMULATION_SOUND, UserSettings.EMULATION_SOUND_DEFAULT);
             int frame_skip = preferences.getInt(UserSettings.FRAME_SKIP, UserSettings.FRAME_SKIP_DEFAULT);
 
-            receiveROMData(rom_data, rom_data.length, resume, emu_mode, palette, speed, sound, frame_skip);
+            receiveROMData(rom, rom.length, resume, emu_mode, palette, speed, sound, frame_skip);
         } catch (IOException e){
             errorToast("The selected file is not a valid ROM.");
             finish();
