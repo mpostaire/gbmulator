@@ -1,8 +1,10 @@
 package io.github.mpostaire.gbmulator;
 
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
@@ -148,7 +150,17 @@ public class MainMenu extends AppCompatActivity {
     }
 
     public void resetROM(View view) {
-        launchEmulator(false);
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(R.string.reset_rom_button);
+        builder.setMessage(R.string.reset_rom_dialog_message);
+        builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                launchEmulator(false);
+            }
+        });
+        builder.setNegativeButton(android.R.string.cancel, null);
+        builder.show();
     }
 
     public void openSettings(View view) {

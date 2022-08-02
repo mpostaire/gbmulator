@@ -45,6 +45,10 @@ desktop: $(PLATFORM_ODIR_STRUCTURE) $(EXEC) $(ICONS)
 debug: CFLAGS+=-g -O0
 debug: all
 
+profile: CFLAGS+=-p
+profile: run
+	gprof ./$(EXEC) gmon.out > prof_output
+
 # TODO this should also make a gbmulator.apk file in this project root dir (next do the gbmulator desktop binary) 
 android: $(ICONS)
 	cd $(SDIR)/platform/android/android-project && ./gradlew assemble

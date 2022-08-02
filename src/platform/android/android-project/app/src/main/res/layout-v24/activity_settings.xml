@@ -160,7 +160,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:gravity="end"
-                        android:text="@string/setting_frame_skip_value" />
+                        android:text="@string/setting_frame_skip_value_off" />
                 </LinearLayout>
 
                 <SeekBar
@@ -277,6 +277,38 @@
                     android:gravity="center|end"
                     android:text="@string/setting_mode_dmg" />
 
+            </LinearLayout>
+
+            <View
+                android:id="@+id/view12"
+                style="@style/HorizontalDivider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <LinearLayout
+                android:id="@+id/settingLayoutEditorButton"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="?android:attr/selectableItemBackground"
+                android:onClick="layoutEditor"
+                android:orientation="vertical"
+                android:padding="10dp">
+
+                <TextView
+                    android:id="@+id/textView5"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="start|center_vertical"
+                    android:text="@string/setting_layout_editor"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/textView9"
+                    android:layout_width="match_parent"
+                    android:layout_height="36dp"
+                    android:gravity="center_vertical"
+                    android:text="@string/setting_layout_editor_label" />
             </LinearLayout>
 
             <View

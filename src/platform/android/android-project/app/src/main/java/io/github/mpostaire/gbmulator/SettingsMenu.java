@@ -10,6 +10,7 @@ import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.Objects;
 
@@ -162,7 +163,10 @@ public class SettingsMenu extends AppCompatActivity {
 
         int frameSkip = preferences.getInt(UserSettings.FRAME_SKIP, UserSettings.FRAME_SKIP_DEFAULT);
         frameSkipTextView = findViewById(R.id.frameSkipTextView);
-        frameSkipTextView.setText(getString(R.string.setting_frame_skip_value, frameSkip));
+        if (frameSkip == 0)
+            frameSkipTextView.setText(getString(R.string.setting_frame_skip_value_off));
+        else
+            frameSkipTextView.setText(getString(R.string.setting_frame_skip_value, frameSkip));
         frameSkipSeekBar = findViewById(R.id.frameSkipSeekBar);
         frameSkipSeekBar.setProgress(frameSkip);
         frameSkipSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -170,7 +174,10 @@ public class SettingsMenu extends AppCompatActivity {
             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
                 preferencesEditor.putInt(UserSettings.FRAME_SKIP, i);
                 preferencesEditor.apply();
-                frameSkipTextView.setText(getString(R.string.setting_frame_skip_value, i));
+                if (i == 0)
+                    frameSkipTextView.setText(getString(R.string.setting_frame_skip_value_off));
+                else
+                    frameSkipTextView.setText(getString(R.string.setting_frame_skip_value, i));
             }
 
             @Override
@@ -200,5 +207,9 @@ public class SettingsMenu extends AppCompatActivity {
 
     public void showPalettePopup(View view) {
         palettePopup.show();
+    }
+
+    public void layoutEditor(View view) {
+        Toast.makeText(this, "TODO", Toast.LENGTH_SHORT).show();
     }
 }
