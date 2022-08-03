@@ -15,18 +15,9 @@
 #define SCREEN_HEIGHT 284
 
 // TODO savestates ui
-// TODO bluetooth link cable
+// TODO bluetooth (and wifi) link cable --> make a link connection pausable and resumeable (because the whole emulator is
+//      reset each time we leave the Emulator activity)
 // TODO test with gamepad controller (PS3, ...)
-// TODO replace all printf() by __android_log_print()
-
-// TODO make ui in an android activity with android ui api (no need for keybindings/scale configs but need for landscape/portrait layouts config)
-
-// TODO button (and screen??) layout designer for both landscape and portrait (like drastic ds emulator)
-//      add to config file the layouts: each element has a normalized x,y coordinates and width/heigth.
-//      --> meaning the coordinates are in percent of the screen (ex: x is in percent of the screen width, ...)
-
-// TODO ???? bigger finger hitbox (circle instead of point --> button pressed is the one closer to the center of the circle)
-//      OR maybe just bigger button hitbox (check drastic ds emulator to see how it's done)
 
 SDL_bool is_running;
 SDL_bool is_landscape;
@@ -633,9 +624,8 @@ int main(int argc, char **argv) {
 
     // main gbmulator loop
     int cycles = 0;
-    int frame_count = 0; // TODO check if using only the frame_skip variable is enough to implement frame skip
+    int frame_count = 0;
     while (is_running) {
-        // handle_input is a slow function: don't call it every step
         if (cycles >= GB_CPU_CYCLES_PER_FRAME * speed) {
             // TODO: cycles -= GB_CPU_CYCLES_PER_FRAME * speed;
             cycles = 0;
@@ -651,6 +641,7 @@ int main(int argc, char **argv) {
                 SDL_Delay(1.0f / 60.0f);
             }
             frame_count++;
+            // handle_input is a slow function: don't call it every step
             handle_input(); // keep this the closest possible before emulator_step() to reduce input inaccuracies
         }
 

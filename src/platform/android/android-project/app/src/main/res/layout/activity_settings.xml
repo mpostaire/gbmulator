@@ -21,10 +21,10 @@
             android:orientation="vertical">
 
             <View
-                android:id="@+id/view8"
-                style="@style/HorizontalDivider"
+                android:id="@+id/divider7"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="1dp"
+                android:background="?android:attr/listDivider" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -72,10 +72,10 @@
             </LinearLayout>
 
             <View
-                android:id="@+id/view"
-                style="@style/HorizontalDivider"
+                android:id="@+id/divider8"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="1dp"
+                android:background="?android:attr/listDivider" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -123,10 +123,10 @@
             </LinearLayout>
 
             <View
-                android:id="@+id/view9"
-                style="@style/HorizontalDivider"
+                android:id="@+id/divider9"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="1dp"
+                android:background="?android:attr/listDivider" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -174,10 +174,10 @@
             </LinearLayout>
 
             <View
-                android:id="@+id/view10"
-                style="@style/HorizontalDivider"
+                android:id="@+id/divider10"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="1dp"
+                android:background="?android:attr/listDivider" />
 
             <LinearLayout
                 android:id="@+id/settingColorPaletteButton"
@@ -227,10 +227,10 @@
             </LinearLayout>
 
             <View
-                android:id="@+id/view6"
-                style="@style/HorizontalDivider"
+                android:id="@+id/divider11"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="1dp"
+                android:background="?android:attr/listDivider" />
 
             <LinearLayout
                 android:id="@+id/settingModeButton"
@@ -265,7 +265,6 @@
                         android:layout_width="match_parent"
                         android:layout_height="36dp"
                         android:gravity="center_vertical"
-                        android:maxWidth="250dp"
                         android:text="@string/setting_set_mode_label" />
                 </LinearLayout>
 
@@ -280,10 +279,10 @@
             </LinearLayout>
 
             <View
-                android:id="@+id/view11"
-                style="@style/HorizontalDivider"
+                android:id="@+id/divider12"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="1dp"
+                android:background="?android:attr/listDivider" />
 
             <LinearLayout
                 android:id="@+id/settingLayoutEditorButton"
@@ -312,10 +311,10 @@
             </LinearLayout>
 
             <View
-                android:id="@+id/view7"
-                style="@style/HorizontalDivider"
+                android:id="@+id/divider13"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="1dp"
+                android:background="?android:attr/listDivider" />
 
         </LinearLayout>
     </ScrollView>

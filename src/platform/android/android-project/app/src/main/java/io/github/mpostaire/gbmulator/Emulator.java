@@ -11,10 +11,20 @@ import java.io.IOException;
 import android.os.Bundle;
 import android.os.Handler;
 import android.provider.Settings;
+import android.util.Log;
 import android.widget.Toast;
 import org.libsdl.app.SDLActivity;
 
 public class Emulator extends SDLActivity {
+
+    Uri romUri;
+    boolean resume;
+    int orientation;
+    int emuMode;
+    int palette;
+    float speed;
+    float sound;
+    int frameSkip;
 
     public native void receiveROMData(byte[] data, int size, boolean resume, int emu_mode, int palette, float emu_speed, float sound, int emu_frame_skip);
 
@@ -40,6 +50,25 @@ public class Emulator extends SDLActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        Bundle extras = getIntent().getExtras();
+        if (extras == null) {
+            errorToast("Oops... Something bad happened!");
+            finish();
+            return;
+        }
+
+        romUri = extras.getParcelable("rom_uri");
+        resume = extras.getBoolean("resume");
+        orientation = extras.getInt("orientation");
+
+        SharedPreferences preferences = getSharedPreferences(UserSettings.PREFERENCES, MODE_PRIVATE);
+        emuMode = preferences.getInt(UserSettings.EMULATION_MODE, UserSettings.EMULATION_MODE_DEFAULT);
+        palette = preferences.getInt(UserSettings.EMULATION_PALETTE, UserSettings.EMULATION_PALETTE_DEFAULT);
+        speed = preferences.getFloat(UserSettings.EMULATION_SPEED, UserSettings.EMULATION_SPEED_DEFAULT);
+        sound = preferences.getFloat(UserSettings.EMULATION_SOUND, UserSettings.EMULATION_SOUND_DEFAULT);
+        frameSkip = preferences.getInt(UserSettings.FRAME_SKIP, UserSettings.FRAME_SKIP_DEFAULT);
+
         Uri uri = Settings.System.getUriFor(Settings.System.ACCELEROMETER_ROTATION);
         ContentObserver rotationObserver = new ContentObserver(new Handler()) {
             @Override
@@ -51,25 +80,20 @@ public class Emulator extends SDLActivity {
         getContentResolver().registerContentObserver(uri,true, rotationObserver);
     }
 
+    @Override
+    public void setOrientationBis(int w, int h, boolean resizable, String hint) {
+        Log.v("SDL", "setOrientation() requestedOrientation=" + orientation + " width=" + w +" height="+ h +" resizable=" + resizable + " hint=" + hint);
+        mSingleton.setRequestedOrientation(orientation);
+    }
+
     public void errorToast(String msg) {
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
     }
 
     public void requestROM() {
-        Bundle extras = getIntent().getExtras();
-        if (extras == null) {
-            finish();
-            errorToast("Oops... Something bad happened!");
-            return;
-        }
 
         try {
-            Uri rom_uri = extras.getParcelable("rom_uri");
-            boolean resume = extras.getBoolean("resume");
-
-            setRequestedOrientation(extras.getInt("orientation"));
-
-            InputStream in = getApplication().getContentResolver().openInputStream(rom_uri);
+            InputStream in = getApplication().getContentResolver().openInputStream(romUri);
             ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream();
 
             int bufferSize = 1024;
@@ -83,14 +107,7 @@ public class Emulator extends SDLActivity {
             byteBuffer.close();
             in.close();
 
-            SharedPreferences preferences = getSharedPreferences(UserSettings.PREFERENCES, MODE_PRIVATE);
-            int emu_mode = preferences.getInt(UserSettings.EMULATION_MODE, UserSettings.EMULATION_MODE_DEFAULT);
-            int palette = preferences.getInt(UserSettings.EMULATION_PALETTE, UserSettings.EMULATION_PALETTE_DEFAULT);
-            float speed = preferences.getFloat(UserSettings.EMULATION_SPEED, UserSettings.EMULATION_SPEED_DEFAULT);
-            float sound = preferences.getFloat(UserSettings.EMULATION_SOUND, UserSettings.EMULATION_SOUND_DEFAULT);
-            int frame_skip = preferences.getInt(UserSettings.FRAME_SKIP, UserSettings.FRAME_SKIP_DEFAULT);
-
-            receiveROMData(rom, rom.length, resume, emu_mode, palette, speed, sound, frame_skip);
+            receiveROMData(rom, rom.length, resume, emuMode, palette, speed, sound, frameSkip);
         } catch (IOException e) {
             errorToast("The selected file is not a valid ROM.");
             finish();
