@@ -23,6 +23,11 @@
 // TODO put socket code logic in platform specific code section and leave here only the transfer logic.
 //      --> callback when data needs to be transfered, then platform handles this data and the transfer
 
+// TODO think about this algorithm: send byte i but wait to receive corresponding byte from the other gameboy.
+//      when it's received, do the bit shift using the link clock rate (customizable?), then repeat with next byte (i + 1)
+
+// TODO maybe desing a protocol allowing for no packet transfer while the connection doesn't transfer data (needs to keep into account the tcp keepalive for tcp connection)
+
 #ifndef IPPROTO_MPTCP
 #define IPPROTO_MPTCP 262
 #endif

@@ -191,7 +191,7 @@ static inline s_byte_t is_finger_over_button(float x, float y) {
         y *= SCREEN_HEIGHT;
     }
 
-    for (int i = 0; i < 12; i++) {
+    for (s_byte_t i = 0; i < 12; i++) {
         SDL_Rect *hitbox = &buttons[i].shape;
         if (x > hitbox->x && x < hitbox->x + hitbox->w && y > hitbox->y && y < hitbox->y + hitbox->h)
             return i;
@@ -311,20 +311,20 @@ static void button_release(emulator_t *emu, joypad_button_t button) {
 }
 
 static inline void touch_press(SDL_TouchFingerEvent *event) {
-    int hovered = is_finger_over_button(event->x, event->y);
+    s_byte_t hovered = is_finger_over_button(event->x, event->y);
     if (hovered >= 0)
         button_press(emu, hovered);
 }
 
 static inline void touch_release(SDL_TouchFingerEvent *event) {
-    int hovered = is_finger_over_button(event->x, event->y);
+    s_byte_t hovered = is_finger_over_button(event->x, event->y);
     if (hovered >= 0)
         button_release(emu, hovered);
 }
 
 static inline void touch_motion(SDL_TouchFingerEvent *event) {
-    int previous = is_finger_over_button(event->x - event->dx, event->y - event->dy);
-    int hovered = is_finger_over_button(event->x, event->y);
+    s_byte_t previous = is_finger_over_button(event->x - event->dx, event->y - event->dy);
+    s_byte_t hovered = is_finger_over_button(event->x, event->y);
 
     if (previous != hovered) {
         if (previous >= 0)
@@ -534,95 +534,19 @@ static void handle_input(void) {
     }
 }
 
-static void load_cartridge(const byte_t *rom_data, size_t rom_size, int resume, int emu_mode, int palette, float emu_speed, float sound) {
-    emulator_options_t opts = {
-        .apu_sample_count = APU_SAMPLE_COUNT,
-        .mode = emu_mode,
-        .on_apu_samples_ready = apu_samples_ready_cb,
-        .on_new_frame = ppu_vblank_cb,
-        .apu_speed = emu_speed,
-        .apu_sound_level = sound,
-        .palette = palette
-    };
-    // TODO frame skip user setting
-    emu = emulator_init(rom_data, rom_size, &opts);
-    if (!emu) return;
-
-    if (resume)
-        load_state_from_file(emu, "resume");
-    else
-        load_battery_from_file(emu, emulator_get_rom_title(emu));
-
-    speed = emu_speed;
-}
-
-static void request_rom(void) {
-    JNIEnv *env = (JNIEnv *) SDL_AndroidGetJNIEnv();
-
-    jobject activity = (jobject) SDL_AndroidGetActivity();
-
-    jclass clazz = (*env)->GetObjectClass(env, activity);
-
-    jmethodID method_id = (*env)->GetMethodID(env, clazz, "requestROM", "()V");
-
-    (*env)->CallVoidMethod(env, activity, method_id);
-
-    (*env)->DeleteLocalRef(env, activity);
-    (*env)->DeleteLocalRef(env, clazz);
-}
-
-JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMData(JNIEnv* env, jobject thiz, jbyteArray data, jsize size, jboolean resume, jint emu_mode, jint palette, jfloat emu_speed, jfloat sound, jint emu_frame_skip) {
-    jboolean is_copy;
-    jbyte *rom_data = (*env)->GetByteArrayElements(env, data, &is_copy);
-
-    load_cartridge((byte_t *) rom_data, size, resume, emu_mode, palette, emu_speed, sound);
-    frame_skip = emu_frame_skip;
-
-    (*env)->ReleaseByteArrayElements(env, data, rom_data, JNI_ABORT);
-}
-
-int main(int argc, char **argv) {
-    emu = NULL;
-
-    // initialize global variables here and not at their initialization as they can still have their
-    // previous values because of android's activities lifecycle
-    is_running = SDL_TRUE;
-    is_controller_present = SDL_FALSE;
-    speed = 1.0f;
-
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
-
-    window = SDL_CreateWindow(
-        EMULATOR_NAME,
-        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        SCREEN_WIDTH, // TODO use phone actual width
-        SCREEN_HEIGHT, // TODO use phone actual height
-        SDL_WINDOW_FULLSCREEN | SDL_WINDOW_RESIZABLE
-    );
-
-    set_layout(0);
-
-    // TODO vsync or not vsync?? see what audio/video syncing does...
-    // TODO also compare desktop and android platforms speeds at emulator speed == 1.0f to see if it's equivalent
-    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-
+static void start_emulation_loop(void) {
     ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
     ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
 
     SDL_AudioSpec audio_settings = {
-        .freq = GB_APU_SAMPLE_RATE,
-        .format = AUDIO_F32SYS,
-        .channels = GB_APU_CHANNELS,
-        .samples = APU_SAMPLE_COUNT
+            .freq = GB_APU_SAMPLE_RATE,
+            .format = AUDIO_F32SYS,
+            .channels = GB_APU_CHANNELS,
+            .samples = APU_SAMPLE_COUNT
     };
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
     SDL_PauseAudioDevice(audio_device, 0);
 
-    // TODO don't overcomplicate and make a request java to call a native method...
-    //      just make request_rom return the rom as a byte_t buffer
-    request_rom();
-
-    // main gbmulator loop
     int cycles = 0;
     int frame_count = 0;
     while (is_running) {
@@ -660,11 +584,107 @@ int main(int argc, char **argv) {
     if (is_controller_present)
         SDL_GameControllerClose(pad);
 
+    SDL_DestroyTexture(ppu_texture);
+    SDL_CloseAudioDevice(audio_device);
+}
+
+static void start_layout_editor(void) {
+    SDL_Event event;
+    while (is_running) {
+        if (SDL_WaitEvent(&event)) {
+            if (event.type == SDL_FINGERUP) {
+                is_running = SDL_FALSE;
+            }
+        }
+        SDL_RenderClear(renderer);
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+        SDL_RenderFillRect(renderer, &gb_screen_rect);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderPresent(renderer);
+    }
+}
+
+static void load_cartridge(const byte_t *rom_data, size_t rom_size, int resume, int emu_mode, int palette, float emu_speed, float sound) {
+    emulator_options_t opts = {
+        .apu_sample_count = APU_SAMPLE_COUNT,
+        .mode = emu_mode,
+        .on_apu_samples_ready = apu_samples_ready_cb,
+        .on_new_frame = ppu_vblank_cb,
+        .apu_speed = emu_speed,
+        .apu_sound_level = sound,
+        .palette = palette
+    };
+    // TODO frame skip user setting
+    emu = emulator_init(rom_data, rom_size, &opts);
+    if (!emu) return;
+
+    if (resume)
+        load_state_from_file(emu, "resume");
+    else
+        load_battery_from_file(emu, emulator_get_rom_title(emu));
+
+    speed = emu_speed;
+}
+
+static void ready(void) {
+    JNIEnv *env = (JNIEnv *) SDL_AndroidGetJNIEnv();
+
+    jobject activity = (jobject) SDL_AndroidGetActivity();
+
+    jclass clazz = (*env)->GetObjectClass(env, activity);
+
+    jmethodID method_id = (*env)->GetMethodID(env, clazz, "onNativeAppReady", "()V");
+
+    (*env)->CallVoidMethod(env, activity, method_id);
+
+    (*env)->DeleteLocalRef(env, activity);
+    (*env)->DeleteLocalRef(env, clazz);
+}
+
+JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMData(JNIEnv* env, jobject thiz, jbyteArray data, jsize size, jboolean resume, jint emu_mode, jint palette, jfloat emu_speed, jfloat sound, jint emu_frame_skip) {
+    jboolean is_copy;
+    jbyte *rom_data = (*env)->GetByteArrayElements(env, data, &is_copy);
+
+    load_cartridge((byte_t *) rom_data, size, resume, emu_mode, palette, emu_speed, sound);
+    frame_skip = emu_frame_skip;
+
+    (*env)->ReleaseByteArrayElements(env, data, rom_data, JNI_ABORT);
+
+    start_emulation_loop();
+}
+
+JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_enterLayoutEditor(JNIEnv* env, jobject thiz, jboolean is_landscape) {
+    set_layout(is_landscape);
+    start_layout_editor();
+}
+
+int main(int argc, char **argv) {
+    emu = NULL;
+
+    // initialize global variables here and not at their initialization as they can still have their
+    // previous values because of android's activities lifecycle
+    is_running = SDL_TRUE;
+    is_controller_present = SDL_FALSE;
+    speed = 1.0f;
+
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
+
+    window = SDL_CreateWindow(
+        EMULATOR_NAME,
+        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+        SCREEN_WIDTH,
+        SCREEN_HEIGHT,
+        SDL_WINDOW_FULLSCREEN | SDL_WINDOW_RESIZABLE
+    );
+
+    // TODO vsync or not vsync?? see what audio/video syncing does...
+    // TODO also compare desktop and android platforms speeds at emulator speed == 1.0f to see if it's equivalent
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+
+    ready(); // TODO this should create all textures and audio etc only if in emulator mode
+
     SDL_DestroyWindow(window);
     SDL_DestroyRenderer(renderer);
-    SDL_DestroyTexture(ppu_texture);
-
-    SDL_CloseAudioDevice(audio_device);
 
     SDL_Quit();
     return EXIT_SUCCESS;

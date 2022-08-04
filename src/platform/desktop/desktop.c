@@ -114,6 +114,8 @@ static char *get_savestate_path(const char *rom_filepath, int slot) {
     return save_path;
 }
 
+// TODO add handle_input_paused() functions that uses if(SDL_WaitEvent(&event)) to update screen only when an input has been received
+//      --> can then remove the SDL_Delay(1.0f / 30.0f) in pause
 static void handle_input(void) {
     SDL_Event event;
     char *savestate_path;

@@ -1,6 +1,7 @@
 package io.github.mpostaire.gbmulator;
 
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AlertDialog;
@@ -218,13 +219,17 @@ public class SettingsMenu extends AppCompatActivity {
         builder.setPositiveButton(R.string.setting_layout_editor_popup_portrait_button, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialogInterface, int i) {
-                Toast.makeText(SettingsMenu.this, "TODO portrait layout", Toast.LENGTH_SHORT).show();
+                Intent intent = new Intent(SettingsMenu.this, Emulator.class);
+                intent.putExtra("layout_editor", 1);
+                startActivity(intent);
             }
         });
         builder.setNeutralButton(R.string.setting_layout_editor_popup_landscape_button, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialogInterface, int i) {
-                Toast.makeText(SettingsMenu.this, "TODO landscape layout", Toast.LENGTH_SHORT).show();
+                Intent intent = new Intent(SettingsMenu.this, Emulator.class);
+                intent.putExtra("layout_editor", 2);
+                startActivity(intent);
             }
         });
         builder.show();

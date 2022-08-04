@@ -25,8 +25,10 @@ public class Emulator extends SDLActivity {
     float speed;
     float sound;
     int frameSkip;
+    int layoutEditor;
 
     public native void receiveROMData(byte[] data, int size, boolean resume, int emu_mode, int palette, float emu_speed, float sound, int emu_frame_skip);
+    public native void enterLayoutEditor(boolean is_landscape);
 
     public boolean canRotate() {
         try {
@@ -60,7 +62,13 @@ public class Emulator extends SDLActivity {
 
         romUri = extras.getParcelable("rom_uri");
         resume = extras.getBoolean("resume");
-        orientation = extras.getInt("orientation");
+        layoutEditor = extras.getInt("layout_editor");
+        if (layoutEditor == 1)
+            orientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
+        else if (orientation == 2)
+            orientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
+        else
+            orientation = extras.getInt("orientation");
 
         SharedPreferences preferences = getSharedPreferences(UserSettings.PREFERENCES, MODE_PRIVATE);
         emuMode = preferences.getInt(UserSettings.EMULATION_MODE, UserSettings.EMULATION_MODE_DEFAULT);
@@ -90,8 +98,14 @@ public class Emulator extends SDLActivity {
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
     }
 
-    public void requestROM() {
+    public void onNativeAppReady() {
+        if (layoutEditor == 0)
+            requestROM();
+        else
+            enterLayoutEditor(layoutEditor == 2);
+    }
 
+    public void requestROM() {
         try {
             InputStream in = getApplication().getContentResolver().openInputStream(romUri);
             ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream();

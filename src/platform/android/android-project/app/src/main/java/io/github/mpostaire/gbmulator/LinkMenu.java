@@ -4,6 +4,8 @@ import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothClass;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothManager;
+import android.bluetooth.BluetoothProfile;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -19,12 +21,13 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.ArrayList;
 import java.util.Objects;
 import java.util.Set;
 
 public class LinkMenu extends AppCompatActivity {
 
-    private BluetoothAdapter bluetoothAdapter;
+    private BluetoothAdapter bluetoothManager;
     BluetoothDeviceAdapter listAdapter;
 
     TextView status;
@@ -51,17 +54,26 @@ public class LinkMenu extends AppCompatActivity {
             }
         });
 
-        bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        // TODO ALL OF THIS MAY BE USELESS...
+        //  we can let android do the connection logic an here we only get the current bluetooth connected device(s)
+        //  to start the communication
+        //  https://developer.android.com/guide/topics/connectivity/bluetooth.html
+        //  https://developer.android.com/guide/topics/connectivity/bluetooth/permissions#availability
+        //  https://stackoverflow.com/questions/33383891/currently-connected-bluetooth-device-android
 
+        //bluetoothManager = (BluetoothManager) getSystemService(BLUETOOTH_SERVICE);
+        bluetoothManager = BluetoothAdapter.getDefaultAdapter();
+
+        // TODO show 2 listViews (paired and unpaired) to allow to pair directly in this activity
+        //      --> need to handle sdk level >= S and its permissions
         BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
                 String action = intent.getAction();
 
-                if (BluetoothAdapter.ACTION_STATE_CHANGED.equals(action)) {
-                    int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1);
-
-                    switch (state) {
+                // TODO also update list when new device is paired/unpaired
+                if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
+                    switch (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1)) {
                         case BluetoothAdapter.STATE_OFF:
                         case BluetoothAdapter.STATE_ON:
                             populateBluetoothDevicesList();
@@ -86,11 +98,11 @@ public class LinkMenu extends AppCompatActivity {
 
     @SuppressLint("MissingPermission")
     public void populateBluetoothDevicesList() {
-        Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
+        Set<BluetoothDevice> pairedDevices = bluetoothManager.getBondedDevices();
         if (pairedDevices.size() == 0) {
             status.setVisibility(View.VISIBLE);
             deviceListContainer.setVisibility(View.GONE);
-            if (bluetoothAdapter.isEnabled())
+            if (bluetoothManager.isEnabled())
                 status.setText(R.string.link_menu_no_devices);
             else
                 status.setText(R.string.link_menu_no_bluetooth);

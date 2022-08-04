@@ -9,6 +9,8 @@
 #include "emulator/emulator.h"
 #include "base64.h"
 
+// TODO remove ui.h dependency and make a html ui instead
+
 SDL_bool is_paused = SDL_TRUE;
 SDL_bool is_rom_loaded = SDL_FALSE;
 
