@@ -3,9 +3,9 @@ package io.github.mpostaire.gbmulator;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.support.annotation.NonNull;
-import android.support.v7.app.AlertDialog;
-import android.support.v7.app.AppCompatActivity;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.MenuItem;
 import android.view.View;
@@ -13,7 +13,6 @@ import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.SeekBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import java.util.Objects;
 
@@ -37,14 +36,17 @@ public class SettingsMenu extends AppCompatActivity {
     PopupMenu modePopup;
     PopupMenu palettePopup;
 
+    SharedPreferences preferences;
+    SharedPreferences.Editor preferencesEditor;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
         Objects.requireNonNull(getSupportActionBar()).setDisplayHomeAsUpEnabled(true);
 
-        SharedPreferences preferences = getSharedPreferences(UserSettings.PREFERENCES, MODE_PRIVATE);
-        SharedPreferences.Editor preferencesEditor = preferences.edit();
+        preferences = getSharedPreferences(UserSettings.PREFERENCES, MODE_PRIVATE);
+        preferencesEditor = preferences.edit();
 
         settingModeButton = findViewById(R.id.settingModeButton);
         settingModeTextView = findViewById(R.id.settingModeTextView);
@@ -224,7 +226,7 @@ public class SettingsMenu extends AppCompatActivity {
                 startActivity(intent);
             }
         });
-        builder.setNeutralButton(R.string.setting_layout_editor_popup_landscape_button, new DialogInterface.OnClickListener() {
+        builder.setNegativeButton(R.string.setting_layout_editor_popup_landscape_button, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialogInterface, int i) {
                 Intent intent = new Intent(SettingsMenu.this, Emulator.class);
@@ -232,6 +234,21 @@ public class SettingsMenu extends AppCompatActivity {
                 startActivity(intent);
             }
         });
+        builder.setNeutralButton(R.string.setting_layout_editor_popup_defaults_button, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                preferencesEditor.putFloat(UserSettings.PORTRAIT_SCREEN_X, UserSettings.PORTRAIT_SCREEN_X_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.PORTRAIT_SCREEN_Y, UserSettings.PORTRAIT_SCREEN_X_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.PORTRAIT_SCREEN_SIZE, UserSettings.PORTRAIT_SCREEN_SIZE_DEFAULT);
+
+                preferencesEditor.putFloat(UserSettings.LANDSCAPE_SCREEN_X, UserSettings.LANDSCAPE_SCREEN_X_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.LANDSCAPE_SCREEN_Y, UserSettings.LANDSCAPE_SCREEN_Y_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.LANDSCAPE_SCREEN_SIZE, UserSettings.LANDSCAPE_SCREEN_SIZE_DEFAULT);
+
+                preferencesEditor.apply();
+            }
+        });
         builder.show();
     }
+
 }

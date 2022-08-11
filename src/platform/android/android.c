@@ -5,6 +5,7 @@
 #include <jni.h>
 
 #include "../common/utils.h"
+#include "layout_editor.h"
 #include "emulator/emulator.h"
 
 #define log(...) __android_log_print(ANDROID_LOG_INFO, "GBmulator", __VA_ARGS__)
@@ -40,147 +41,42 @@ emulator_t *emu;
 
 SDL_Rect gb_screen_rect;
 
-typedef struct {
-    SDL_Rect shape;
-    joypad_button_t button;
-    byte_t r;
-    byte_t g;
-    byte_t b;
-} button_t;
-
 button_t buttons[] = {
     {
         .shape = {
-            .h = 18,
-            .w = 18
-        },
-        .r = 255,
-        .g = 0,
-        .b = 0,
-        .button = JOYPAD_LEFT
+            .h = 60,
+            .w = 60
+        }
     },
     {
         .shape = {
-            .h = 18,
-            .w = 18
+            .h = 20,
+            .w = 20
         },
-        .r = 255,
-        .g = 0,
-        .b = 0,
-        .button = JOYPAD_RIGHT
-    },
-    {
-        .shape = {
-            .h = 18,
-            .w = 18
-        },
-        .r = 255,
-        .g = 0,
-        .b = 0,
-        .button = JOYPAD_UP
-    },
-    {
-        .shape = {
-            .h = 18,
-            .w = 18
-        },
-        .r = 255,
-        .g = 0,
-        .b = 0,
-        .button = JOYPAD_DOWN
-    },
-    {
-        .shape = {
-            .h = 18,
-            .w = 18
-        },
-        .r = 255,
-        .g = 0,
-        .b = 0,
         .button = JOYPAD_A
     },
     {
         .shape = {
-            .h = 18,
-            .w = 18
+            .h = 20,
+            .w = 20
         },
-        .r = 255,
-        .g = 0,
-        .b = 0,
         .button = JOYPAD_B
     },
     {
         .shape = {
-            .h = 18,
-            .w = 18
+            .h = 10,
+            .w = 30
         },
-        .r = 255,
-        .g = 0,
-        .b = 0,
         .button = JOYPAD_START
     },
     {
         .shape = {
-            .h = 18,
-            .w = 18
+            .h = 10,
+            .w = 30
         },
-        .r = 255,
-        .g = 0,
-        .b = 0,
         .button = JOYPAD_SELECT
     },
-
-    {
-        .shape = {
-            .h = 18,
-            .w = 18,
-        },
-        .r = 0,
-        .g = 0,
-        .b = 255,
-        .button = JOYPAD_SELECT + 1 // up left
-    },
-    {
-        .shape = {
-            .h = 18,
-            .w = 18
-        },
-        .r = 0,
-        .g = 0,
-        .b = 255,
-        .button = JOYPAD_SELECT + 2 // up right
-    },
-    {
-        .shape = {
-            .h = 18,
-            .w = 18
-        },
-        .r = 0,
-        .g = 0,
-        .b = 255,
-        .button = JOYPAD_SELECT + 3 // down left
-    },
-    {
-        .shape = {
-            .h = 18,
-            .w = 18
-        },
-        .r = 0,
-        .g = 0,
-        .b = 255,
-        .button = JOYPAD_SELECT + 4 // down right
-    },
 };
-
-static void draw_buttons(SDL_Renderer *renderer) {
-    // only draw the physical buttons (first 8 of the buttons array)
-    for (int i = 0; i < 8; i++) {
-        SDL_SetRenderDrawColor(renderer, buttons[i].r, buttons[i].g, buttons[i].b, 255);
-        SDL_RenderFillRect(renderer, &buttons[i].shape);
-    }
-
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-}
 
 static inline s_byte_t is_finger_over_button(float x, float y) {
     if (is_landscape) {
@@ -191,10 +87,38 @@ static inline s_byte_t is_finger_over_button(float x, float y) {
         y *= SCREEN_HEIGHT;
     }
 
-    for (s_byte_t i = 0; i < 12; i++) {
+    SDL_Rect *hitbox = &buttons[0].shape;
+    if (x > hitbox->x && x < hitbox->x + hitbox->w && y > hitbox->y && y < hitbox->y + hitbox->h) {
+        x -= hitbox->x;
+        y -= hitbox->y;
+        if (x < hitbox->w / 3) {
+            if (y < hitbox->h / 3) // up left
+                return JOYPAD_SELECT + 1;
+            else if (y > 2 * (hitbox->h / 3)) // down left
+                return JOYPAD_SELECT + 3;
+            else
+                return JOYPAD_LEFT;
+        } else if (x > 2 * (hitbox->w / 3)) {
+            if (y < hitbox->h / 3) // up right
+                return JOYPAD_SELECT + 2;
+            else if (y > 2 * (hitbox->h / 3)) // down right
+                return JOYPAD_SELECT + 4;
+            else
+                return JOYPAD_RIGHT;
+        } else {
+            if (y < hitbox->h / 3)
+                return JOYPAD_UP;
+            else if (y > 2 * (hitbox->h / 3))
+                return JOYPAD_DOWN;
+            else
+                return -1;
+        }
+    }
+
+    for (s_byte_t i = 1; i < 5; i++) {
         SDL_Rect *hitbox = &buttons[i].shape;
         if (x > hitbox->x && x < hitbox->x + hitbox->w && y > hitbox->y && y < hitbox->y + hitbox->h)
-            return i;
+            return buttons[i].button;
     }
 
     return -1;
@@ -225,32 +149,14 @@ static void button_press(emulator_t *emu, joypad_button_t button) {
 
     switch ((int) button) { // cast to int to shut compiler warnings
     case JOYPAD_SELECT + 1:
-        buttons[JOYPAD_UP].r = 0;
-        buttons[JOYPAD_UP].g = 255;
-        buttons[JOYPAD_LEFT].r = 0;
-        buttons[JOYPAD_LEFT].g = 255;
         break;
     case JOYPAD_SELECT + 2:
-        buttons[JOYPAD_UP].r = 0;
-        buttons[JOYPAD_UP].g = 255;
-        buttons[JOYPAD_RIGHT].r = 0;
-        buttons[JOYPAD_RIGHT].g = 255;
         break;
     case JOYPAD_SELECT + 3:
-        buttons[JOYPAD_DOWN].r = 0;
-        buttons[JOYPAD_DOWN].g = 255;
-        buttons[JOYPAD_LEFT].r = 0;
-        buttons[JOYPAD_LEFT].g = 255;
         break;
     case JOYPAD_SELECT + 4:
-        buttons[JOYPAD_DOWN].r = 0;
-        buttons[JOYPAD_DOWN].g = 255;
-        buttons[JOYPAD_RIGHT].r = 0;
-        buttons[JOYPAD_RIGHT].g = 255;
         break;
     default:
-        buttons[button].r = 0;
-        buttons[button].g = 255;
         break;
     }
 }
@@ -280,32 +186,14 @@ static void button_release(emulator_t *emu, joypad_button_t button) {
 
     switch ((int) button) { // cast to int to shut compiler warnings
     case JOYPAD_SELECT + 1:
-        buttons[JOYPAD_UP].r = 255;
-        buttons[JOYPAD_UP].g = 0;
-        buttons[JOYPAD_LEFT].r = 255;
-        buttons[JOYPAD_LEFT].g = 0;
         break;
     case JOYPAD_SELECT + 2:
-        buttons[JOYPAD_UP].r = 255;
-        buttons[JOYPAD_UP].g = 0;
-        buttons[JOYPAD_RIGHT].r = 255;
-        buttons[JOYPAD_RIGHT].g = 0;
         break;
     case JOYPAD_SELECT + 3:
-        buttons[JOYPAD_DOWN].r = 255;
-        buttons[JOYPAD_DOWN].g = 0;
-        buttons[JOYPAD_LEFT].r = 255;
-        buttons[JOYPAD_LEFT].g = 0;
         break;
     case JOYPAD_SELECT + 4:
-        buttons[JOYPAD_DOWN].r = 255;
-        buttons[JOYPAD_DOWN].g = 0;
-        buttons[JOYPAD_RIGHT].r = 255;
-        buttons[JOYPAD_RIGHT].g = 0;
         break;
     default:
-        buttons[button].r = 255;
-        buttons[button].g = 0;
         break;
     }
 }
@@ -342,93 +230,48 @@ static void set_layout(int layout) {
         // portrait
         SDL_RenderSetLogicalSize(renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
         gb_screen_rect.w = SCREEN_WIDTH;
-        gb_screen_rect.h = GB_SCREEN_HEIGHT * (SCREEN_WIDTH / (float) GB_SCREEN_WIDTH);
+        gb_screen_rect.h = GB_SCREEN_HEIGHT * (gb_screen_rect.w / GB_SCREEN_WIDTH);
         gb_screen_rect.x = 0;
         gb_screen_rect.y = 0;
 
-        // physical buttons
-        buttons[0].shape.x = 18 - 18;
-        buttons[0].shape.y = 178 + 18;
+        buttons[0].shape.x = 20 - 20;
+        buttons[0].shape.y = 178;
 
-        buttons[1].shape.x = 18 + 18;
-        buttons[1].shape.y = 178 + 18;
+        buttons[1].shape.x = 160 - 20;
+        buttons[1].shape.y = 178 + 20 / 2;
 
-        buttons[2].shape.x = 18;
-        buttons[2].shape.y = 178;
+        buttons[2].shape.x = 160 - 20 * 2;
+        buttons[2].shape.y = 178 + 20 + 20 / 2;
 
-        buttons[3].shape.x = 18;
-        buttons[3].shape.y = 178 + 18 * 2;
+        buttons[3].shape.x = 160 / 2 + 30;
+        buttons[3].shape.y = 284 - 30;
 
-        buttons[4].shape.x = 160 - 18;
-        buttons[4].shape.y = 178 + 18 / 2;
-
-        buttons[5].shape.x = 160 - 18 * 2;
-        buttons[5].shape.y = 178 + 18 + 18 / 2;
-
-        buttons[6].shape.x = 160 / 2 + 18;
-        buttons[6].shape.y = 284 - 18;
-
-        buttons[7].shape.x = 160 / 2 - 18 * 2;
-        buttons[7].shape.y = 284 - 18;
-
-        // virtual buttons
-        buttons[8].shape.x = 18 - 18;
-        buttons[8].shape.y = 178;
-
-        buttons[9].shape.x = 18 + 18;
-        buttons[9].shape.y = 178;
-
-        buttons[10].shape.x = 18 - 18;
-        buttons[10].shape.y = 178 + 18 * 2;
-
-        buttons[11].shape.x = 18 + 18;
-        buttons[11].shape.y = 178 + 18 * 2;
+        buttons[4].shape.x = 160 / 2 - 30 * 2;
+        buttons[4].shape.y = 284 - 30;
         break;
     case 1:
         // landscape
         SDL_RenderSetLogicalSize(renderer, SCREEN_HEIGHT, SCREEN_WIDTH);
-        gb_screen_rect.w = GB_SCREEN_WIDTH * (SCREEN_WIDTH / (float) GB_SCREEN_HEIGHT);
         gb_screen_rect.h = SCREEN_WIDTH;
+        gb_screen_rect.w = GB_SCREEN_WIDTH * (gb_screen_rect.h / GB_SCREEN_HEIGHT);
         gb_screen_rect.x = SCREEN_HEIGHT / 2 - gb_screen_rect.w / 2;
         gb_screen_rect.y = 0;
 
         // physical buttons
-        buttons[0].shape.x = 18 - 18;
-        buttons[0].shape.y = 160 - 18 * 4;
+        buttons[0].shape.x = 20 - 20;
+        buttons[0].shape.y = 160 - 20 * 5;
 
-        buttons[1].shape.x = 18 + 18;
-        buttons[1].shape.y = 160 - 18 * 4;
+        buttons[1].shape.x = 284 - 20;
+        buttons[1].shape.y = 160 - 20 * 4 - 20 / 2;
 
-        buttons[2].shape.x = 18;
-        buttons[2].shape.y = 160 - 18 * 5;
+        buttons[2].shape.x = 284 - 20 * 2;
+        buttons[2].shape.y = 160 - 20 * 3 - 20 / 2;
 
-        buttons[3].shape.x = 18;
-        buttons[3].shape.y = 160 - 18 * 3;
+        buttons[3].shape.x = 284 - 30 * 3 + 1;
+        buttons[3].shape.y = 160 - 30;
 
-        buttons[4].shape.x = 284 - 18;
-        buttons[4].shape.y = 160 - 18 * 4 - 18 / 2;
-
-        buttons[5].shape.x = 284 - 18 * 2;
-        buttons[5].shape.y = 160 - 18 * 3 - 18 / 2;
-
-        buttons[6].shape.x = 284 - 18 * 3 + 1;
-        buttons[6].shape.y = 160 - 18;
-
-        buttons[7].shape.x = 18 * 2;
-        buttons[7].shape.y = 160 - 18;
-
-        // virtual buttons
-        buttons[8].shape.x = 18 - 18;
-        buttons[8].shape.y = 160 - 18 * 5;
-
-        buttons[9].shape.x = 18 + 18;
-        buttons[9].shape.y = 160 - 18 * 5;
-
-        buttons[10].shape.x = 18 - 18;
-        buttons[10].shape.y = 160 - 18 * 3;
-
-        buttons[11].shape.x = 128 + 128;
-        buttons[11].shape.y = 1080 - 128 * 3;
+        buttons[4].shape.x = 30 * 2;
+        buttons[4].shape.y = 160 - 30;
         break;
     }
 }
@@ -521,11 +364,7 @@ static void handle_input(void) {
         case SDL_APP_DIDENTERFOREGROUND:
             break;
         case SDL_RENDER_DEVICE_RESET:
-            // TODO
-            // However, there's a chance (on older hardware, or on systems under heavy load),
-            // where the GL context can not be restored. In that case you have to listen for a specific
-            // message (SDL_RENDER_DEVICE_RESET) and restore your textures manually or quit the app.
-            log("SDL_RENDER_DEVICE_RESET");
+            is_running = SDL_FALSE;
             break;
         case SDL_QUIT:
             is_running = SDL_FALSE;
@@ -556,7 +395,11 @@ static void start_emulation_loop(void) {
             if (frame_count >= frame_skip) {
                 SDL_RenderClear(renderer);
                 SDL_RenderCopy(renderer, ppu_texture, NULL, &gb_screen_rect);
-                draw_buttons(renderer);
+                // draw buttons
+                // TODO different textures when a button is pressed/not pressed
+                // TODO customizable button opacity as a sharedpreference
+                for (int i = 0; i < 5; i++)
+                    SDL_RenderCopy(renderer, buttons[i].texture, NULL, &buttons[i].shape);
                 // this SDL_Delay() isn't needed as the audio sync adds it's own delay
                 // TODO??? SDL_Delay((1.0f / 60.0f) - time_to_render_last_frame); // even with SDL waiting for vsync, delay here for monitors with different refresh rates than 60Hz
                 SDL_RenderPresent(renderer);
@@ -586,22 +429,6 @@ static void start_emulation_loop(void) {
 
     SDL_DestroyTexture(ppu_texture);
     SDL_CloseAudioDevice(audio_device);
-}
-
-static void start_layout_editor(void) {
-    SDL_Event event;
-    while (is_running) {
-        if (SDL_WaitEvent(&event)) {
-            if (event.type == SDL_FINGERUP) {
-                is_running = SDL_FALSE;
-            }
-        }
-        SDL_RenderClear(renderer);
-        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-        SDL_RenderFillRect(renderer, &gb_screen_rect);
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderPresent(renderer);
-    }
 }
 
 static void load_cartridge(const byte_t *rom_data, size_t rom_size, int resume, int emu_mode, int palette, float emu_speed, float sound) {
@@ -641,7 +468,24 @@ static void ready(void) {
     (*env)->DeleteLocalRef(env, clazz);
 }
 
-JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMData(JNIEnv* env, jobject thiz, jbyteArray data, jsize size, jboolean resume, jint emu_mode, jint palette, jfloat emu_speed, jfloat sound, jint emu_frame_skip) {
+JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMData(
+        JNIEnv* env,
+        jobject thiz,
+        jbyteArray data,
+        jsize size,
+        jboolean resume,
+        jint emu_mode,
+        jint palette,
+        jfloat emu_speed,
+        jfloat sound,
+        jint emu_frame_skip,
+        jfloat portrait_screen_x,
+        jfloat portrait_screen_y,
+        jfloat portrait_screen_size,
+        jfloat landscape_screen_x,
+        jfloat landscape_screen_y,
+        jfloat landscape_screen_size
+) {
     jboolean is_copy;
     jbyte *rom_data = (*env)->GetByteArrayElements(env, data, &is_copy);
 
@@ -650,12 +494,25 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
 
     (*env)->ReleaseByteArrayElements(env, data, rom_data, JNI_ABORT);
 
+    set_layout(is_landscape);
     start_emulation_loop();
 }
 
-JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_enterLayoutEditor(JNIEnv* env, jobject thiz, jboolean is_landscape) {
+JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_enterLayoutEditor(
+        JNIEnv* env,
+        jobject thiz,
+        jboolean is_landscape,
+        jfloat screen_x,
+        jfloat screen_y,
+        jfloat screen_size
+) {
     set_layout(is_landscape);
-    start_layout_editor();
+
+    button_t *bs = xmalloc(sizeof(button_t) * 5);
+    for (int i = 0; i < 5; i++)
+        bs[i] = buttons[i];
+    start_layout_editor(renderer, is_landscape, SCREEN_WIDTH, SCREEN_HEIGHT, &gb_screen_rect, bs);
+    free(bs);
 }
 
 int main(int argc, char **argv) {
@@ -681,10 +538,33 @@ int main(int argc, char **argv) {
     // TODO also compare desktop and android platforms speeds at emulator speed == 1.0f to see if it's equivalent
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
+    SDL_Surface *surface = SDL_LoadBMP("dpad.bmp");
+    buttons[0].texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("a.bmp");
+    buttons[1].texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("b.bmp");
+    buttons[2].texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("start.bmp");
+    buttons[3].texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("select.bmp");
+    buttons[4].texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
     ready(); // TODO this should create all textures and audio etc only if in emulator mode
 
-    SDL_DestroyWindow(window);
+    for (int i = 0; i < 5; i++)
+        SDL_DestroyTexture(buttons[i].texture);
+
     SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
 
     SDL_Quit();
     return EXIT_SUCCESS;

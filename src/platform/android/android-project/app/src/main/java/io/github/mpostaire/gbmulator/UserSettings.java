@@ -25,17 +25,23 @@ public class UserSettings {
 
     // SCREEN position and size
 
-    public static final String SCREEN_X = "screen_x";
-    public static final int SCREEN_X_DEFAULT = 0;
+    public static final String PORTRAIT_SCREEN_X = "portrait_screen_x";
+    public static final float PORTRAIT_SCREEN_X_DEFAULT = 0.0f;
 
-    public static final String SCREEN_Y = "screen_y";
-    public static final int SCREEN_Y_DEFAULT = 0;
+    public static final String PORTRAIT_SCREEN_Y = "portrait_screen_y";
+    public static final float PORTRAIT_SCREEN_Y_DEFAULT = 0.0f;
 
-    public static final String SCREEN_WIDTH = "screen_width";
-    public static final int SCREEN_WIDTH_DEFAULT = 160;
+    public static final String PORTRAIT_SCREEN_SIZE = "portrait_screen_size";
+    public static final float PORTRAIT_SCREEN_SIZE_DEFAULT = 1.0f;
 
-    public static final String SCREEN_HEIGHT = "screen_height";
-    public static final int SCREEN_HEIGHT_DEFAULT = 144;
+    public static final String LANDSCAPE_SCREEN_X = "landscape_screen_x";
+    public static final float LANDSCAPE_SCREEN_X_DEFAULT = 0.0f;
+
+    public static final String LANDSCAPE_SCREEN_Y = "landscape_screen_y";
+    public static final float LANDSCAPE_SCREEN_Y_DEFAULT = 0.0f;
+
+    public static final String LANDSCAPE_SCREEN_SIZE = "landscape_screen_size";
+    public static final float LANDSCAPE_SCREEN_SIZE_DEFAULT = 1.0f;
 
     // DIRECTION BUTTONS position and size
 
