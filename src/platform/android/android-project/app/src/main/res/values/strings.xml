@@ -29,6 +29,8 @@
     <string name="setting_frame_skip">Frame skip:</string>
     <string name="setting_frame_skip_value">%1$d</string>
     <string name="setting_frame_skip_value_off">OFF</string>
+    <string name="setting_opacity">Buttons opacity:</string>
+    <string name="setting_opacity_value">%1$d%%</string>
     <string name="setting_layout_editor">Layout editor</string>
     <string name="setting_layout_editor_label">Customize the screen and buttons size/position for the portrait and landscape layouts</string>
     <string name="setting_layout_editor_popup_label">Select the layout to edit or reset to defaults</string>

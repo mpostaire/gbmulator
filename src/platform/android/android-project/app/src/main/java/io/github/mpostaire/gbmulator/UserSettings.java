@@ -23,39 +23,68 @@ public class UserSettings {
     public static final String FRAME_SKIP = "frame_skip";
     public static final int FRAME_SKIP_DEFAULT = 0;
 
-    // SCREEN position and size
+    public static final String BUTTONS_OPACITY = "buttons_opacity";
+    public static final float BUTTONS_OPACITY_DEFAULT = 1.0f;
 
-    public static final String PORTRAIT_SCREEN_X = "portrait_screen_x";
-    public static final float PORTRAIT_SCREEN_X_DEFAULT = 0.0f;
+    // Portrait buttons positions
+    public static final String PORTRAIT_DPAD_X = "portrait_dpad_x";
+    public static final int PORTRAIT_DPAD_X_DEFAULT = 0;
 
-    public static final String PORTRAIT_SCREEN_Y = "portrait_screen_y";
-    public static final float PORTRAIT_SCREEN_Y_DEFAULT = 0.0f;
+    public static final String PORTRAIT_DPAD_Y = "portrait_dpad_y";
+    public static final int PORTRAIT_DPAD_Y_DEFAULT = 178;
 
-    public static final String PORTRAIT_SCREEN_SIZE = "portrait_screen_size";
-    public static final float PORTRAIT_SCREEN_SIZE_DEFAULT = 1.0f;
+    public static final String PORTRAIT_A_X = "portrait_a_x";
+    public static final int PORTRAIT_A_X_DEFAULT = 140;
 
-    public static final String LANDSCAPE_SCREEN_X = "landscape_screen_x";
-    public static final float LANDSCAPE_SCREEN_X_DEFAULT = 0.0f;
+    public static final String PORTRAIT_A_Y = "portrait_a_y";
+    public static final int PORTRAIT_A_Y_DEFAULT = 188;
 
-    public static final String LANDSCAPE_SCREEN_Y = "landscape_screen_y";
-    public static final float LANDSCAPE_SCREEN_Y_DEFAULT = 0.0f;
+    public static final String PORTRAIT_B_X = "portrait_b_x";
+    public static final int PORTRAIT_B_X_DEFAULT = 120;
 
-    public static final String LANDSCAPE_SCREEN_SIZE = "landscape_screen_size";
-    public static final float LANDSCAPE_SCREEN_SIZE_DEFAULT = 1.0f;
+    public static final String PORTRAIT_B_Y = "portrait_b_y";
+    public static final int PORTRAIT_B_Y_DEFAULT = 208;
 
-    // DIRECTION BUTTONS position and size
+    public static final String PORTRAIT_START_X = "portrait_start_x";
+    public static final int PORTRAIT_START_X_DEFAULT = 90;
 
-    public static final String DIRECTION_BUTTONS_X = "direction_buttons_x";
-    public static final int DIRECTION_BUTTONS_X_DEFAULT = 0; // TODO
+    public static final String PORTRAIT_START_Y = "portrait_start_y";
+    public static final int PORTRAIT_START_Y_DEFAULT = 264;
 
-    public static final String DIRECTION_BUTTONS_Y = "direction_buttons_y";
-    public static final int DIRECTION_BUTTONS_Y_DEFAULT = 0; // TODO
+    public static final String PORTRAIT_SELECT_X = "portrait_select_x";
+    public static final int PORTRAIT_SELECT_X_DEFAULT = 40;
 
-    public static final String DIRECTION_BUTTONS_WIDTH = "direction_buttons_width";
-    public static final int DIRECTION_BUTTONS_WIDTH_DEFAULT = 32; // TODO
+    public static final String PORTRAIT_SELECT_Y = "portrait_select_y";
+    public static final int PORTRAIT_SELECT_Y_DEFAULT = 264;
 
-    public static final String DIRECTION_BUTTONS_HEIGHT = "direction_buttons_height";
-    public static final int DIRECTION_BUTTONS_HEIGHT_DEFAULT = 32; // TODO
+    // Landscape buttons positions
+    public static final String LANDSCAPE_DPAD_X = "landscape_dpad_x";
+    public static final int LANDSCAPE_DPAD_X_DEFAULT = 0;
 
-    // TODO A,B,START,SELECT
+    public static final String LANDSCAPE_DPAD_Y = "landscape_dpad_y";
+    public static final int LANDSCAPE_DPAD_Y_DEFAULT = 60;
+
+    public static final String LANDSCAPE_A_X = "landscape_a_x";
+    public static final int LANDSCAPE_A_X_DEFAULT = 264;
+
+    public static final String LANDSCAPE_A_Y = "landscape_a_y";
+    public static final int LANDSCAPE_A_Y_DEFAULT = 70;
+
+    public static final String LANDSCAPE_B_X = "landscape_b_x";
+    public static final int LANDSCAPE_B_X_DEFAULT = 244;
+
+    public static final String LANDSCAPE_B_Y = "landscape_b_y";
+    public static final int LANDSCAPE_B_Y_DEFAULT = 90;
+
+    public static final String LANDSCAPE_START_X = "landscape_start_x";
+    public static final int LANDSCAPE_START_X_DEFAULT = 224;
+
+    public static final String LANDSCAPE_START_Y = "landscape_start_y";
+    public static final int LANDSCAPE_START_Y_DEFAULT = 140;
+
+    public static final String LANDSCAPE_SELECT_X = "landscape_select_x";
+    public static final int LANDSCAPE_SELECT_X_DEFAULT = 30;
+
+    public static final String LANDSCAPE_SELECT_Y = "landscape_select_y";
+    public static final int LANDSCAPE_SELECT_Y_DEFAULT = 140;
 }

@@ -131,24 +131,27 @@ static void apply_layout_preferences(void) {
 
     jclass clazz = (*env)->GetObjectClass(env, activity);
 
-    jmethodID method_id = (*env)->GetMethodID(env, clazz, "applyLayoutPreferences", "(ZFFF)V");
+    jmethodID method_id = (*env)->GetMethodID(env, clazz, "applyLayoutPreferences", "(ZIIIIIIIIII)V");
 
     if (is_landscape) {
         (*env)->CallVoidMethod(
             env, activity, method_id,
             SDL_TRUE,
-            buttons[0]->x / (float) screen_height,
-            buttons[0]->y / (float) screen_width,
-            buttons[1]->x / (float) screen_height);
+            buttons[0].shape.x, buttons[0].shape.y,
+            buttons[1].shape.x, buttons[1].shape.y,
+            buttons[2].shape.x, buttons[2].shape.y,
+            buttons[3].shape.x, buttons[3].shape.y,
+            buttons[4].shape.x, buttons[4].shape.y);
     } else {
         (*env)->CallVoidMethod(
             env, activity, method_id,
             SDL_FALSE,
-            buttons[0]->x / (float) screen_width,
-            buttons[0]->y / (float) screen_height,
-            buttons[1]->x / (float) screen_width);
+            buttons[0].shape.x, buttons[0].shape.y,
+            buttons[1].shape.x, buttons[1].shape.y,
+            buttons[2].shape.x, buttons[2].shape.y,
+            buttons[3].shape.x, buttons[3].shape.y,
+            buttons[4].shape.x, buttons[4].shape.y);
     }
-
 
     (*env)->DeleteLocalRef(env, activity);
     (*env)->DeleteLocalRef(env, clazz);
@@ -180,8 +183,6 @@ void start_layout_editor(
         SDL_RenderClear(renderer);
 
         SDL_RenderCopy(renderer, gb_screen_texture, NULL, gb_screen_rect);
-        // TODO customizable button opacity as a sharedpreference (make a minimum such as the min opacity while a button
-        //      is dimmed because it's moving is still visible)
         for (int i = 0; i < 5; i++)
             SDL_RenderCopy(renderer, buttons[i].texture, NULL, &buttons[i].shape);
 

@@ -29,22 +29,42 @@ public class Emulator extends SDLActivity {
     float sound;
     int frameSkip;
     int layoutEditor;
+    float buttonOpacity;
 
-    float portraitScreenX;
-    float portraitScreenY;
-    float portraitSreenSize;
+    int portraitDpadX, portraitDpadY;
+    int portraitAX, portraitAY;
+    int portraitBX, portraitBY;
+    int portraitStartX, portraitStartY;
+    int portraitSelectX, portraitSelectY;
 
-    float landscapeScreenX;
-    float landscapeScreenY;
-    float landscapeScreenSize;
+    int landscapeDpadX, landscapeDpadY;
+    int landscapeAX, landscapeAY;
+    int landscapeBX, landscapeBY;
+    int landscapeStartX, landscapeStartY;
+    int landscapeSelectX, landscapeSelectY;
 
     public native void receiveROMData(
-            byte[] data, int size,
-            boolean resume, int emu_mode, int palette, float emu_speed, float sound, int emu_frame_skip,
-            float portraitScreenX, float portraitScreenY, float portraitSreenSize,
-            float landscapeScreenX, float landscapeScreenY, float landscapeScreenSize);
+        byte[] data, int size,
+        boolean resume, int emu_mode, int palette, float emu_speed, float sound, int emu_frame_skip,
+        float buttons_opacity,
+        int portraitDpadX, int portraitDpadY,
+        int portraitAX, int portraitAY,
+        int portraitBX, int portraitBY,
+        int portraitStartX, int portraitStartY,
+        int portraitSelectX, int portraitSelectY,
+        int landscapeDpadX, int landscapeDpadY,
+        int landscapeAX, int landscapeAY,
+        int landscapeBX, int landscapeBY,
+        int landscapeStartX, int landscapeStartY,
+        int landscapeSelectX, int landscapeSelectY);
 
-    public native void enterLayoutEditor(boolean is_landscape, float screenX, float screenY, float screenSize);
+    public native void enterLayoutEditor(float buttons_opacity,
+        boolean is_landscape,
+        int dpad_x, int dpad_y,
+        int a_x, int a_y,
+        int b_x, int b_y,
+        int start_x, int start_y,
+        int select_x, int select_y);
 
     public boolean canRotate() {
         try {
@@ -94,14 +114,29 @@ public class Emulator extends SDLActivity {
         speed = preferences.getFloat(UserSettings.EMULATION_SPEED, UserSettings.EMULATION_SPEED_DEFAULT);
         sound = preferences.getFloat(UserSettings.EMULATION_SOUND, UserSettings.EMULATION_SOUND_DEFAULT);
         frameSkip = preferences.getInt(UserSettings.FRAME_SKIP, UserSettings.FRAME_SKIP_DEFAULT);
+        buttonOpacity = preferences.getFloat(UserSettings.BUTTONS_OPACITY, UserSettings.BUTTONS_OPACITY_DEFAULT);
 
-        portraitScreenX = preferences.getFloat(UserSettings.PORTRAIT_SCREEN_X, UserSettings.PORTRAIT_SCREEN_X_DEFAULT);
-        portraitScreenY = preferences.getFloat(UserSettings.PORTRAIT_SCREEN_Y, UserSettings.PORTRAIT_SCREEN_Y_DEFAULT);
-        portraitSreenSize = preferences.getFloat(UserSettings.PORTRAIT_SCREEN_SIZE, UserSettings.PORTRAIT_SCREEN_SIZE_DEFAULT);
+        portraitDpadX = preferences.getInt(UserSettings.PORTRAIT_DPAD_X, UserSettings.PORTRAIT_DPAD_X_DEFAULT);
+        portraitDpadY = preferences.getInt(UserSettings.PORTRAIT_DPAD_Y, UserSettings.PORTRAIT_DPAD_Y_DEFAULT);
+        portraitAX = preferences.getInt(UserSettings.PORTRAIT_A_X, UserSettings.PORTRAIT_A_X_DEFAULT);
+        portraitAY = preferences.getInt(UserSettings.PORTRAIT_A_Y, UserSettings.PORTRAIT_A_Y_DEFAULT);
+        portraitBX = preferences.getInt(UserSettings.PORTRAIT_B_X, UserSettings.PORTRAIT_B_X_DEFAULT);
+        portraitBY = preferences.getInt(UserSettings.PORTRAIT_B_Y, UserSettings.PORTRAIT_B_Y_DEFAULT);
+        portraitStartX = preferences.getInt(UserSettings.PORTRAIT_START_X, UserSettings.PORTRAIT_START_X_DEFAULT);
+        portraitStartY = preferences.getInt(UserSettings.PORTRAIT_START_Y, UserSettings.PORTRAIT_START_Y_DEFAULT);
+        portraitSelectX = preferences.getInt(UserSettings.PORTRAIT_SELECT_X, UserSettings.PORTRAIT_SELECT_X_DEFAULT);
+        portraitSelectY = preferences.getInt(UserSettings.PORTRAIT_SELECT_Y, UserSettings.PORTRAIT_SELECT_Y_DEFAULT);
 
-        landscapeScreenX = preferences.getFloat(UserSettings.LANDSCAPE_SCREEN_X, UserSettings.LANDSCAPE_SCREEN_X_DEFAULT);
-        landscapeScreenY = preferences.getFloat(UserSettings.LANDSCAPE_SCREEN_Y, UserSettings.LANDSCAPE_SCREEN_Y_DEFAULT);
-        landscapeScreenSize = preferences.getFloat(UserSettings.LANDSCAPE_SCREEN_SIZE, UserSettings.LANDSCAPE_SCREEN_SIZE_DEFAULT);
+        landscapeDpadX = preferences.getInt(UserSettings.LANDSCAPE_DPAD_X, UserSettings.LANDSCAPE_DPAD_X_DEFAULT);
+        landscapeDpadY = preferences.getInt(UserSettings.LANDSCAPE_DPAD_Y, UserSettings.LANDSCAPE_DPAD_Y_DEFAULT);
+        landscapeAX = preferences.getInt(UserSettings.LANDSCAPE_A_X, UserSettings.LANDSCAPE_A_X_DEFAULT);
+        landscapeAY = preferences.getInt(UserSettings.LANDSCAPE_A_Y, UserSettings.LANDSCAPE_A_Y_DEFAULT);
+        landscapeBX = preferences.getInt(UserSettings.LANDSCAPE_B_X, UserSettings.LANDSCAPE_B_X_DEFAULT);
+        landscapeBY = preferences.getInt(UserSettings.LANDSCAPE_B_Y, UserSettings.LANDSCAPE_B_Y_DEFAULT);
+        landscapeStartX = preferences.getInt(UserSettings.LANDSCAPE_START_X, UserSettings.LANDSCAPE_START_X_DEFAULT);
+        landscapeStartY = preferences.getInt(UserSettings.LANDSCAPE_START_Y, UserSettings.LANDSCAPE_START_Y_DEFAULT);
+        landscapeSelectX = preferences.getInt(UserSettings.LANDSCAPE_SELECT_X, UserSettings.LANDSCAPE_SELECT_X_DEFAULT);
+        landscapeSelectY = preferences.getInt(UserSettings.LANDSCAPE_SELECT_Y, UserSettings.LANDSCAPE_SELECT_Y_DEFAULT);
 
         Uri uri = Settings.System.getUriFor(Settings.System.ACCELEROMETER_ROTATION);
         ContentObserver rotationObserver = new ContentObserver(new Handler()) {
@@ -130,10 +165,20 @@ public class Emulator extends SDLActivity {
                 requestROM();
                 break;
             case 1:
-                enterLayoutEditor(false, portraitScreenX, portraitScreenY, portraitSreenSize);
+                enterLayoutEditor(buttonOpacity, false,
+                        portraitDpadX, portraitDpadY,
+                        portraitAX, portraitAY,
+                        portraitBX, portraitBY,
+                        portraitStartX, portraitStartY,
+                        portraitSelectX, portraitSelectY);
                 break;
             case 2:
-                enterLayoutEditor(true, landscapeScreenX, landscapeScreenY, landscapeScreenSize);
+                enterLayoutEditor(buttonOpacity, true,
+                        landscapeDpadX, landscapeDpadY,
+                        landscapeAX, landscapeAY,
+                        landscapeBX, landscapeBY,
+                        landscapeStartX, landscapeStartY,
+                        landscapeSelectX, landscapeSelectY);
                 break;
         }
     }
@@ -156,8 +201,9 @@ public class Emulator extends SDLActivity {
 
             receiveROMData(
                     rom, rom.length, resume, emuMode, palette, speed, sound, frameSkip,
-                    portraitScreenX, portraitScreenY, portraitSreenSize,
-                    landscapeScreenX, landscapeScreenY, landscapeScreenSize);
+                    buttonOpacity,
+                    portraitDpadX, portraitDpadY, portraitAX, portraitAY, portraitBX, portraitBY, portraitStartX, portraitStartY, portraitSelectX, portraitSelectY,
+                    landscapeDpadX, landscapeDpadY, landscapeAX, landscapeAY, landscapeBX, landscapeBY, landscapeStartX, landscapeStartY, landscapeSelectX, landscapeSelectY);
         } catch (IOException e) {
             errorToast("The selected file is not a valid ROM.");
             finish();
@@ -165,10 +211,23 @@ public class Emulator extends SDLActivity {
 
     }
 
-    public void applyLayoutPreferences(boolean isLandscape, float screenX, float screenY, float screenSize) {
-        preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_SCREEN_X : UserSettings.PORTRAIT_SCREEN_X, screenX);
-        preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_SCREEN_Y : UserSettings.PORTRAIT_SCREEN_Y, screenY);
-        preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_SCREEN_SIZE : UserSettings.PORTRAIT_SCREEN_SIZE, screenSize);
+    public void applyLayoutPreferences(
+            boolean isLandscape,
+            int dpadX, int dpadY,
+            int aX, int aY,
+            int bX, int bY,
+            int startX, int startY,
+            int selectX, int selectY) {
+        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_DPAD_X : UserSettings.PORTRAIT_DPAD_X, dpadX);
+        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_DPAD_Y : UserSettings.PORTRAIT_DPAD_Y, dpadY);
+        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_A_X : UserSettings.PORTRAIT_A_X, aX);
+        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_A_Y : UserSettings.PORTRAIT_A_Y, aY);
+        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_B_X : UserSettings.PORTRAIT_B_X, bX);
+        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_B_Y : UserSettings.PORTRAIT_B_Y, bY);
+        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_START_X : UserSettings.PORTRAIT_START_X, startX);
+        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_START_Y : UserSettings.PORTRAIT_START_Y, startY);
+        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_SELECT_X : UserSettings.PORTRAIT_SELECT_X, selectX);
+        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_SELECT_Y : UserSettings.PORTRAIT_SELECT_Y, selectY);
 
         preferencesEditor.apply();
     }

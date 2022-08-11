@@ -18,7 +18,6 @@
 // TODO savestates ui
 // TODO bluetooth (and wifi) link cable --> make a link connection pausable and resumeable (because the whole emulator is
 //      reset each time we leave the Emulator activity)
-// TODO test with gamepad controller (PS3, ...)
 
 SDL_bool is_running;
 SDL_bool is_landscape;
@@ -34,12 +33,44 @@ int ppu_texture_pitch;
 
 SDL_AudioDeviceID audio_device;
 
-SDL_GameController *pad;
-SDL_bool is_controller_present;
-
 emulator_t *emu;
 
 SDL_Rect gb_screen_rect;
+
+int portrait_dpad_x;
+int portrait_dpad_y;
+int portrait_a_x;
+int portrait_a_y;
+int portrait_b_x;
+int portrait_b_y;
+int portrait_start_x;
+int portrait_start_y;
+int portrait_select_x;
+int portrait_select_y;
+
+int landscape_dpad_x;
+int landscape_dpad_y;
+int landscape_a_x;
+int landscape_a_y;
+int landscape_b_x;
+int landscape_b_y;
+int landscape_start_x;
+int landscape_start_y;
+int landscape_select_x;
+int landscape_select_y;
+
+int dpad_status;
+
+SDL_Texture *dpad_textures[16];
+
+SDL_Texture *a_texture;
+SDL_Texture *b_texture;
+SDL_Texture *start_texture;
+SDL_Texture *select_texture;
+SDL_Texture *a_pressed_texture;
+SDL_Texture *b_pressed_texture;
+SDL_Texture *start_pressed_texture;
+SDL_Texture *select_pressed_texture;
 
 button_t buttons[] = {
     {
@@ -148,53 +179,61 @@ static void button_press(emulator_t *emu, joypad_button_t button) {
     }
 
     switch ((int) button) { // cast to int to shut compiler warnings
+    case JOYPAD_UP:
+    case JOYPAD_DOWN:
+    case JOYPAD_LEFT:
+    case JOYPAD_RIGHT:
+        SET_BIT(dpad_status, button);
+        break;
+    case JOYPAD_A:
+        buttons[1].texture = a_pressed_texture;
+        return;
+    case JOYPAD_B:
+        buttons[2].texture = b_pressed_texture;
+        return;
+    case JOYPAD_START:
+        buttons[3].texture = start_pressed_texture;
+        return;
+    case JOYPAD_SELECT:
+        buttons[4].texture = select_pressed_texture;
+        return;
     case JOYPAD_SELECT + 1:
+        SET_BIT(dpad_status, JOYPAD_UP);
+        SET_BIT(dpad_status, JOYPAD_LEFT);
         break;
     case JOYPAD_SELECT + 2:
+        SET_BIT(dpad_status, JOYPAD_UP);
+        SET_BIT(dpad_status, JOYPAD_RIGHT);
         break;
     case JOYPAD_SELECT + 3:
+        SET_BIT(dpad_status, JOYPAD_DOWN);
+        SET_BIT(dpad_status, JOYPAD_LEFT);
         break;
     case JOYPAD_SELECT + 4:
-        break;
-    default:
+        SET_BIT(dpad_status, JOYPAD_DOWN);
+        SET_BIT(dpad_status, JOYPAD_RIGHT);
         break;
     }
+
+    buttons[0].texture = dpad_textures[dpad_status];
 }
 
-static void button_release(emulator_t *emu, joypad_button_t button) {
-    switch ((int) button) { // cast to int to shut compiler warnings
-    case JOYPAD_SELECT + 1:
-        emulator_joypad_release(emu, JOYPAD_UP);
-        emulator_joypad_release(emu, JOYPAD_LEFT);
-        break;
-    case JOYPAD_SELECT + 2:
-        emulator_joypad_release(emu, JOYPAD_UP);
-        emulator_joypad_release(emu, JOYPAD_RIGHT);
-        break;
-    case JOYPAD_SELECT + 3:
-        emulator_joypad_release(emu, JOYPAD_DOWN);
-        emulator_joypad_release(emu, JOYPAD_LEFT);
-        break;
-    case JOYPAD_SELECT + 4:
-        emulator_joypad_release(emu, JOYPAD_DOWN);
-        emulator_joypad_release(emu, JOYPAD_RIGHT);
-        break;
-    default:
-        emulator_joypad_release(emu, button);
-        break;
-    }
+static void button_release(SDL_TouchID touch_id) {
+    for (int i = JOYPAD_LEFT; i <= JOYPAD_SELECT; i++)
+        emulator_joypad_release(emu, i);
+    dpad_status = 0;
+    buttons[0].texture = dpad_textures[dpad_status];
+    buttons[1].texture = a_texture;
+    buttons[2].texture = b_texture;
+    buttons[3].texture = start_texture;
+    buttons[4].texture = select_texture;
 
-    switch ((int) button) { // cast to int to shut compiler warnings
-    case JOYPAD_SELECT + 1:
-        break;
-    case JOYPAD_SELECT + 2:
-        break;
-    case JOYPAD_SELECT + 3:
-        break;
-    case JOYPAD_SELECT + 4:
-        break;
-    default:
-        break;
+    for (int i = 0; i < SDL_GetNumTouchFingers(touch_id); i++) {
+        SDL_Finger *f = SDL_GetTouchFinger(touch_id, i);
+        if (!f) continue;
+        s_byte_t hovered = is_finger_over_button(f->x, f->y);
+        if (hovered >= 0)
+            button_press(emu, hovered);
     }
 }
 
@@ -207,7 +246,7 @@ static inline void touch_press(SDL_TouchFingerEvent *event) {
 static inline void touch_release(SDL_TouchFingerEvent *event) {
     s_byte_t hovered = is_finger_over_button(event->x, event->y);
     if (hovered >= 0)
-        button_release(emu, hovered);
+        button_release(event->touchId);
 }
 
 static inline void touch_motion(SDL_TouchFingerEvent *event) {
@@ -216,7 +255,7 @@ static inline void touch_motion(SDL_TouchFingerEvent *event) {
 
     if (previous != hovered) {
         if (previous >= 0)
-            button_release(emu, previous);
+            button_release(event->touchId);
         if (hovered >= 0)
             button_press(emu, hovered);
     }
@@ -226,52 +265,41 @@ static void set_layout(int layout) {
     is_landscape = layout;
 
     switch (layout) {
-    case 0:
-        // portrait
+    case 0: // portrait
         SDL_RenderSetLogicalSize(renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
         gb_screen_rect.w = SCREEN_WIDTH;
         gb_screen_rect.h = GB_SCREEN_HEIGHT * (gb_screen_rect.w / GB_SCREEN_WIDTH);
         gb_screen_rect.x = 0;
         gb_screen_rect.y = 0;
 
-        buttons[0].shape.x = 20 - 20;
-        buttons[0].shape.y = 178;
-
-        buttons[1].shape.x = 160 - 20;
-        buttons[1].shape.y = 178 + 20 / 2;
-
-        buttons[2].shape.x = 160 - 20 * 2;
-        buttons[2].shape.y = 178 + 20 + 20 / 2;
-
-        buttons[3].shape.x = 160 / 2 + 30;
-        buttons[3].shape.y = 284 - 30;
-
-        buttons[4].shape.x = 160 / 2 - 30 * 2;
-        buttons[4].shape.y = 284 - 30;
+        buttons[0].shape.x = portrait_dpad_x;
+        buttons[0].shape.y = portrait_dpad_y;
+        buttons[1].shape.x = portrait_a_x;
+        buttons[1].shape.y = portrait_a_y;
+        buttons[2].shape.x = portrait_b_x;
+        buttons[2].shape.y = portrait_b_y;
+        buttons[3].shape.x = portrait_start_x;
+        buttons[3].shape.y = portrait_start_y;
+        buttons[4].shape.x = portrait_select_x;
+        buttons[4].shape.y = portrait_select_y;
         break;
-    case 1:
-        // landscape
+    case 1: // landscape
         SDL_RenderSetLogicalSize(renderer, SCREEN_HEIGHT, SCREEN_WIDTH);
         gb_screen_rect.h = SCREEN_WIDTH;
         gb_screen_rect.w = GB_SCREEN_WIDTH * (gb_screen_rect.h / GB_SCREEN_HEIGHT);
         gb_screen_rect.x = SCREEN_HEIGHT / 2 - gb_screen_rect.w / 2;
         gb_screen_rect.y = 0;
 
-        // physical buttons
-        buttons[0].shape.x = 20 - 20;
-        buttons[0].shape.y = 160 - 20 * 5;
-
-        buttons[1].shape.x = 284 - 20;
-        buttons[1].shape.y = 160 - 20 * 4 - 20 / 2;
-
-        buttons[2].shape.x = 284 - 20 * 2;
-        buttons[2].shape.y = 160 - 20 * 3 - 20 / 2;
-
-        buttons[3].shape.x = 284 - 30 * 3 + 1;
-        buttons[3].shape.y = 160 - 30;
-
-        buttons[4].shape.x = 30 * 2;
-        buttons[4].shape.y = 160 - 30;
+        buttons[0].shape.x = landscape_dpad_x;
+        buttons[0].shape.y = landscape_dpad_y;
+        buttons[1].shape.x = landscape_a_x;
+        buttons[1].shape.y = landscape_a_y;
+        buttons[2].shape.x = landscape_b_x;
+        buttons[2].shape.y = landscape_b_y;
+        buttons[3].shape.x = landscape_start_x;
+        buttons[3].shape.y = landscape_start_y;
+        buttons[4].shape.x = landscape_select_x;
+        buttons[4].shape.y = landscape_select_y;
         break;
     }
 }
@@ -307,7 +335,7 @@ static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
     //     log("need refill");
 
     while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 4)
-         SDL_Delay(1);
+        SDL_Delay(1);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
 
@@ -327,29 +355,6 @@ static void handle_input(void) {
         case SDL_KEYDOWN:
             if (!event.key.repeat && event.key.keysym.sym == SDLK_AC_BACK)
                 is_running = SDL_FALSE;
-            break;
-        case SDL_CONTROLLERBUTTONDOWN:
-            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE)
-                is_running = SDL_FALSE;
-            else
-                button_press(emu, sdl_controller_to_joypad(event.cbutton.button));
-            break;
-        case SDL_CONTROLLERBUTTONUP:
-            button_release(emu, sdl_controller_to_joypad(event.cbutton.button));
-            break;
-        case SDL_CONTROLLERDEVICEADDED:
-            if (!is_controller_present) {
-                pad = SDL_GameControllerOpen(event.cdevice.which);
-                is_controller_present = SDL_TRUE;
-                log("%s connected\n", SDL_GameControllerName(pad));
-            }
-            break;
-        case SDL_CONTROLLERDEVICEREMOVED:
-            if (is_controller_present) {
-                SDL_GameControllerClose(pad);
-                is_controller_present = SDL_FALSE;
-                log("%s disconnected\n", SDL_GameControllerName(pad));
-            }
             break;
         case SDL_WINDOWEVENT:
             if(event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
@@ -396,8 +401,6 @@ static void start_emulation_loop(void) {
                 SDL_RenderClear(renderer);
                 SDL_RenderCopy(renderer, ppu_texture, NULL, &gb_screen_rect);
                 // draw buttons
-                // TODO different textures when a button is pressed/not pressed
-                // TODO customizable button opacity as a sharedpreference
                 for (int i = 0; i < 5; i++)
                     SDL_RenderCopy(renderer, buttons[i].texture, NULL, &buttons[i].shape);
                 // this SDL_Delay() isn't needed as the audio sync adds it's own delay
@@ -423,9 +426,6 @@ static void start_emulation_loop(void) {
         save_state_to_file(emu, "resume");
         emulator_quit(emu);
     }
-
-    if (is_controller_present)
-        SDL_GameControllerClose(pad);
 
     SDL_DestroyTexture(ppu_texture);
     SDL_CloseAudioDevice(audio_device);
@@ -479,13 +479,28 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
         jfloat emu_speed,
         jfloat sound,
         jint emu_frame_skip,
-        jfloat portrait_screen_x,
-        jfloat portrait_screen_y,
-        jfloat portrait_screen_size,
-        jfloat landscape_screen_x,
-        jfloat landscape_screen_y,
-        jfloat landscape_screen_size
-) {
+        jfloat buttons_opacity,
+        jint port_dpad_x,
+        jint port_dpad_y,
+        jint port_a_x,
+        jint port_a_y,
+        jint port_b_x,
+        jint port_b_y,
+        jint port_start_x,
+        jint port_start_y,
+        jint port_select_x,
+        jint port_select_y,
+        jint land_dpad_x,
+        jint land_dpad_y,
+        jint land_a_x,
+        jint land_a_y,
+        jint land_b_x,
+        jint land_b_y,
+        jint land_start_x,
+        jint land_start_y,
+        jint land_select_x,
+        jint land_select_y)
+{
     jboolean is_copy;
     jbyte *rom_data = (*env)->GetByteArrayElements(env, data, &is_copy);
 
@@ -494,23 +509,163 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
 
     (*env)->ReleaseByteArrayElements(env, data, rom_data, JNI_ABORT);
 
+    portrait_dpad_x = port_dpad_x;
+    portrait_dpad_y = port_dpad_y;
+    portrait_a_x = port_a_x;
+    portrait_a_y = port_a_y;
+    portrait_b_x = port_b_x;
+    portrait_b_y = port_b_y;
+    portrait_start_x = port_start_x;
+    portrait_start_y = port_start_y;
+    portrait_select_x = port_select_x;
+    portrait_select_y = port_select_y;
+
+    landscape_dpad_x = land_dpad_x;
+    landscape_dpad_y = land_dpad_y;
+    landscape_a_x = land_a_x;
+    landscape_a_y = land_a_y;
+    landscape_b_x = land_b_x;
+    landscape_b_y = land_b_y;
+    landscape_start_x = land_start_x;
+    landscape_start_y = land_start_y;
+    landscape_select_x = land_select_x;
+    landscape_select_y = land_select_y;
+
     set_layout(is_landscape);
+
+    SDL_Surface *surface = SDL_LoadBMP("dpad_pressed_left.bmp");
+    dpad_textures[1] = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("dpad_pressed_right.bmp");
+    dpad_textures[2] = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("dpad_pressed_left-right.bmp");
+    dpad_textures[3] = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("dpad_pressed_up.bmp");
+    dpad_textures[4] = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("dpad_pressed_up-left.bmp");
+    dpad_textures[5] = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("dpad_pressed_up-right.bmp");
+    dpad_textures[6] = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("dpad_pressed_up-left-right.bmp");
+    dpad_textures[7] = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("dpad_pressed_down.bmp");
+    dpad_textures[8] = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("dpad_pressed_down-left.bmp");
+    dpad_textures[9] = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("dpad_pressed_down-right.bmp");
+    dpad_textures[10] = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("dpad_pressed_down-left-right.bmp");
+    dpad_textures[11] = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("dpad_pressed_up-down.bmp");
+    dpad_textures[12] = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("dpad_pressed_up-left-down.bmp");
+    dpad_textures[13] = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("dpad_pressed_up-right-down.bmp");
+    dpad_textures[14] = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("dpad_pressed_all.bmp");
+    dpad_textures[15] = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("a_pressed.bmp");
+    a_pressed_texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("b_pressed.bmp");
+    b_pressed_texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("start_pressed.bmp");
+    start_pressed_texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("select_pressed.bmp");
+    select_pressed_texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    SDL_SetTextureAlphaMod(a_pressed_texture, buttons_opacity * 0xFF);
+    SDL_SetTextureAlphaMod(b_pressed_texture, buttons_opacity * 0xFF);
+    SDL_SetTextureAlphaMod(start_pressed_texture, buttons_opacity * 0xFF);
+    SDL_SetTextureAlphaMod(select_pressed_texture, buttons_opacity * 0xFF);
+    for (int i = 0; i < 5; i++)
+        SDL_SetTextureAlphaMod(buttons[i].texture, buttons_opacity * 0xFF);
+    for (int i = 0; i < 16; i++)
+        SDL_SetTextureAlphaMod(dpad_textures[i], buttons_opacity * 0xFF);
+
     start_emulation_loop();
 }
 
 JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_enterLayoutEditor(
         JNIEnv* env,
         jobject thiz,
+        jfloat buttons_opacity,
         jboolean is_landscape,
-        jfloat screen_x,
-        jfloat screen_y,
-        jfloat screen_size
-) {
+        jint dpad_x,
+        jint dpad_y,
+        jint a_x,
+        jint a_y,
+        jint b_x,
+        jint b_y,
+        jint start_x,
+        jint start_y,
+        jint select_x,
+        jint select_y)
+{
+    portrait_dpad_x = dpad_x;
+    portrait_dpad_y = dpad_y;
+    portrait_a_x = a_x;
+    portrait_a_y = a_y;
+    portrait_b_x = b_x;
+    portrait_b_y = b_y;
+    portrait_start_x = start_x;
+    portrait_start_y = start_y;
+    portrait_select_x = select_x;
+    portrait_select_y = select_y;
+
+    landscape_dpad_x = dpad_x;
+    landscape_dpad_y = dpad_y;
+    landscape_a_x = a_x;
+    landscape_a_y = a_y;
+    landscape_b_x = b_x;
+    landscape_b_y = b_y;
+    landscape_start_x = start_x;
+    landscape_start_y = start_y;
+    landscape_select_x = select_x;
+    landscape_select_y = select_y;
+
     set_layout(is_landscape);
 
     button_t *bs = xmalloc(sizeof(button_t) * 5);
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < 5; i++) {
+        SDL_SetTextureAlphaMod(buttons[i].texture, buttons_opacity * 0xFF);
         bs[i] = buttons[i];
+    }
     start_layout_editor(renderer, is_landscape, SCREEN_WIDTH, SCREEN_HEIGHT, &gb_screen_rect, bs);
     free(bs);
 }
@@ -521,10 +676,9 @@ int main(int argc, char **argv) {
     // initialize global variables here and not at their initialization as they can still have their
     // previous values because of android's activities lifecycle
     is_running = SDL_TRUE;
-    is_controller_present = SDL_FALSE;
     speed = 1.0f;
 
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
 
     window = SDL_CreateWindow(
         EMULATOR_NAME,
@@ -540,25 +694,30 @@ int main(int argc, char **argv) {
 
     SDL_Surface *surface = SDL_LoadBMP("dpad.bmp");
     buttons[0].texture = SDL_CreateTextureFromSurface(renderer, surface);
+    dpad_textures[0] = buttons[0].texture;
     SDL_FreeSurface(surface);
 
     surface = SDL_LoadBMP("a.bmp");
-    buttons[1].texture = SDL_CreateTextureFromSurface(renderer, surface);
+    a_texture = SDL_CreateTextureFromSurface(renderer, surface);
+    buttons[1].texture = a_texture;
     SDL_FreeSurface(surface);
 
     surface = SDL_LoadBMP("b.bmp");
-    buttons[2].texture = SDL_CreateTextureFromSurface(renderer, surface);
+    b_texture = SDL_CreateTextureFromSurface(renderer, surface);
+    buttons[2].texture = b_texture;
     SDL_FreeSurface(surface);
 
     surface = SDL_LoadBMP("start.bmp");
-    buttons[3].texture = SDL_CreateTextureFromSurface(renderer, surface);
+    start_texture = SDL_CreateTextureFromSurface(renderer, surface);
+    buttons[3].texture = start_texture;
     SDL_FreeSurface(surface);
 
     surface = SDL_LoadBMP("select.bmp");
-    buttons[4].texture = SDL_CreateTextureFromSurface(renderer, surface);
+    select_texture = SDL_CreateTextureFromSurface(renderer, surface);
+    buttons[4].texture = select_texture;
     SDL_FreeSurface(surface);
 
-    ready(); // TODO this should create all textures and audio etc only if in emulator mode
+    ready();
 
     for (int i = 0; i < 5; i++)
         SDL_DestroyTexture(buttons[i].texture);

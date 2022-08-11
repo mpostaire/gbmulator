@@ -7,6 +7,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.LinearLayout;
@@ -32,6 +33,9 @@ public class SettingsMenu extends AppCompatActivity {
 
     SeekBar frameSkipSeekBar;
     TextView frameSkipTextView;
+
+    SeekBar opacitySeekBar;
+    TextView opacityTextView;
 
     PopupMenu modePopup;
     PopupMenu palettePopup;
@@ -195,6 +199,30 @@ public class SettingsMenu extends AppCompatActivity {
 
             }
         });
+
+        int opacity = (int) (preferences.getFloat(UserSettings.BUTTONS_OPACITY, UserSettings.BUTTONS_OPACITY_DEFAULT) * 100);
+        opacityTextView = findViewById(R.id.opacityTextView);
+        opacityTextView.setText(getString(R.string.setting_opacity_value, opacity));
+        opacitySeekBar = findViewById(R.id.opacitySeekBar);
+        opacitySeekBar.setProgress(opacity - 10);
+        opacitySeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                preferencesEditor.putFloat(UserSettings.BUTTONS_OPACITY, (i + 10) / 100.0f);
+                preferencesEditor.apply();
+                opacityTextView.setText(getString(R.string.setting_opacity_value, i + 10));
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
     }
 
     @Override
@@ -237,13 +265,27 @@ public class SettingsMenu extends AppCompatActivity {
         builder.setNeutralButton(R.string.setting_layout_editor_popup_defaults_button, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialogInterface, int i) {
-                preferencesEditor.putFloat(UserSettings.PORTRAIT_SCREEN_X, UserSettings.PORTRAIT_SCREEN_X_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.PORTRAIT_SCREEN_Y, UserSettings.PORTRAIT_SCREEN_X_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.PORTRAIT_SCREEN_SIZE, UserSettings.PORTRAIT_SCREEN_SIZE_DEFAULT);
+                preferencesEditor.putInt(UserSettings.PORTRAIT_DPAD_X, UserSettings.PORTRAIT_DPAD_X_DEFAULT);
+                preferencesEditor.putInt(UserSettings.PORTRAIT_DPAD_Y, UserSettings.PORTRAIT_DPAD_Y_DEFAULT);
+                preferencesEditor.putInt(UserSettings.PORTRAIT_A_X, UserSettings.PORTRAIT_A_X_DEFAULT);
+                preferencesEditor.putInt(UserSettings.PORTRAIT_A_Y, UserSettings.PORTRAIT_A_Y_DEFAULT);
+                preferencesEditor.putInt(UserSettings.PORTRAIT_B_X, UserSettings.PORTRAIT_B_X_DEFAULT);
+                preferencesEditor.putInt(UserSettings.PORTRAIT_B_Y, UserSettings.PORTRAIT_B_Y_DEFAULT);
+                preferencesEditor.putInt(UserSettings.PORTRAIT_START_X, UserSettings.PORTRAIT_START_X_DEFAULT);
+                preferencesEditor.putInt(UserSettings.PORTRAIT_START_Y, UserSettings.PORTRAIT_START_Y_DEFAULT);
+                preferencesEditor.putInt(UserSettings.PORTRAIT_SELECT_X, UserSettings.PORTRAIT_SELECT_X_DEFAULT);
+                preferencesEditor.putInt(UserSettings.PORTRAIT_SELECT_Y, UserSettings.PORTRAIT_SELECT_Y_DEFAULT);
 
-                preferencesEditor.putFloat(UserSettings.LANDSCAPE_SCREEN_X, UserSettings.LANDSCAPE_SCREEN_X_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.LANDSCAPE_SCREEN_Y, UserSettings.LANDSCAPE_SCREEN_Y_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.LANDSCAPE_SCREEN_SIZE, UserSettings.LANDSCAPE_SCREEN_SIZE_DEFAULT);
+                preferencesEditor.putInt(UserSettings.LANDSCAPE_DPAD_X, UserSettings.LANDSCAPE_DPAD_X_DEFAULT);
+                preferencesEditor.putInt(UserSettings.LANDSCAPE_DPAD_Y, UserSettings.LANDSCAPE_DPAD_Y_DEFAULT);
+                preferencesEditor.putInt(UserSettings.LANDSCAPE_A_X, UserSettings.LANDSCAPE_A_X_DEFAULT);
+                preferencesEditor.putInt(UserSettings.LANDSCAPE_A_Y, UserSettings.LANDSCAPE_A_Y_DEFAULT);
+                preferencesEditor.putInt(UserSettings.LANDSCAPE_B_X, UserSettings.LANDSCAPE_B_X_DEFAULT);
+                preferencesEditor.putInt(UserSettings.LANDSCAPE_B_Y, UserSettings.LANDSCAPE_B_Y_DEFAULT);
+                preferencesEditor.putInt(UserSettings.LANDSCAPE_START_X, UserSettings.LANDSCAPE_START_X_DEFAULT);
+                preferencesEditor.putInt(UserSettings.LANDSCAPE_START_Y, UserSettings.LANDSCAPE_START_Y_DEFAULT);
+                preferencesEditor.putInt(UserSettings.LANDSCAPE_SELECT_X, UserSettings.LANDSCAPE_SELECT_X_DEFAULT);
+                preferencesEditor.putInt(UserSettings.LANDSCAPE_SELECT_Y, UserSettings.LANDSCAPE_SELECT_Y_DEFAULT);
 
                 preferencesEditor.apply();
             }
