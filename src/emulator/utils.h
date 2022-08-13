@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
 
 #define CHECK_BIT(var, pos) ((var) & (1 << (pos)))
 #define SET_BIT(var, pos) ((var) |= (1 << (pos)))
@@ -24,17 +25,6 @@ void *xcalloc(size_t nmemb, size_t size);
 
 void *xrealloc(void *ptr, size_t size);
 
-/**
- * @returns 1 if directory_path is a directory, 0 otherwise.
- */
-int dir_exists(const char *directory_path);
+char *time_to_string(time_t t, size_t *len);
 
-/**
- * Creates directory_path and its parents if they don't exist.
- */
-void mkdirp(const char *directory_path);
-
-/**
- * Makes all parent dirs of filepath if necessary
- */
-void make_parent_dirs(const char *filepath);
+time_t string_to_time(const char *time_str);

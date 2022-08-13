@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "config.h"
+#include "utils.h"
 #include "emulator/emulator.h"
 
 // defaults

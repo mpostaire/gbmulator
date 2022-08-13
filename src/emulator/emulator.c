@@ -145,12 +145,20 @@ byte_t *emulator_get_save(emulator_t *emu, size_t *save_length) {
         return NULL;
     }
 
+    size_t rtc_value_len = 0;
+    size_t rtc_timestamp_len = 0;
+    char *rtc_value_str = NULL;
+    char *rtc_timestamp_str = NULL;
+    if (emu->mmu->has_rtc) {
+        rtc_value_str = time_to_string(emu->mmu->rtc.value_in_seconds, &rtc_value_len);
+        rtc_timestamp_str = time_to_string(emu->mmu->rtc.timestamp, &rtc_timestamp_len);
+    }
+
     size_t eram_len = emu->mmu->has_battery ? 0x2000 * emu->mmu->eram_banks : 0;
-    size_t rtc_len = emu->mmu->has_rtc ? sizeof(rtc_t) - offsetof(rtc_t, value_in_seconds) : 0;
-    size_t total_len = eram_len + rtc_len;
+    size_t total_len = eram_len + rtc_value_len + rtc_timestamp_len;
     if (save_length)
         *save_length = total_len;
-    
+
     if (total_len == 0)
         return NULL;
 
@@ -159,8 +167,15 @@ byte_t *emulator_get_save(emulator_t *emu, size_t *save_length) {
     if (eram_len > 0)
         memcpy(save_data, emu->mmu->eram, eram_len);
 
-    if (rtc_len > 0)
-        memcpy(&save_data[eram_len], &emu->mmu->rtc.value_in_seconds, rtc_len);
+    if (rtc_value_len + rtc_timestamp_len > 0) {
+        memcpy(&save_data[eram_len], rtc_value_str, rtc_value_len);
+        memcpy(&save_data[eram_len + rtc_value_len], rtc_timestamp_str, rtc_timestamp_len);
+    }
+
+    if (rtc_value_str)
+        free(rtc_value_str);
+    if (rtc_timestamp_str)
+        free(rtc_timestamp_str);
 
     return save_data;
 }
@@ -171,17 +186,25 @@ int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
         return 0;
 
     size_t eram_len = emu->mmu->has_battery ? 0x2000 * emu->mmu->eram_banks : 0;
-    size_t rtc_len = emu->mmu->has_rtc ? sizeof(rtc_t) - offsetof(rtc_t, value_in_seconds) : 0;
-    size_t total_len = eram_len + rtc_len;
 
+    size_t rtc_value_len = 0;
+    size_t rtc_timestamp_len = 0;
+    if (emu->mmu->has_rtc) {
+        rtc_value_len = strlen((char *) &save_data[eram_len]) + 1;
+        rtc_timestamp_len = strlen((char *) &save_data[eram_len + rtc_value_len]) + 1;
+    }
+
+    size_t total_len = eram_len + rtc_value_len + rtc_timestamp_len;
     if (total_len != save_length || total_len == 0)
         return 0;
 
     if (eram_len > 0)
         memcpy(emu->mmu->eram, save_data, eram_len);
 
-    if (rtc_len > 0)
-        memcpy(&emu->mmu->rtc.value_in_seconds, &save_data[eram_len], rtc_len);
+    if (rtc_value_len + rtc_timestamp_len > 0) {
+        emu->mmu->rtc.value_in_seconds = string_to_time((char *) &save_data[eram_len]);
+        emu->mmu->rtc.timestamp = string_to_time((char *) &save_data[eram_len + rtc_value_len]);
+    }
 
     return 1;
 }
