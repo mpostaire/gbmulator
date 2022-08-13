@@ -1,20 +1,43 @@
 package io.github.mpostaire.gbmulator;
 
+import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.common.api.Scope;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.api.client.extensions.android.http.AndroidHttp;
+import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
+import com.google.api.client.json.gson.GsonFactory;
+import com.google.api.services.drive.Drive;
+import com.google.api.services.drive.DriveScopes;
+import com.google.api.services.drive.model.File;
+
+import java.io.ByteArrayOutputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 public class SettingsMenu extends AppCompatActivity {
@@ -42,6 +65,10 @@ public class SettingsMenu extends AppCompatActivity {
 
     SharedPreferences preferences;
     SharedPreferences.Editor preferencesEditor;
+
+    DriveServiceHelper driveServiceHelper;
+    String driveSaveDirId;
+    ProgressDialog driveSyncProgressDialog;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -291,6 +318,264 @@ public class SettingsMenu extends AppCompatActivity {
             }
         });
         builder.show();
+    }
+
+    public void signInDrive(View view) {
+        GoogleSignInOptions signInOptions = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestEmail()
+                .requestScopes(new Scope(DriveScopes.DRIVE_FILE))
+                .build();
+
+        GoogleSignInClient client = GoogleSignIn.getClient(this, signInOptions);
+
+        startActivityForResult(client.getSignInIntent(), 400);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        switch (requestCode) {
+            case 400:
+                if (resultCode == RESULT_OK) {
+                    GoogleSignIn.getSignedInAccountFromIntent(data)
+                            .addOnSuccessListener(new OnSuccessListener<GoogleSignInAccount>() {
+                                @Override
+                                public void onSuccess(GoogleSignInAccount googleSignInAccount) {
+                                    GoogleAccountCredential credential = GoogleAccountCredential
+                                            .usingOAuth2(SettingsMenu.this, Collections.singleton(DriveScopes.DRIVE_FILE));
+                                    credential.setSelectedAccount(googleSignInAccount.getAccount());
+
+                                    Drive driveService = new Drive.Builder(AndroidHttp.newCompatibleTransport(), new GsonFactory(), credential)
+                                            .setApplicationName("GBmulator")
+                                            .build();
+
+                                    driveSyncSaves(driveService);
+                                }
+                            })
+                            .addOnFailureListener(new OnFailureListener() {
+                                @Override
+                                public void onFailure(@NonNull Exception e) {
+                                    e.printStackTrace();
+                                    Toast.makeText(SettingsMenu.this, "Failed to connect to Google Drive", Toast.LENGTH_SHORT).show();
+                                }
+                            });
+                }
+                break;
+        }
+    }
+
+    public void incrementProgressDialog() {
+        driveSyncProgressDialog.incrementProgressBy(1);
+        if (driveSyncProgressDialog.getProgress() >= driveSyncProgressDialog.getMax())
+            driveSyncProgressDialog.dismiss();
+    }
+
+    public void decrementMaxProgressDialog() {
+        driveSyncProgressDialog.setMax(driveSyncProgressDialog.getMax() - 1);
+        if (driveSyncProgressDialog.getMax() <= 0)
+            driveSyncProgressDialog.dismiss();
+    }
+
+    private void driveSyncSaves(Drive driveService) {
+        driveSyncProgressDialog = new ProgressDialog(this);
+        driveSyncProgressDialog.setTitle(getString(R.string.setting_drive_dialog_title));
+        driveSyncProgressDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+        driveSyncProgressDialog.setMax(1);
+        driveSyncProgressDialog.setCancelable(false);
+        driveSyncProgressDialog.setCanceledOnTouchOutside(false);
+        driveSyncProgressDialog.show();
+
+        driveServiceHelper = new DriveServiceHelper(driveService);
+        driveServiceHelper.getSaveDirId().addOnSuccessListener(new OnSuccessListener<String>() {
+            @Override
+            public void onSuccess(String dirId) {
+                driveSaveDirId = dirId;
+                if (driveSaveDirId == null) {
+                    driveCompare(new File[] {});
+                    return;
+                }
+                driveServiceHelper.listSaveFiles(driveSaveDirId).addOnSuccessListener(new OnSuccessListener<List<File>>() {
+                    @Override
+                    public void onSuccess(List<File> files) {
+                        driveCompare(files.toArray(new File[] {}));
+                    }
+                }).addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        driveCompare(new File[] {});
+                    }
+                });
+            }
+        }).addOnFailureListener(new OnFailureListener() {
+            @Override
+            public void onFailure(@NonNull Exception e) {
+                driveCompare(new File[] {});
+            }
+        });
+    }
+
+    public void driveCompare(File[] distantFiles) {
+        java.io.File localSaveDir = new java.io.File(getFilesDir().getAbsolutePath());
+        java.io.File[] localSaveFiles = localSaveDir.listFiles();
+        ArrayList<java.io.File> toUpload = new ArrayList<>();
+        ArrayList<File> toUpdate = new ArrayList<>();
+        ArrayList<String> toUpdateLocalPath = new ArrayList<>();
+        ArrayList<File> toDownload = new ArrayList<>();
+        if (localSaveFiles != null) {
+            for (java.io.File localFile : localSaveFiles) {
+                if (localFile.getName().equals("resume"))
+                    continue;
+                boolean found = false;
+                for (File distantFile : distantFiles) {
+                    if (localFile.getName().equals(distantFile.getName())) {
+                        found = true;
+                        if (localFile.lastModified() > distantFile.getModifiedTime().getValue()) {
+                            toUpdate.add(distantFile);
+                            toUpdateLocalPath.add(localFile.getAbsolutePath());
+                        } else {
+                            toDownload.add(distantFile);
+                        }
+                        break;
+                    }
+                }
+
+                // add to upload list the local save files that are not present in the distant save directory
+                if (!found)
+                    toUpload.add(localFile);
+            }
+        }
+
+        // add to download list the distant save files that are not present in the local save directory
+        for (File distantFile : distantFiles) {
+            boolean found = false;
+            if (localSaveFiles != null) {
+                for (java.io.File localFile : localSaveFiles) {
+                    if (localFile.getName().equals("resume"))
+                        continue;
+                    if (distantFile.getName().equals(localFile.getName())) {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!found)
+                toDownload.add(distantFile);
+        }
+
+        /*for (File f : toDownload)
+            Log.i("GBmulator", "TO DOWNLOAD: " + f.getName());
+        for (java.io.File f : toUpload)
+            Log.i("GBmulator", "TO UPLOAD: " + f.getName());
+        for (File f : toUpdate)
+            Log.i("GBmulator", "TO UPDATE: " + f.getName());
+
+        if (toDownload.isEmpty())
+            Log.i("GBmulator", "TO DOWNLOAD EMPTY");
+        if (toUpload.isEmpty())
+            Log.i("GBmulator", "TO UPLOAD EMPTY");
+        if (toUpdate.isEmpty())
+            Log.i("GBmulator", "TO UPDATE EMPTY");*/
+
+        // TODO understand why pokemon gold save load fails after a sync (other roms seems to work fine...)
+
+        driveSyncProgressDialog.setMax(toDownload.size() + toUpload.size() + toUpdate.size());
+
+        driveDownloadSaveFiles(toDownload);
+        driveUploadSaveFiles(toUpload);
+        driveUpdateSaveFiles(toUpdateLocalPath, toUpdate);
+    }
+
+    public void uploadSaveFilesHelper(ArrayList<java.io.File> toUpload, String parentDirId) {
+        for (java.io.File f : toUpload) {
+            driveServiceHelper.uploadSaveFile(f.getAbsolutePath(), parentDirId).addOnSuccessListener(new OnSuccessListener<String>() {
+                @Override
+                public void onSuccess(String s) {
+                    incrementProgressDialog();
+                }
+            }).addOnFailureListener(new OnFailureListener() {
+                @Override
+                public void onFailure(@NonNull Exception e) {
+                    e.printStackTrace();
+                    decrementMaxProgressDialog();
+                    Toast.makeText(SettingsMenu.this, "Failed to upload the save file: " + f.getName(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+    }
+
+    public void driveUploadSaveFiles(ArrayList<java.io.File> toUpload) {
+        if (driveSaveDirId == null) {
+            driveServiceHelper.createSaveDir().addOnSuccessListener(new OnSuccessListener<String>() {
+                @Override
+                public void onSuccess(String parentDirId) {
+                    uploadSaveFilesHelper(toUpload, parentDirId);
+                }
+            }).addOnFailureListener(new OnFailureListener() {
+                @Override
+                public void onFailure(@NonNull Exception e) {
+                    e.printStackTrace();
+                    decrementMaxProgressDialog();
+                    Toast.makeText(SettingsMenu.this, "Failed to create the save directory", Toast.LENGTH_SHORT).show();
+                }
+            });
+        } else {
+            uploadSaveFilesHelper(toUpload, driveSaveDirId);
+        }
+    }
+
+    public void driveUpdateSaveFiles(ArrayList<String> toUpdateLocalPath, ArrayList<File> toUpdate) {
+        for (int i = 0; i < toUpdate.size(); i++) {
+            int finalI = i;
+            driveServiceHelper.updateSaveFile(toUpdateLocalPath.get(i), toUpdate.get(i).getId()).addOnSuccessListener(new OnSuccessListener<String>() {
+                @Override
+                public void onSuccess(String s) {
+                    incrementProgressDialog();
+                }
+            }).addOnFailureListener(new OnFailureListener() {
+                @Override
+                public void onFailure(@NonNull Exception e) {
+                    e.printStackTrace();
+                    decrementMaxProgressDialog();
+                    Toast.makeText(SettingsMenu.this, "Failed to update the save file: " + toUpdate.get(finalI).getName(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+    }
+
+    public void driveDownloadSaveFiles(ArrayList<File> toDownload) {
+        for (File f : toDownload) {
+            driveServiceHelper.downloadSaveFile(f.getId()).addOnSuccessListener(new OnSuccessListener<ByteArrayOutputStream>() {
+                @Override
+                public void onSuccess(ByteArrayOutputStream byteArrayOutputStream) {
+                    FileOutputStream fileOutputStream = null;
+                    try {
+                        fileOutputStream = new FileOutputStream(getFilesDir() + "/" + f.getName());
+                    } catch (FileNotFoundException e) {
+                        e.printStackTrace();
+                        decrementMaxProgressDialog();
+                        Toast.makeText(SettingsMenu.this, "Failed to download the save file: " + f.getName(), Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    try {
+                        byteArrayOutputStream.writeTo(fileOutputStream);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        decrementMaxProgressDialog();
+                        Toast.makeText(SettingsMenu.this, "Failed to download the save file: " + f.getName(), Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    incrementProgressDialog();
+                }
+            }).addOnFailureListener(new OnFailureListener() {
+                @Override
+                public void onFailure(@NonNull Exception e) {
+                    e.printStackTrace();
+                    decrementMaxProgressDialog();
+                    Toast.makeText(SettingsMenu.this, "Failed to download the save file: " + f.getName(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
     }
 
 }

@@ -37,4 +37,8 @@
     <string name="setting_layout_editor_popup_portrait_button">Portrait</string>
     <string name="setting_layout_editor_popup_landscape_button">Landscape</string>
     <string name="setting_layout_editor_popup_defaults_button">Reset</string>
+    <string name="setting_drive">Sync with Google Drive</string>
+    <string name="setting_drive_label">Tap here to sync the battery save files in your Google Drive account</string>
+    <string name="setting_drive_dialog_title">Syncing…</string>
+
 </resources>
