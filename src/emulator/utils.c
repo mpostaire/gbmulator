@@ -32,7 +32,7 @@ void *xrealloc(void *ptr, size_t size) {
 }
 
 char *time_to_string(time_t t, size_t *len) {
-    struct tm *tm = gmtime(&t);
+    struct tm *tm = localtime(&t);
     char *buf = xmalloc(256);
     size_t ret = strftime(buf, 256, "%Y-%m-%d %T", tm);
     if (len)
@@ -41,7 +41,8 @@ char *time_to_string(time_t t, size_t *len) {
 }
 
 time_t string_to_time(const char *time_str) {
-    struct tm tm;
+    struct tm tm = { 0 };
+    tm.tm_isdst = -1;
     strptime(time_str, "%Y-%m-%d %T", &tm);
     return mktime(&tm);
 }
