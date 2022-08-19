@@ -31,10 +31,6 @@ import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.DriveScopes;
 import com.google.api.services.drive.model.File;
 
-import java.io.ByteArrayOutputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -323,9 +319,8 @@ public class SettingsMenu extends AppCompatActivity {
     public void signInDrive(View view) {
         driveSyncProgressDialog = new ProgressDialog(this);
         driveSyncProgressDialog.setTitle(getString(R.string.setting_drive_dialog_title));
-        driveSyncProgressDialog.setMessage("Signing in your Google Drive account...");
+        driveSyncProgressDialog.setMessage(getString(R.string.setting_drive_dialog_sign_in_msg));
         driveSyncProgressDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
-        driveSyncProgressDialog.setMax(1);
         driveSyncProgressDialog.setCancelable(false);
         driveSyncProgressDialog.setCanceledOnTouchOutside(false);
         driveSyncProgressDialog.show();
@@ -373,20 +368,8 @@ public class SettingsMenu extends AppCompatActivity {
         }
     }
 
-    public void incrementProgressDialog() {
-        driveSyncProgressDialog.incrementProgressBy(1);
-        if (driveSyncProgressDialog.getProgress() >= driveSyncProgressDialog.getMax())
-            driveSyncProgressDialog.dismiss();
-    }
-
-    public void decrementMaxProgressDialog() {
-        driveSyncProgressDialog.setMax(driveSyncProgressDialog.getMax() - 1);
-        if (driveSyncProgressDialog.getMax() <= 0 || driveSyncProgressDialog.getProgress() >= driveSyncProgressDialog.getMax())
-            driveSyncProgressDialog.dismiss();
-    }
-
     private void driveSyncSaves(Drive driveService) {
-        driveSyncProgressDialog.setMessage("Fetching remote saves...");
+        driveSyncProgressDialog.setMessage(getString(R.string.setting_drive_dialog_fetch_msg));
 
         driveServiceHelper = new DriveServiceHelper(driveService);
         driveServiceHelper.getSaveDirId().addOnSuccessListener(new OnSuccessListener<String>() {
@@ -480,106 +463,57 @@ public class SettingsMenu extends AppCompatActivity {
         if (toUpdate.isEmpty())
             Log.i("GBmulator", "TO UPDATE EMPTY");*/
 
-        driveSyncProgressDialog.setMessage("Syncing saves...");
-        driveSyncProgressDialog.setMax(toDownload.size() + toUpload.size() + toUpdate.size());
-
-        // Todo download, then upload, then update (and do it all at once in a single call to drive service helper)
-
-        driveDownloadSaveFiles(toDownload);
-        driveUploadSaveFiles(toUpload);
-        driveUpdateSaveFiles(toUpdateLocalPath, toUpdate);
+        driveDownloadSaveFiles(toDownload, toUpload, toUpdate, toUpdateLocalPath);
     }
 
-    public void uploadSaveFilesHelper(ArrayList<java.io.File> toUpload, String parentDirId) {
-        for (java.io.File f : toUpload) {
-            driveServiceHelper.uploadSaveFile(f.getAbsolutePath(), parentDirId).addOnSuccessListener(new OnSuccessListener<String>() {
-                @Override
-                public void onSuccess(String s) {
-                    incrementProgressDialog();
-                }
-            }).addOnFailureListener(new OnFailureListener() {
-                @Override
-                public void onFailure(@NonNull Exception e) {
+    public void driveDownloadSaveFiles(ArrayList<File> toDownload, ArrayList<java.io.File> toUpload, ArrayList<File> toUpdate, ArrayList<String> toUpdateLocalPath) {
+        driveSyncProgressDialog.setMessage(getString(R.string.setting_drive_dialog_download_msg));
+
+        driveServiceHelper.downloadSaveFiles(toDownload, getFilesDir().getAbsolutePath())
+                .addOnSuccessListener(files -> driveUploadSaveFiles(toUpload, toUpdate, toUpdateLocalPath))
+                .addOnFailureListener(e -> {
                     e.printStackTrace();
-                    decrementMaxProgressDialog();
-                    Toast.makeText(SettingsMenu.this, "Failed to upload the save file: " + f.getName(), Toast.LENGTH_SHORT).show();
-                }
-            });
-        }
+                    driveSyncProgressDialog.cancel();
+                    Toast.makeText(SettingsMenu.this, "Failed downloading the save files", Toast.LENGTH_SHORT).show();
+                });
     }
 
-    public void driveUploadSaveFiles(ArrayList<java.io.File> toUpload) {
+    public void uploadSaveFilesHelper(ArrayList<java.io.File> toUpload, String parentDirId, ArrayList<File> toUpdate, ArrayList<String> toUpdateLocalPath) {
+        driveServiceHelper.uploadSaveFiles(toUpload, parentDirId)
+                .addOnSuccessListener(files -> driveUpdateSaveFiles(toUpdateLocalPath, toUpdate))
+                .addOnFailureListener(e -> {
+                    e.printStackTrace();
+                    driveSyncProgressDialog.cancel();
+                    Toast.makeText(SettingsMenu.this, "Failed uploading the save files", Toast.LENGTH_SHORT).show();
+                });
+    }
+
+    public void driveUploadSaveFiles(ArrayList<java.io.File> toUpload, ArrayList<File> toUpdate, ArrayList<String> toUpdateLocalPath) {
+        driveSyncProgressDialog.setMessage(getString(R.string.setting_drive_dialog_upload_msg));
+
         if (driveSaveDirId == null) {
-            driveServiceHelper.createSaveDir().addOnSuccessListener(new OnSuccessListener<String>() {
-                @Override
-                public void onSuccess(String parentDirId) {
-                    uploadSaveFilesHelper(toUpload, parentDirId);
-                }
-            }).addOnFailureListener(new OnFailureListener() {
-                @Override
-                public void onFailure(@NonNull Exception e) {
-                    e.printStackTrace();
-                    decrementMaxProgressDialog();
-                    Toast.makeText(SettingsMenu.this, "Failed to create the save directory", Toast.LENGTH_SHORT).show();
-                }
-            });
+            driveServiceHelper.createSaveDir()
+                    .addOnSuccessListener(parentDirId -> uploadSaveFilesHelper(toUpload, parentDirId, toUpdate, toUpdateLocalPath))
+                    .addOnFailureListener(e -> {
+                        e.printStackTrace();
+                        driveSyncProgressDialog.cancel();
+                        Toast.makeText(SettingsMenu.this, "Failed to create the save directory", Toast.LENGTH_SHORT).show();
+                    });
         } else {
-            uploadSaveFilesHelper(toUpload, driveSaveDirId);
+            uploadSaveFilesHelper(toUpload, driveSaveDirId, toUpdate, toUpdateLocalPath);
         }
     }
 
     public void driveUpdateSaveFiles(ArrayList<String> toUpdateLocalPath, ArrayList<File> toUpdate) {
-        for (int i = 0; i < toUpdate.size(); i++) {
-            int finalI = i;
-            driveServiceHelper.updateSaveFile(toUpdateLocalPath.get(i), toUpdate.get(i).getId()).addOnSuccessListener(new OnSuccessListener<String>() {
-                @Override
-                public void onSuccess(String s) {
-                    incrementProgressDialog();
-                }
-            }).addOnFailureListener(new OnFailureListener() {
-                @Override
-                public void onFailure(@NonNull Exception e) {
-                    e.printStackTrace();
-                    decrementMaxProgressDialog();
-                    Toast.makeText(SettingsMenu.this, "Failed to update the save file: " + toUpdate.get(finalI).getName(), Toast.LENGTH_SHORT).show();
-                }
-            });
-        }
-    }
+        driveSyncProgressDialog.setMessage(getString(R.string.setting_drive_dialog_update_msg));
 
-    public void driveDownloadSaveFiles(ArrayList<File> toDownload) {
-        for (File f : toDownload) {
-            driveServiceHelper.downloadSaveFile(f.getId()).addOnSuccessListener(new OnSuccessListener<ByteArrayOutputStream>() {
-                @Override
-                public void onSuccess(ByteArrayOutputStream byteArrayOutputStream) {
-                    FileOutputStream fileOutputStream = null;
-                    try {
-                        fileOutputStream = new FileOutputStream(getFilesDir() + "/" + f.getName());
-                    } catch (FileNotFoundException e) {
-                        e.printStackTrace();
-                        decrementMaxProgressDialog();
-                        Toast.makeText(SettingsMenu.this, "Failed to download the save file: " + f.getName(), Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    try {
-                        byteArrayOutputStream.writeTo(fileOutputStream);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                        decrementMaxProgressDialog();
-                        Toast.makeText(SettingsMenu.this, "Failed to download the save file: " + f.getName(), Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    incrementProgressDialog();
-                }
-            }).addOnFailureListener(new OnFailureListener() {
-                @Override
-                public void onFailure(@NonNull Exception e) {
+        driveServiceHelper.updateSaveFiles(toUpdateLocalPath, toUpdate)
+                .addOnSuccessListener(files -> driveSyncProgressDialog.dismiss())
+                .addOnFailureListener(e -> {
                     e.printStackTrace();
-                    decrementMaxProgressDialog();
-                    Toast.makeText(SettingsMenu.this, "Failed to download the save file: " + f.getName(), Toast.LENGTH_SHORT).show();
-                }
-            });
-        }
+                    driveSyncProgressDialog.cancel();
+                    Toast.makeText(SettingsMenu.this, "Failed updating the save files", Toast.LENGTH_SHORT).show();
+                });
     }
 
 }

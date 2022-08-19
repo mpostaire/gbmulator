@@ -8,7 +8,10 @@ import com.google.api.services.drive.model.File;
 import com.google.api.services.drive.model.FileList;
 
 import java.io.ByteArrayOutputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executor;
@@ -38,39 +41,56 @@ public class DriveServiceHelper {
         });
     }
 
-    public Task<String> uploadSaveFile(String filePath, String parentDirId) {
+    public Task<ArrayList<java.io.File>> uploadSaveFiles(ArrayList<java.io.File> toUpload, String parentDirId) {
         return Tasks.call(executor, () -> {
-            java.io.File file = new java.io.File(filePath);
-            FileContent mediaContent = new FileContent("application/octet-stream", file);
-            File fileMetadata = new File();
-            fileMetadata.setName(file.getName());
-            fileMetadata.setParents(Collections.singletonList(parentDirId));
-            File myFile = driveService.files().create(fileMetadata, mediaContent).execute();
-            if (myFile == null)
-                throw new IOException("Null result when requesting file creation");
-            return myFile.getId();
+            ArrayList<java.io.File> uploadedFiles = new ArrayList<>();
+            for (java.io.File src : toUpload) {
+                java.io.File file = new java.io.File(src.getAbsolutePath());
+                FileContent mediaContent = new FileContent("application/octet-stream", file);
+                File fileMetadata = new File();
+                fileMetadata.setName(file.getName());
+                fileMetadata.setParents(Collections.singletonList(parentDirId));
+                File myFile = driveService.files().create(fileMetadata, mediaContent).execute();
+                if (myFile == null) continue;
+                uploadedFiles.add(src);
+            }
+
+            return uploadedFiles;
         });
     }
 
-    public Task<ByteArrayOutputStream> downloadSaveFile(String fileId) {
+    public Task<ArrayList<File>> downloadSaveFiles(ArrayList<File> toDownload, String destDirPath) {
         return Tasks.call(executor, () -> {
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            driveService.files().get(fileId).executeMediaAndDownloadTo(byteArrayOutputStream);
-            return byteArrayOutputStream;
+            ArrayList<File> downloadedFiles = new ArrayList<>();
+            for (File src : toDownload) {
+                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                driveService.files().get(src.getId()).executeMediaAndDownloadTo(byteArrayOutputStream);
+                try {
+                    FileOutputStream fileOutputStream = new FileOutputStream(destDirPath + "/" + src.getName());
+                    byteArrayOutputStream.writeTo(fileOutputStream);
+                    downloadedFiles.add(src);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            return downloadedFiles;
         });
     }
 
-    public Task<String> updateSaveFile(String localFilePath, String distantFileId) {
+    public Task<ArrayList<File>> updateSaveFiles(ArrayList<String> toUpdateLocalPath, ArrayList<File> toUpdate) {
         return Tasks.call(executor, () -> {
-            java.io.File fileContents = new java.io.File(localFilePath);
-            FileContent mediaContent = new FileContent("application/octet-stream", fileContents);
+            ArrayList<File> updatedFiles = new ArrayList<>();
+            for (int i = 0; i < toUpdate.size(); i++) {
+                java.io.File fileContents = new java.io.File(toUpdateLocalPath.get(i));
+                FileContent mediaContent = new FileContent("application/octet-stream", fileContents);
 
-            File newDistantFile = new File();
+                File newDistantFile = new File();
 
-            File myFile = driveService.files().update(distantFileId, newDistantFile, mediaContent).execute();
-            if (myFile == null)
-                throw new IOException("Null result when requesting file update");
-            return myFile.getId();
+                File myFile = driveService.files().update(toUpdate.get(i).getId(), newDistantFile, mediaContent).execute();
+                if (myFile == null) continue;
+                updatedFiles.add(toUpdate.get(i));
+            }
+            return updatedFiles;
         });
     }
 

@@ -29,7 +29,7 @@
     <string name="setting_frame_skip">Frame skip:</string>
     <string name="setting_frame_skip_value">%1$d</string>
     <string name="setting_frame_skip_value_off">OFF</string>
-    <string name="setting_opacity">Buttons opacity:</string>
+    <string name="setting_opacity">Button opacity:</string>
     <string name="setting_opacity_value">%1$d%%</string>
     <string name="setting_layout_editor">Layout editor</string>
     <string name="setting_layout_editor_label">Customize the screen and buttons size/position for the portrait and landscape layouts</string>
@@ -39,6 +39,12 @@
     <string name="setting_layout_editor_popup_defaults_button">Reset</string>
     <string name="setting_drive">Sync with Google Drive</string>
     <string name="setting_drive_label">Tap here to sync the battery save files in your Google Drive account</string>
-    <string name="setting_drive_dialog_title">Syncing…</string>
+    <string name="setting_drive_dialog_title">Syncing saves…</string>
+
+    <string name="setting_drive_dialog_sign_in_msg">Signing in your Google Drive account…</string>
+    <string name="setting_drive_dialog_fetch_msg">Fetching remote saves…</string>
+    <string name="setting_drive_dialog_download_msg">Downloading saves…</string>
+    <string name="setting_drive_dialog_upload_msg">Uploading saves…</string>
+    <string name="setting_drive_dialog_update_msg">Updating remote saves…</string>
 
 </resources>
