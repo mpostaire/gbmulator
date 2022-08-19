@@ -12,8 +12,6 @@
 
 // going higher than 2048 starts to add noticeable audio lag
 #define APU_SAMPLE_COUNT 2048
-#define SCREEN_WIDTH 160
-#define SCREEN_HEIGHT 284
 
 // TODO savestates ui
 // TODO bluetooth (and wifi) link cable --> make a link connection pausable and resumeable (because the whole emulator is
@@ -24,6 +22,9 @@ SDL_bool is_landscape;
 
 float speed;
 int frame_skip;
+
+int screen_width;
+int screen_height;
 
 SDL_Renderer *renderer;
 SDL_Window *window;
@@ -111,11 +112,11 @@ button_t buttons[] = {
 
 static inline s_byte_t is_finger_over_button(float x, float y) {
     if (is_landscape) {
-        x *= SCREEN_HEIGHT;
-        y *= SCREEN_WIDTH;
+        x *= screen_height;
+        y *= screen_width;
     } else {
-        x *= SCREEN_WIDTH;
-        y *= SCREEN_HEIGHT;
+        x *= screen_width;
+        y *= screen_height;
     }
 
     SDL_Rect *hitbox = &buttons[0].shape;
@@ -266,8 +267,8 @@ static void set_layout(int layout) {
 
     switch (layout) {
     case 0: // portrait
-        SDL_RenderSetLogicalSize(renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
-        gb_screen_rect.w = SCREEN_WIDTH;
+        SDL_RenderSetLogicalSize(renderer, screen_width, screen_height);
+        gb_screen_rect.w = screen_width;
         gb_screen_rect.h = GB_SCREEN_HEIGHT * (gb_screen_rect.w / GB_SCREEN_WIDTH);
         gb_screen_rect.x = 0;
         gb_screen_rect.y = 0;
@@ -284,10 +285,10 @@ static void set_layout(int layout) {
         buttons[4].shape.y = portrait_select_y;
         break;
     case 1: // landscape
-        SDL_RenderSetLogicalSize(renderer, SCREEN_HEIGHT, SCREEN_WIDTH);
-        gb_screen_rect.h = SCREEN_WIDTH;
+        SDL_RenderSetLogicalSize(renderer, screen_height, screen_width);
+        gb_screen_rect.h = screen_width;
         gb_screen_rect.w = GB_SCREEN_WIDTH * (gb_screen_rect.h / GB_SCREEN_HEIGHT);
-        gb_screen_rect.x = SCREEN_HEIGHT / 2 - gb_screen_rect.w / 2;
+        gb_screen_rect.x = screen_height / 2 - gb_screen_rect.w / 2;
         gb_screen_rect.y = 0;
 
         buttons[0].shape.x = landscape_dpad_x;
@@ -395,8 +396,7 @@ static void start_emulation_loop(void) {
     int frame_count = 0;
     while (is_running) {
         if (cycles >= GB_CPU_CYCLES_PER_FRAME * speed) {
-            // TODO: cycles -= GB_CPU_CYCLES_PER_FRAME * speed;
-            cycles = 0;
+            cycles -= GB_CPU_CYCLES_PER_FRAME * speed;
             if (frame_count >= frame_skip) {
                 SDL_RenderClear(renderer);
                 SDL_RenderCopy(renderer, ppu_texture, NULL, &gb_screen_rect);
@@ -441,7 +441,6 @@ static void load_cartridge(const byte_t *rom_data, size_t rom_size, int resume, 
         .apu_sound_level = sound,
         .palette = palette
     };
-    // TODO frame skip user setting
     emu = emulator_init(rom_data, rom_size, &opts);
     if (!emu) return;
 
@@ -666,7 +665,7 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_enterLayoutEd
         SDL_SetTextureAlphaMod(buttons[i].texture, buttons_opacity * 0xFF);
         bs[i] = buttons[i];
     }
-    start_layout_editor(renderer, is_landscape, SCREEN_WIDTH, SCREEN_HEIGHT, &gb_screen_rect, bs);
+    start_layout_editor(renderer, is_landscape, screen_width, screen_height, &gb_screen_rect, bs);
     free(bs);
 }
 
@@ -680,16 +679,28 @@ int main(int argc, char **argv) {
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
 
+    // get the minimum possible size of the window while keeping the aspect ratio
+    SDL_DisplayMode display_mode;
+    if (!SDL_GetCurrentDisplayMode(0, &display_mode)) {
+        screen_width = GB_SCREEN_WIDTH;
+        if (display_mode.h > display_mode.w)
+            screen_height = display_mode.h / (float) display_mode.w * screen_width;
+        else
+            screen_height = display_mode.w / (float) display_mode.h * screen_width;
+    } else {
+        // couldn't get the device's screen size, assume 1080x1920
+        screen_width = GB_SCREEN_WIDTH;
+        screen_height = 1920 / (float) 1080 * screen_width; // 284
+    }
+
     window = SDL_CreateWindow(
         EMULATOR_NAME,
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        SCREEN_WIDTH,
-        SCREEN_HEIGHT,
+        screen_width,
+        screen_height,
         SDL_WINDOW_FULLSCREEN | SDL_WINDOW_RESIZABLE
     );
 
-    // TODO vsync or not vsync?? see what audio/video syncing does...
-    // TODO also compare desktop and android platforms speeds at emulator speed == 1.0f to see if it's equivalent
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
     SDL_Surface *surface = SDL_LoadBMP("dpad.bmp");
