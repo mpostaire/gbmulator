@@ -38,27 +38,27 @@ emulator_t *emu;
 
 SDL_Rect gb_screen_rect;
 
-int portrait_dpad_x;
-int portrait_dpad_y;
-int portrait_a_x;
-int portrait_a_y;
-int portrait_b_x;
-int portrait_b_y;
-int portrait_start_x;
-int portrait_start_y;
-int portrait_select_x;
-int portrait_select_y;
+float portrait_dpad_x;
+float portrait_dpad_y;
+float portrait_a_x;
+float portrait_a_y;
+float portrait_b_x;
+float portrait_b_y;
+float portrait_start_x;
+float portrait_start_y;
+float portrait_select_x;
+float portrait_select_y;
 
-int landscape_dpad_x;
-int landscape_dpad_y;
-int landscape_a_x;
-int landscape_a_y;
-int landscape_b_x;
-int landscape_b_y;
-int landscape_start_x;
-int landscape_start_y;
-int landscape_select_x;
-int landscape_select_y;
+float landscape_dpad_x;
+float landscape_dpad_y;
+float landscape_a_x;
+float landscape_a_y;
+float landscape_b_x;
+float landscape_b_y;
+float landscape_start_x;
+float landscape_start_y;
+float landscape_select_x;
+float landscape_select_y;
 
 int dpad_status;
 
@@ -479,26 +479,26 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
         jfloat sound,
         jint emu_frame_skip,
         jfloat buttons_opacity,
-        jint port_dpad_x,
-        jint port_dpad_y,
-        jint port_a_x,
-        jint port_a_y,
-        jint port_b_x,
-        jint port_b_y,
-        jint port_start_x,
-        jint port_start_y,
-        jint port_select_x,
-        jint port_select_y,
-        jint land_dpad_x,
-        jint land_dpad_y,
-        jint land_a_x,
-        jint land_a_y,
-        jint land_b_x,
-        jint land_b_y,
-        jint land_start_x,
-        jint land_start_y,
-        jint land_select_x,
-        jint land_select_y)
+        jfloat port_dpad_x,
+        jfloat port_dpad_y,
+        jfloat port_a_x,
+        jfloat port_a_y,
+        jfloat port_b_x,
+        jfloat port_b_y,
+        jfloat port_start_x,
+        jfloat port_start_y,
+        jfloat port_select_x,
+        jfloat port_select_y,
+        jfloat land_dpad_x,
+        jfloat land_dpad_y,
+        jfloat land_a_x,
+        jfloat land_a_y,
+        jfloat land_b_x,
+        jfloat land_b_y,
+        jfloat land_start_x,
+        jfloat land_start_y,
+        jfloat land_select_x,
+        jfloat land_select_y)
 {
     jboolean is_copy;
     jbyte *rom_data = (*env)->GetByteArrayElements(env, data, &is_copy);
@@ -508,27 +508,27 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
 
     (*env)->ReleaseByteArrayElements(env, data, rom_data, JNI_ABORT);
 
-    portrait_dpad_x = port_dpad_x;
-    portrait_dpad_y = port_dpad_y;
-    portrait_a_x = port_a_x;
-    portrait_a_y = port_a_y;
-    portrait_b_x = port_b_x;
-    portrait_b_y = port_b_y;
-    portrait_start_x = port_start_x;
-    portrait_start_y = port_start_y;
-    portrait_select_x = port_select_x;
-    portrait_select_y = port_select_y;
+    portrait_dpad_x = port_dpad_x * (float) screen_width;
+    portrait_dpad_y = port_dpad_y * (float) screen_height;
+    portrait_a_x = port_a_x * (float) screen_width;
+    portrait_a_y = port_a_y * (float) screen_height;
+    portrait_b_x = port_b_x * (float) screen_width;
+    portrait_b_y = port_b_y * (float) screen_height;
+    portrait_start_x = port_start_x * (float) screen_width;
+    portrait_start_y = port_start_y * (float) screen_height;
+    portrait_select_x = port_select_x * (float) screen_width;
+    portrait_select_y = port_select_y * (float) screen_height;
 
-    landscape_dpad_x = land_dpad_x;
-    landscape_dpad_y = land_dpad_y;
-    landscape_a_x = land_a_x;
-    landscape_a_y = land_a_y;
-    landscape_b_x = land_b_x;
-    landscape_b_y = land_b_y;
-    landscape_start_x = land_start_x;
-    landscape_start_y = land_start_y;
-    landscape_select_x = land_select_x;
-    landscape_select_y = land_select_y;
+    landscape_dpad_x = land_dpad_x * (float) screen_height;
+    landscape_dpad_y = land_dpad_y * (float) screen_width;
+    landscape_a_x = land_a_x * (float) screen_height;
+    landscape_a_y = land_a_y * (float) screen_width;
+    landscape_b_x = land_b_x * (float) screen_height;
+    landscape_b_y = land_b_y * (float) screen_width;
+    landscape_start_x = land_start_x * (float) screen_height;
+    landscape_start_y = land_start_y * (float) screen_width;
+    landscape_select_x = land_select_x * (float) screen_height;
+    landscape_select_y = land_select_y * (float) screen_width;
 
     set_layout(is_landscape);
 
@@ -625,38 +625,38 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_enterLayoutEd
         jobject thiz,
         jfloat buttons_opacity,
         jboolean is_landscape,
-        jint dpad_x,
-        jint dpad_y,
-        jint a_x,
-        jint a_y,
-        jint b_x,
-        jint b_y,
-        jint start_x,
-        jint start_y,
-        jint select_x,
-        jint select_y)
+        jfloat dpad_x,
+        jfloat dpad_y,
+        jfloat a_x,
+        jfloat a_y,
+        jfloat b_x,
+        jfloat b_y,
+        jfloat start_x,
+        jfloat start_y,
+        jfloat select_x,
+        jfloat select_y)
 {
-    portrait_dpad_x = dpad_x;
-    portrait_dpad_y = dpad_y;
-    portrait_a_x = a_x;
-    portrait_a_y = a_y;
-    portrait_b_x = b_x;
-    portrait_b_y = b_y;
-    portrait_start_x = start_x;
-    portrait_start_y = start_y;
-    portrait_select_x = select_x;
-    portrait_select_y = select_y;
+    portrait_dpad_x = dpad_x * (float) screen_width;
+    portrait_dpad_y = dpad_y * (float) screen_height;
+    portrait_a_x = a_x * (float) screen_width;
+    portrait_a_y = a_y * (float) screen_height;
+    portrait_b_x = b_x * (float) screen_width;
+    portrait_b_y = b_y * (float) screen_height;
+    portrait_start_x = start_x * (float) screen_width;
+    portrait_start_y = start_y * (float) screen_height;
+    portrait_select_x = select_x * (float) screen_width;
+    portrait_select_y = select_y * (float) screen_height;
 
-    landscape_dpad_x = dpad_x;
-    landscape_dpad_y = dpad_y;
-    landscape_a_x = a_x;
-    landscape_a_y = a_y;
-    landscape_b_x = b_x;
-    landscape_b_y = b_y;
-    landscape_start_x = start_x;
-    landscape_start_y = start_y;
-    landscape_select_x = select_x;
-    landscape_select_y = select_y;
+    landscape_dpad_x = dpad_x * (float) screen_height;
+    landscape_dpad_y = dpad_y * (float) screen_width;
+    landscape_a_x = a_x * (float) screen_height;
+    landscape_a_y = a_y * (float) screen_width;
+    landscape_b_x = b_x * (float) screen_height;
+    landscape_b_y = b_y * (float) screen_width;
+    landscape_start_x = start_x * (float) screen_height;
+    landscape_start_y = start_y * (float) screen_width;
+    landscape_select_x = select_x * (float) screen_height;
+    landscape_select_y = select_y * (float) screen_width;
 
     set_layout(is_landscape);
 

@@ -31,40 +31,40 @@ public class Emulator extends SDLActivity {
     int layoutEditor;
     float buttonOpacity;
 
-    int portraitDpadX, portraitDpadY;
-    int portraitAX, portraitAY;
-    int portraitBX, portraitBY;
-    int portraitStartX, portraitStartY;
-    int portraitSelectX, portraitSelectY;
+    float portraitDpadX, portraitDpadY;
+    float portraitAX, portraitAY;
+    float portraitBX, portraitBY;
+    float portraitStartX, portraitStartY;
+    float portraitSelectX, portraitSelectY;
 
-    int landscapeDpadX, landscapeDpadY;
-    int landscapeAX, landscapeAY;
-    int landscapeBX, landscapeBY;
-    int landscapeStartX, landscapeStartY;
-    int landscapeSelectX, landscapeSelectY;
+    float landscapeDpadX, landscapeDpadY;
+    float landscapeAX, landscapeAY;
+    float landscapeBX, landscapeBY;
+    float landscapeStartX, landscapeStartY;
+    float landscapeSelectX, landscapeSelectY;
 
     public native void receiveROMData(
         byte[] data, int size,
         boolean resume, int emu_mode, int palette, float emu_speed, float sound, int emu_frame_skip,
         float buttons_opacity,
-        int portraitDpadX, int portraitDpadY,
-        int portraitAX, int portraitAY,
-        int portraitBX, int portraitBY,
-        int portraitStartX, int portraitStartY,
-        int portraitSelectX, int portraitSelectY,
-        int landscapeDpadX, int landscapeDpadY,
-        int landscapeAX, int landscapeAY,
-        int landscapeBX, int landscapeBY,
-        int landscapeStartX, int landscapeStartY,
-        int landscapeSelectX, int landscapeSelectY);
+        float portraitDpadX, float portraitDpadY,
+        float portraitAX, float portraitAY,
+        float portraitBX, float portraitBY,
+        float portraitStartX, float portraitStartY,
+        float portraitSelectX, float portraitSelectY,
+        float landscapeDpadX, float landscapeDpadY,
+        float landscapeAX, float landscapeAY,
+        float landscapeBX, float landscapeBY,
+        float landscapeStartX, float landscapeStartY,
+        float landscapeSelectX, float landscapeSelectY);
 
     public native void enterLayoutEditor(float buttons_opacity,
         boolean is_landscape,
-        int dpad_x, int dpad_y,
-        int a_x, int a_y,
-        int b_x, int b_y,
-        int start_x, int start_y,
-        int select_x, int select_y);
+        float dpad_x, float dpad_y,
+        float a_x, float a_y,
+        float b_x, float b_y,
+        float start_x, float start_y,
+        float select_x, float select_y);
 
     public boolean canRotate() {
         try {
@@ -116,27 +116,27 @@ public class Emulator extends SDLActivity {
         frameSkip = preferences.getInt(UserSettings.FRAME_SKIP, UserSettings.FRAME_SKIP_DEFAULT);
         buttonOpacity = preferences.getFloat(UserSettings.BUTTONS_OPACITY, UserSettings.BUTTONS_OPACITY_DEFAULT);
 
-        portraitDpadX = preferences.getInt(UserSettings.PORTRAIT_DPAD_X, UserSettings.PORTRAIT_DPAD_X_DEFAULT);
-        portraitDpadY = preferences.getInt(UserSettings.PORTRAIT_DPAD_Y, UserSettings.PORTRAIT_DPAD_Y_DEFAULT);
-        portraitAX = preferences.getInt(UserSettings.PORTRAIT_A_X, UserSettings.PORTRAIT_A_X_DEFAULT);
-        portraitAY = preferences.getInt(UserSettings.PORTRAIT_A_Y, UserSettings.PORTRAIT_A_Y_DEFAULT);
-        portraitBX = preferences.getInt(UserSettings.PORTRAIT_B_X, UserSettings.PORTRAIT_B_X_DEFAULT);
-        portraitBY = preferences.getInt(UserSettings.PORTRAIT_B_Y, UserSettings.PORTRAIT_B_Y_DEFAULT);
-        portraitStartX = preferences.getInt(UserSettings.PORTRAIT_START_X, UserSettings.PORTRAIT_START_X_DEFAULT);
-        portraitStartY = preferences.getInt(UserSettings.PORTRAIT_START_Y, UserSettings.PORTRAIT_START_Y_DEFAULT);
-        portraitSelectX = preferences.getInt(UserSettings.PORTRAIT_SELECT_X, UserSettings.PORTRAIT_SELECT_X_DEFAULT);
-        portraitSelectY = preferences.getInt(UserSettings.PORTRAIT_SELECT_Y, UserSettings.PORTRAIT_SELECT_Y_DEFAULT);
+        portraitDpadX = preferences.getFloat(UserSettings.PORTRAIT_DPAD_X, UserSettings.PORTRAIT_DPAD_X_DEFAULT);
+        portraitDpadY = preferences.getFloat(UserSettings.PORTRAIT_DPAD_Y, UserSettings.PORTRAIT_DPAD_Y_DEFAULT);
+        portraitAX = preferences.getFloat(UserSettings.PORTRAIT_A_X, UserSettings.PORTRAIT_A_X_DEFAULT);
+        portraitAY = preferences.getFloat(UserSettings.PORTRAIT_A_Y, UserSettings.PORTRAIT_A_Y_DEFAULT);
+        portraitBX = preferences.getFloat(UserSettings.PORTRAIT_B_X, UserSettings.PORTRAIT_B_X_DEFAULT);
+        portraitBY = preferences.getFloat(UserSettings.PORTRAIT_B_Y, UserSettings.PORTRAIT_B_Y_DEFAULT);
+        portraitStartX = preferences.getFloat(UserSettings.PORTRAIT_START_X, UserSettings.PORTRAIT_START_X_DEFAULT);
+        portraitStartY = preferences.getFloat(UserSettings.PORTRAIT_START_Y, UserSettings.PORTRAIT_START_Y_DEFAULT);
+        portraitSelectX = preferences.getFloat(UserSettings.PORTRAIT_SELECT_X, UserSettings.PORTRAIT_SELECT_X_DEFAULT);
+        portraitSelectY = preferences.getFloat(UserSettings.PORTRAIT_SELECT_Y, UserSettings.PORTRAIT_SELECT_Y_DEFAULT);
 
-        landscapeDpadX = preferences.getInt(UserSettings.LANDSCAPE_DPAD_X, UserSettings.LANDSCAPE_DPAD_X_DEFAULT);
-        landscapeDpadY = preferences.getInt(UserSettings.LANDSCAPE_DPAD_Y, UserSettings.LANDSCAPE_DPAD_Y_DEFAULT);
-        landscapeAX = preferences.getInt(UserSettings.LANDSCAPE_A_X, UserSettings.LANDSCAPE_A_X_DEFAULT);
-        landscapeAY = preferences.getInt(UserSettings.LANDSCAPE_A_Y, UserSettings.LANDSCAPE_A_Y_DEFAULT);
-        landscapeBX = preferences.getInt(UserSettings.LANDSCAPE_B_X, UserSettings.LANDSCAPE_B_X_DEFAULT);
-        landscapeBY = preferences.getInt(UserSettings.LANDSCAPE_B_Y, UserSettings.LANDSCAPE_B_Y_DEFAULT);
-        landscapeStartX = preferences.getInt(UserSettings.LANDSCAPE_START_X, UserSettings.LANDSCAPE_START_X_DEFAULT);
-        landscapeStartY = preferences.getInt(UserSettings.LANDSCAPE_START_Y, UserSettings.LANDSCAPE_START_Y_DEFAULT);
-        landscapeSelectX = preferences.getInt(UserSettings.LANDSCAPE_SELECT_X, UserSettings.LANDSCAPE_SELECT_X_DEFAULT);
-        landscapeSelectY = preferences.getInt(UserSettings.LANDSCAPE_SELECT_Y, UserSettings.LANDSCAPE_SELECT_Y_DEFAULT);
+        landscapeDpadX = preferences.getFloat(UserSettings.LANDSCAPE_DPAD_X, UserSettings.LANDSCAPE_DPAD_X_DEFAULT);
+        landscapeDpadY = preferences.getFloat(UserSettings.LANDSCAPE_DPAD_Y, UserSettings.LANDSCAPE_DPAD_Y_DEFAULT);
+        landscapeAX = preferences.getFloat(UserSettings.LANDSCAPE_A_X, UserSettings.LANDSCAPE_A_X_DEFAULT);
+        landscapeAY = preferences.getFloat(UserSettings.LANDSCAPE_A_Y, UserSettings.LANDSCAPE_A_Y_DEFAULT);
+        landscapeBX = preferences.getFloat(UserSettings.LANDSCAPE_B_X, UserSettings.LANDSCAPE_B_X_DEFAULT);
+        landscapeBY = preferences.getFloat(UserSettings.LANDSCAPE_B_Y, UserSettings.LANDSCAPE_B_Y_DEFAULT);
+        landscapeStartX = preferences.getFloat(UserSettings.LANDSCAPE_START_X, UserSettings.LANDSCAPE_START_X_DEFAULT);
+        landscapeStartY = preferences.getFloat(UserSettings.LANDSCAPE_START_Y, UserSettings.LANDSCAPE_START_Y_DEFAULT);
+        landscapeSelectX = preferences.getFloat(UserSettings.LANDSCAPE_SELECT_X, UserSettings.LANDSCAPE_SELECT_X_DEFAULT);
+        landscapeSelectY = preferences.getFloat(UserSettings.LANDSCAPE_SELECT_Y, UserSettings.LANDSCAPE_SELECT_Y_DEFAULT);
 
         Uri uri = Settings.System.getUriFor(Settings.System.ACCELEROMETER_ROTATION);
         ContentObserver rotationObserver = new ContentObserver(new Handler()) {
@@ -213,21 +213,21 @@ public class Emulator extends SDLActivity {
 
     public void applyLayoutPreferences(
             boolean isLandscape,
-            int dpadX, int dpadY,
-            int aX, int aY,
-            int bX, int bY,
-            int startX, int startY,
-            int selectX, int selectY) {
-        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_DPAD_X : UserSettings.PORTRAIT_DPAD_X, dpadX);
-        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_DPAD_Y : UserSettings.PORTRAIT_DPAD_Y, dpadY);
-        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_A_X : UserSettings.PORTRAIT_A_X, aX);
-        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_A_Y : UserSettings.PORTRAIT_A_Y, aY);
-        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_B_X : UserSettings.PORTRAIT_B_X, bX);
-        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_B_Y : UserSettings.PORTRAIT_B_Y, bY);
-        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_START_X : UserSettings.PORTRAIT_START_X, startX);
-        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_START_Y : UserSettings.PORTRAIT_START_Y, startY);
-        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_SELECT_X : UserSettings.PORTRAIT_SELECT_X, selectX);
-        preferencesEditor.putInt(isLandscape ? UserSettings.LANDSCAPE_SELECT_Y : UserSettings.PORTRAIT_SELECT_Y, selectY);
+            float dpadX, float dpadY,
+            float aX, float aY,
+            float bX, float bY,
+            float startX, float startY,
+            float selectX, float selectY) {
+        preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_DPAD_X : UserSettings.PORTRAIT_DPAD_X, dpadX);
+        preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_DPAD_Y : UserSettings.PORTRAIT_DPAD_Y, dpadY);
+        preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_A_X : UserSettings.PORTRAIT_A_X, aX);
+        preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_A_Y : UserSettings.PORTRAIT_A_Y, aY);
+        preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_B_X : UserSettings.PORTRAIT_B_X, bX);
+        preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_B_Y : UserSettings.PORTRAIT_B_Y, bY);
+        preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_START_X : UserSettings.PORTRAIT_START_X, startX);
+        preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_START_Y : UserSettings.PORTRAIT_START_Y, startY);
+        preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_SELECT_X : UserSettings.PORTRAIT_SELECT_X, selectX);
+        preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_SELECT_Y : UserSettings.PORTRAIT_SELECT_Y, selectY);
 
         preferencesEditor.apply();
     }

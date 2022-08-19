@@ -292,27 +292,27 @@ public class SettingsMenu extends AppCompatActivity {
         builder.setNeutralButton(R.string.setting_layout_editor_popup_defaults_button, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialogInterface, int i) {
-                preferencesEditor.putInt(UserSettings.PORTRAIT_DPAD_X, UserSettings.PORTRAIT_DPAD_X_DEFAULT);
-                preferencesEditor.putInt(UserSettings.PORTRAIT_DPAD_Y, UserSettings.PORTRAIT_DPAD_Y_DEFAULT);
-                preferencesEditor.putInt(UserSettings.PORTRAIT_A_X, UserSettings.PORTRAIT_A_X_DEFAULT);
-                preferencesEditor.putInt(UserSettings.PORTRAIT_A_Y, UserSettings.PORTRAIT_A_Y_DEFAULT);
-                preferencesEditor.putInt(UserSettings.PORTRAIT_B_X, UserSettings.PORTRAIT_B_X_DEFAULT);
-                preferencesEditor.putInt(UserSettings.PORTRAIT_B_Y, UserSettings.PORTRAIT_B_Y_DEFAULT);
-                preferencesEditor.putInt(UserSettings.PORTRAIT_START_X, UserSettings.PORTRAIT_START_X_DEFAULT);
-                preferencesEditor.putInt(UserSettings.PORTRAIT_START_Y, UserSettings.PORTRAIT_START_Y_DEFAULT);
-                preferencesEditor.putInt(UserSettings.PORTRAIT_SELECT_X, UserSettings.PORTRAIT_SELECT_X_DEFAULT);
-                preferencesEditor.putInt(UserSettings.PORTRAIT_SELECT_Y, UserSettings.PORTRAIT_SELECT_Y_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.PORTRAIT_DPAD_X, UserSettings.PORTRAIT_DPAD_X_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.PORTRAIT_DPAD_Y, UserSettings.PORTRAIT_DPAD_Y_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.PORTRAIT_A_X, UserSettings.PORTRAIT_A_X_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.PORTRAIT_A_Y, UserSettings.PORTRAIT_A_Y_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.PORTRAIT_B_X, UserSettings.PORTRAIT_B_X_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.PORTRAIT_B_Y, UserSettings.PORTRAIT_B_Y_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.PORTRAIT_START_X, UserSettings.PORTRAIT_START_X_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.PORTRAIT_START_Y, UserSettings.PORTRAIT_START_Y_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.PORTRAIT_SELECT_X, UserSettings.PORTRAIT_SELECT_X_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.PORTRAIT_SELECT_Y, UserSettings.PORTRAIT_SELECT_Y_DEFAULT);
 
-                preferencesEditor.putInt(UserSettings.LANDSCAPE_DPAD_X, UserSettings.LANDSCAPE_DPAD_X_DEFAULT);
-                preferencesEditor.putInt(UserSettings.LANDSCAPE_DPAD_Y, UserSettings.LANDSCAPE_DPAD_Y_DEFAULT);
-                preferencesEditor.putInt(UserSettings.LANDSCAPE_A_X, UserSettings.LANDSCAPE_A_X_DEFAULT);
-                preferencesEditor.putInt(UserSettings.LANDSCAPE_A_Y, UserSettings.LANDSCAPE_A_Y_DEFAULT);
-                preferencesEditor.putInt(UserSettings.LANDSCAPE_B_X, UserSettings.LANDSCAPE_B_X_DEFAULT);
-                preferencesEditor.putInt(UserSettings.LANDSCAPE_B_Y, UserSettings.LANDSCAPE_B_Y_DEFAULT);
-                preferencesEditor.putInt(UserSettings.LANDSCAPE_START_X, UserSettings.LANDSCAPE_START_X_DEFAULT);
-                preferencesEditor.putInt(UserSettings.LANDSCAPE_START_Y, UserSettings.LANDSCAPE_START_Y_DEFAULT);
-                preferencesEditor.putInt(UserSettings.LANDSCAPE_SELECT_X, UserSettings.LANDSCAPE_SELECT_X_DEFAULT);
-                preferencesEditor.putInt(UserSettings.LANDSCAPE_SELECT_Y, UserSettings.LANDSCAPE_SELECT_Y_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.LANDSCAPE_DPAD_X, UserSettings.LANDSCAPE_DPAD_X_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.LANDSCAPE_DPAD_Y, UserSettings.LANDSCAPE_DPAD_Y_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.LANDSCAPE_A_X, UserSettings.LANDSCAPE_A_X_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.LANDSCAPE_A_Y, UserSettings.LANDSCAPE_A_Y_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.LANDSCAPE_B_X, UserSettings.LANDSCAPE_B_X_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.LANDSCAPE_B_Y, UserSettings.LANDSCAPE_B_Y_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.LANDSCAPE_START_X, UserSettings.LANDSCAPE_START_X_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.LANDSCAPE_START_Y, UserSettings.LANDSCAPE_START_Y_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.LANDSCAPE_SELECT_X, UserSettings.LANDSCAPE_SELECT_X_DEFAULT);
+                preferencesEditor.putFloat(UserSettings.LANDSCAPE_SELECT_Y, UserSettings.LANDSCAPE_SELECT_Y_DEFAULT);
 
                 preferencesEditor.apply();
             }
@@ -321,6 +321,15 @@ public class SettingsMenu extends AppCompatActivity {
     }
 
     public void signInDrive(View view) {
+        driveSyncProgressDialog = new ProgressDialog(this);
+        driveSyncProgressDialog.setTitle(getString(R.string.setting_drive_dialog_title));
+        driveSyncProgressDialog.setMessage("Signing in your Google Drive account...");
+        driveSyncProgressDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
+        driveSyncProgressDialog.setMax(1);
+        driveSyncProgressDialog.setCancelable(false);
+        driveSyncProgressDialog.setCanceledOnTouchOutside(false);
+        driveSyncProgressDialog.show();
+
         GoogleSignInOptions signInOptions = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                 .requestEmail()
                 .requestScopes(new Scope(DriveScopes.DRIVE_FILE))
@@ -372,18 +381,12 @@ public class SettingsMenu extends AppCompatActivity {
 
     public void decrementMaxProgressDialog() {
         driveSyncProgressDialog.setMax(driveSyncProgressDialog.getMax() - 1);
-        if (driveSyncProgressDialog.getMax() <= 0)
+        if (driveSyncProgressDialog.getMax() <= 0 || driveSyncProgressDialog.getProgress() >= driveSyncProgressDialog.getMax())
             driveSyncProgressDialog.dismiss();
     }
 
     private void driveSyncSaves(Drive driveService) {
-        driveSyncProgressDialog = new ProgressDialog(this);
-        driveSyncProgressDialog.setTitle(getString(R.string.setting_drive_dialog_title));
-        driveSyncProgressDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
-        driveSyncProgressDialog.setMax(1);
-        driveSyncProgressDialog.setCancelable(false);
-        driveSyncProgressDialog.setCanceledOnTouchOutside(false);
-        driveSyncProgressDialog.show();
+        driveSyncProgressDialog.setMessage("Fetching remote saves...");
 
         driveServiceHelper = new DriveServiceHelper(driveService);
         driveServiceHelper.getSaveDirId().addOnSuccessListener(new OnSuccessListener<String>() {
@@ -477,9 +480,10 @@ public class SettingsMenu extends AppCompatActivity {
         if (toUpdate.isEmpty())
             Log.i("GBmulator", "TO UPDATE EMPTY");*/
 
-        // TODO understand why pokemon gold save load fails after a sync (other roms seems to work fine...)
-
+        driveSyncProgressDialog.setMessage("Syncing saves...");
         driveSyncProgressDialog.setMax(toDownload.size() + toUpload.size() + toUpdate.size());
+
+        // Todo download, then upload, then update (and do it all at once in a single call to drive service helper)
 
         driveDownloadSaveFiles(toDownload);
         driveUploadSaveFiles(toUpload);

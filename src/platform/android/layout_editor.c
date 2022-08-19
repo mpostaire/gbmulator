@@ -109,8 +109,7 @@ static void handle_input(void) {
                 is_running = SDL_FALSE;
             break;
         case SDL_APP_WILLENTERBACKGROUND:
-            // TODO continue editing layout
-            // is_running = SDL_FALSE;
+            // continue editing layout
             break;
         case SDL_APP_DIDENTERFOREGROUND:
             break;
@@ -131,26 +130,26 @@ static void apply_layout_preferences(void) {
 
     jclass clazz = (*env)->GetObjectClass(env, activity);
 
-    jmethodID method_id = (*env)->GetMethodID(env, clazz, "applyLayoutPreferences", "(ZIIIIIIIIII)V");
+    jmethodID method_id = (*env)->GetMethodID(env, clazz, "applyLayoutPreferences", "(ZFFFFFFFFFF)V");
 
     if (is_landscape) {
         (*env)->CallVoidMethod(
             env, activity, method_id,
             SDL_TRUE,
-            buttons[0].shape.x, buttons[0].shape.y,
-            buttons[1].shape.x, buttons[1].shape.y,
-            buttons[2].shape.x, buttons[2].shape.y,
-            buttons[3].shape.x, buttons[3].shape.y,
-            buttons[4].shape.x, buttons[4].shape.y);
+            buttons[0].shape.x / (float) screen_height, buttons[0].shape.y / (float) screen_width,
+            buttons[1].shape.x / (float) screen_height, buttons[1].shape.y / (float) screen_width,
+            buttons[2].shape.x / (float) screen_height, buttons[2].shape.y / (float) screen_width,
+            buttons[3].shape.x / (float) screen_height, buttons[3].shape.y / (float) screen_width,
+            buttons[4].shape.x / (float) screen_height, buttons[4].shape.y / (float) screen_width);
     } else {
         (*env)->CallVoidMethod(
             env, activity, method_id,
             SDL_FALSE,
-            buttons[0].shape.x, buttons[0].shape.y,
-            buttons[1].shape.x, buttons[1].shape.y,
-            buttons[2].shape.x, buttons[2].shape.y,
-            buttons[3].shape.x, buttons[3].shape.y,
-            buttons[4].shape.x, buttons[4].shape.y);
+            buttons[0].shape.x / (float) screen_width, buttons[0].shape.y / (float) screen_height,
+            buttons[1].shape.x / (float) screen_width, buttons[1].shape.y / (float) screen_height,
+            buttons[2].shape.x / (float) screen_width, buttons[2].shape.y / (float) screen_height,
+            buttons[3].shape.x / (float) screen_width, buttons[3].shape.y / (float) screen_height,
+            buttons[4].shape.x / (float) screen_width, buttons[4].shape.y / (float) screen_height);
     }
 
     (*env)->DeleteLocalRef(env, activity);
