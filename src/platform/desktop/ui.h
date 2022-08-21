@@ -46,7 +46,7 @@ struct menu_entry_t {
         struct {
             byte_t editing;
             char *key_name;
-            SDL_Keycode *config_key;
+            joypad_button_t button;
         } setter;
     };
 };

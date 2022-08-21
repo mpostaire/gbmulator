@@ -6,6 +6,15 @@ html, body {
     font-family: Arial, sans-serif;
 }
 
+button {
+    min-width: 7em;
+}
+
+select {
+    min-width: 7em;
+    text-align: center;
+}
+
 .theme-dmg {
     --color-gb: #d2d6cd;
     --color-gb-screen-border: #a4a6af;
@@ -98,6 +107,128 @@ canvas.emscripten {
     to {
         transform: rotate(360deg);
     }
+}
+
+.separator {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    text-align: center;
+    justify-content: space-between;
+    width: 100%;
+    margin: 1em 0 1em 0;
+}
+
+.separator::before,
+.separator::after {
+    content: "";
+    flex: 1;
+    border-bottom: 1px solid;
+}
+
+.separator:not(:empty)::before {
+    margin-right: 0.5em;
+}
+
+.separator:not(:empty)::after {
+    margin-left: 0.5em;
+}
+
+#open-menu {
+    position: absolute;
+    top: 0.6em;
+    right: -5.43em;
+    z-index: 2;
+
+    border: 0;
+    background: transparent;
+    box-sizing: border-box;
+    width: 0;
+    height: 0.9em;
+    border-color: transparent transparent transparent black;
+    transition: 100ms all ease;
+    cursor: pointer;
+    border-style: double;
+    border-width: 0 0 0 0.9em;
+}
+
+#open-menu.paused {
+    border-color: transparent transparent transparent white;
+    border-style: solid;
+    border-width: 0.4em 0 0.4em 0.8em;
+}
+
+#open-menu:not(:disabled):hover {
+    filter: brightness(80%);
+}
+
+#open-menu:disabled {
+    cursor: auto;
+}
+
+#open-rom {
+    margin: 0.4em;
+}
+
+#open-menu {
+    margin: 0.4em;
+}
+
+#menu {
+    position: absolute;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+
+    height: 100%;
+    width: 100%;
+    z-index: 1;
+
+    top: 0;
+    left: 0;
+
+    background-color: rgba(0, 0, 0, 0.8);
+    border-radius: 2%;
+}
+
+#menu-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    height: 100%;
+
+    max-width: 20em;
+    color: white;
+    padding: 1em;
+}
+
+.options-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.options-container div {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    margin: 0.1em 0 0.1em 0;
+}
+
+.options-container div .slider {
+    margin-left: 7em;
+}
+
+.slider {
+    width: 10em;
+}
+
+.slider-label {
+    width: 4em;
+    text-align: end;
 }
 
 #gb {

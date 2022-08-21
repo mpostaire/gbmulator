@@ -1,9 +1,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "config.h"
+#include "../common/config.h"
+#include "../common/utils.h"
 #include "ui.h"
-#include "utils.h"
 #include "emulator/emulator.h"
 
 // TODO fix this file (it's ugly code with lots of copy pasted repetitions).
@@ -116,12 +116,12 @@ const byte_t font[0x5F][0x8] = {
 static void key_setter_set_key(menu_entry_t *entry, SDL_Keycode key) {
     for (int i = 0; i < entry->parent->length - 1; i++) {
         if (entry == &entry->parent->entries[i]) {
-            *entry->setter.config_key = key;
+            config.keybindings[entry->setter.button] = key;
             break;
         }
     }
 
-    const char *key_name = SDL_GetKeyName(*entry->setter.config_key);
+    const char *key_name = SDL_GetKeyName(config.keybindings[entry->setter.button]);
     int l = strlen(key_name);
     entry->setter.key_name = xrealloc(entry->setter.key_name, l + 1);
     snprintf(entry->setter.key_name, l + 1, "%s", key_name);
@@ -130,14 +130,14 @@ static void key_setter_set_key(menu_entry_t *entry, SDL_Keycode key) {
 static void key_setter_set_keybind(menu_entry_t *entry, SDL_Keycode key) {
     int same = -1;
     for (int i = 0; i < entry->parent->length - 1; i++) {
-        if (entry->parent->position != i && *entry->parent->entries[i].setter.config_key == key) {
+        if (entry->parent->position != i && config.keybindings[entry->parent->entries[i].setter.button] == key) {
             same = i;
             break;
         }
     }
 
     if (same >= 0)
-        key_setter_set_key(&entry->parent->entries[same], *entry->setter.config_key);
+        key_setter_set_key(&entry->parent->entries[same], config.keybindings[entry->setter.button]);
 
     key_setter_set_key(entry, key);
 }
@@ -187,7 +187,7 @@ static void init_keysetters(menu_t *menu) {
         if (menu->entries[i].type == UI_SUBMENU)
             init_keysetters(menu->entries[i].submenu);
         if (menu->entries[i].type == UI_KEY_SETTER)
-            key_setter_set_key(&menu->entries[i], *menu->entries[i].setter.config_key);
+            key_setter_set_key(&menu->entries[i], config.keybindings[menu->entries[i].setter.button]);
     }
 }
 

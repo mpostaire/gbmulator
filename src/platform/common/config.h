@@ -20,14 +20,7 @@ struct config {
     byte_t is_ipv6;
     byte_t mptcp_enabled;
 
-    SDL_Keycode left;
-    SDL_Keycode right;
-    SDL_Keycode up;
-    SDL_Keycode down;
-    SDL_Keycode a;
-    SDL_Keycode b;
-    SDL_Keycode start;
-    SDL_Keycode select;
+    SDL_KeyCode keybindings[8];
 } extern config;
 
 int config_verif_key(SDL_Keycode key);

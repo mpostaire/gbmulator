@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <SDL2/SDL.h>
 
-#include "../common/ui.h"
+#include "ui.h"
 #include "../common/config.h"
 #include "../common/utils.h"
 #include "emulator/emulator.h"
@@ -24,7 +24,6 @@
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
-SDL_bool is_rom_loaded = SDL_FALSE;
 
 SDL_Window *window;
 
@@ -48,7 +47,7 @@ static void gbmulator_exit(menu_entry_t *entry) {
 }
 
 static void gbmulator_unpause(menu_entry_t *entry) {
-    if (is_rom_loaded)
+    if (emu)
         is_paused = SDL_FALSE;
 }
 
@@ -124,7 +123,7 @@ static void handle_input(void) {
         case SDL_TEXTINPUT:
             if (is_paused) {
                 if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
-                    if (is_rom_loaded)
+                    if (emu)
                         is_paused = SDL_FALSE;
                     else
                         ui_back_to_root_menu(ui);
@@ -136,7 +135,7 @@ static void handle_input(void) {
         case SDL_KEYDOWN:
             if (is_paused) {
                 if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
-                    if (is_rom_loaded)
+                    if (emu)
                         is_paused = SDL_FALSE;
                     else
                         ui_back_to_root_menu(ui);
@@ -177,7 +176,7 @@ static void handle_input(void) {
         case SDL_CONTROLLERBUTTONDOWN:
             if (is_paused) {
                 if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
-                    if (is_rom_loaded)
+                    if (emu)
                         is_paused = SDL_FALSE;
                     else
                         ui_back_to_root_menu(ui);
@@ -304,7 +303,6 @@ static void load_cartridge(char *path) {
     ui->root_menu->entries[2].disabled = 0; // enable reset rom menu entry
     ui->root_menu->entries[3].disabled = 0; // enable link cable menu entry
 
-    is_rom_loaded = SDL_TRUE;
     is_paused = SDL_FALSE;
 }
 
@@ -446,14 +444,14 @@ menu_t keybindings_menu = {
     .title = "Keybindings",
     .length = 9,
     .entries = {
-        { "LEFT:", UI_KEY_SETTER, .setter.config_key = &config.left },
-        { "RIGHT:", UI_KEY_SETTER, .setter.config_key = &config.right },
-        { "UP:", UI_KEY_SETTER, .setter.config_key = &config.up },
-        { "DOWN:", UI_KEY_SETTER, .setter.config_key = &config.down },
-        { "A:", UI_KEY_SETTER, .setter.config_key = &config.a },
-        { "B:", UI_KEY_SETTER, .setter.config_key = &config.b },
-        { "START:", UI_KEY_SETTER, .setter.config_key = &config.start },
-        { "SELECT:", UI_KEY_SETTER, .setter.config_key = &config.select },
+        { "LEFT:", UI_KEY_SETTER, .setter.button = JOYPAD_LEFT },
+        { "RIGHT:", UI_KEY_SETTER, .setter.button = JOYPAD_RIGHT },
+        { "UP:", UI_KEY_SETTER, .setter.button = JOYPAD_UP },
+        { "DOWN:", UI_KEY_SETTER, .setter.button = JOYPAD_DOWN },
+        { "A:", UI_KEY_SETTER, .setter.button = JOYPAD_A },
+        { "B:", UI_KEY_SETTER, .setter.button = JOYPAD_B },
+        { "START:", UI_KEY_SETTER, .setter.button = JOYPAD_START },
+        { "SELECT:", UI_KEY_SETTER, .setter.button = JOYPAD_SELECT },
         { "Back...", UI_BACK }
     }
 };
@@ -612,7 +610,7 @@ int main(int argc, char **argv) {
             SDL_RenderClear(renderer);
 
             // update ppu_texture to show color palette changes behind the menu
-            if (is_rom_loaded) {
+            if (emu) {
                 SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(emu), ppu_texture_pitch);
                 SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
             }
@@ -621,14 +619,14 @@ int main(int argc, char **argv) {
             SDL_RenderCopy(renderer, ui_texture, NULL, NULL);
 
             SDL_RenderPresent(renderer);
-            // wait for the next event (not consuming it) to avoid CPU usage
-            SDL_WaitEvent(NULL);
+            // delay to match 30 fps to render the blinking elements of the ui but at a lower cpu usage
+            SDL_Delay(1.0f / 30.0f);
             continue;
         }
 
         // handle_input is a slow function: don't call it every step
         if (cycles >= GB_CPU_CYCLES_PER_FRAME * config.speed) {
-            cycles = 0; // TODO: cycles -= GB_CPU_CYCLES_PER_FRAME * config.speed
+            cycles -= GB_CPU_CYCLES_PER_FRAME * config.speed;
             SDL_RenderClear(renderer);
             SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
             // this SDL_Delay() isn't needed as the audio sync adds it's own delay

@@ -11,14 +11,14 @@
 #include "config.h"
 
 int sdl_key_to_joypad(SDL_Keycode key) {
-    if (key == config.left) return JOYPAD_LEFT;
-    if (key == config.right) return JOYPAD_RIGHT;
-    if (key == config.up) return JOYPAD_UP;
-    if (key == config.down) return JOYPAD_DOWN;
-    if (key == config.a) return JOYPAD_A;
-    if (key == config.b) return JOYPAD_B;
-    if (key == config.start) return JOYPAD_START;
-    if (key == config.select) return JOYPAD_SELECT;
+    if (key == config.keybindings[JOYPAD_LEFT]) return JOYPAD_LEFT;
+    if (key == config.keybindings[JOYPAD_RIGHT]) return JOYPAD_RIGHT;
+    if (key == config.keybindings[JOYPAD_UP]) return JOYPAD_UP;
+    if (key == config.keybindings[JOYPAD_DOWN]) return JOYPAD_DOWN;
+    if (key == config.keybindings[JOYPAD_A]) return JOYPAD_A;
+    if (key == config.keybindings[JOYPAD_B]) return JOYPAD_B;
+    if (key == config.keybindings[JOYPAD_START]) return JOYPAD_START;
+    if (key == config.keybindings[JOYPAD_SELECT]) return JOYPAD_SELECT;
     return key;
 }
 
