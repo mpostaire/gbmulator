@@ -23,10 +23,31 @@
 // TODO put socket code logic in platform specific code section and leave here only the transfer logic.
 //      --> callback when data needs to be transfered, then platform handles this data and the transfer
 
-// TODO think about this algorithm: send byte i but wait to receive corresponding byte from the other gameboy.
-//      when it's received, do the bit shift using the link clock rate (customizable?), then repeat with next byte (i + 1)
+// The master game boy MUST receive the slave data at the same time it is sending its own data.
+// The slave game boy sends its data when it receives the master's data so it's not affected by the network delay.
 
-// TODO maybe desing a protocol allowing for no packet transfer while the connection doesn't transfer data (needs to keep into account the tcp keepalive for tcp connection)
+// --> This wasn’t required for the emulator to Game Boy connection because the emulator could act as the master device and slow down or speed up
+// as necessary to maintain the connection.
+// ==> so make the master emulator frequency adapt it's speed based on the current network speed
+
+// TODO Alternative way -- but likely also problematic: this is essentially the server streaming the emulation to the client
+// https://retrocomputing.stackexchange.com/questions/24636/is-there-an-obstruction-to-emulating-gameboy-link-cable-over-wi-fi
+// I could imagine a setup where, user A has rom RA, with save file SA and user B has rom RB with save file SB.
+// A sets themself up as the server, and B as the client. The emulation session sends RB and SB to A. A emulates two gameboys under the hood,
+// running RA with SA on one and RB with SB on the other. Only the the RA session is displayed to A, and then A sends the sound and current frame of
+// the RB session back to B, and polls B for controller inputs. Any time the game is saved A sends SB back over to B, and A deletes their copy
+// of RB and SB at the end of the session.
+
+// TODO: I think it's the best way (it expands the alternative way above):
+// https://docs.libretro.com/development/retroarch/netplay/
+// If I understand it means device A emulates 2 gameboys and device B also.
+// They serialize their states (using savestates): A creates SA and sends it to B, B creates SB and sends it to A
+// A and B emulate both their own and the other states but only show to the user their own state. 
+// A and B send their respective inputs when they are changed (way less packets sent and latency is a small issue compaired to other solutions)
+// on reception of an input from the other device, they apply it to their own hidden emulation of the other device
+// There is also a need to rewind to resync... learn more about this by reading the link
+
+// TODO set TCP_NODELAY on the sockets to avoid extra delays in the OS.
 
 #ifndef IPPROTO_MPTCP
 #define IPPROTO_MPTCP 262
