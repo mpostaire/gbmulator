@@ -136,8 +136,8 @@ canvas.emscripten {
 
 #open-menu {
     position: absolute;
-    top: 0.6em;
-    right: -5.43em;
+    top: 1em;
+    right: -5em;
     z-index: 2;
 
     border: 0;
@@ -150,6 +150,10 @@ canvas.emscripten {
     cursor: pointer;
     border-style: double;
     border-width: 0 0 0 0.9em;
+}
+
+#open-menu:focus {
+    outline: none;
 }
 
 #open-menu.paused {
@@ -167,10 +171,6 @@ canvas.emscripten {
 }
 
 #open-rom {
-    margin: 0.4em;
-}
-
-#open-menu {
     margin: 0.4em;
 }
 

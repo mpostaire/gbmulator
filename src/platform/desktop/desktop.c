@@ -61,6 +61,36 @@ static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
 
+static byte_t *get_rom_data(const char *path, size_t *rom_size) {
+    const char *dot = strrchr(path, '.');
+    if (!dot || (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) && strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))))) {
+        eprintf("%s: wrong file extension (expected .gb or .gbc)\n", path);
+        return NULL;
+    }
+
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        errnoprintf("opening file %s", path);
+        return NULL;
+    }
+
+    fseek(f, 0, SEEK_END);
+    size_t len = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    byte_t *buf = xmalloc(len);
+    if (!fread(buf, len, 1, f)) {
+        errnoprintf("reading %s", path);
+        fclose(f);
+        return NULL;
+    }
+    fclose(f);
+
+    if (rom_size)
+        *rom_size = len;
+    return buf;
+}
+
 static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
     char *xdg = getenv(xdg_variable);
     if (xdg) return xdg;
@@ -111,141 +141,6 @@ static char *get_savestate_path(const char *rom_filepath, int slot) {
 
     free(xdg_data);
     return save_path;
-}
-
-// TODO add handle_input_paused() functions that uses if(SDL_WaitEvent(&event)) to update screen only when an input has been received
-//      --> can then remove the SDL_Delay(1.0f / 30.0f) in pause
-static void handle_input(void) {
-    SDL_Event event;
-    char *savestate_path;
-    while (SDL_PollEvent(&event)) {
-        switch (event.type) {
-        case SDL_TEXTINPUT:
-            if (is_paused) {
-                if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
-                    if (emu)
-                        is_paused = SDL_FALSE;
-                    else
-                        ui_back_to_root_menu(ui);
-                } else {
-                    ui_text_input(ui, event.text.text);
-                }
-            }
-            break;
-        case SDL_KEYDOWN:
-            if (is_paused) {
-                if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
-                    if (emu)
-                        is_paused = SDL_FALSE;
-                    else
-                        ui_back_to_root_menu(ui);
-                } else {
-                    ui_keyboard_press(ui, &event.key);
-                }
-                break;
-            }
-            if (event.key.repeat)
-                break;
-            switch (event.key.keysym.sym) {
-            case SDLK_PAUSE:
-            case SDLK_ESCAPE:
-                is_paused = SDL_TRUE;
-                ui_back_to_root_menu(ui);
-                break;
-            case SDLK_F1: case SDLK_F2:
-            case SDLK_F3: case SDLK_F4:
-            case SDLK_F5: case SDLK_F6:
-            case SDLK_F7: case SDLK_F8:
-                if (!emu)
-                    break;
-                savestate_path = get_savestate_path(rom_path, event.key.keysym.sym - SDLK_F1);
-                if (event.key.keysym.mod & KMOD_SHIFT)
-                    save_state_to_file(emu, savestate_path);
-                else
-                    load_state_from_file(emu, savestate_path);
-                free(savestate_path);
-                break;
-            }
-            if (!is_paused)
-                emulator_joypad_press(emu, sdl_key_to_joypad(event.key.keysym.sym));
-            break;
-        case SDL_KEYUP:
-            if (!event.key.repeat && !is_paused)
-                emulator_joypad_release(emu, sdl_key_to_joypad(event.key.keysym.sym));
-            break;
-        case SDL_CONTROLLERBUTTONDOWN:
-            if (is_paused) {
-                if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
-                    if (emu)
-                        is_paused = SDL_FALSE;
-                    else
-                        ui_back_to_root_menu(ui);
-                } else {
-                    ui_controller_press(ui, event.cbutton.button);
-                }
-                break;
-            }
-            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
-                is_paused = SDL_TRUE;
-                ui_back_to_root_menu(ui);
-                break;
-            }
-            if (!is_paused)
-                emulator_joypad_press(emu, sdl_controller_to_joypad(event.cbutton.button));
-            break;
-        case SDL_CONTROLLERBUTTONUP:
-            if (!is_paused)
-                emulator_joypad_release(emu, sdl_controller_to_joypad(event.cbutton.button));
-            break;
-        case SDL_CONTROLLERDEVICEADDED:
-            if (!is_controller_present) {
-                pad = SDL_GameControllerOpen(event.cdevice.which);
-                is_controller_present = SDL_TRUE;
-                printf("%s connected\n", SDL_GameControllerName(pad));
-            }
-            break;
-        case SDL_CONTROLLERDEVICEREMOVED:
-            if (is_controller_present) {
-                SDL_GameControllerClose(pad);
-                is_controller_present = SDL_FALSE;
-                printf("%s disconnected\n", SDL_GameControllerName(pad));
-            }
-            break;
-        case SDL_QUIT:
-            is_running = SDL_FALSE;
-            break;
-        }
-    }
-}
-
-static byte_t *get_rom_data(const char *path, size_t *rom_size) {
-    const char *dot = strrchr(path, '.');
-    if (!dot || (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) && strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))))) {
-        eprintf("%s: wrong file extension (expected .gb or .gbc)\n", path);
-        return NULL;
-    }
-
-    FILE *f = fopen(path, "rb");
-    if (!f) {
-        errnoprintf("opening file %s", path);
-        return NULL;
-    }
-
-    fseek(f, 0, SEEK_END);
-    size_t len = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    byte_t *buf = xmalloc(len);
-    if (!fread(buf, len, 1, f)) {
-        errnoprintf("reading %s", path);
-        fclose(f);
-        return NULL;
-    }
-    fclose(f);
-
-    if (rom_size)
-        *rom_size = len;
-    return buf;
 }
 
 static void load_cartridge(char *path) {
@@ -305,16 +200,6 @@ static void load_cartridge(char *path) {
 
     is_paused = SDL_FALSE;
 }
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -476,6 +361,117 @@ menu_t main_menu = {
 
 
 
+
+
+// TODO add handle_input_paused() functions that uses if(SDL_WaitEvent(&event)) to update screen only when an input has been received
+//      --> can then remove the SDL_Delay(1.0f / 30.0f) in pause
+static void handle_input(void) {
+    SDL_Event event;
+    char *savestate_path;
+    while (SDL_PollEvent(&event)) {
+        switch (event.type) {
+        case SDL_TEXTINPUT:
+            if (is_paused) {
+                if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
+                    if (emu)
+                        is_paused = SDL_FALSE;
+                    else
+                        ui_back_to_root_menu(ui);
+                } else {
+                    ui_text_input(ui, event.text.text);
+                }
+            }
+            break;
+        case SDL_KEYDOWN:
+            if (is_paused) {
+                if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
+                    if (emu)
+                        is_paused = SDL_FALSE;
+                    else
+                        ui_back_to_root_menu(ui);
+                } else {
+                    ui_keyboard_press(ui, &event.key);
+                }
+                break;
+            }
+            if (event.key.repeat)
+                break;
+            switch (event.key.keysym.sym) {
+            case SDLK_PAUSE:
+            case SDLK_ESCAPE:
+                is_paused = SDL_TRUE;
+                ui_back_to_root_menu(ui);
+                break;
+            case SDLK_F1: case SDLK_F2:
+            case SDLK_F3: case SDLK_F4:
+            case SDLK_F5: case SDLK_F6:
+            case SDLK_F7: case SDLK_F8:
+                if (!emu)
+                    break;
+                savestate_path = get_savestate_path(rom_path, event.key.keysym.sym - SDLK_F1);
+                if (event.key.keysym.mod & KMOD_SHIFT) {
+                    save_state_to_file(emu, savestate_path, 1);
+                } else {
+                    int ret = load_state_from_file(emu, savestate_path);
+                    if (ret > 0) {
+                        config.mode = ret;
+                        options_menu.entries[4].choices.position = config.mode - 1;
+                    }
+                }
+                free(savestate_path);
+                break;
+            }
+            if (!is_paused)
+                emulator_joypad_press(emu, sdl_key_to_joypad(event.key.keysym.sym));
+            break;
+        case SDL_KEYUP:
+            if (!event.key.repeat && !is_paused)
+                emulator_joypad_release(emu, sdl_key_to_joypad(event.key.keysym.sym));
+            break;
+        case SDL_CONTROLLERBUTTONDOWN:
+            if (is_paused) {
+                if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
+                    if (emu)
+                        is_paused = SDL_FALSE;
+                    else
+                        ui_back_to_root_menu(ui);
+                } else {
+                    ui_controller_press(ui, event.cbutton.button);
+                }
+                break;
+            }
+            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
+                is_paused = SDL_TRUE;
+                ui_back_to_root_menu(ui);
+                break;
+            }
+            if (!is_paused)
+                emulator_joypad_press(emu, sdl_controller_to_joypad(event.cbutton.button));
+            break;
+        case SDL_CONTROLLERBUTTONUP:
+            if (!is_paused)
+                emulator_joypad_release(emu, sdl_controller_to_joypad(event.cbutton.button));
+            break;
+        case SDL_CONTROLLERDEVICEADDED:
+            if (!is_controller_present) {
+                pad = SDL_GameControllerOpen(event.cdevice.which);
+                is_controller_present = SDL_TRUE;
+                printf("%s connected\n", SDL_GameControllerName(pad));
+            }
+            break;
+        case SDL_CONTROLLERDEVICEREMOVED:
+            if (is_controller_present) {
+                SDL_GameControllerClose(pad);
+                is_controller_present = SDL_FALSE;
+                printf("%s disconnected\n", SDL_GameControllerName(pad));
+            }
+            break;
+        case SDL_QUIT:
+            is_running = SDL_FALSE;
+            break;
+        }
+    }
+}
 
 int main(int argc, char **argv) {
     char *config_path = get_config_path();

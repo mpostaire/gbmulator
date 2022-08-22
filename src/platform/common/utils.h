@@ -31,6 +31,6 @@ void save_battery_to_file(emulator_t *emu, const char *path);
 
 void load_battery_from_file(emulator_t *emu, const char *path);
 
-int save_state_to_file(emulator_t *emu, const char *path);
+int save_state_to_file(emulator_t *emu, const char *path, int compressed);
 
 int load_state_from_file(emulator_t *emu, const char *path);

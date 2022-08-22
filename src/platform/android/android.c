@@ -423,7 +423,7 @@ static void start_emulation_loop(void) {
 
     if (emu) {
         save_battery_to_file(emu, emulator_get_rom_title(emu));
-        save_state_to_file(emu, "resume");
+        save_state_to_file(emu, "resume", 0);
         emulator_quit(emu);
     }
 

@@ -120,11 +120,11 @@ void load_battery_from_file(emulator_t *emu, const char *path) {
     free(save_data);
 }
 
-int save_state_to_file(emulator_t *emu, const char *path) {
+int save_state_to_file(emulator_t *emu, const char *path, int compressed) {
     make_parent_dirs(path);
 
     size_t len;
-    byte_t *buf = emulator_get_savestate(emu, &len);
+    byte_t *buf = emulator_get_savestate(emu, &len, compressed);
 
     SDL_RWops *f = SDL_RWFromFile(path, "wb");
     if (!f) {
@@ -161,8 +161,8 @@ int load_state_from_file(emulator_t *emu, const char *path) {
         return 0;
     }
 
-    emulator_load_savestate(emu, buf, len);
+    int ret = emulator_load_savestate(emu, buf, len);
     SDL_RWclose(f);
     free(buf);
-    return 1;
+    return ret;
 }

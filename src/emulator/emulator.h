@@ -59,7 +59,7 @@ byte_t *emulator_get_save(emulator_t *emu, size_t *save_length);
 
 int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length);
 
-byte_t *emulator_get_savestate(emulator_t *emu, size_t *length);
+byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, byte_t compressed);
 
 int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length);
 

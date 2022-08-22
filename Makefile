@@ -2,7 +2,7 @@ SDIR=src
 ODIR=out
 IDIR=$(SDIR)
 CFLAGS=-std=gnu11 -Wall -O2 -I$(IDIR)
-LDLIBS=-lSDL2
+LDLIBS=-lSDL2 $(shell pkg-config --libs zlib 2> /dev/null && echo -n "-D__HAS_ZLIB__")
 CC=gcc
 EXEC=gbmulator
 
@@ -59,7 +59,7 @@ debug_android: android
 
 web: CC:=emcc
 web: LDLIBS:=
-web: CFLAGS+=-O3 -sUSE_SDL=2
+web: CFLAGS+=-O3 -sUSE_SDL=2 -sUSE_ZLIB=1
 web: $(PLATFORM_ODIR_STRUCTURE) $(ICONS) docs docs/index.html 
 
 debug_web: web

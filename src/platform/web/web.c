@@ -300,13 +300,19 @@ static void handle_input(void) {
                 snprintf(savestate_path, len + 9, "%s-state-%d", rom_title, event.key.keysym.sym - SDLK_F1);
                 if (event.key.keysym.mod & KMOD_SHIFT) {
                     size_t savestate_length;
-                    byte_t *savestate = emulator_get_savestate(emu, &savestate_length);
+                    byte_t *savestate = emulator_get_savestate(emu, &savestate_length, 1);
                     local_storage_set_item(savestate_path, savestate, 1, savestate_length);
                     free(savestate);
                 } else {
                     size_t savestate_length;
                     byte_t *savestate = local_storage_get_item(savestate_path, &savestate_length, 1);
-                    emulator_load_savestate(emu, savestate, savestate_length);
+                    int ret = emulator_load_savestate(emu, savestate, savestate_length);
+                    if (ret > 0) {
+                        config.mode = ret;
+                        EM_ASM({
+                            document.getElementById("mode-setter").value = $4;
+                        }, config.mode);
+                    }
                     free(savestate);
                 }
                 free(savestate_path);
