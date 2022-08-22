@@ -122,9 +122,23 @@ typedef struct {
 typedef struct {
     byte_t cartridge[8400000];
     size_t cartridge_size;
-    // do not move the 'mem' member (savestate.c uses offsetof mem on this struct)
+    // do not move the 'mbc' member (emulator.c uses offsetof mbc on this struct)
     // everything that is below this line will be saved in the savestates
+    mbc_type_t mbc;
+    byte_t rom_banks;
+    byte_t eram_banks;
+    word_t current_rom_bank;
+    s_word_t current_eram_bank;
+    byte_t mbc1_mode;
+    byte_t eram_enabled;
+
+    byte_t has_eram;
+    byte_t has_battery;
+    byte_t has_rumble;
+    byte_t has_rtc;
+
     byte_t mem[0x10000];
+    // do not move the 'eram' member for the same reason as the 'mbc' member
     byte_t eram[0x20000]; // max 16 banks of size 0x2000
     byte_t wram_extra[0x7000]; // 7 extra banks of wram of size 0x1000 for a total of 8 banks
     byte_t vram_extra[0x2000]; // 1 extra bank of wram of size 0x1000 for a total of 2 banks
@@ -146,19 +160,6 @@ typedef struct {
         word_t src_address;
         word_t dest_address;
     } hdma;
-
-    mbc_type_t mbc;
-    byte_t rom_banks;
-    byte_t eram_banks;
-    word_t current_rom_bank;
-    s_word_t current_eram_bank;
-    byte_t mbc1_mode;
-    byte_t eram_enabled;
-
-    byte_t has_eram;
-    byte_t has_battery;
-    byte_t has_rumble;
-    byte_t has_rtc;
 
     rtc_t rtc;
 } mmu_t;

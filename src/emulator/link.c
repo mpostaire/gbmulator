@@ -47,6 +47,11 @@
 // on reception of an input from the other device, they apply it to their own hidden emulation of the other device
 // There is also a need to rewind to resync... learn more about this by reading the link
 
+// TODO BEST SOLUTION this is how my boy and my old boy does it: https://gitlab.com/JonathonReinhart/python-myboy/-/tree/master
+// during handshake both devices should transfer their own savestate
+// (at the beginning handshake if the roms are different, transfer them to allow link between diff ROMS) ?? legal ??
+// it's like the solution above but better adapted for link cable
+
 // TODO set TCP_NODELAY on the sockets to avoid extra delays in the OS.
 
 #ifndef IPPROTO_MPTCP

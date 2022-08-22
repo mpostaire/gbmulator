@@ -16,13 +16,26 @@
 typedef struct __attribute__((packed)) {
     char identifier[sizeof(FORMAT_STRING)];
     char rom_title[16];
+    byte_t mode; // DMG or CGB
 } save_header_t;
 
 typedef struct __attribute__((packed)) {
     save_header_t header;
+    byte_t eram_banks;
     cpu_t cpu;
-    byte_t mmu[sizeof(mmu_t) - offsetof(mmu_t, mem)];
     gbtimer_t timer;
+    byte_t mmu[];
+
+    // byte_t mmu_header[(sizeof(mmu_t) - offsetof(mmu_t, mbc)) - (sizeof(mmu_t) - offsetof(mmu_t, mem))];
+    // byte_t mem[sizeof(((mmu_t *) 0)->mem)];
+    // byte_t 
+    // byte_t *eram;
+    // byte_t *wram_extra;
+    // byte_t *vram_extra;
+    // byte_t *cram;
+    // byte_t *rtc;
+    // byte_t *oam_dma;
+    // byte_t *hdma;
 } savestate_data_t;
 
 emulator_options_t defaults_opts = {
@@ -209,29 +222,52 @@ int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
     return 1;
 }
 
+// TODO? boolean param to add zlib compression (add something to the savestate header to show compression and don't compress header)
+// zlib optional dependency -> makefile detect slib and add a define at compile time
+// if no zlib and compress boolean is true, don't compress but still get the savestate without error
 byte_t *emulator_get_savestate(emulator_t *emu, size_t *length) {
-    savestate_data_t *savestate = xmalloc(sizeof(savestate_data_t));
+    size_t eram_len = 0x2000 * emu->mmu->eram_banks;
+    size_t wram_extra_len = 0;
+    size_t vram_extra_len = 0;
+    size_t cram_len = 0;
+    size_t hdma_len = 0;
+    size_t rtc_len = 0;
+    if (emu->mode == CGB) {
+        wram_extra_len = sizeof(emu->mmu->wram_extra);
+        vram_extra_len = sizeof(emu->mmu->vram_extra);
+        cram_len = sizeof(emu->mmu->cram_bg) + sizeof(emu->mmu->cram_obj);
+        hdma_len = sizeof(emu->mmu->hdma);
+        rtc_len = sizeof(emu->mmu->rtc);
+    }
+    size_t mmu_header_len = (sizeof(mmu_t) - offsetof(mmu_t, mbc)) - (sizeof(mmu_t) - offsetof(mmu_t, eram));
+    size_t mmu_len = mmu_header_len + eram_len + wram_extra_len + vram_extra_len + cram_len + hdma_len + rtc_len;
 
+    savestate_data_t *savestate = xmalloc(sizeof(savestate_data_t) + mmu_len);
+
+    savestate->header.mode = emu->mode;
     memcpy(savestate->header.identifier, FORMAT_STRING, sizeof(savestate->header.identifier));
-
     memcpy(savestate->header.rom_title, emu->rom_title, sizeof(savestate->header.rom_title));
 
+    savestate->eram_banks = emu->mmu->eram_banks;
     memcpy(&savestate->cpu, emu->cpu, sizeof(cpu_t));
-
-    memcpy(&savestate->mmu, &emu->mmu->mem, sizeof(mmu_t) - offsetof(mmu_t, mem));
-
     memcpy(&savestate->timer, emu->timer, sizeof(gbtimer_t));
 
-    *length = sizeof(savestate_data_t);
+    memcpy(savestate->mmu, &emu->mmu->mbc, mmu_header_len);
+
+    size_t offset = mmu_header_len;
+    memcpy(savestate->mmu + offset, &emu->mmu->eram, eram_len);
+
+    if (emu->mode == CGB) {
+        offset += eram_len;
+        memcpy(savestate->mmu + offset, &emu->mmu->wram_extra, mmu_len - offset);
+    }
+
+    *length = sizeof(savestate_data_t) + mmu_len;
     return (byte_t *) savestate;
 }
 
+// TODO? auto detect if compressed, and auto decompress
 int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) {
-    if (length != sizeof(savestate_data_t)) {
-        eprintf("invalid data length\n");
-        return 0;
-    }
-
     savestate_data_t *savestate = (savestate_data_t *) data;
 
     if (strncmp(savestate->header.identifier, FORMAT_STRING, sizeof(FORMAT_STRING))) {
@@ -243,11 +279,42 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
         return 0;
     }
 
+    if (savestate->header.mode != emu->mode)
+        emulator_reset(emu, savestate->header.mode);
+
+    size_t eram_len = 0x2000 * savestate->eram_banks;
+    size_t wram_extra_len = 0;
+    size_t vram_extra_len = 0;
+    size_t cram_len = 0;
+    size_t hdma_len = 0;
+    size_t rtc_len = 0;
+    if (savestate->header.mode == CGB) {
+        wram_extra_len = sizeof(emu->mmu->wram_extra);
+        vram_extra_len = sizeof(emu->mmu->vram_extra);
+        cram_len = sizeof(emu->mmu->cram_bg) + sizeof(emu->mmu->cram_obj);
+        hdma_len = sizeof(emu->mmu->hdma);
+        rtc_len = sizeof(emu->mmu->rtc);
+    }
+    size_t mmu_header_len = (sizeof(mmu_t) - offsetof(mmu_t, mbc)) - (sizeof(mmu_t) - offsetof(mmu_t, eram));
+    size_t mmu_len = mmu_header_len + eram_len + wram_extra_len + vram_extra_len + cram_len + hdma_len + rtc_len;
+
+    if (savestate->eram_banks > 16 || length != sizeof(savestate_data_t) + mmu_len) {
+        eprintf("invalid savestate data length\n");
+        return 0;
+    }
+
     memcpy(emu->cpu, &savestate->cpu, sizeof(cpu_t));
-
-    memcpy(&emu->mmu->mem, &savestate->mmu, sizeof(mmu_t) - offsetof(mmu_t, mem));
-
     memcpy(emu->timer, &savestate->timer, sizeof(gbtimer_t));
+
+    memcpy(&emu->mmu->mbc, savestate->mmu, mmu_header_len);
+
+    size_t offset = mmu_header_len;
+    memcpy(&emu->mmu->eram, savestate->mmu + offset, eram_len);
+
+    if (emu->mode == CGB) {
+        offset += eram_len;
+        memcpy(&emu->mmu->wram_extra, savestate->mmu + offset, mmu_len - offset);
+    }
 
     // resets apu's internal state to prevent glitchy audio if resuming from state without sound playing from state with sound playing
     apu_quit(emu);
