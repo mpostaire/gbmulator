@@ -8,4 +8,4 @@ int link_init_transfer(emulator_t *emu, emulator_t **linked_emu);
 
 void link_send_joypad(byte_t joypad);
 
-void link_poll_joypad(emulator_t *emu);
+int link_poll_joypad(emulator_t *emu);

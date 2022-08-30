@@ -656,8 +656,12 @@ int main(int argc, char **argv) {
         // TODO for this to be a true link, the cycles of emu and linked_emu must be synced.
         //      --> implement the 4 cycles per step
         if (is_link_connected) {
-            link_poll_joypad(linked_emu);
-            emulator_step(linked_emu);
+            if (!link_poll_joypad(linked_emu)) {
+                printf("Link cable disconnected\n");
+                is_link_connected = SDL_FALSE;
+            } else {
+                emulator_step(linked_emu);
+            }
         }
 
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).

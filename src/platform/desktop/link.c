@@ -162,7 +162,7 @@ static inline int receive(int fd, void *buf, size_t n, int flags) {
     ssize_t total_ret = 0;
     while (total_ret != n) {
         ssize_t ret = recv(fd, &((char *) buf)[total_ret], n - total_ret, flags);
-        if (ret == -1)
+        if (ret <= 0)
             return 0;
         total_ret += ret;
     }
@@ -328,21 +328,23 @@ void link_send_joypad(byte_t joypad) {
     send(sfd, buf, 2, 0);
 }
 
-void link_poll_joypad(emulator_t *emu) {
+int link_poll_joypad(emulator_t *emu) {
     struct pollfd fds;
     fds.fd = is_server ? client_sfd : server_sfd;
     fds.events = POLLIN;
     if (poll(&fds, 1, 0) != 1)
-        return;
+        return 1;
 
     char buf[2];
-    receive(fds.fd, buf, 2, 0);
+    if (!receive(fds.fd, buf, 2, 0))
+        return 0;
     if (buf[0] != JOYPAD) {
         eprintf("received packet type %d but expected %d (ignored)\n", buf[0], JOYPAD);
-        return;
+        return 1;
     }
     printf("[incoming joypad] a=%d b=%d select=%d start=%d | right=%d left=%d up=%d down=%d\n",
         !GET_BIT(buf[1], 7), !GET_BIT(buf[1], 6), !GET_BIT(buf[1], 5), !GET_BIT(buf[1], 4),
         !GET_BIT(buf[1], 3), !GET_BIT(buf[1], 2), !GET_BIT(buf[1], 1), !GET_BIT(buf[1], 0));
     emulator_set_joypad_state(emu, buf[1]);
+    return 1;
 }
