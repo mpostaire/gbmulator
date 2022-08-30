@@ -10,18 +10,7 @@
 #include "apu.h"
 #include "boot.h"
 #include "cpu.h"
-
-const char *mbc_names[] = {
-    "ROM_ONLY",
-    "MBC1",
-    "MBC2",
-    "MBC3",
-    "MBC30",
-    "MBC5",
-    "MBC6",
-    "MBC7",
-    "HuC1"
-};
+#include "link.h"
 
 extern inline void rtc_update(rtc_t *rtc);
 
@@ -131,29 +120,11 @@ static int parse_cartridge(emulator_t *emu) {
     if (mmu->cartridge[0x0143] == 0xC0 || mmu->cartridge[0x0143] == 0x80)
         emu->rom_title[15] = '\0';
 
-    printf("[%s] Playing %s\n", emu->mode == DMG ? "DMG" : "CGB", emu->rom_title);
-
-    char *ram_str = NULL;
-    if (mmu->has_eram) {
-        ram_str = xmalloc(18);
-        snprintf(ram_str, 17, " + %d RAM banks", mmu->eram_banks);
-    }
-
-    printf("Cartridge using %s with %d ROM banks%s%s%s%s\n",
-            mbc_names[mmu->mbc],
-            mmu->rom_banks,
-            ram_str ? ram_str : "",
-            mmu->has_battery ? " + BATTERY" : "",
-            mmu->has_rtc ? " + RTC" : "",
-            mmu->has_rumble ? " + RUMBLE" : ""
-    );
-    free(ram_str);
-
-    // checksum validation
-    int sum = 0;
+    // 8-bit cartridge header checksum validation
+    byte_t checksum = 0;
     for (int i = 0x0134; i <= 0x014C; i++)
-        sum = sum - mmu->cartridge[i] - 1;
-    if (((byte_t) (sum & 0xFF)) != mmu->cartridge[0x014D]) {
+        checksum = checksum - mmu->cartridge[i] - 1;
+    if (checksum != mmu->cartridge[0x014D]) {
         eprintf("invalid checksum\n");
         return 0;
     }
@@ -707,6 +678,13 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
     } else if (address == P1) {
         // prevent writes to the lower nibble of the P1 register (joypad)
         mmu->mem[address] = data & 0xF0;
+    } else if (address == SC) {
+        if (CHECK_BIT(mmu->mem[SC], 1) != CHECK_BIT(data, 1)) {
+            mmu->mem[address] = data & 0x83;
+            link_set_clock(emu);
+        } else {
+            mmu->mem[address] = data & 0x83;
+        }
     } else if (address == NR10) {
         if (!IS_APU_ENABLED(emu))
             return;

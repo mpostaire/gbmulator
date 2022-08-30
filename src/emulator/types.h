@@ -1,12 +1,13 @@
 #pragma once
 
 #include <time.h>
-#include <arpa/inet.h>
 
 typedef unsigned char byte_t;
 typedef signed char s_byte_t;
 typedef unsigned short word_t;
 typedef signed short s_word_t;
+
+typedef struct emulator_t emulator_t;
 
 // TODO? LCD off special bright white color
 typedef enum {
@@ -238,12 +239,9 @@ typedef struct {
 
 typedef struct {
     int cycles_counter;
+    int clock_cycles;
     int bit_counter;
-    int sfd; // server's socket used only by the server
-    int is_server;
-    int other_sfd;
-    int connected;
-    struct sockaddr *other_addr;
+    emulator_t *other_emu;
 } link_t;
 
 typedef enum {
@@ -251,7 +249,7 @@ typedef enum {
     CGB
 } emulator_mode_t;
 
-typedef struct {
+struct emulator_t {
     emulator_mode_t mode;
     float apu_sound_level;
     float apu_speed;
@@ -269,7 +267,7 @@ typedef struct {
     gbtimer_t *timer;
     joypad_t *joypad;
     link_t *link;
-} emulator_t;
+};
 
 typedef struct {
     emulator_mode_t mode; // either `DMG` for original game boy emulation or `CGB` for game boy color emulation

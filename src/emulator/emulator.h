@@ -47,9 +47,11 @@ void emulator_quit(emulator_t *emu);
 
 void emulator_reset(emulator_t *emu, emulator_mode_t mode);
 
-int emulator_start_link(emulator_t *emu, const char *port, int is_ipv6, int mptcp_enabled);
+void emulator_print_status(emulator_t *emu);
 
-int emulator_connect_to_link(emulator_t *emu, const char *address, const char *port, int is_ipv6, int mptcp_enabled);
+void emulator_link_connect(emulator_t *emu, emulator_t *other_emu);
+
+void emulator_link_disconnect(emulator_t *emu);
 
 void emulator_joypad_press(emulator_t *emu, joypad_button_t key);
 
@@ -63,10 +65,20 @@ byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, byte_t compresse
 
 int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length);
 
+byte_t emulator_get_joypad_state(emulator_t *emu);
+
+void emulator_set_joypad_state(emulator_t *emu, byte_t state);
+
+/**
+ * @returns the ROM title (you must not free the returned pointer).
+ */
 char *emulator_get_rom_title(emulator_t *emu);
 
 char *emulator_get_rom_title_from_data(byte_t *rom_data, size_t size);
 
+/**
+ * @returns a pointer to the ROM (you must not free the returned pointer).
+ */
 byte_t *emulator_get_rom(emulator_t *emu, size_t *rom_size);
 
 /**

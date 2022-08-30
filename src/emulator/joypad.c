@@ -5,6 +5,9 @@
 #include "cpu.h"
 #include "mmu.h"
 
+// TODO rearrange enum joypad_buttons_t so that it aligns with the bits
+//      -> cleaner switch case but needs to check everywhere where there is an usage of input position
+
 void joypad_init(emulator_t *emu) {
     emu->joypad = xmalloc(sizeof(joypad_t));
     emu->joypad->action = 0xCF;

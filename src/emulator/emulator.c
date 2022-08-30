@@ -2,7 +2,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#ifdef __HAS_ZLIB__
+#ifdef __HAVE_ZLIB__
 #include <zlib.h>
 #endif
 
@@ -38,6 +38,18 @@ emulator_options_t defaults_opts = {
     .apu_sample_count = GB_APU_DEFAULT_SAMPLE_COUNT,
     .on_apu_samples_ready = NULL,
     .on_new_frame = NULL
+};
+
+const char *mbc_names[] = {
+    "ROM_ONLY",
+    "MBC1",
+    "MBC2",
+    "MBC3",
+    "MBC30",
+    "MBC5",
+    "MBC6",
+    "MBC7",
+    "HuC1"
 };
 
 int emulator_step(emulator_t *emu) {
@@ -127,13 +139,36 @@ void emulator_reset(emulator_t *emu, emulator_mode_t mode) {
     free(rom_data);
 }
 
+void emulator_print_status(emulator_t *emu) {
+    printf("[%s] Playing %s\n", emu->mode == DMG ? "DMG" : "CGB", emu->rom_title);
 
-int emulator_start_link(emulator_t *emu, const char *port, int is_ipv6, int mptcp_enabled) {
-    return link_start_server(emu, port, is_ipv6, mptcp_enabled);
+    mmu_t *mmu = emu->mmu;
+
+    char *ram_str = NULL;
+    if (mmu->has_eram) {
+        ram_str = xmalloc(18);
+        snprintf(ram_str, 17, " + %d RAM banks", mmu->eram_banks);
+    }
+
+    printf("Cartridge using %s with %d ROM banks%s%s%s%s\n",
+            mbc_names[mmu->mbc],
+            mmu->rom_banks,
+            ram_str ? ram_str : "",
+            mmu->has_battery ? " + BATTERY" : "",
+            mmu->has_rtc ? " + RTC" : "",
+            mmu->has_rumble ? " + RUMBLE" : ""
+    );
+    free(ram_str);
 }
 
-int emulator_connect_to_link(emulator_t *emu, const char *address, const char *port, int is_ipv6, int mptcp_enabled) {
-    return link_connect_to_server(emu, address, port, is_ipv6, mptcp_enabled);
+void emulator_link_connect(emulator_t *emu, emulator_t *other_emu) {
+    emu->link->other_emu = other_emu;
+    other_emu->link->other_emu = emu;
+}
+
+void emulator_link_disconnect(emulator_t *emu) {
+    emu->link->other_emu->link->other_emu = NULL;
+    emu->link->other_emu = NULL;
 }
 
 void emulator_joypad_press(emulator_t *emu, joypad_button_t key) {
@@ -256,15 +291,19 @@ byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, byte_t compresse
     }
 
     // compress savestate data if specified
-    #ifdef __HAS_ZLIB__
+    #ifdef __HAVE_ZLIB__
     if (compressed) {
         SET_BIT(savestate_header->mode, 7);
-        savestate_data_t *dest = xmalloc(compressBound(savestate_data_len));
+        size_t t = compressBound(savestate_data_len);
+        savestate_data_t *dest = xmalloc(t);
         size_t dest_len;
-        compress((byte_t *) dest, &dest_len, (byte_t *) savestate_data, savestate_data_len);
+        int ret = compress((byte_t *) dest, &dest_len, (byte_t *) savestate_data, savestate_data_len);
         free(savestate_data);
         savestate_data_len = dest_len;
         savestate_data = dest;
+
+        printf("get_savestate %ld (compress:%d) buf=%ld\n", sizeof(savestate_header_t) + savestate_data_len, ret, t);
+
     }
     #endif
 
@@ -282,7 +321,7 @@ byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, byte_t compresse
 
 int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) {
     if (length <= sizeof(savestate_header_t)) {
-        eprintf("invalid savestate length\n");
+        eprintf("invalid savestate length (%ld)\n", length);
         return 0;
     }
 
@@ -303,10 +342,12 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
     memcpy(savestate_data, data + sizeof(savestate_header_t), savestate_data_len);
 
     if (CHECK_BIT(savestate_header->mode, 7)) {
-        #ifdef __HAS_ZLIB__
-        savestate_data_t *dest = xmalloc(sizeof(savestate_data_t) + (sizeof(mmu_t) - offsetof(mmu_t, mbc)));
+        #ifdef __HAVE_ZLIB__
+        size_t t = sizeof(savestate_data_t) + (sizeof(mmu_t) - offsetof(mmu_t, mbc)) + 1e5;
+        savestate_data_t *dest = xmalloc(t);
         size_t dest_len;
-        uncompress((byte_t *) dest, &dest_len, (byte_t *) savestate_data, savestate_data_len);
+        int ret = uncompress((byte_t *) dest, &dest_len, (byte_t *) savestate_data, savestate_data_len);
+        printf("uncompress=%d\n", ret);
         free(savestate_data);
         savestate_data_len = dest_len;
         savestate_data = dest;
@@ -363,6 +404,18 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
     apu_init(emu);
 
     return emu->mode;
+}
+
+byte_t emulator_get_joypad_state(emulator_t *emu) {
+    return (emu->joypad->action & 0x0F) << 4 | (emu->joypad->direction & 0x0F);
+}
+
+void emulator_set_joypad_state(emulator_t *emu, byte_t state) {
+    emu->joypad->action = (state >> 4) & 0x0F;
+    emu->joypad->direction = state & 0x0F;
+
+    if (!CHECK_BIT(emu->mmu->mem[P1], 4) || !CHECK_BIT(emu->mmu->mem[P1], 5))
+        cpu_request_interrupt(emu, IRQ_JOYPAD);
 }
 
 char *emulator_get_rom_title(emulator_t *emu) {

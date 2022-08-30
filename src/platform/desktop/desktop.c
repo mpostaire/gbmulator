@@ -3,6 +3,7 @@
 #include <SDL2/SDL.h>
 
 #include "ui.h"
+#include "link.h"
 #include "../common/config.h"
 #include "../common/utils.h"
 #include "emulator/emulator.h"
@@ -22,8 +23,16 @@
 // TODO: in pokemon gold (in CGB and DMG modes) at the beginning animation of a battle, when the wild pokemon slides to the
 // right, at the last moment, the top of the pokemon's sprite will appear for a few frames where the combat menu should be located
 
+typedef enum {
+    LINK_DISCONNECTED,
+    LINK_CONNECTING,
+    LINK_INITIALIZATION,
+    LINK_CONNECTED
+} link_status_t;
+
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
+link_status_t link_status = LINK_DISCONNECTED;
 
 SDL_Window *window;
 
@@ -41,6 +50,7 @@ ui_t *ui;
 char *rom_path;
 
 emulator_t *emu;
+emulator_t *linked_emu;
 
 static void gbmulator_exit(menu_entry_t *entry) {
     is_running = SDL_FALSE;
@@ -190,6 +200,7 @@ static void load_cartridge(char *path) {
     if (emu)
         emulator_quit(emu);
     emu = new_emu;
+    emulator_print_status(emu);
 
     snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", emulator_get_rom_title(emu));
     SDL_SetWindowTitle(window, window_title);
@@ -262,9 +273,9 @@ static void start_link(menu_entry_t *entry) {
 
     int success;
     if (entry->parent->entries[0].choices.position)
-        success = emulator_connect_to_link(emu, config.link_host, config.link_port, config.is_ipv6, config.mptcp_enabled);
+        success = link_connect_to_server(config.link_host, config.link_port, config.is_ipv6, config.mptcp_enabled);
     else
-        success = emulator_start_link(emu, config.link_port, config.is_ipv6, config.mptcp_enabled);
+        success = link_start_server(config.link_port, config.is_ipv6, config.mptcp_enabled);
 
     if (success) {
         entry->parent->entries[0].disabled = 1;
@@ -274,6 +285,8 @@ static void start_link(menu_entry_t *entry) {
         entry->parent->entries[4].disabled = 1;
         entry->parent->entries[5].disabled = 1;
         entry->parent->position = 6;
+
+        link_status = LINK_CONNECTING;
     }
 }
 
@@ -295,6 +308,7 @@ static void reset_rom(menu_entry_t *entry) {
     if (!emu)
         return;
     emulator_reset(emu, config.mode);
+    emulator_print_status(emu);
     is_paused = SDL_FALSE;
 }
 
@@ -421,12 +435,18 @@ static void handle_input(void) {
                 free(savestate_path);
                 break;
             }
-            if (!is_paused)
+            if (!is_paused) {
                 emulator_joypad_press(emu, sdl_key_to_joypad(event.key.keysym.sym));
+                if (link_status == LINK_CONNECTED)
+                    link_send_joypad(emulator_get_joypad_state(emu));
+            }
             break;
         case SDL_KEYUP:
-            if (!event.key.repeat && !is_paused)
+            if (!event.key.repeat && !is_paused) {
                 emulator_joypad_release(emu, sdl_key_to_joypad(event.key.keysym.sym));
+                if (link_status == LINK_CONNECTED)
+                    link_send_joypad(emulator_get_joypad_state(emu));
+            }
             break;
         case SDL_CONTROLLERBUTTONDOWN:
             if (is_paused) {
@@ -445,12 +465,18 @@ static void handle_input(void) {
                 ui_back_to_root_menu(ui);
                 break;
             }
-            if (!is_paused)
+            if (!is_paused) {
                 emulator_joypad_press(emu, sdl_controller_to_joypad(event.cbutton.button));
+                if (link_status == LINK_CONNECTED)
+                    link_send_joypad(emulator_get_joypad_state(emu));
+            }
             break;
         case SDL_CONTROLLERBUTTONUP:
-            if (!is_paused)
+            if (!is_paused) {
                 emulator_joypad_release(emu, sdl_controller_to_joypad(event.cbutton.button));
+                if (link_status == LINK_CONNECTED)
+                    link_send_joypad(emulator_get_joypad_state(emu));
+            }
             break;
         case SDL_CONTROLLERDEVICEADDED:
             if (!is_controller_present) {
@@ -579,6 +605,19 @@ int main(int argc, char **argv) {
     // main gbmulator loop
     int cycles = 0;
     while (is_running) {
+        if (link_status == LINK_CONNECTING && link_complete_connection())
+            link_status = LINK_INITIALIZATION;
+        if (link_status == LINK_INITIALIZATION) {
+            emulator_t *new_linked_emu;
+            int ret = link_run_init_transfer(emu, &new_linked_emu);
+            if (ret == -1) {
+                // TODO disconnection
+            } else if (ret == 1 && new_linked_emu) {
+                linked_emu = new_linked_emu;
+                link_status = LINK_CONNECTED;
+            }
+        }
+
         // emulation paused
         if (is_paused) {
             handle_input();
@@ -633,6 +672,11 @@ int main(int argc, char **argv) {
 
         // run one step of the emulator
         cycles += emulator_step(emu);
+
+        if (link_status == LINK_CONNECTED) {
+            link_poll_joypad(linked_emu);
+            emulator_step(linked_emu);
+        }
 
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).
     }
