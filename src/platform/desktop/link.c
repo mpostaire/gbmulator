@@ -10,6 +10,28 @@
 
 #include "emulator/emulator.h"
 
+// TODO
+// the actual pb is that tetris don't sync the tetronimoes
+// because at the time the local master starts generating the random tetronimoes, the
+// remote master hasn't received the input making it generating them yet.
+// it receives the input at a later cycle count/frame so will inevitably generate a different set of tetronimoes.
+// This is so even with a constant emulator_step() cycles! (but even worse if they are not constant??)
+// step 1 --> do the initial handshake and savestate sharing.
+// step 2 --> exchange joypad packets
+// step 3 --> apply the received joypad packets to the linked_emu of the server and the client
+// step 4 --> run client and server emulation for n frames (choose n for different latencies; n=1 is the best)
+// step 5 --> wait client and server emulation
+// step 6 --> go back to step 2 
+
+// this can cause stutters if the network latency is too high. To 'fix' use retroarch's rewinding technique:
+// As it's more complex, implement the algorithm above first. 
+// retroarch's netplay is Magic.
+// Basically it relies on the fact that we can emulate a system like the gameboy much faster than realtime,
+// so when it gets an input state change from the remote player that's n frames old, it rewinds the emulation state
+// by n frames, gives it that input, then runs things forwards again and displays the result to the local user,
+// all within a single frame, effectively sending the lagged input "into the past".
+// Under reasonable assumptions, it works quite well
+
 #ifndef IPPROTO_MPTCP
 #define IPPROTO_MPTCP 262
 #endif
