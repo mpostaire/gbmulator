@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stddef.h>
+#include <arpa/inet.h>
 #ifdef __ANDROID__
 #include <SDL.h>
 #else
