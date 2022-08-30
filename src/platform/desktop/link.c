@@ -15,21 +15,6 @@
 #endif
 
 typedef enum {
-    INFO_SEND,
-    INFO_SENDING,
-    INFO_RECEIVE,
-    ROM_SEND,
-    ROM_SENDING,
-    ROM_RECEIVE_HEADER,
-    ROM_RECEIVE_PAYLOAD,
-    STATE_SEND,
-    STATE_SENDING,
-    STATE_RECEIVE_HEADER,
-    STATE_RECEIVE_PAYLOAD,
-    JOYPAD_CHANGE
-} link_state_t;
-
-typedef enum {
     INFO,
     ROM,
     STATE,
@@ -40,11 +25,6 @@ int server_sfd = -1;
 int client_sfd = -1;
 int is_server = 0;
 struct sockaddr server_addr;
-
-link_state_t protocol_state = INFO_SEND;
-ssize_t last_buf_received_len = 0;
-ssize_t last_buf_sent_len = 0;
-word_t checksum;
 
 static void print_connected_to(struct sockaddr *addr) {
     char buf[INET6_ADDRSTRLEN];
@@ -79,7 +59,7 @@ int link_start_server(const char *port, int is_ipv6, int mptcp_enabled) {
 
     for (; res != NULL; res = res->ai_next) {
         // getaddrinfo doesn't work with IPPROTO_MPTCP
-        if ((server_sfd = socket(res->ai_family, res->ai_socktype | SOCK_NONBLOCK, mptcp_enabled ? IPPROTO_MPTCP : res->ai_protocol)) == -1)
+        if ((server_sfd = socket(res->ai_family, res->ai_socktype, mptcp_enabled ? IPPROTO_MPTCP : res->ai_protocol)) == -1)
             continue;
 
         if (!bind(server_sfd, res->ai_addr, res->ai_addrlen))
@@ -114,6 +94,14 @@ int link_start_server(const char *port, int is_ipv6, int mptcp_enabled) {
 
     printf("Link server waiting for client on port %s...\n", port);
 
+    // wait for a client connection
+    socklen_t client_addr_len = sizeof(struct sockaddr_in6); // take the largest possible size regardless of IP version
+    struct sockaddr *client_addr = xmalloc(client_addr_len);
+    client_sfd = accept(server_sfd, client_addr, &client_addr_len);
+    if (client_sfd == -1)
+        return 0;
+    print_connected_to(client_addr);
+    free(client_addr);
     return 1;
 }
 
@@ -135,17 +123,13 @@ int link_connect_to_server(const char *address, const char *port, int is_ipv6, i
 
     for (; res != NULL; res = res->ai_next) {
         // getaddrinfo doesn't work with IPPROTO_MPTCP
-        if ((server_sfd = socket(res->ai_family, res->ai_socktype | SOCK_NONBLOCK, mptcp_enabled ? IPPROTO_MPTCP : res->ai_protocol)) == -1)
+        if ((server_sfd = socket(res->ai_family, res->ai_socktype, mptcp_enabled ? IPPROTO_MPTCP : res->ai_protocol)) == -1)
             continue;
 
-        ret = connect(server_sfd, res->ai_addr, res->ai_addrlen);
-        if (ret == -1 && errno != EINPROGRESS) {
-
-        } else {
+        if (connect(server_sfd, res->ai_addr, res->ai_addrlen) == -1)
+            close(server_sfd);
+        else
             break;
-        }
-
-        close(server_sfd);
     }
 
     if (res == NULL) {
@@ -162,255 +146,178 @@ int link_connect_to_server(const char *address, const char *port, int is_ipv6, i
 
     printf("Link client connecting to server %s on port %s...\n", address, port);
 
+    // confirm connection to the server
+    char buf;
+    if (send(server_sfd, &buf, 0, MSG_NOSIGNAL) == -1) {
+        close(server_sfd);
+        server_sfd = -1;
+        errnoprintf("could not make a connection");
+        return 0;
+    }
+    print_connected_to(&server_addr);
     return 1;
 }
 
-/**
- * Check if a connection has been made without blocking.
- */
-int link_complete_connection(void) {
-    if (is_server) {
-        socklen_t client_addr_len = sizeof(struct sockaddr_in6); // take the largest possible size regardless of IP version
-        struct sockaddr *client_addr = xmalloc(client_addr_len);
-        client_sfd = accept(server_sfd, client_addr, &client_addr_len);
-        if (client_sfd == -1) {
-            if (errno != EAGAIN)
-                errnoprintf("accept");
+static inline int receive(int fd, void *buf, size_t n, int flags) {
+    ssize_t total_ret = 0;
+    while (total_ret != n) {
+        ssize_t ret = recv(fd, &((char *) buf)[total_ret], n - total_ret, flags);
+        if (ret == -1)
             return 0;
-        }
-        print_connected_to(client_addr);
-        free(client_addr);
+        total_ret += ret;
+    }
+    return 1;
+}
+
+static int exchange_info(int sfd, emulator_t *emu, emulator_mode_t *mode, int *can_compress) {
+    // --- SEND INFO ---
+
+    word_t checksum = 0;
+    for (int i = 0; i < sizeof(emu->mmu->cartridge); i += 2)
+        checksum = checksum - (emu->mmu->cartridge[i] + emu->mmu->cartridge[i + 1]) - 1;
+
+    byte_t pkt[4];
+    pkt[0] = INFO;
+    pkt[1] = emu->mode;
+    #ifdef __HAVE_ZLIB__
+    // SET_BIT(pkt[1], 7); // TODO fix compression
+    #endif
+    memcpy(&pkt[2], &checksum, 2);
+
+    send(sfd, pkt, 4, 0);
+
+    // --- RECEIVE INFO ---
+
+    receive(sfd, pkt, 4, 0);
+
+    if (pkt[0] != INFO) {
+        eprintf("received packet type %d but expected %d (ignored)\n", pkt[0], INFO);
+        return -1;
+    }
+
+    *mode = pkt[1] & 0x03;
+    #ifdef __HAVE_ZLIB__
+    *can_compress = GET_BIT(pkt[1], 7);
+    #endif
+
+    word_t received_checksum = 0;
+    memcpy(&received_checksum, &pkt[2], 2);
+    if (received_checksum == checksum) {
         return 1;
     } else {
-        struct pollfd fds;
-        fds.fd = server_sfd;
-        fds.events = POLLOUT;
-        if (poll(&fds, 1, 0) == 1) {
-            char buf;
-            if (send(server_sfd, &buf, 0, MSG_NOSIGNAL) == 0) {
-                print_connected_to(&server_addr);
-                return 1;
-            } else {
-                close(server_sfd);
-                server_sfd = -1;
-                errnoprintf("could not make a connection");
-            }
-        }
+        printf("checksum mismatch ('%x' != '%x'): exchanging ROMs\n", checksum, received_checksum);
+        return 0;
     }
-
-    return 0;
 }
 
-int send_pkt(int fd, void *buf, size_t n, int flags) {
-    struct pollfd fds;
-    fds.fd = fd;
-    fds.events = POLLOUT;
-    if (poll(&fds, 1, 0) != 1)
-        return 0;
+static int exchange_rom(int sfd, emulator_t *emu, byte_t **rom_data, size_t *rom_len) {
+    // --- SEND ROM ---
 
-    ssize_t ret = send(fd, &((char *) buf)[last_buf_sent_len], n - last_buf_sent_len, flags);
-    if (ret == -1) {
-        errnoprintf();
+    // TODO compression
+    byte_t *rom = emulator_get_rom(emu, rom_len);
+
+    byte_t *pkt = xcalloc(1, *rom_len + 9);
+    pkt[0] = ROM;
+    memcpy(&pkt[1], rom_len, 8);
+    memcpy(&pkt[9], &rom, *rom_len);
+
+    send(sfd, pkt, *rom_len + 9, 0);
+    free(pkt);
+
+    // --- RECEIVE ROM ---
+
+    // TODO compression
+    byte_t pkt_header[9];
+    receive(sfd, pkt_header, 9, 0);
+
+    if (pkt_header[0] != ROM) {
+        eprintf("received packet type %d but expected %d (ignored)\n", pkt_header[0], ROM);
         return 0;
     }
-    last_buf_sent_len += ret;
-    if (last_buf_sent_len > n) {
-        eprintf("sent too much (expected %ld, sent %ld)\n", n, last_buf_sent_len);
-        last_buf_sent_len = 0;
-        return 0;
-    } else if (last_buf_sent_len == n) {
-        last_buf_sent_len = 0;
-        return 1;
-    }
-    return 0;
+
+    memcpy(rom_len, &pkt_header[1], 8);
+    *rom_data = xcalloc(1, *rom_len);
+
+    receive(sfd, *rom_data, *rom_len, 0);
+
+    return 1;
 }
 
-int receive_pkt(int fd, void *buf, size_t n, int flags) {
-    struct pollfd fds;
-    fds.fd = fd;
-    fds.events = POLLIN;
-    if (poll(&fds, 1, 0) != 1)
-        return 0;
+static int exchange_savestate(int sfd, emulator_t *emu, int can_compress, byte_t **savestate_data, size_t *savestate_len) {
+    // --- SEND SAVESTATE ---
 
-    ssize_t ret = recv(fd, &((char *) buf)[last_buf_received_len], n - last_buf_received_len, flags);
-    if (ret == -1) {
-        errnoprintf();
+    byte_t *local_savestate_data = emulator_get_savestate(emu, savestate_len, can_compress);
+
+    byte_t *pkt = xcalloc(1, *savestate_len + 9);
+    pkt[0] = STATE;
+    memcpy(&pkt[1], savestate_len, 8);
+    memcpy(&pkt[9], local_savestate_data, *savestate_len);
+
+    send(sfd, pkt, *savestate_len + 9, 0);
+    free(pkt);
+    free(local_savestate_data);
+
+    // --- RECEIVE SAVESTATE ---
+
+    byte_t pkt_header[9];
+    receive(sfd, pkt_header, 9, 0);
+
+    if (pkt_header[0] != STATE) {
+        eprintf("received packet type %d but expected %d (ignored)\n", pkt_header[0], STATE);
         return 0;
     }
-    last_buf_received_len += ret;
-    if (last_buf_received_len > n) {
-        eprintf("received too much (expected %ld, got %ld)\n", n, last_buf_received_len);
-        last_buf_received_len = 0;
-        return 0;
-    } else if (last_buf_received_len == n) {
-        last_buf_received_len = 0;
-        return 1;
-    }
-    return 0;
+
+    memcpy(savestate_len, &pkt_header[1], 8);
+
+    *savestate_data = xcalloc(1, *savestate_len);
+
+    receive(sfd, *savestate_data, *savestate_len, 0);
+
+    return 1;
 }
 
-byte_t can_compress = 0;
-emulator_mode_t mode;
-byte_t *savestate;
-byte_t *rom_data;
-uint64_t savestate_len;
-size_t rom_len;
-byte_t small_buf[9];
-byte_t *buf;
-int link_run_init_transfer(emulator_t *emu, emulator_t **linked_emu) {
+int link_init_transfer(emulator_t *emu, emulator_t **linked_emu) {
     // TODO connection lost detection (return -1)
-
-
-
     int sfd = is_server ? client_sfd : server_sfd;
     *linked_emu = NULL;
-    switch (protocol_state) {
-    case INFO_SEND:
-        // cartridge checksum
-        checksum = 0;
-        for (int i = 0; i < sizeof(emu->mmu->cartridge); i += 2)
-            checksum = checksum - (emu->mmu->cartridge[i] + emu->mmu->cartridge[i + 1]) - 1;
+    emulator_mode_t mode = 0;
+    int can_compress = 0;
+    size_t rom_len;
+    byte_t *rom_data = NULL;
+    size_t savestate_len;
+    byte_t *savestate_data = NULL;
 
-        small_buf[0] = INFO;
-        small_buf[1] = emu->mode;
-        #ifdef __HAVE_ZLIB__
-        // SET_BIT(small_buf[1], 7); // TODO fix compression
-        #endif
-        memcpy(&small_buf[2], &checksum, 2);
+    // TODO handle wrong packet type received
+    int ret = exchange_info(sfd, emu, &mode, &can_compress);
+    if (ret == 0)
+        exchange_rom(sfd, emu, &rom_data, &rom_len);
+    exchange_savestate(sfd, emu, can_compress, &savestate_data, &savestate_len);
 
-        protocol_state = INFO_SENDING;
-        break;
-    case INFO_SENDING:
-        if (!send_pkt(sfd, small_buf, 4, 0))
-            return 0;
-        protocol_state = INFO_RECEIVE;
-        break;
-    case INFO_RECEIVE:
-        if (!receive_pkt(sfd, small_buf, 4, 0))
-            return 0;
+    // --- LINK BACKGROUND EMUALATOR ---
 
-        if (small_buf[0] != INFO) {
-            eprintf("received packet type %d but expected %d (ignored)\n", small_buf[0], INFO);
-            return 0;
-        }
-
-        mode = small_buf[1] & 0x03;
-        #ifdef __HAVE_ZLIB__
-        can_compress = GET_BIT(small_buf[1], 7);
-        #endif
-
-        word_t received_checksum = 0;
-        memcpy(&received_checksum, &small_buf[2], 2);
-        if (received_checksum == checksum) {
-            protocol_state = STATE_SEND;
-        } else {
-            printf("received checksum '%x' but expected '%x': exchanging ROMs\n", received_checksum, checksum);
-            protocol_state = ROM_SEND;
-        }
-        break;
-    case ROM_SEND:
-        // TODO compression
-        byte_t *rom = emulator_get_rom(emu, &rom_len);
-
-        buf = xcalloc(1, rom_len + 9);
-        buf[0] = ROM;
-        memcpy(&buf[1], &rom_len, 8);
-        memcpy(&buf[9], &rom, rom_len);
-
-        protocol_state = ROM_SENDING;
-        break;
-    case ROM_SENDING:
-        if (!send_pkt(sfd, buf, rom_len + 9, 0))
-            return 0;
-        free(buf);
-        protocol_state = ROM_RECEIVE_HEADER;
-        break;
-    case ROM_RECEIVE_HEADER:
-        // TODO compression
-        if (!receive_pkt(sfd, small_buf, 9, 0))
-            return 0;
-
-        if (small_buf[0] != ROM) {
-            eprintf("received packet type %d but expected %d (ignored)\n", small_buf[0], ROM);
-            return 0;
-        }
-
-        memcpy(&rom_len, &small_buf[1], 8);
-        rom_data = xcalloc(1, rom_len);
-
-        protocol_state = ROM_RECEIVE_PAYLOAD;
-        break;
-    case ROM_RECEIVE_PAYLOAD:
-        if (!receive_pkt(sfd, rom_data, rom_len, 0))
-            return 0;
-        protocol_state = STATE_SEND;
-    case STATE_SEND:
-        savestate = emulator_get_savestate(emu, &savestate_len, can_compress);
-
-        buf = xcalloc(1, savestate_len + 9);
-        buf[0] = STATE;
-        memcpy(&buf[1], &savestate_len, 8);
-        memcpy(&buf[9], savestate, savestate_len);
-
-        protocol_state = STATE_SENDING;
-        break;
-    case STATE_SENDING:
-        if (!send_pkt(sfd, buf, savestate_len + 9, 0))
-            return 0;
-        free(buf);
-        protocol_state = STATE_RECEIVE_HEADER;
-        break;
-    case STATE_RECEIVE_HEADER:
-        if (!receive_pkt(sfd, small_buf, 9, 0))
-            return 0;
-
-        if (small_buf[0] != STATE) {
-            eprintf("received packet type %d but expected %d (ignored)\n", small_buf[0], STATE);
-            return 0;
-        }
-
-        memcpy(&savestate_len, &small_buf[1], 8);
-
-        savestate = xrealloc(savestate, savestate_len);
-
-        protocol_state = STATE_RECEIVE_PAYLOAD;
-        break;
-    case STATE_RECEIVE_PAYLOAD:
-        if (!receive_pkt(sfd, savestate, savestate_len, 0))
-            return 0;
-
-        emulator_options_t opts = { .mode = mode };
-        if (rom_data) {
-            *linked_emu = emulator_init(rom_data, rom_len, &opts);
-            // if (!*linked_emu) { // TODO error handling but instead of restarting from INFO_SEND send a special ERROR packet
-            //     eprintf("received invalid or corrupted ROM, retrying connection...\n");
-            //     protocol_state = INFO_SEND;
-            //     free(rom_data);
-            //     free(savestate);
-            //     return 0;
-            // }
+    emulator_options_t opts = { .mode = mode };
+    if (rom_data) {
+        *linked_emu = emulator_init(rom_data, rom_len, &opts);
+        if (!*linked_emu) {
+            eprintf("received invalid or corrupted ROM\n");
             free(rom_data);
-        } else {
-            rom_data = emulator_get_rom(emu, &rom_len);
-            *linked_emu = emulator_init(rom_data, rom_len, &opts);
+            return 0;
         }
-        emulator_load_savestate(*linked_emu, savestate, savestate_len);
-        // if (!emulator_load_savestate(*linked_emu, savestate, savestate_len)) { // TODO error handling but instead of restarting from INFO_SEND send a special ERROR packet
-        //     eprintf("received invalid or corrupted savestate, retrying connection...\n");
-        //     protocol_state = INFO_SEND;
-        //     return 0;
-        // }
-        emulator_link_connect(emu, *linked_emu);
-
-        free(savestate);
-
-        protocol_state = JOYPAD_CHANGE;
-        return 1;
-    default:
-        break;
+        free(rom_data);
+    } else {
+        rom_data = emulator_get_rom(emu, &rom_len);
+        *linked_emu = emulator_init(rom_data, rom_len, &opts);
     }
+    if (!emulator_load_savestate(*linked_emu, savestate_data, savestate_len)) {
+        eprintf("received invalid or corrupted savestate\n");
+        return 0;
+    }
+    emulator_link_connect(emu, *linked_emu);
+    printf("Link cable successfully connected\n");
 
-    return 0;
+    free(savestate_data);
+
+    return 1;
 }
 
 void link_send_joypad(byte_t joypad) {
@@ -418,17 +325,24 @@ void link_send_joypad(byte_t joypad) {
     char buf[2];
     buf[0] = JOYPAD;
     buf[1] = joypad;
-    send_pkt(sfd, buf, 2, 0);
+    send(sfd, buf, 2, 0);
 }
 
 void link_poll_joypad(emulator_t *emu) {
-    int sfd = is_server ? client_sfd : server_sfd;
-    char buf[2];
-    if (!receive_pkt(sfd, buf, 2, 0))
+    struct pollfd fds;
+    fds.fd = is_server ? client_sfd : server_sfd;
+    fds.events = POLLIN;
+    if (poll(&fds, 1, 0) != 1)
         return;
+
+    char buf[2];
+    receive(fds.fd, buf, 2, 0);
     if (buf[0] != JOYPAD) {
         eprintf("received packet type %d but expected %d (ignored)\n", buf[0], JOYPAD);
         return;
     }
+    printf("[incoming joypad] a=%d b=%d select=%d start=%d | right=%d left=%d up=%d down=%d\n",
+        !GET_BIT(buf[1], 7), !GET_BIT(buf[1], 6), !GET_BIT(buf[1], 5), !GET_BIT(buf[1], 4),
+        !GET_BIT(buf[1], 3), !GET_BIT(buf[1], 2), !GET_BIT(buf[1], 1), !GET_BIT(buf[1], 0));
     emulator_set_joypad_state(emu, buf[1]);
 }

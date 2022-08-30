@@ -23,16 +23,9 @@
 // TODO: in pokemon gold (in CGB and DMG modes) at the beginning animation of a battle, when the wild pokemon slides to the
 // right, at the last moment, the top of the pokemon's sprite will appear for a few frames where the combat menu should be located
 
-typedef enum {
-    LINK_DISCONNECTED,
-    LINK_CONNECTING,
-    LINK_INITIALIZATION,
-    LINK_CONNECTED
-} link_status_t;
-
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
-link_status_t link_status = LINK_DISCONNECTED;
+SDL_bool is_link_connected = SDL_FALSE;
 
 SDL_Window *window;
 
@@ -277,7 +270,12 @@ static void start_link(menu_entry_t *entry) {
     else
         success = link_start_server(config.link_port, config.is_ipv6, config.mptcp_enabled);
 
-    if (success) {
+    emulator_t *new_linked_emu;
+    if (success && link_init_transfer(emu, &new_linked_emu)) {
+        linked_emu = new_linked_emu;
+        is_link_connected = SDL_TRUE;
+        is_paused = SDL_FALSE;
+
         entry->parent->entries[0].disabled = 1;
         entry->parent->entries[1].disabled = 1;
         entry->parent->entries[2].disabled = 1;
@@ -285,8 +283,6 @@ static void start_link(menu_entry_t *entry) {
         entry->parent->entries[4].disabled = 1;
         entry->parent->entries[5].disabled = 1;
         entry->parent->position = 6;
-
-        link_status = LINK_CONNECTING;
     }
 }
 
@@ -376,9 +372,6 @@ menu_t main_menu = {
 
 
 
-
-// TODO add handle_input_paused() functions that uses if(SDL_WaitEvent(&event)) to update screen only when an input has been received
-//      --> can then remove the SDL_Delay(1.0f / 30.0f) in pause
 static void handle_input(void) {
     SDL_Event event;
     char *savestate_path;
@@ -437,14 +430,14 @@ static void handle_input(void) {
             }
             if (!is_paused) {
                 emulator_joypad_press(emu, sdl_key_to_joypad(event.key.keysym.sym));
-                if (link_status == LINK_CONNECTED)
+                if (is_link_connected)
                     link_send_joypad(emulator_get_joypad_state(emu));
             }
             break;
         case SDL_KEYUP:
             if (!event.key.repeat && !is_paused) {
                 emulator_joypad_release(emu, sdl_key_to_joypad(event.key.keysym.sym));
-                if (link_status == LINK_CONNECTED)
+                if (is_link_connected)
                     link_send_joypad(emulator_get_joypad_state(emu));
             }
             break;
@@ -467,14 +460,14 @@ static void handle_input(void) {
             }
             if (!is_paused) {
                 emulator_joypad_press(emu, sdl_controller_to_joypad(event.cbutton.button));
-                if (link_status == LINK_CONNECTED)
+                if (is_link_connected)
                     link_send_joypad(emulator_get_joypad_state(emu));
             }
             break;
         case SDL_CONTROLLERBUTTONUP:
             if (!is_paused) {
                 emulator_joypad_release(emu, sdl_controller_to_joypad(event.cbutton.button));
-                if (link_status == LINK_CONNECTED)
+                if (is_link_connected)
                     link_send_joypad(emulator_get_joypad_state(emu));
             }
             break;
@@ -605,19 +598,6 @@ int main(int argc, char **argv) {
     // main gbmulator loop
     int cycles = 0;
     while (is_running) {
-        if (link_status == LINK_CONNECTING && link_complete_connection())
-            link_status = LINK_INITIALIZATION;
-        if (link_status == LINK_INITIALIZATION) {
-            emulator_t *new_linked_emu;
-            int ret = link_run_init_transfer(emu, &new_linked_emu);
-            if (ret == -1) {
-                // TODO disconnection
-            } else if (ret == 1 && new_linked_emu) {
-                linked_emu = new_linked_emu;
-                link_status = LINK_CONNECTED;
-            }
-        }
-
         // emulation paused
         if (is_paused) {
             handle_input();
@@ -673,7 +653,9 @@ int main(int argc, char **argv) {
         // run one step of the emulator
         cycles += emulator_step(emu);
 
-        if (link_status == LINK_CONNECTED) {
+        // TODO for this to be a true link, the cycles of emu and linked_emu must be synced.
+        //      --> implement the 4 cycles per step
+        if (is_link_connected) {
             link_poll_joypad(linked_emu);
             emulator_step(linked_emu);
         }
