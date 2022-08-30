@@ -4,9 +4,6 @@
 #include "cpu.h"
 #include "mmu.h"
 
-// TODO this is still buggy: tetris works fine, dr mario has glitched game over screen (unrelated?)
-//      and pokemon red has glitched fight and trade
-
 void link_set_clock(emulator_t *emu) {
     if (emu->mode == CGB) {
         // TODO handle double speed (also call this function where the double speed enable/disable is happening)
@@ -39,9 +36,6 @@ void link_step(emulator_t *emu, int cycles) {
     if (link->cycles_counter >= link->clock_cycles) {
         link->cycles_counter -= link->clock_cycles; // keep leftover cycles (if any)
 
-        if (!link->other_emu)
-            return;
-
         // transfer requested / in progress with internal clock (this emu is the master of the connection)
         // --> the master emulator also does the work for the slave so we don't have to handle the case
         //     where this emu is the slave
@@ -49,24 +43,30 @@ void link_step(emulator_t *emu, int cycles) {
             if (link->bit_counter < 8) { // emulate 8 bit shifting
                 link->bit_counter++;
 
-                byte_t this_bit = GET_BIT(mmu->mem[SB], 7);
-                byte_t other_bit = GET_BIT(link->other_emu->mmu->mem[SB], 7);
+                byte_t other_bit = 0xFF; // this is 0xFF if no other_emu connected
+
+                if (link->other_emu) {
+                    other_bit = GET_BIT(link->other_emu->mmu->mem[SB], 7);
+                    byte_t this_bit = GET_BIT(mmu->mem[SB], 7);
+
+                    // transfer this emu bit to other_emu
+                    link->other_emu->mmu->mem[SB] <<= 1;
+                    CHANGE_BIT(link->other_emu->mmu->mem[SB], this_bit, 0);
+                }
 
                 // transfer other_emu bit to this emu
                 mmu->mem[SB] <<= 1;
                 CHANGE_BIT(mmu->mem[SB], other_bit, 0);
-
-                // transfer this emu bit to other_emu
-                link->other_emu->mmu->mem[SB] <<= 1;
-                CHANGE_BIT(link->other_emu->mmu->mem[SB], this_bit, 0);
             } else { // transfer is done (all bits were shifted)
                 link->bit_counter = 0;
 
                 RESET_BIT(mmu->mem[SC], 7);
                 cpu_request_interrupt(emu, IRQ_SERIAL);
 
-                RESET_BIT(link->other_emu->mmu->mem[SC], 7);
-                cpu_request_interrupt(link->other_emu, IRQ_SERIAL);
+                if (link->other_emu) {
+                    RESET_BIT(link->other_emu->mmu->mem[SC], 7);
+                    cpu_request_interrupt(link->other_emu, IRQ_SERIAL);
+                }
             }
         }
     }

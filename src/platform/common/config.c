@@ -18,14 +18,14 @@ struct config config = {
     .mptcp_enabled = 0,
 
     .keybindings = {
-        SDLK_LEFT,
         SDLK_RIGHT,
+        SDLK_LEFT,
         SDLK_UP,
         SDLK_DOWN,
         SDLK_KP_0,
         SDLK_KP_PERIOD,
-        SDLK_KP_1,
-        SDLK_KP_2
+        SDLK_KP_2,
+        SDLK_KP_1
     }
 };
 
@@ -85,14 +85,14 @@ static void parse_config_line(const char *line) {
         config.is_ipv6 = is_ipv6;
     } else if (sscanf(line, "mptcp=%hhu", &mptcp_enabled)) {
         config.mptcp_enabled = mptcp_enabled;
-    } else if (sscanf(line, "left=%15[^\t\n]", left)) {
-        key = SDL_GetKeyFromName(left);
-        if (config_verif_key(key))
-            config.keybindings[JOYPAD_LEFT] = key;
     } else if (sscanf(line, "right=%15[^\t\n]", right)) {
         key = SDL_GetKeyFromName(right);
         if (config_verif_key(key))
             config.keybindings[JOYPAD_RIGHT] = key;
+    } else if (sscanf(line, "left=%15[^\t\n]", left)) {
+        key = SDL_GetKeyFromName(left);
+        if (config_verif_key(key))
+            config.keybindings[JOYPAD_LEFT] = key;
     } else if (sscanf(line, "up=%15[^\t\n]", up)) {
         key = SDL_GetKeyFromName(up);
         if (config_verif_key(key))
@@ -109,14 +109,14 @@ static void parse_config_line(const char *line) {
         key = SDL_GetKeyFromName(b);
         if (config_verif_key(key))
             config.keybindings[JOYPAD_B] = key;
-    } else if (sscanf(line, "start=%15[^\t\n]", start)) {
-        key = SDL_GetKeyFromName(start);
-        if (config_verif_key(key))
-            config.keybindings[JOYPAD_START] = key;
     } else if (sscanf(line, "select=%15[^\t\n]", select)) {
         key = SDL_GetKeyFromName(select);
         if (config_verif_key(key))
             config.keybindings[JOYPAD_SELECT] = key;
+    } else if (sscanf(line, "start=%15[^\t\n]", start)) {
+        key = SDL_GetKeyFromName(start);
+        if (config_verif_key(key))
+            config.keybindings[JOYPAD_START] = key;
     }
 }
 
@@ -146,9 +146,9 @@ char *config_save_to_buffer(size_t *len) {
 
     // separate snprintfs as SDL_GetKeyName() returns a pointer which contents get overwritten at each call
     *len = strlen(buf);
-    snprintf(&buf[*len], 512 - *len, "left=%s\n", SDL_GetKeyName(config.keybindings[JOYPAD_LEFT]));
-    *len = strlen(buf);
     snprintf(&buf[*len], 512 - *len, "right=%s\n", SDL_GetKeyName(config.keybindings[JOYPAD_RIGHT]));
+    *len = strlen(buf);
+    snprintf(&buf[*len], 512 - *len, "left=%s\n", SDL_GetKeyName(config.keybindings[JOYPAD_LEFT]));
     *len = strlen(buf);
     snprintf(&buf[*len], 512 - *len, "up=%s\n", SDL_GetKeyName(config.keybindings[JOYPAD_UP]));
     *len = strlen(buf);
@@ -158,9 +158,9 @@ char *config_save_to_buffer(size_t *len) {
     *len = strlen(buf);
     snprintf(&buf[*len], 512 - *len, "b=%s\n", SDL_GetKeyName(config.keybindings[JOYPAD_B]));
     *len = strlen(buf);
-    snprintf(&buf[*len], 512 - *len, "start=%s\n", SDL_GetKeyName(config.keybindings[JOYPAD_START]));
-    *len = strlen(buf);
     snprintf(&buf[*len], 512 - *len, "select=%s\n", SDL_GetKeyName(config.keybindings[JOYPAD_SELECT]));
+    *len = strlen(buf);
+    snprintf(&buf[*len], 512 - *len, "start=%s\n", SDL_GetKeyName(config.keybindings[JOYPAD_START]));
     *len = strlen(buf);
 
     return buf;

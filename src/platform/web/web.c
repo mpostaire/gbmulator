@@ -254,16 +254,16 @@ static void handle_input(void) {
             if (is_paused) {
                 if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
                     set_pause(SDL_FALSE);
-                    if (editing_keybind >= JOYPAD_LEFT && editing_keybind <= JOYPAD_SELECT) {
+                    if (editing_keybind >= JOYPAD_RIGHT && editing_keybind <= JOYPAD_START) {
                         EM_ASM({
                             toggleEditingKeybind($0);
                             editingKeybind = -1;
                         }, editing_keybind);
                         editing_keybind = -1;
                     }
-                } else if (editing_keybind >= JOYPAD_LEFT && editing_keybind <= JOYPAD_SELECT && config_verif_key(event.key.keysym.sym)) {
+                } else if (editing_keybind >= JOYPAD_RIGHT && editing_keybind <= JOYPAD_START && config_verif_key(event.key.keysym.sym)) {
                     // check if another keybind is already bound to this key and swap them if this is the case
-                    for (int i = JOYPAD_LEFT; i <= JOYPAD_SELECT; i++) {
+                    for (int i = JOYPAD_RIGHT; i <= JOYPAD_START; i++) {
                         if (i != editing_keybind && config.keybindings[i] == event.key.keysym.sym) {
                             config.keybindings[i] = config.keybindings[editing_keybind];
                             EM_ASM({
@@ -410,7 +410,7 @@ int main(int argc, char **argv) {
     }, config.speed, config.sound * 100, config.scale, config.color_palette, config.mode);
 
     // separate calls necessary for SDL_GetKeyName()
-    for (int i = JOYPAD_LEFT; i <= JOYPAD_SELECT; i++) {
+    for (int i = JOYPAD_RIGHT; i <= JOYPAD_START; i++) {
         EM_ASM({
             document.getElementById("keybind-setter-" + $0).innerHTML = UTF8ToString($1);
         }, i, SDL_GetKeyName(config.keybindings[i]));

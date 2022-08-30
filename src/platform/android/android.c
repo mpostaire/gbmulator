@@ -99,15 +99,15 @@ button_t buttons[] = {
             .h = 10,
             .w = 30
         },
-        .button = JOYPAD_START
+        .button = JOYPAD_SELECT
     },
     {
         .shape = {
             .h = 10,
             .w = 30
         },
-        .button = JOYPAD_SELECT
-    },
+        .button = JOYPAD_START
+    }
 };
 
 static inline s_byte_t is_finger_over_button(float x, float y) {
@@ -226,8 +226,8 @@ static void button_release(SDL_TouchID touch_id) {
     buttons[0].texture = dpad_textures[dpad_status];
     buttons[1].texture = a_texture;
     buttons[2].texture = b_texture;
-    buttons[3].texture = start_texture;
-    buttons[4].texture = select_texture;
+    buttons[3].texture = select_texture;
+    buttons[4].texture = start_texture;
 
     for (int i = 0; i < SDL_GetNumTouchFingers(touch_id); i++) {
         SDL_Finger *f = SDL_GetTouchFinger(touch_id, i);
@@ -279,10 +279,10 @@ static void set_layout(int layout) {
         buttons[1].shape.y = portrait_a_y;
         buttons[2].shape.x = portrait_b_x;
         buttons[2].shape.y = portrait_b_y;
-        buttons[3].shape.x = portrait_start_x;
-        buttons[3].shape.y = portrait_start_y;
-        buttons[4].shape.x = portrait_select_x;
-        buttons[4].shape.y = portrait_select_y;
+        buttons[3].shape.x = portrait_select_x;
+        buttons[3].shape.y = portrait_select_y;
+        buttons[4].shape.x = portrait_start_x;
+        buttons[4].shape.y = portrait_start_y;
         break;
     case 1: // landscape
         SDL_RenderSetLogicalSize(renderer, screen_height, screen_width);
@@ -297,10 +297,10 @@ static void set_layout(int layout) {
         buttons[1].shape.y = landscape_a_y;
         buttons[2].shape.x = landscape_b_x;
         buttons[2].shape.y = landscape_b_y;
-        buttons[3].shape.x = landscape_start_x;
-        buttons[3].shape.y = landscape_start_y;
-        buttons[4].shape.x = landscape_select_x;
-        buttons[4].shape.y = landscape_select_y;
+        buttons[3].shape.x = landscape_select_x;
+        buttons[3].shape.y = landscape_select_y;
+        buttons[4].shape.x = landscape_start_x;
+        buttons[4].shape.y = landscape_start_y;
         break;
     }
 }

@@ -24,14 +24,14 @@ typedef enum {
 } color_palette_t;
 
 typedef enum {
-    JOYPAD_LEFT,
     JOYPAD_RIGHT,
+    JOYPAD_LEFT,
     JOYPAD_UP,
     JOYPAD_DOWN,
     JOYPAD_A,
     JOYPAD_B,
-    JOYPAD_START,
-    JOYPAD_SELECT
+    JOYPAD_SELECT,
+    JOYPAD_START
 } joypad_button_t;
 
 typedef struct {
