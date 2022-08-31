@@ -53,16 +53,10 @@ const char *mbc_names[] = {
 };
 
 int emulator_step(emulator_t *emu) {
-    // TODO make timings accurate by forcing each cpu_step() to take 4 cycles: if it's not enough to finish an instruction,
-    // the next cpu_step() will resume the previous instruction. This will makes the timer "hack" (increment within a loop and not an if)
-    // obsolete while allowing accurate memory timings emulation.
-
-    // each instruction is multiple steps where each memory access is one step in the instruction
-
     // stop execution of the program while a VBLANK DMA is active
     int cycles;
     if (emu->mmu->hdma.lock_cpu) // implies that the emulator is running in CGB mode
-        cycles = 1;
+        cycles = 4;
     else
         cycles = cpu_step(emu);
     mmu_step(emu, cycles);
@@ -303,7 +297,6 @@ byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, byte_t compresse
         savestate_data = dest;
 
         printf("get_savestate %ld (compress:%d) buf=%ld\n", sizeof(savestate_header_t) + savestate_data_len, ret, t);
-
     }
     #endif
 

@@ -2,7 +2,6 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <poll.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -15,7 +14,8 @@
 // because at the time the local master starts generating the random tetronimoes, the
 // remote master hasn't received the input making it generating them yet.
 // it receives the input at a later cycle count/frame so will inevitably generate a different set of tetronimoes.
-// This is so even with a constant emulator_step() cycles! (but even worse if they are not constant??)
+// Is this true even with a constant emulator_step() cycles?
+
 // step 1 --> do the initial handshake and savestate sharing.
 // step 2 --> exchange joypad packets
 // step 3 --> apply the received joypad packets to the linked_emu of the server and the client
@@ -342,31 +342,23 @@ int link_init_transfer(emulator_t *emu, emulator_t **linked_emu) {
     return 1;
 }
 
-void link_send_joypad(byte_t joypad) {
+int link_exchange_joypad(emulator_t *emu, emulator_t *linked_emu) {
     int sfd = is_server ? client_sfd : server_sfd;
     char buf[2];
     buf[0] = JOYPAD;
-    buf[1] = joypad;
+    buf[1] = emulator_get_joypad_state(emu);
     send(sfd, buf, 2, 0);
-}
 
-int link_poll_joypad(emulator_t *emu) {
-    struct pollfd fds;
-    fds.fd = is_server ? client_sfd : server_sfd;
-    fds.events = POLLIN;
-    if (poll(&fds, 1, 0) != 1)
-        return 1;
+    do {
+        if (!receive(sfd, buf, 2, 0))
+            return 0;
+        if (buf[0] != JOYPAD)
+            eprintf("received packet type %d but expected %d (ignored)\n", buf[0], JOYPAD);
+    } while (buf[0] != JOYPAD);
 
-    char buf[2];
-    if (!receive(fds.fd, buf, 2, 0))
-        return 0;
-    if (buf[0] != JOYPAD) {
-        eprintf("received packet type %d but expected %d (ignored)\n", buf[0], JOYPAD);
-        return 1;
-    }
     printf("[incoming joypad] a=%d b=%d select=%d start=%d | right=%d left=%d up=%d down=%d\n",
         !GET_BIT(buf[1], 7), !GET_BIT(buf[1], 6), !GET_BIT(buf[1], 5), !GET_BIT(buf[1], 4),
         !GET_BIT(buf[1], 3), !GET_BIT(buf[1], 2), !GET_BIT(buf[1], 1), !GET_BIT(buf[1], 0));
-    emulator_set_joypad_state(emu, buf[1]);
+    emulator_set_joypad_state(linked_emu, buf[1]);
     return 1;
 }

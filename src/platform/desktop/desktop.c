@@ -25,11 +25,11 @@
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
-SDL_bool is_link_connected = SDL_FALSE;
 
 SDL_Window *window;
 
 SDL_Texture *ppu_texture;
+SDL_Texture *linked_ppu_texture;
 int ppu_texture_pitch;
 
 SDL_AudioDeviceID audio_device;
@@ -41,6 +41,8 @@ char window_title[sizeof(EMULATOR_NAME) + 19];
 
 ui_t *ui;
 char *rom_path;
+
+int cycles_per_frame = GB_CPU_CYCLES_PER_FRAME;
 
 emulator_t *emu;
 emulator_t *linked_emu;
@@ -56,6 +58,10 @@ static void gbmulator_unpause(menu_entry_t *entry) {
 
 static void ppu_vblank_cb(byte_t *pixels) {
     SDL_UpdateTexture(ppu_texture, NULL, pixels, ppu_texture_pitch);
+}
+
+static void linked_ppu_vblank_cb(byte_t *pixels) {
+    SDL_UpdateTexture(linked_ppu_texture, NULL, pixels, ppu_texture_pitch);
 }
 
 static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
@@ -219,6 +225,7 @@ static void choose_scale(menu_entry_t *entry) {
 
 static void choose_speed(menu_entry_t *entry) {
     config.speed = (entry->choices.position * 0.5f) + 1;
+    cycles_per_frame = GB_CPU_CYCLES_PER_FRAME * config.speed;
     if (emu)
         emulator_set_apu_speed(emu, config.speed);
 }
@@ -273,7 +280,10 @@ static void start_link(menu_entry_t *entry) {
     emulator_t *new_linked_emu;
     if (success && link_init_transfer(emu, &new_linked_emu)) {
         linked_emu = new_linked_emu;
-        is_link_connected = SDL_TRUE;
+        emulator_options_t opts;
+        emulator_get_options(linked_emu, &opts);
+        opts.on_new_frame = linked_ppu_vblank_cb;
+        emulator_set_options(linked_emu, &opts);
         is_paused = SDL_FALSE;
 
         entry->parent->entries[0].disabled = 1;
@@ -428,18 +438,12 @@ static void handle_input(void) {
                 free(savestate_path);
                 break;
             }
-            if (!is_paused) {
+            if (!is_paused)
                 emulator_joypad_press(emu, sdl_key_to_joypad(event.key.keysym.sym));
-                if (is_link_connected)
-                    link_send_joypad(emulator_get_joypad_state(emu));
-            }
             break;
         case SDL_KEYUP:
-            if (!event.key.repeat && !is_paused) {
+            if (!event.key.repeat && !is_paused)
                 emulator_joypad_release(emu, sdl_key_to_joypad(event.key.keysym.sym));
-                if (is_link_connected)
-                    link_send_joypad(emulator_get_joypad_state(emu));
-            }
             break;
         case SDL_CONTROLLERBUTTONDOWN:
             if (is_paused) {
@@ -458,18 +462,12 @@ static void handle_input(void) {
                 ui_back_to_root_menu(ui);
                 break;
             }
-            if (!is_paused) {
+            if (!is_paused)
                 emulator_joypad_press(emu, sdl_controller_to_joypad(event.cbutton.button));
-                if (is_link_connected)
-                    link_send_joypad(emulator_get_joypad_state(emu));
-            }
             break;
         case SDL_CONTROLLERBUTTONUP:
-            if (!is_paused) {
+            if (!is_paused)
                 emulator_joypad_release(emu, sdl_controller_to_joypad(event.cbutton.button));
-                if (is_link_connected)
-                    link_send_joypad(emulator_get_joypad_state(emu));
-            }
             break;
         case SDL_CONTROLLERDEVICEADDED:
             if (!is_controller_present) {
@@ -497,6 +495,7 @@ int main(int argc, char **argv) {
     // must be called before emulator_init() and ui_init()
     config_load_from_file(config_path);
     emu = NULL;
+    cycles_per_frame = GB_CPU_CYCLES_PER_FRAME * config.speed;
 
 
 
@@ -546,7 +545,7 @@ int main(int argc, char **argv) {
     window = SDL_CreateWindow(
         EMULATOR_NAME,
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        GB_SCREEN_WIDTH * scale,
+        GB_SCREEN_WIDTH * scale * 2,
         GB_SCREEN_HEIGHT * scale,
         SDL_WINDOW_HIDDEN /*| SDL_WINDOW_RESIZABLE*/
     );
@@ -581,6 +580,7 @@ int main(int argc, char **argv) {
     SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
 
     ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    linked_ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
     ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
     SDL_Texture *ui_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
     int ui_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
@@ -640,29 +640,36 @@ int main(int argc, char **argv) {
         }
 
         // handle_input is a slow function: don't call it every step
-        if (cycles >= GB_CPU_CYCLES_PER_FRAME * config.speed) {
-            cycles -= GB_CPU_CYCLES_PER_FRAME * config.speed;
+        if (cycles >= cycles_per_frame) {
+            cycles -= cycles_per_frame;
             SDL_RenderClear(renderer);
-            SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
+            SDL_Rect ppu_rect = { .x = 0, .y = 0, .w = GB_SCREEN_WIDTH * config.scale, .h = GB_SCREEN_HEIGHT * config.scale };
+            SDL_Rect linked_ppu_rect = { .x = GB_SCREEN_WIDTH * config.scale, .y = 0, .w = GB_SCREEN_WIDTH * config.scale, .h = GB_SCREEN_HEIGHT * config.scale };
+            SDL_RenderCopy(renderer, ppu_texture, NULL, &ppu_rect);
+            if (linked_emu)
+                SDL_RenderCopy(renderer, linked_ppu_texture, NULL, &linked_ppu_rect);
             // this SDL_Delay() isn't needed as the audio sync adds it's own delay
             // SDL_Delay(1.0f / 60.0f); // even with SDL waiting for vsync, delay here for monitors with different refresh rates than 60Hz
             SDL_RenderPresent(renderer);
-            handle_input(); // keep this the closest possible before emulator_step() to reduce input inaccuracies
+
+            // keep this the closest possible before emulator_step() to reduce input inaccuracies
+            handle_input();
+            if (linked_emu && !link_exchange_joypad(emu, linked_emu)) {
+                printf("Link cable disconnected\n");
+                emulator_link_disconnect(emu);
+                emulator_quit(linked_emu);
+                linked_emu = NULL;
+            }
         }
 
         // run one step of the emulator
+        // TODO for the link to work both emulators MUST run at the same time.
+        //      in this current implementation, one emulator may run for a bit more cycles than the other
+        //      --> sync errors (e.g. tetris tetronimoes not the same because the rng is based on the DIV
+        //          register that depend on the cycle)
         cycles += emulator_step(emu);
-
-        // TODO for this to be a true link, the cycles of emu and linked_emu must be synced.
-        //      --> implement the 4 cycles per step
-        if (is_link_connected) {
-            if (!link_poll_joypad(linked_emu)) {
-                printf("Link cable disconnected\n");
-                is_link_connected = SDL_FALSE;
-            } else {
-                emulator_step(linked_emu);
-            }
-        }
+        if (linked_emu)
+            emulator_step(linked_emu);
 
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).
     }

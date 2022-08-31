@@ -2972,6 +2972,20 @@ void cpu_request_interrupt(emulator_t *emu, int irq) {
 }
 
 int cpu_step(emulator_t *emu) {
+    // TODO make this run for exactly 4 cycles everytime
+    // --> each instructions is separated in multiple steps costing 4 cycles
+    // each cpu_step() call runs such an instruction (or interrupt) step instead of
+    // all the instruction ---> instructions are not atomic
+    // add to the cpu the current instruction that it's execution and wich step of the instruction.
+    // find a way to split the cpu instructions (and interrupts) into steps
+
+    // THIS MAY BE VERY INEFFICIENT check this link for alternative:
+    // https://www.reddit.com/r/EmuDev/comments/e2grlv/comment/f8xc4d2/?utm_source=share&utm_medium=web2x&context=3
+    // This should be better performance wise but this won't allow for a fixed 4 cycles per cpu_step() call
+    // but is this really necessary?
+
+    // after this check everything with blaarg's cpu, cpu timing, mem timing and interrupt time tests
+
     cpu_t *cpu = emu->cpu;
 
     int interrupts_cycles = cpu_handle_interrupts(emu);
