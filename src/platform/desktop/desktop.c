@@ -667,9 +667,10 @@ int main(int argc, char **argv) {
         //      in this current implementation, one emulator may run for a bit more cycles than the other
         //      --> sync errors (e.g. tetris tetronimoes not the same because the rng is based on the DIV
         //          register that depend on the cycle)
-        cycles += emulator_step(emu);
+        emulator_step(emu);
         if (linked_emu)
             emulator_step(linked_emu);
+        cycles += 4;
 
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).
     }

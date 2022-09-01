@@ -35,46 +35,51 @@ typedef enum {
 } joypad_button_t;
 
 typedef struct {
-	union {
-		struct {
-			byte_t f;
-			byte_t a;
-		};
-		word_t af;
-	};
+    union {
+        struct {
+            byte_t f;
+            byte_t a;
+        };
+        word_t af;
+    };
 
-	union {
-		struct {
-			byte_t c;
-			byte_t b;
-		};
-		word_t bc;
-	};
+    union {
+        struct {
+            byte_t c;
+            byte_t b;
+        };
+        word_t bc;
+    };
 
-	union {
-		struct {
-			byte_t e;
-			byte_t d;
-		};
-		word_t de;
-	};
+    union {
+        struct {
+            byte_t e;
+            byte_t d;
+        };
+        word_t de;
+    };
 
-	union {
-		struct {
-			byte_t l;
-			byte_t h;
-		};
-		word_t hl;
-	};
+    union {
+        struct {
+            byte_t l;
+            byte_t h;
+        };
+        word_t hl;
+    };
 
-	word_t sp;
-	word_t pc;
+    word_t sp;
+    word_t pc;
 } registers_t;
 
 typedef struct {
-	registers_t registers;
-	byte_t ime; // interrupt master enable
-	byte_t halt;
+    registers_t registers;
+    byte_t ime; // interrupt master enable
+    byte_t halt;
+    byte_t opcode; // current opcode
+    int opcode_state; // current opcode or current microcode inside the opcode (< 0 --> request new instruction fetch)
+    byte_t is_opcode_cb;
+    word_t operand; // operand for the current opcode
+    word_t opcode_compute_storage; // storage used for an easier implementation of some opcodes
 } cpu_t;
 
 typedef enum {

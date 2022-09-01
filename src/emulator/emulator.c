@@ -52,19 +52,32 @@ const char *mbc_names[] = {
     "HuC1"
 };
 
-int emulator_step(emulator_t *emu) {
+void emulator_step(emulator_t *emu) {
+    // TODO make timings accurate by forcing each cpu_step() to take 4 cycles: if it's not enough to finish an instruction,
+    // the next cpu_step() will resume the previous instruction. This will makes the timer "hack" (increment within a loop and not an if)
+    // obsolete while allowing accurate memory timings emulation.
+
+    // each instruction is multiple steps where each memory access is one step in the instruction
+
     // stop execution of the program while a VBLANK DMA is active
     int cycles;
     if (emu->mmu->hdma.lock_cpu) // implies that the emulator is running in CGB mode
         cycles = 4;
     else
-        cycles = cpu_step(emu);
-    mmu_step(emu, cycles);
-    timer_step(emu, cycles);
-    link_step(emu, cycles);
-    ppu_step(emu, cycles);
-    apu_step(emu, cycles);
-    return cycles;
+        cpu_step(emu);
+
+    // TODO remove this
+    if (emu->mmu->mem[SC] == 0x81) {
+        printf("%c", emu->mmu->mem[SB]);
+        emu->mmu->mem[SC] = 0x00;
+    }
+
+    // TODO remove second arg of all the *_step(emu, 4) functions below once the cpu is implemented
+    mmu_step(emu, 4);
+    timer_step(emu, 4);
+    link_step(emu, 4);
+    ppu_step(emu, 4);
+    apu_step(emu, 4);
 }
 
 emulator_t *emulator_init(const byte_t *rom_data, size_t rom_size, emulator_options_t *opts) {

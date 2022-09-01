@@ -12,7 +12,7 @@ typedef enum {
 
 void cpu_request_interrupt(emulator_t *emu, int irq);
 
-int cpu_step(emulator_t *emu);
+void cpu_step(emulator_t *emu);
 
 void cpu_init(emulator_t *emu);
 
