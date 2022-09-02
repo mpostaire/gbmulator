@@ -22,6 +22,7 @@ typedef enum {
     SC = 0xFF02, // Serial transfer control
 
     // Timer
+    DIV_LSB = 0xFF03, // Lower byte of the Divider Register
     DIV = 0xFF04,  // Divider Register
     TIMA = 0xFF05, // Timer counter
     TMA = 0xFF06,  // Timer Modulo

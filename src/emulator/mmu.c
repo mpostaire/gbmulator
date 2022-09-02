@@ -622,9 +622,22 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD enabled
     } else if (address >= UNUSABLE && address < IO) {
         // UNUSABLE memory is unusable
+    } else if (address == DIV_LSB) {
+        // writing to DIV resets it to 0
+        mmu->mem[address] = 0;
+        mmu->mem[DIV] = 0;
     } else if (address == DIV) {
         // writing to DIV resets it to 0
         mmu->mem[address] = 0;
+        mmu->mem[DIV_LSB] = 0;
+    } else if (address == TAC) {
+        mmu->mem[address] = data;
+        switch (data & 0x03) {
+        case 0: emu->timer->max_tima_cycles = 1024; break;
+        case 1: emu->timer->max_tima_cycles = 16; break;
+        case 2: emu->timer->max_tima_cycles = 64; break;
+        case 3: emu->timer->max_tima_cycles = 256; break;
+        }
     } else if (address == LY) {
         // read only
     } else if (address == LYC) {

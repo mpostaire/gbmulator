@@ -233,7 +233,7 @@ typedef struct {
 } apu_t;
 
 typedef struct {
-    int div_counter;
+    int max_tima_cycles;
     int tima_counter;
 } gbtimer_t;
 
