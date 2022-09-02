@@ -10,7 +10,7 @@ typedef enum {
 	IRQ_JOYPAD
 } interrupt_t;
 
-void cpu_request_interrupt(emulator_t *emu, int irq);
+#define CPU_REQUEST_INTERRUPT(emu, irq) SET_BIT((emu)->mmu->mem[IF], (irq))
 
 void cpu_step(emulator_t *emu);
 

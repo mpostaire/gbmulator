@@ -75,9 +75,9 @@ typedef struct {
     registers_t registers;
     byte_t ime; // interrupt master enable
     byte_t halt;
+    byte_t exec_state; // determines if the cpu is pushing an interrupt execution, executiong a normal opcode or a cb opcode
     byte_t opcode; // current opcode
     int opcode_state; // current opcode or current microcode inside the opcode (< 0 --> request new instruction fetch)
-    byte_t is_opcode_cb;
     word_t operand; // operand for the current opcode
     word_t opcode_compute_storage; // storage used for an easier implementation of some opcodes
 } cpu_t;

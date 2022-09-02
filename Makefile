@@ -92,7 +92,7 @@ $(ICONS): $(ICONDIR)/$(EXEC).svg
 	[ $(patsubst $(ICONDIR)/%/$(EXEC).png,%,$@) = 192x192 ] && cp $(ICONDIR)/192x192/$(EXEC).png src/platform/android/android-project/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png || true
 
 run: desktop
-	./$(EXEC) "roms/tests/blargg/cpu_instrs/individual/06-ld r,r.gb"
+	./$(EXEC) "roms/tests/blargg/cpu_instrs/individual/07-jr,jp,call,ret,rst.gb"
 
 check: $(SDIR)/**/*.c
 	cppcheck --enable=all --suppress=missingIncludeSystem $(SDIR)

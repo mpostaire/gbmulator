@@ -21,7 +21,7 @@ void inline ppu_ly_lyc_compare(emulator_t *emu) {
     if (mmu->mem[LY] == mmu->mem[LYC]) {
         SET_BIT(mmu->mem[STAT], 2);
         if (CHECK_BIT(mmu->mem[STAT], 6))
-            cpu_request_interrupt(emu, IRQ_STAT);
+            CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
     } else {
         RESET_BIT(mmu->mem[STAT], 2);
     }

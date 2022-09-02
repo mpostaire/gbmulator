@@ -60,17 +60,8 @@ void emulator_step(emulator_t *emu) {
     // each instruction is multiple steps where each memory access is one step in the instruction
 
     // stop execution of the program while a VBLANK DMA is active
-    int cycles;
-    if (emu->mmu->hdma.lock_cpu) // implies that the emulator is running in CGB mode
-        cycles = 4;
-    else
+    if (!emu->mmu->hdma.lock_cpu)
         cpu_step(emu);
-
-    // TODO remove this
-    if (emu->mmu->mem[SC] == 0x81) {
-        printf("%c", emu->mmu->mem[SB]);
-        emu->mmu->mem[SC] = 0x00;
-    }
 
     // TODO remove second arg of all the *_step(emu, 4) functions below once the cpu is implemented
     mmu_step(emu, 4);
@@ -421,7 +412,7 @@ void emulator_set_joypad_state(emulator_t *emu, byte_t state) {
     emu->joypad->direction = state & 0x0F;
 
     if (!CHECK_BIT(emu->mmu->mem[P1], 4) || !CHECK_BIT(emu->mmu->mem[P1], 5))
-        cpu_request_interrupt(emu, IRQ_JOYPAD);
+        CPU_REQUEST_INTERRUPT(emu, IRQ_JOYPAD);
 }
 
 char *emulator_get_rom_title(emulator_t *emu) {

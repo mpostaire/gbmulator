@@ -14,16 +14,20 @@
 #define CHECK_FLAG(cpu, x) ((cpu)->registers.f & (x))
 #define RESET_FLAG(cpu, x) ((cpu)->registers.f &= ~(x))
 
-#define OPCODE_STATE_FETCH -1
+typedef enum {
+    FETCH_OPCODE,
+    FETCH_OPCODE_CB,
+    EXEC_OPCODE,
+    EXEC_OPCODE_CB,
+    EXEC_PUSH_IRQ
+} exec_state;
 
 // must be used in the last microcode (CLOCK() call) of an opcode
-#define END_OPCODE cpu->opcode_state = OPCODE_STATE_FETCH
+#define END_OPCODE cpu->exec_state = FETCH_OPCODE
 
-#define END_OPCODE_CB \
-{ \
-    END_OPCODE; \
-    cpu->is_opcode_cb = 0; \
-}
+#define END_PUSH_IRQ { END_OPCODE; cpu->ime = 0; }
+
+#define START_OPCODE_CB cpu->exec_state = FETCH_OPCODE_CB
 
 // https://www.reddit.com/r/EmuDev/comments/a7kr9h/comment/ec3wkfo/?utm_source=share&utm_medium=web2x&context=3
 #define _CLOCK(_label, ...) \
@@ -568,8 +572,8 @@ const opcode_t extended_instructions[256] = {
 // takes 8 cycles
 #define GET_OPERAND_16(...) \
 { \
-    CLOCK(cpu->operand = mmu_read(emu, cpu->registers.pc); cpu->registers.pc++); \
-    CLOCK(cpu->operand |= mmu_read(emu, cpu->registers.pc) << 8; cpu->registers.pc++; __VA_ARGS__;); \
+    CLOCK(cpu->operand = mmu_read(emu, cpu->registers.pc++)); \
+    CLOCK(cpu->operand |= mmu_read(emu, cpu->registers.pc++) << 8; __VA_ARGS__;); \
 }
 
 // takes 12 cycles
@@ -583,9 +587,9 @@ const opcode_t extended_instructions[256] = {
 // takes 12 cycles
 #define POP(reg_ptr, ...) \
 { \
-    CLOCK(*(reg_ptr) = mmu_read(emu, cpu->registers.sp)); \
-    CLOCK(*(reg_ptr) |= mmu_read(emu, cpu->registers.sp + 1) << 8); \
-    CLOCK(cpu->registers.sp += 2; __VA_ARGS__;); \
+    CLOCK(*(reg_ptr) = mmu_read(emu, cpu->registers.sp++)); \
+    CLOCK(*(reg_ptr) |= mmu_read(emu, cpu->registers.sp++) << 8); \
+    CLOCK(__VA_ARGS__); \
 }
 
 static inline void and(cpu_t *cpu, byte_t reg) {
@@ -674,18 +678,17 @@ static inline void sla(cpu_t *cpu, byte_t *reg) {
     RESET_FLAG(cpu, FLAG_N | FLAG_H);
 }
 
-// static byte_t sra(cpu_t *cpu, byte_t reg) {
-//     // set carry to the value of rightmost bit
-//     int msb = reg & 0x80;
-//     (reg & 0x01) ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
-//     // shift right
-//     reg >>= 1;
-//     reg |= msb;
+static inline void sra(cpu_t *cpu, byte_t *reg) {
+    // set carry to the value of rightmost bit
+    int msb = (*reg) & 0x80;
+    ((*reg) & 0x01) ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
+    // shift right
+    (*reg) >>= 1;
+    (*reg) |= msb;
 
-//     reg ? RESET_FLAG(cpu, FLAG_Z) : SET_FLAG(cpu, FLAG_Z);
-//     RESET_FLAG(cpu, FLAG_N | FLAG_H);
-//     return reg;
-// }
+    (*reg) ? RESET_FLAG(cpu, FLAG_Z) : SET_FLAG(cpu, FLAG_Z);
+    RESET_FLAG(cpu, FLAG_N | FLAG_H);
+}
 
 static inline void rr(cpu_t *cpu, byte_t *reg) {
     int carry = CHECK_FLAG(cpu, FLAG_C) ? 1 : 0;
@@ -798,936 +801,578 @@ static void exec_extended_opcode(emulator_t *emu) {
     cpu_t *cpu = emu->cpu;
 
     switch (cpu->opcode_state) {
-    // case 0x00: // RLC B
-    //     cpu->registers.b = rlc(cpu, cpu->registers.b);
-    //     cycles = 8;
-    //     break;
-    // case 0x01: // RLC C
-    //     cpu->registers.c = rlc(cpu, cpu->registers.c);
-    //     cycles = 8;
-    //     break;
-    // case 0x02: // RLC D
-    //     cpu->registers.d = rlc(cpu, cpu->registers.d);
-    //     cycles = 8;
-    //     break;
-    // case 0x03: // RLC E
-    //     cpu->registers.e = rlc(cpu, cpu->registers.e);
-    //     cycles = 8;
-    //     break;
-    // case 0x04: // RLC H
-    //     cpu->registers.h = rlc(cpu, cpu->registers.h);
-    //     cycles = 8;
-    //     break;
-    // case 0x05: // RLC L
-    //     cpu->registers.l = rlc(cpu, cpu->registers.l);
-    //     cycles = 8;
-    //     break;
-    // case 0x06: // RLC (HL)
-    //     mmu_write(emu, cpu->registers.hl, rlc(cpu, mmu_read(emu, cpu->registers.hl)));
-    //     cycles = 16;
-    //     break;
-    // case 0x07: // RLC A
-    //     cpu->registers.a = rlc(cpu, cpu->registers.a);
-    //     cycles = 8;
-    //     break;
-    // case 0x08: // RRC B
-    //     cpu->registers.b = rrc(cpu, cpu->registers.b);
-    //     cycles = 8;
-    //     break;
-    // case 0x09: // RRC C
-    //     cpu->registers.c = rrc(cpu, cpu->registers.c);
-    //     cycles = 8;
-    //     break;
-    // case 0x0A: // RRC D
-    //     cpu->registers.d = rrc(cpu, cpu->registers.d);
-    //     cycles = 8;
-    //     break;
-    // case 0x0B: // RRC E
-    //     cpu->registers.e = rrc(cpu, cpu->registers.e);
-    //     cycles = 8;
-    //     break;
-    // case 0x0C: // RRC H
-    //     cpu->registers.h = rrc(cpu, cpu->registers.h);
-    //     cycles = 8;
-    //     break;
-    // case 0x0D: // RRC L
-    //     cpu->registers.l = rrc(cpu, cpu->registers.l);
-    //     cycles = 8;
-    //     break;
-    // case 0x0E: // RRC (HL)
-    //     mmu_write(emu, cpu->registers.hl, rrc(cpu, mmu_read(emu, cpu->registers.hl)));
-    //     cycles = 16;
-    //     break;
-    // case 0x0F: // RRC A
-    //     cpu->registers.a = rrc(cpu, cpu->registers.a);
-    //     cycles = 8;
-    //     break;
+    case 0x00: // RLC B (4 cycles)
+        CLOCK(rlc(cpu, &cpu->registers.b); END_OPCODE;);
+    case 0x01: // RLC C (4 cycles)
+        CLOCK(rlc(cpu, &cpu->registers.c); END_OPCODE;);
+    case 0x02: // RLC D (4 cycles)
+        CLOCK(rlc(cpu, &cpu->registers.d); END_OPCODE;);
+    case 0x03: // RLC E (4 cycles)
+        CLOCK(rlc(cpu, &cpu->registers.e); END_OPCODE;);
+    case 0x04: // RLC H (4 cycles)
+        CLOCK(rlc(cpu, &cpu->registers.h); END_OPCODE;);
+    case 0x05: // RLC L (4 cycles)
+        CLOCK(rlc(cpu, &cpu->registers.l); END_OPCODE;);
+    case 0x06: // RLC (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(rlc(cpu, (byte_t *) &cpu->opcode_compute_storage));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
+    case 0x07: // RLC A (4 cycles)
+        CLOCK(rlc(cpu, &cpu->registers.a); END_OPCODE;);
+    case 0x08: // RRC B (4 cycles)
+        CLOCK(rrc(cpu, &cpu->registers.b); END_OPCODE);
+    case 0x09: // RRC C (4 cycles)
+        CLOCK(rrc(cpu, &cpu->registers.c); END_OPCODE);
+    case 0x0A: // RRC D (4 cycles)
+        CLOCK(rrc(cpu, &cpu->registers.d); END_OPCODE);
+    case 0x0B: // RRC E (4 cycles)
+        CLOCK(rrc(cpu, &cpu->registers.e); END_OPCODE);
+    case 0x0C: // RRC H (4 cycles)
+        CLOCK(rrc(cpu, &cpu->registers.h); END_OPCODE);
+    case 0x0D: // RRC L (4 cycles)
+        CLOCK(rrc(cpu, &cpu->registers.l); END_OPCODE);
+    case 0x0E: // RRC (HL) (16 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(rrc(cpu, (byte_t *) &cpu->opcode_compute_storage));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
+    case 0x0F: // RRC A (4 cycles)
+        CLOCK(rrc(cpu, &cpu->registers.a); END_OPCODE);
     case 0x10: // RL B (4 cycles)
-        CLOCK(rl(cpu, &cpu->registers.b); END_OPCODE_CB;);
+        CLOCK(rl(cpu, &cpu->registers.b); END_OPCODE;);
     case 0x11: // RL C (4 cycles)
-        CLOCK(rl(cpu, &cpu->registers.c); END_OPCODE_CB;)
-    // case 0x12: // RL D
-    //     cpu->registers.d = rl(cpu, cpu->registers.d);
-    //     cycles = 8;
-    //     break;
-    // case 0x13: // RL E
-    //     cpu->registers.e = rl(cpu, cpu->registers.e);
-    //     cycles = 8;
-    //     break;
-    // case 0x14: // RL H
-    //     cpu->registers.h = rl(cpu, cpu->registers.h);
-    //     cycles = 8;
-    //     break;
-    // case 0x15: // RL L
-    //     cpu->registers.l = rl(cpu, cpu->registers.l);
-    //     cycles = 8;
-    //     break;
-    // case 0x16: // RL (HL)
-    //     mmu_write(emu, cpu->registers.hl, rl(cpu, mmu_read(emu, cpu->registers.hl)));
-    //     cycles = 16;
-    //     break;
-    // case 0x17: // RL A
-    //     cpu->registers.a = rl(cpu, cpu->registers.a);
-    //     cycles = 8;
-    //     break;
+        CLOCK(rl(cpu, &cpu->registers.c); END_OPCODE;)
+    case 0x12: // RL D (4 cycles)
+        CLOCK(rl(cpu, &cpu->registers.d); END_OPCODE;);
+    case 0x13: // RL E (4 cycles)
+        CLOCK(rl(cpu, &cpu->registers.e); END_OPCODE;);
+    case 0x14: // RL H (4 cycles)
+        CLOCK(rl(cpu, &cpu->registers.h); END_OPCODE;);
+    case 0x15: // RL L (4 cycles)
+        CLOCK(rl(cpu, &cpu->registers.l); END_OPCODE;);
+    case 0x16: // RL (HL) (8 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(rl(cpu, (byte_t *) &cpu->opcode_compute_storage));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
+    case 0x17: // RL A (4 cycles)
+        CLOCK(rl(cpu, &cpu->registers.a); END_OPCODE;);
     case 0x18: // RR B (4 cycles)
-        CLOCK(rr(cpu, &cpu->registers.b); END_OPCODE_CB;);
+        CLOCK(rr(cpu, &cpu->registers.b); END_OPCODE;);
     case 0x19: // RR C (4 cycles)
-        CLOCK(rr(cpu, &cpu->registers.c); END_OPCODE_CB;);
+        CLOCK(rr(cpu, &cpu->registers.c); END_OPCODE;);
     case 0x1A: // RR D (4 cycles)
-        CLOCK(rr(cpu, &cpu->registers.d); END_OPCODE_CB;);
+        CLOCK(rr(cpu, &cpu->registers.d); END_OPCODE;);
     case 0x1B: // RR E (4 cycles)
-        CLOCK(rr(cpu, &cpu->registers.e); END_OPCODE_CB;);
+        CLOCK(rr(cpu, &cpu->registers.e); END_OPCODE;);
     case 0x1C: // RR H (4 cycles)
-        CLOCK(rr(cpu, &cpu->registers.h); END_OPCODE_CB;);
+        CLOCK(rr(cpu, &cpu->registers.h); END_OPCODE;);
     case 0x1D: // RR L (4 cycles)
-        CLOCK(rr(cpu, &cpu->registers.l); END_OPCODE_CB;);
+        CLOCK(rr(cpu, &cpu->registers.l); END_OPCODE;);
     case 0x1E: // RR (HL) (12 cycles)
         CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
         CLOCK(rr(cpu, (byte_t *) &cpu->opcode_compute_storage));
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE_CB;);
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
     case 0x1F: // RR A (4 cycles)
-        CLOCK(rr(cpu, &cpu->registers.a); END_OPCODE_CB;);
+        CLOCK(rr(cpu, &cpu->registers.a); END_OPCODE;);
     case 0x20: // SLA B (4 cycles)
-        CLOCK(sla(cpu, &cpu->registers.b); END_OPCODE_CB;);
-    // case 0x21: // SLA C
-    //     cpu->registers.c = sla(cpu, cpu->registers.c);
-    //     cycles = 8;
-    //     break;
-    // case 0x22: // SLA D
-    //     cpu->registers.d = sla(cpu, cpu->registers.d);
-    //     cycles = 8;
-    //     break;
-    // case 0x23: // SLA E
-    //     cpu->registers.e = sla(cpu, cpu->registers.e);
-    //     cycles = 8;
-    //     break;
-    // case 0x24: // SLA H
-    //     cpu->registers.h = sla(cpu, cpu->registers.h);
-    //     cycles = 8;
-    //     break;
-    // case 0x25: // SLA L
-    //     cpu->registers.l = sla(cpu, cpu->registers.l);
-    //     cycles = 8;
-    //     break;
-    // case 0x26: // SLA (HL)
-    //     mmu_write(emu, cpu->registers.hl, sla(cpu, mmu_read(emu, cpu->registers.hl)));
-    //     cycles = 16;
-    //     break;
-    // case 0x27: // SLA A
-    //     cpu->registers.a = sla(cpu, cpu->registers.a);
-    //     cycles = 8;
-    //     break;
-    // case 0x28: // SRA B
-    //     cpu->registers.b = sra(cpu, cpu->registers.b);
-    //     cycles = 8;
-    //     break;
-    // case 0x29: // SRA C
-    //     cpu->registers.c = sra(cpu, cpu->registers.c);
-    //     cycles = 8;
-    //     break;
-    // case 0x2A: // SRA D
-    //     cpu->registers.d = sra(cpu, cpu->registers.d);
-    //     cycles = 8;
-    //     break;
-    // case 0x2B: // SRA E
-    //     cpu->registers.e = sra(cpu, cpu->registers.e);
-    //     cycles = 8;
-    //     break;
-    // case 0x2C: // SRA H
-    //     cpu->registers.h = sra(cpu, cpu->registers.h);
-    //     cycles = 8;
-    //     break;
-    // case 0x2D: // SRA L
-    //     cpu->registers.l = sra(cpu, cpu->registers.l);
-    //     cycles = 8;
-    //     break;
-    // case 0x2E: // SRA (HL)
-    //     mmu_write(emu, cpu->registers.hl, sra(cpu, mmu_read(emu, cpu->registers.hl)));
-    //     cycles = 16;
-    //     break;
-    // case 0x2F: // SRA A
-    //     cpu->registers.a = sra(cpu, cpu->registers.a);
-    //     cycles = 8;
-    //     break;
-    // case 0x30: // SWAP B
-    //     cpu->registers.b = swap(cpu, cpu->registers.b);
-    //     cycles = 8;
-    //     break;
+        CLOCK(sla(cpu, &cpu->registers.b); END_OPCODE;);
+    case 0x21: // SLA C (4 cycles)
+        CLOCK(sla(cpu, &cpu->registers.c); END_OPCODE;);
+    case 0x22: // SLA D (4 cycles)
+        CLOCK(sla(cpu, &cpu->registers.d); END_OPCODE;);
+    case 0x23: // SLA E (4 cycles)
+        CLOCK(sla(cpu, &cpu->registers.e); END_OPCODE;);
+    case 0x24: // SLA H (4 cycles)
+        CLOCK(sla(cpu, &cpu->registers.h); END_OPCODE;);
+    case 0x25: // SLA L (4 cycles)
+        CLOCK(sla(cpu, &cpu->registers.l); END_OPCODE;);
+    case 0x26: // SLA (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(sla(cpu, (byte_t *) &cpu->opcode_compute_storage));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
+    case 0x27: // SLA A (4 cycles)
+        CLOCK(sla(cpu, &cpu->registers.a); END_OPCODE;);
+    case 0x28: // SRA B (4 cycles)
+        CLOCK(sra(cpu, &cpu->registers.b); END_OPCODE;);
+    case 0x29: // SRA C (4 cycles)
+        CLOCK(sra(cpu, &cpu->registers.c); END_OPCODE;);
+    case 0x2A: // SRA D (4 cycles)
+        CLOCK(sra(cpu, &cpu->registers.d); END_OPCODE;);
+    case 0x2B: // SRA E (4 cycles)
+        CLOCK(sra(cpu, &cpu->registers.e); END_OPCODE;);
+    case 0x2C: // SRA H (4 cycles)
+        CLOCK(sra(cpu, &cpu->registers.h); END_OPCODE;);
+    case 0x2D: // SRA L (4 cycles)
+        CLOCK(sra(cpu, &cpu->registers.l); END_OPCODE;);
+    case 0x2E: // SRA (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(sra(cpu, (byte_t *) &cpu->opcode_compute_storage));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
+    case 0x2F: // SRA A (4 cycles)
+        CLOCK(sra(cpu, &cpu->registers.a); END_OPCODE;);
+    case 0x30: // SWAP B (4 cycles)
+        CLOCK(swap(cpu, &cpu->registers.b); END_OPCODE;);
     case 0x31: // SWAP C (4 cycles)
-        CLOCK(swap(cpu, &cpu->registers.c); END_OPCODE_CB;);
-    // case 0x32: // SWAP D
-    //     cpu->registers.d = swap(cpu, cpu->registers.d);
-    //     cycles = 8;
-    //     break;
-    // case 0x33: // SWAP E
-    //     cpu->registers.e = swap(cpu, cpu->registers.e);
-    //     cycles = 8;
-    //     break;
-    // case 0x34: // SWAP H
-    //     cpu->registers.h = swap(cpu, cpu->registers.h);
-    //     cycles = 8;
-    //     break;
-    // case 0x35: // SWAP L
-    //     cpu->registers.l = swap(cpu, cpu->registers.l);
-    //     cycles = 8;
-    //     break;
-    // case 0x36: // SWAP (HL)
-    //     mmu_write(emu, cpu->registers.hl, swap(cpu, mmu_read(emu, cpu->registers.hl)));
-    //     cycles = 16;
-    //     break;
+        CLOCK(swap(cpu, &cpu->registers.c); END_OPCODE;);
+    case 0x32: // SWAP D (4 cycles)
+        CLOCK(swap(cpu, &cpu->registers.d); END_OPCODE;);
+    case 0x33: // SWAP E (4 cycles)
+        CLOCK(swap(cpu, &cpu->registers.e); END_OPCODE;);
+    case 0x34: // SWAP H (4 cycles)
+        CLOCK(swap(cpu, &cpu->registers.h); END_OPCODE;);
+    case 0x35: // SWAP L (4 cycles)
+        CLOCK(swap(cpu, &cpu->registers.l); END_OPCODE;);
+    case 0x36: // SWAP (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(swap(cpu, (byte_t *) &cpu->opcode_compute_storage));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
     case 0x37: // SWAP A (4 cycles)
-        CLOCK(swap(cpu, &cpu->registers.a); END_OPCODE_CB;);
+        CLOCK(swap(cpu, &cpu->registers.a); END_OPCODE;);
     case 0x38: // SRL B (4 cycles)
-        CLOCK(srl(cpu, &cpu->registers.b); END_OPCODE_CB;);
+        CLOCK(srl(cpu, &cpu->registers.b); END_OPCODE;);
     case 0x39: // SRL C (4 cycles)
-        CLOCK(srl(cpu, &cpu->registers.c); END_OPCODE_CB;);
+        CLOCK(srl(cpu, &cpu->registers.c); END_OPCODE;);
     case 0x3A: // SRL D (4 cycles)
-        CLOCK(srl(cpu, &cpu->registers.d); END_OPCODE_CB;);
+        CLOCK(srl(cpu, &cpu->registers.d); END_OPCODE;);
     case 0x3B: // SRL E (4 cycles)
-        CLOCK(srl(cpu, &cpu->registers.e); END_OPCODE_CB;);
+        CLOCK(srl(cpu, &cpu->registers.e); END_OPCODE;);
     case 0x3C: // SRL H (4 cycles)
-        CLOCK(srl(cpu, &cpu->registers.h); END_OPCODE_CB;);
+        CLOCK(srl(cpu, &cpu->registers.h); END_OPCODE;);
     case 0x3D: // SRL L (4 cycles)
-        CLOCK(srl(cpu, &cpu->registers.l); END_OPCODE_CB;);
+        CLOCK(srl(cpu, &cpu->registers.l); END_OPCODE;);
     case 0x3E: // SRL (HL) (12 cycles)
         CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
         CLOCK(srl(cpu, (byte_t *) &cpu->opcode_compute_storage));
         CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
     case 0x3F: // SRL A (4 cycles)
-        CLOCK(srl(cpu, &cpu->registers.a); END_OPCODE_CB;);
+        CLOCK(srl(cpu, &cpu->registers.a); END_OPCODE;);
     case 0x40: // BIT 0, B (4 cycles)
-        CLOCK(bit(cpu, cpu->registers.b, 0); END_OPCODE_CB);
+        CLOCK(bit(cpu, cpu->registers.b, 0); END_OPCODE);
     case 0x41: // BIT 0, C (4 cycles)
-        CLOCK(bit(cpu, cpu->registers.c, 0); END_OPCODE_CB;);
+        CLOCK(bit(cpu, cpu->registers.c, 0); END_OPCODE;);
     case 0x42: // BIT 0, D (4 cycles)
-        CLOCK(bit(cpu, cpu->registers.d, 0); END_OPCODE_CB);
+        CLOCK(bit(cpu, cpu->registers.d, 0); END_OPCODE);
     case 0x43: // BIT 0, E (4 cycles)
-        CLOCK(bit(cpu, cpu->registers.e, 0); END_OPCODE_CB);
+        CLOCK(bit(cpu, cpu->registers.e, 0); END_OPCODE);
     case 0x44: // BIT 0, H (4 cycles)
-        CLOCK(bit(cpu, cpu->registers.h, 0); END_OPCODE_CB);
+        CLOCK(bit(cpu, cpu->registers.h, 0); END_OPCODE);
     case 0x45: // BIT 0, L (4 cycles)
-        CLOCK(bit(cpu, cpu->registers.l, 0); END_OPCODE_CB);
+        CLOCK(bit(cpu, cpu->registers.l, 0); END_OPCODE);
     case 0x46: // BIT 0, (HL) (8 cycles)
         CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
-        CLOCK(bit(cpu, cpu->opcode_compute_storage, 0); END_OPCODE_CB);
+        CLOCK(bit(cpu, cpu->opcode_compute_storage, 0); END_OPCODE);
     case 0x47: // BIT 0, A (4 cycles)
-        CLOCK(bit(cpu, cpu->registers.a, 0); END_OPCODE_CB);
-    // case 0x48: // BIT 1, B
-    //     bit(cpu, cpu->registers.b, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0x49: // BIT 1, C
-    //     bit(cpu, cpu->registers.c, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0x4A: // BIT 1, D
-    //     bit(cpu, cpu->registers.d, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0x4B: // BIT 1, E
-    //     bit(cpu, cpu->registers.e, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0x4C: // BIT 1, H
-    //     bit(cpu, cpu->registers.h, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0x4D: // BIT 1, L
-    //     bit(cpu, cpu->registers.l, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0x4E: // BIT 1, (HL)
-    //     bit(cpu, mmu_read(emu, cpu->registers.hl), 1);
-    //     cycles = 12;
-    //     break;
-    // case 0x4F: // BIT 1, A
-    //     bit(cpu, cpu->registers.a, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0x50: // BIT 2, B
-    //     bit(cpu, cpu->registers.b, 2);
-    //     cycles = 8;
-    //     break;
-    // case 0x51: // BIT 2, C
-    //     bit(cpu, cpu->registers.c, 2);
-    //     cycles = 8;
-    //     break;
-    // case 0x52: // BIT 2, D
-    //     bit(cpu, cpu->registers.d, 2);
-    //     cycles = 8;
-    //     break;
-    // case 0x53: // BIT 2, E
-    //     bit(cpu, cpu->registers.e, 2);
-    //     cycles = 8;
-    //     break;
-    // case 0x54: // BIT 2, H
-    //     bit(cpu, cpu->registers.h, 2);
-    //     cycles = 8;
-    //     break;
-    // case 0x55: // BIT 2, L
-    //     bit(cpu, cpu->registers.l, 2);
-    //     cycles = 8;
-    //     break;
-    // case 0x56: // BIT 2, (HL)
-    //     bit(cpu, mmu_read(emu, cpu->registers.hl), 2);
-    //     cycles = 12;
-    //     break;
-    // case 0x57: // BIT 2, A
-    //     bit(cpu, cpu->registers.a, 2);
-    //     cycles = 8;
-    //     break;
-    // case 0x58: // BIT 3, B
-    //     bit(cpu, cpu->registers.b, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0x59: // BIT 3, C
-    //     bit(cpu, cpu->registers.c, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0x5A: // BIT 3, D
-    //     bit(cpu, cpu->registers.d, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0x5B: // BIT 3, E
-    //     bit(cpu, cpu->registers.e, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0x5C: // BIT 3, H
-    //     bit(cpu, cpu->registers.h, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0x5D: // BIT 3, L
-    //     bit(cpu, cpu->registers.l, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0x5E: // BIT 3, (HL)
-    //     bit(cpu, mmu_read(emu, cpu->registers.hl), 3);
-    //     cycles = 12;
-    //     break;
-    // case 0x5F: // BIT 3, A
-    //     bit(cpu, cpu->registers.a, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0x60: // BIT 4, B
-    //     bit(cpu, cpu->registers.b, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0x61: // BIT 4, C
-    //     bit(cpu, cpu->registers.c, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0x62: // BIT 4, D
-    //     bit(cpu, cpu->registers.d, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0x63: // BIT 4, E
-    //     bit(cpu, cpu->registers.e, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0x64: // BIT 4, H
-    //     bit(cpu, cpu->registers.h, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0x65: // BIT 4, L
-    //     bit(cpu, cpu->registers.l, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0x66: // BIT 4, (HL)
-    //     bit(cpu, mmu_read(emu, cpu->registers.hl), 4);
-    //     cycles = 12;
-    //     break;
-    // case 0x67: // BIT 4, A
-    //     bit(cpu, cpu->registers.a, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0x68: // BIT 5, B
-    //     bit(cpu, cpu->registers.b, 5);
-    //     cycles = 8;
-    //     break;
-    // case 0x69: // BIT 5, C
-    //     bit(cpu, cpu->registers.c, 5);
-    //     cycles = 8;
-    //     break;
-    // case 0x6A: // BIT 5, D
-    //     bit(cpu, cpu->registers.d, 5);
-    //     cycles = 8;
-    //     break;
-    // case 0x6B: // BIT 5, E
-    //     bit(cpu, cpu->registers.e, 5);
-    //     cycles = 8;
-    //     break;
+        CLOCK(bit(cpu, cpu->registers.a, 0); END_OPCODE);
+    case 0x48: // BIT 1, B (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.b, 1); END_OPCODE;);
+    case 0x49: // BIT 1, C (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.c, 1); END_OPCODE;);
+    case 0x4A: // BIT 1, D (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.d, 1); END_OPCODE;);
+    case 0x4B: // BIT 1, E (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.e, 1); END_OPCODE;);
+    case 0x4C: // BIT 1, H (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.h, 1); END_OPCODE;);
+    case 0x4D: // BIT 1, L (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.l, 1); END_OPCODE;);
+    case 0x4E: // BIT 1, (HL) (8 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(bit(cpu, cpu->opcode_compute_storage, 1); END_OPCODE);
+    case 0x4F: // BIT 1, A (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.a, 1); END_OPCODE;);
+    case 0x50: // BIT 2, B (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.b, 2); END_OPCODE;);
+    case 0x51: // BIT 2, C (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.c, 2); END_OPCODE;);
+    case 0x52: // BIT 2, D (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.d, 2); END_OPCODE;);
+    case 0x53: // BIT 2, E (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.e, 2); END_OPCODE;);
+    case 0x54: // BIT 2, H (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.h, 2); END_OPCODE;);
+    case 0x55: // BIT 2, L (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.l, 2); END_OPCODE;);
+    case 0x56: // BIT 2, (HL) (8 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(bit(cpu, cpu->opcode_compute_storage, 2); END_OPCODE);
+    case 0x57: // BIT 2, A (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.a, 2); END_OPCODE;);
+    case 0x58: // BIT 3, B (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.b, 3); END_OPCODE;);
+    case 0x59: // BIT 3, C (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.c, 3); END_OPCODE;);
+    case 0x5A: // BIT 3, D (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.d, 3); END_OPCODE;);
+    case 0x5B: // BIT 3, E (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.e, 3); END_OPCODE;);
+    case 0x5C: // BIT 3, H (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.h, 3); END_OPCODE;);
+    case 0x5D: // BIT 3, L (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.l, 3); END_OPCODE;);
+    case 0x5E: // BIT 3, (HL) (8 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(bit(cpu, cpu->opcode_compute_storage, 3); END_OPCODE);
+    case 0x5F: // BIT 3, A (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.a, 3); END_OPCODE;);
+    case 0x60: // BIT 4, B (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.b, 4); END_OPCODE;);
+    case 0x61: // BIT 4, C (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.c, 4); END_OPCODE;);
+    case 0x62: // BIT 4, D (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.d, 4); END_OPCODE;);
+    case 0x63: // BIT 4, E (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.e, 4); END_OPCODE;);
+    case 0x64: // BIT 4, H (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.h, 4); END_OPCODE;);
+    case 0x65: // BIT 4, L (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.l, 4); END_OPCODE;);
+    case 0x66: // BIT 4, (HL) (8 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(bit(cpu, cpu->opcode_compute_storage, 4); END_OPCODE);
+    case 0x67: // BIT 4, A (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.a, 4); END_OPCODE;);
+    case 0x68: // BIT 5, B (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.b, 5); END_OPCODE;);
+    case 0x69: // BIT 5, C (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.c, 5); END_OPCODE;);
+    case 0x6A: // BIT 5, D (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.d, 5); END_OPCODE;);
+    case 0x6B: // BIT 5, E (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.e, 5); END_OPCODE;);
     case 0x6C: // BIT 5, H (4 cycles)
         CLOCK(
             bit(cpu, cpu->registers.h, 5);
-            END_OPCODE_CB;
+            END_OPCODE;
         );
-    // case 0x6D: // BIT 5, L
-    //     bit(cpu, cpu->registers.l, 5);
-    //     cycles = 8;
-    //     break;
-    // case 0x6E: // BIT 5, (HL)
-    //     bit(cpu, mmu_read(emu, cpu->registers.hl), 5);
-    //     cycles = 12;
-    //     break;
-    // case 0x6F: // BIT 5, A
-    //     bit(cpu, cpu->registers.a, 5);
-    //     cycles = 8;
-    //     break;
-    // case 0x70: // BIT 6, B
-    //     bit(cpu, cpu->registers.b, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0x71: // BIT 6, C
-    //     bit(cpu, cpu->registers.c, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0x72: // BIT 6, D
-    //     bit(cpu, cpu->registers.d, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0x73: // BIT 6, E
-    //     bit(cpu, cpu->registers.e, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0x74: // BIT 6, H
-    //     bit(cpu, cpu->registers.h, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0x75: // BIT 6, L
-    //     bit(cpu, cpu->registers.l, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0x76: // BIT 6, (HL)
-    //     bit(cpu, mmu_read(emu, cpu->registers.hl), 6);
-    //     cycles = 12;
-    //     break;
+    case 0x6D: // BIT 5, L (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.l, 5); END_OPCODE;);
+    case 0x6E: // BIT 5, (HL) (8 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(bit(cpu, cpu->opcode_compute_storage, 5); END_OPCODE);
+    case 0x6F: // BIT 5, A (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.a, 5); END_OPCODE;);
+    case 0x70: // BIT 6, B (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.b, 6); END_OPCODE;);
+    case 0x71: // BIT 6, C (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.c, 6); END_OPCODE;);
+    case 0x72: // BIT 6, D (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.d, 6); END_OPCODE;);
+    case 0x73: // BIT 6, E (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.e, 6); END_OPCODE;);
+    case 0x74: // BIT 6, H (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.h, 6); END_OPCODE;);
+    case 0x75: // BIT 6, L (4 cycles)
+        CLOCK(bit(cpu, cpu->registers.l, 6); END_OPCODE;);
+    case 0x76: // BIT 6, (HL) (8 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(bit(cpu, cpu->opcode_compute_storage, 6); END_OPCODE);
     case 0x77: // BIT 6, A (4 cycles)
-        CLOCK(bit(cpu, cpu->registers.a, 6); END_OPCODE_CB;);
+        CLOCK(bit(cpu, cpu->registers.a, 6); END_OPCODE;);
     case 0x78: // BIT 7, B (4 cycles)
-        CLOCK(bit(cpu, cpu->registers.b, 7); END_OPCODE_CB;);
+        CLOCK(bit(cpu, cpu->registers.b, 7); END_OPCODE;);
     case 0x79: // BIT 7, C (4 cycles)
-        CLOCK(bit(cpu, cpu->registers.c, 7); END_OPCODE_CB;);
+        CLOCK(bit(cpu, cpu->registers.c, 7); END_OPCODE;);
     case 0x7A: // BIT 7, D (4 cycles)
-        CLOCK(bit(cpu, cpu->registers.d, 7); END_OPCODE_CB;);
+        CLOCK(bit(cpu, cpu->registers.d, 7); END_OPCODE;);
     case 0x7B: // BIT 7, E (4 cycles)
-        CLOCK(bit(cpu, cpu->registers.e, 7); END_OPCODE_CB;);
+        CLOCK(bit(cpu, cpu->registers.e, 7); END_OPCODE;);
     case 0x7C: // BIT 7, H (4 cycles)
-        CLOCK(bit(cpu, cpu->registers.h, 7); END_OPCODE_CB;);
+        CLOCK(bit(cpu, cpu->registers.h, 7); END_OPCODE;);
     case 0x7D: // BIT 7, L (4 cycles)
-        CLOCK(bit(cpu, cpu->registers.l, 7); END_OPCODE_CB;);
-    // case 0x7E: // BIT 7, (HL)
-    //     bit(cpu, mmu_read(emu, cpu->registers.hl), 7);
-    //     cycles = 12;
-    //     break;
+        CLOCK(bit(cpu, cpu->registers.l, 7); END_OPCODE;);
+    case 0x7E: // BIT 7, (HL) (8 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(bit(cpu, cpu->opcode_compute_storage, 7); END_OPCODE);
     case 0x7F: // BIT 7, A (4 cycles)
-        CLOCK(bit(cpu, cpu->registers.a, 7); END_OPCODE_CB;);
+        CLOCK(bit(cpu, cpu->registers.a, 7); END_OPCODE;);
     case 0x80: // RES 0, B (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.b, 0); END_OPCODE_CB;);
+        CLOCK(RESET_BIT(cpu->registers.b, 0); END_OPCODE;);
     case 0x81: // RES 0, C (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.c, 0); END_OPCODE_CB;);
+        CLOCK(RESET_BIT(cpu->registers.c, 0); END_OPCODE;);
     case 0x82: // RES 0, D (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.d, 0); END_OPCODE_CB;);
+        CLOCK(RESET_BIT(cpu->registers.d, 0); END_OPCODE;);
     case 0x83: // RES 0, E (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.e, 0); END_OPCODE_CB;);
+        CLOCK(RESET_BIT(cpu->registers.e, 0); END_OPCODE;);
     case 0x84: // RES 0, H (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.h, 0); END_OPCODE_CB;);
+        CLOCK(RESET_BIT(cpu->registers.h, 0); END_OPCODE;);
     case 0x85: // RES 0, L (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.l, 0); END_OPCODE_CB;);
+        CLOCK(RESET_BIT(cpu->registers.l, 0); END_OPCODE;);
     case 0x86: // RES 0, (HL) (16 cycles)
         CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
         CLOCK(RESET_BIT(cpu->opcode_compute_storage, 0));
         CLOCK();
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE_CB);
-    // case 0x87: // RES 0, A
-    //     RESET_BIT(cpu->registers.a, 0);
-    //     cycles = 8;
-    //     break;
-    // case 0x88: // RES 1, B
-    //     RESET_BIT(cpu->registers.b, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0x89: // RES 1, C
-    //     RESET_BIT(cpu->registers.c, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0x8A: // RES 1, D
-    //     RESET_BIT(cpu->registers.d, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0x8B: // RES 1, E
-    //     RESET_BIT(cpu->registers.e, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0x8C: // RES 1, H
-    //     RESET_BIT(cpu->registers.h, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0x8D: // RES 1, L
-    //     RESET_BIT(cpu->registers.l, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0x8E: // RES 1, (HL)
-    //     temp = mmu_read(emu, cpu->registers.hl);
-    //     mmu_write(emu, cpu->registers.hl, RESET_BIT(temp, 1));
-    //     cycles = 16;
-    //     break;
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
+    case 0x87: // RES 0, A (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.a, 0); END_OPCODE;);
+    case 0x88: // RES 1, B (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.b, 1); END_OPCODE;);
+    case 0x89: // RES 1, C (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.c, 1); END_OPCODE;);
+    case 0x8A: // RES 1, D (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.d, 1); END_OPCODE;);
+    case 0x8B: // RES 1, E (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.e, 1); END_OPCODE;);
+    case 0x8C: // RES 1, H (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.h, 1); END_OPCODE;);
+    case 0x8D: // RES 1, L (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.l, 1); END_OPCODE;);
+    case 0x8E: // RES 1, (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(RESET_BIT(cpu->opcode_compute_storage, 1));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
     case 0x8F: // RES 1, A (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.a, 1); END_OPCODE_CB;);
+        CLOCK(RESET_BIT(cpu->registers.a, 1); END_OPCODE;);
     case 0x90: // RES 2, B (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.b, 2); END_OPCODE_CB;);
+        CLOCK(RESET_BIT(cpu->registers.b, 2); END_OPCODE;);
     case 0x91: // RES 2, C (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.c, 2); END_OPCODE_CB;);
+        CLOCK(RESET_BIT(cpu->registers.c, 2); END_OPCODE;);
     case 0x92: // RES 2, D (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.d, 2); END_OPCODE_CB;);
+        CLOCK(RESET_BIT(cpu->registers.d, 2); END_OPCODE;);
     case 0x93: // RES 2, E (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.e, 2); END_OPCODE_CB;);
+        CLOCK(RESET_BIT(cpu->registers.e, 2); END_OPCODE;);
     case 0x94: // RES 2, H (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.h, 2); END_OPCODE_CB;);
+        CLOCK(RESET_BIT(cpu->registers.h, 2); END_OPCODE;);
     case 0x95: // RES 2, L (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.l, 2); END_OPCODE_CB;);
-    // case 0x96: // RES 2, (HL)
-    //     temp = mmu_read(emu, cpu->registers.hl);
-    //     mmu_write(emu, cpu->registers.hl, RESET_BIT(temp, 2));
-    //     cycles = 16;
-    //     break;
+        CLOCK(RESET_BIT(cpu->registers.l, 2); END_OPCODE;);
+    case 0x96: // RES 2, (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(RESET_BIT(cpu->opcode_compute_storage, 2));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
     case 0x97: // RES 2, A (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.a, 2); END_OPCODE_CB;);
-    // case 0x98: // RES 3, B
-    //     RESET_BIT(cpu->registers.b, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0x99: // RES 3, C
-    //     RESET_BIT(cpu->registers.c, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0x9A: // RES 3, D
-    //     RESET_BIT(cpu->registers.d, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0x9B: // RES 3, E
-    //     RESET_BIT(cpu->registers.e, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0x9C: // RES 3, H
-    //     RESET_BIT(cpu->registers.h, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0x9D: // RES 3, L
-    //     RESET_BIT(cpu->registers.l, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0x9E: // RES 3, (HL)
-    //     temp = mmu_read(emu, cpu->registers.hl);
-    //     mmu_write(emu, cpu->registers.hl, RESET_BIT(temp, 3));
-    //     cycles = 16;
-    //     break;
-    // case 0x9F: // RES 3, A
-    //     RESET_BIT(cpu->registers.a, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0xA0: // RES 4, B
-    //     RESET_BIT(cpu->registers.b, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0xA1: // RES 4, C
-    //     RESET_BIT(cpu->registers.c, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0xA2: // RES 4, D
-    //     RESET_BIT(cpu->registers.d, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0xA3: // RES 4, E
-    //     RESET_BIT(cpu->registers.e, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0xA4: // RES 4, H
-    //     RESET_BIT(cpu->registers.h, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0xA5: // RES 4, L
-    //     RESET_BIT(cpu->registers.l, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0xA6: // RES 4, (HL)
-    //     temp = mmu_read(emu, cpu->registers.hl);
-    //     mmu_write(emu, cpu->registers.hl, RESET_BIT(temp, 4));
-    //     cycles = 16;
-    //     break;
-    // case 0xA7: // RES 4, A
-    //     RESET_BIT(cpu->registers.a, 4);
-    //     cycles = 8;
-    //     break;
+        CLOCK(RESET_BIT(cpu->registers.a, 2); END_OPCODE;);
+    case 0x98: // RES 3, B (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.b, 3); END_OPCODE;);
+    case 0x99: // RES 3, C (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.c, 3); END_OPCODE;);
+    case 0x9A: // RES 3, D (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.d, 3); END_OPCODE;);
+    case 0x9B: // RES 3, E (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.e, 3); END_OPCODE;);
+    case 0x9C: // RES 3, H (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.h, 3); END_OPCODE;);
+    case 0x9D: // RES 3, L (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.l, 3); END_OPCODE;);
+    case 0x9E: // RES 3, (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(RESET_BIT(cpu->opcode_compute_storage, 3));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
+    case 0x9F: // RES 3, A (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.a, 3); END_OPCODE;);
+    case 0xA0: // RES 4, B (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.b, 4); END_OPCODE;);
+    case 0xA1: // RES 4, C (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.c, 4); END_OPCODE;);
+    case 0xA2: // RES 4, D (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.d, 4); END_OPCODE;);
+    case 0xA3: // RES 4, E (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.e, 4); END_OPCODE;);
+    case 0xA4: // RES 4, H (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.h, 4); END_OPCODE;);
+    case 0xA5: // RES 4, L (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.l, 4); END_OPCODE;);
+    case 0xA6: // RES 4, (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(RESET_BIT(cpu->opcode_compute_storage, 4));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
+    case 0xA7: // RES 4, A (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.a, 4); END_OPCODE;);
     case 0xA8: // RES 5, B (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.b, 5); END_OPCODE_CB;);
+        CLOCK(RESET_BIT(cpu->registers.b, 5); END_OPCODE;);
     case 0xA9: // RES 5, C (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.c, 5); END_OPCODE_CB;);
+        CLOCK(RESET_BIT(cpu->registers.c, 5); END_OPCODE;);
     case 0xAA: // RES 5, D (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.d, 5); END_OPCODE_CB;);
+        CLOCK(RESET_BIT(cpu->registers.d, 5); END_OPCODE;);
     case 0xAB: // RES 5, E (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.e, 5); END_OPCODE_CB;);
+        CLOCK(RESET_BIT(cpu->registers.e, 5); END_OPCODE;);
     case 0xAC: // RES 5, H (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.h, 5); END_OPCODE_CB;);
+        CLOCK(RESET_BIT(cpu->registers.h, 5); END_OPCODE;);
     case 0xAD: // RES 5, L (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.l, 5); END_OPCODE_CB;);
-    // case 0xAE: // RES 5, (HL)
-    //     temp = mmu_read(emu, cpu->registers.hl);
-    //     mmu_write(emu, cpu->registers.hl, RESET_BIT(temp, 5));
-    //     cycles = 16;
-    //     break;
+        CLOCK(RESET_BIT(cpu->registers.l, 5); END_OPCODE;);
+    case 0xAE: // RES 5, (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(RESET_BIT(cpu->opcode_compute_storage, 5));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
     case 0xAF: // RES 5, A (4 cycles)
-        CLOCK(RESET_BIT(cpu->registers.a, 5); END_OPCODE_CB;);
-    // case 0xB0: // RES 6, B
-    //     RESET_BIT(cpu->registers.b, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0xB1: // RES 6, C
-    //     RESET_BIT(cpu->registers.c, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0xB2: // RES 6, D
-    //     RESET_BIT(cpu->registers.d, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0xB3: // RES 6, E
-    //     RESET_BIT(cpu->registers.e, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0xB4: // RES 6, H
-    //     RESET_BIT(cpu->registers.h, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0xB5: // RES 6, L
-    //     RESET_BIT(cpu->registers.l, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0xB6: // RES 6, (HL)
-    //     temp = mmu_read(emu, cpu->registers.hl);
-    //     mmu_write(emu, cpu->registers.hl, RESET_BIT(temp, 6));
-    //     cycles = 16;
-    //     break;
-    // case 0xB7: // RES 6, A
-    //     RESET_BIT(cpu->registers.a, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0xB8: // RES 7, B
-    //     RESET_BIT(cpu->registers.b, 7);
-    //     cycles = 8;
-    //     break;
-    // case 0xB9: // RES 7, C
-    //     RESET_BIT(cpu->registers.c, 7);
-    //     cycles = 8;
-    //     break;
-    // case 0xBA: // RES 7, D
-    //     RESET_BIT(cpu->registers.d, 7);
-    //     cycles = 8;
-    //     break;
-    // case 0xBB: // RES 7, E
-    //     RESET_BIT(cpu->registers.e, 7);
-    //     cycles = 8;
-    //     break;
-    // case 0xBC: // RES 7, H
-    //     RESET_BIT(cpu->registers.h, 7);
-    //     cycles = 8;
-    //     break;
-    // case 0xBD: // RES 7, L
-    //     RESET_BIT(cpu->registers.l, 7);
-    //     cycles = 8;
-    //     break;
-    // case 0xBE: // RES 7, (HL)
-    //     temp = mmu_read(emu, cpu->registers.hl);
-    //     mmu_write(emu, cpu->registers.hl, RESET_BIT(temp, 7));
-    //     cycles = 16;
-    //     break;
-    // case 0xBF: // RES 7, A
-    //     RESET_BIT(cpu->registers.a, 7);
-    //     cycles = 8;
-    //     break;
-    // case 0xC0: // SET 0, B
-    //     SET_BIT(cpu->registers.b, 0);
-    //     cycles = 8;
-    //     break;
-    // case 0xC1: // SET 0, C
-    //     SET_BIT(cpu->registers.c, 0);
-    //     cycles = 8;
-    //     break;
-    // case 0xC2: // SET 0, D
-    //     SET_BIT(cpu->registers.d, 0);
-    //     cycles = 8;
-    //     break;
-    // case 0xC3: // SET 0, E
-    //     SET_BIT(cpu->registers.e, 0);
-    //     cycles = 8;
-    //     break;
-    // case 0xC4: // SET 0, H
-    //     SET_BIT(cpu->registers.h, 0);
-    //     cycles = 8;
-    //     break;
-    // case 0xC5: // SET 0, L
-    //     SET_BIT(cpu->registers.l, 0);
-    //     cycles = 8;
-    //     break;
-    // case 0xC6: // SET 0, (HL)
-    //     temp = mmu_read(emu, cpu->registers.hl);
-    //     mmu_write(emu, cpu->registers.hl, SET_BIT(temp, 0));
-    //     cycles = 16;
-    //     break;
-    // case 0xC7: // SET 0, A
-    //     SET_BIT(cpu->registers.a, 0);
-    //     cycles = 8;
-    //     break;
-    // case 0xC8: // SET 1, B
-    //     SET_BIT(cpu->registers.b, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0xC9: // SET 1, C
-    //     SET_BIT(cpu->registers.c, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0xCA: // SET 1, D
-    //     SET_BIT(cpu->registers.d, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0xCB: // SET 1, E
-    //     SET_BIT(cpu->registers.e, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0xCC: // SET 1, H
-    //     SET_BIT(cpu->registers.h, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0xCD: // SET 1, L
-    //     SET_BIT(cpu->registers.l, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0xCE: // SET 1, (HL)
-    //     temp = mmu_read(emu, cpu->registers.hl);
-    //     mmu_write(emu, cpu->registers.hl, SET_BIT(temp, 1));
-    //     cycles = 16;
-    //     break;
-    // case 0xCF: // SET 1, A
-    //     SET_BIT(cpu->registers.a, 1);
-    //     cycles = 8;
-    //     break;
-    // case 0xD0: // SET 2, B
-    //     SET_BIT(cpu->registers.b, 2);
-    //     cycles = 8;
-    //     break;
-    // case 0xD1: // SET 2, C
-    //     SET_BIT(cpu->registers.c, 2);
-    //     cycles = 8;
-    //     break;
-    // case 0xD2: // SET 2, D
-    //     SET_BIT(cpu->registers.d, 2);
-    //     cycles = 8;
-    //     break;
-    // case 0xD3: // SET 2, E
-    //     SET_BIT(cpu->registers.e, 2);
-    //     cycles = 8;
-    //     break;
-    // case 0xD4: // SET 2, H
-    //     SET_BIT(cpu->registers.h, 2);
-    //     cycles = 8;
-    //     break;
-    // case 0xD5: // SET 2, L
-    //     SET_BIT(cpu->registers.l, 2);
-    //     cycles = 8;
-    //     break;
-    // case 0xD6: // SET 2, (HL)
-    //     temp = mmu_read(emu, cpu->registers.hl);
-    //     mmu_write(emu, cpu->registers.hl, SET_BIT(temp, 2));
-    //     cycles = 16;
-    //     break;
-    // case 0xD7: // SET 2, A
-    //     SET_BIT(cpu->registers.a, 2);
-    //     cycles = 8;
-    //     break;
-    // case 0xD8: // SET 3, B
-    //     SET_BIT(cpu->registers.b, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0xD9: // SET 3, C
-    //     SET_BIT(cpu->registers.c, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0xDA: // SET 3, D
-    //     SET_BIT(cpu->registers.d, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0xDB: // SET 3, E
-    //     SET_BIT(cpu->registers.e, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0xDC: // SET 3, H
-    //     SET_BIT(cpu->registers.h, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0xDD: // SET 3, L
-    //     SET_BIT(cpu->registers.l, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0xDE: // SET 3, (HL)
-    //     temp = mmu_read(emu, cpu->registers.hl);
-    //     mmu_write(emu, cpu->registers.hl, SET_BIT(temp, 3));
-    //     cycles = 16;
-    //     break;
-    // case 0xDF: // SET 3, A
-    //     SET_BIT(cpu->registers.a, 3);
-    //     cycles = 8;
-    //     break;
-    // case 0xE0: // SET 4, B
-    //     SET_BIT(cpu->registers.b, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0xE1: // SET 4, C
-    //     SET_BIT(cpu->registers.c, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0xE2: // SET 4, D
-    //     SET_BIT(cpu->registers.d, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0xE3: // SET 4, E
-    //     SET_BIT(cpu->registers.e, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0xE4: // SET 4, H
-    //     SET_BIT(cpu->registers.h, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0xE5: // SET 4, L
-    //     SET_BIT(cpu->registers.l, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0xE6: // SET 4, (HL)
-    //     temp = mmu_read(emu, cpu->registers.hl);
-    //     mmu_write(emu, cpu->registers.hl, SET_BIT(temp, 4));
-    //     cycles = 16;
-    //     break;
-    // case 0xE7: // SET 4, A
-    //     SET_BIT(cpu->registers.a, 4);
-    //     cycles = 8;
-    //     break;
-    // case 0xE8: // SET 5, B
-    //     SET_BIT(cpu->registers.b, 5);
-    //     cycles = 8;
-    //     break;
-    // case 0xE9: // SET 5, C
-    //     SET_BIT(cpu->registers.c, 5);
-    //     cycles = 8;
-    //     break;
-    // case 0xEA: // SET 5, D
-    //     SET_BIT(cpu->registers.d, 5);
-    //     cycles = 8;
-    //     break;
-    // case 0xEB: // SET 5, E
-    //     SET_BIT(cpu->registers.e, 5);
-    //     cycles = 8;
-    //     break;
-    // case 0xEC: // SET 5, H
-    //     SET_BIT(cpu->registers.h, 5);
-    //     cycles = 8;
-    //     break;
-    // case 0xED: // SET 5, L
-    //     SET_BIT(cpu->registers.l, 5);
-    //     cycles = 8;
-    //     break;
-    // case 0xEE: // SET 5, (HL)
-    //     temp = mmu_read(emu, cpu->registers.hl);
-    //     mmu_write(emu, cpu->registers.hl, SET_BIT(temp, 5));
-    //     cycles = 16;
-    //     break;
-    // case 0xEF: // SET 5, A
-    //     SET_BIT(cpu->registers.a, 5);
-    //     cycles = 8;
-    //     break;
-    // case 0xF0: // SET 6, B
-    //     SET_BIT(cpu->registers.b, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0xF1: // SET 6, C
-    //     SET_BIT(cpu->registers.c, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0xF2: // SET 6, D
-    //     SET_BIT(cpu->registers.d, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0xF3: // SET 6, E
-    //     SET_BIT(cpu->registers.e, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0xF4: // SET 6, H
-    //     SET_BIT(cpu->registers.h, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0xF5: // SET 6, L
-    //     SET_BIT(cpu->registers.l, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0xF6: // SET 6, (HL)
-    //     temp = mmu_read(emu, cpu->registers.hl);
-    //     mmu_write(emu, cpu->registers.hl, SET_BIT(temp, 6));
-    //     cycles = 16;
-    //     break;
-    // case 0xF7: // SET 6, A
-    //     SET_BIT(cpu->registers.a, 6);
-    //     cycles = 8;
-    //     break;
-    // case 0xF8: // SET 7, B
-    //     SET_BIT(cpu->registers.b, 7);
-    //     cycles = 8;
-    //     break;
-    // case 0xF9: // SET 7, C
-    //     SET_BIT(cpu->registers.c, 7);
-    //     cycles = 8;
-    //     break;
-    // case 0xFA: // SET 7, D
-    //     SET_BIT(cpu->registers.d, 7);
-    //     cycles = 8;
-    //     break;
-    // case 0xFB: // SET 7, E
-    //     SET_BIT(cpu->registers.e, 7);
-    //     cycles = 8;
-    //     break;
-    // case 0xFC: // SET 7, H
-    //     SET_BIT(cpu->registers.h, 7);
-    //     cycles = 8;
-    //     break;
-    // case 0xFD: // SET 7, L
-    //     SET_BIT(cpu->registers.l, 7);
-    //     cycles = 8;
-    //     break;
-    // case 0xFE: // SET 7, (HL)
-    //     temp = mmu_read(emu, cpu->registers.hl);
-    //     mmu_write(emu, cpu->registers.hl, SET_BIT(temp, 7));
-    //     cycles = 16;
-    //     break;
-    // case 0xFF: // SET 7, A
-    //     SET_BIT(cpu->registers.a, 7);
-    //     cycles = 8;
-    //     break;
+        CLOCK(RESET_BIT(cpu->registers.a, 5); END_OPCODE;);
+    case 0xB0: // RES 6, B (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.b, 6); END_OPCODE;);
+    case 0xB1: // RES 6, C (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.c, 6); END_OPCODE;);
+    case 0xB2: // RES 6, D (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.d, 6); END_OPCODE;);
+    case 0xB3: // RES 6, E (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.e, 6); END_OPCODE;);
+    case 0xB4: // RES 6, H (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.h, 6); END_OPCODE;);
+    case 0xB5: // RES 6, L (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.l, 6); END_OPCODE;);
+    case 0xB6: // RES 6, (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(RESET_BIT(cpu->opcode_compute_storage, 6));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
+    case 0xB7: // RES 6, A (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.a, 6); END_OPCODE;);
+    case 0xB8: // RES 7, B (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.b, 7); END_OPCODE;);
+    case 0xB9: // RES 7, C (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.c, 7); END_OPCODE;);
+    case 0xBA: // RES 7, D (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.d, 7); END_OPCODE;);
+    case 0xBB: // RES 7, E (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.e, 7); END_OPCODE;);
+    case 0xBC: // RES 7, H (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.h, 7); END_OPCODE;);
+    case 0xBD: // RES 7, L (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.l, 7); END_OPCODE;);
+    case 0xBE: // RES 7, (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(RESET_BIT(cpu->opcode_compute_storage, 7));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
+    case 0xBF: // RES 7, A (4 cycles)
+        CLOCK(RESET_BIT(cpu->registers.a, 7); END_OPCODE;);
+    case 0xC0: // SET 0, B (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.b, 0); END_OPCODE;);
+    case 0xC1: // SET 0, C (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.c, 0); END_OPCODE;);
+    case 0xC2: // SET 0, D (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.d, 0); END_OPCODE;);
+    case 0xC3: // SET 0, E (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.e, 0); END_OPCODE;);
+    case 0xC4: // SET 0, H (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.h, 0); END_OPCODE;);
+    case 0xC5: // SET 0, L (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.l, 0); END_OPCODE;);
+    case 0xC6: // SET 0, (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(SET_BIT(cpu->opcode_compute_storage, 0));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
+    case 0xC7: // SET 0, A (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.a, 0); END_OPCODE;);
+    case 0xC8: // SET 1, B (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.b, 1); END_OPCODE;);
+    case 0xC9: // SET 1, C (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.c, 1); END_OPCODE;);
+    case 0xCA: // SET 1, D (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.d, 1); END_OPCODE;);
+    case 0xCB: // SET 1, E (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.e, 1); END_OPCODE;);
+    case 0xCC: // SET 1, H (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.h, 1); END_OPCODE;);
+    case 0xCD: // SET 1, L (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.l, 1); END_OPCODE;);
+    case 0xCE: // SET 1, (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(SET_BIT(cpu->opcode_compute_storage, 1));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
+    case 0xCF: // SET 1, A (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.a, 1); END_OPCODE;);
+    case 0xD0: // SET 2, B (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.b, 2); END_OPCODE;);
+    case 0xD1: // SET 2, C (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.c, 2); END_OPCODE;);
+    case 0xD2: // SET 2, D (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.d, 2); END_OPCODE;);
+    case 0xD3: // SET 2, E (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.e, 2); END_OPCODE;);
+    case 0xD4: // SET 2, H (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.h, 2); END_OPCODE;);
+    case 0xD5: // SET 2, L (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.l, 2); END_OPCODE;);
+    case 0xD6: // SET 2, (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(SET_BIT(cpu->opcode_compute_storage, 2));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
+    case 0xD7: // SET 2, A (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.a, 2); END_OPCODE;);
+    case 0xD8: // SET 3, B (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.b, 3); END_OPCODE;);
+    case 0xD9: // SET 3, C (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.c, 3); END_OPCODE;);
+    case 0xDA: // SET 3, D (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.d, 3); END_OPCODE;);
+    case 0xDB: // SET 3, E (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.e, 3); END_OPCODE;);
+    case 0xDC: // SET 3, H (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.h, 3); END_OPCODE;);
+    case 0xDD: // SET 3, L (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.l, 3); END_OPCODE;);
+    case 0xDE: // SET 3, (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(SET_BIT(cpu->opcode_compute_storage, 3));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
+    case 0xDF: // SET 3, A (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.a, 3); END_OPCODE;);
+    case 0xE0: // SET 4, B (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.b, 4); END_OPCODE;);
+    case 0xE1: // SET 4, C (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.c, 4); END_OPCODE;);
+    case 0xE2: // SET 4, D (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.d, 4); END_OPCODE;);
+    case 0xE3: // SET 4, E (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.e, 4); END_OPCODE;);
+    case 0xE4: // SET 4, H (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.h, 4); END_OPCODE;);
+    case 0xE5: // SET 4, L (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.l, 4); END_OPCODE;);
+    case 0xE6: // SET 4, (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(SET_BIT(cpu->opcode_compute_storage, 4));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
+    case 0xE7: // SET 4, A (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.a, 4); END_OPCODE;);
+    case 0xE8: // SET 5, B (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.b, 5); END_OPCODE;);
+    case 0xE9: // SET 5, C (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.c, 5); END_OPCODE;);
+    case 0xEA: // SET 5, D (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.d, 5); END_OPCODE;);
+    case 0xEB: // SET 5, E (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.e, 5); END_OPCODE;);
+    case 0xEC: // SET 5, H (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.h, 5); END_OPCODE;);
+    case 0xED: // SET 5, L (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.l, 5); END_OPCODE;);
+    case 0xEE: // SET 5, (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(SET_BIT(cpu->opcode_compute_storage, 5));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
+    case 0xEF: // SET 5, A (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.a, 5); END_OPCODE;);
+    case 0xF0: // SET 6, B (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.b, 6); END_OPCODE;);
+    case 0xF1: // SET 6, C (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.c, 6); END_OPCODE;);
+    case 0xF2: // SET 6, D (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.d, 6); END_OPCODE;);
+    case 0xF3: // SET 6, E (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.e, 6); END_OPCODE;);
+    case 0xF4: // SET 6, H (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.h, 6); END_OPCODE;);
+    case 0xF5: // SET 6, L (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.l, 6); END_OPCODE;);
+    case 0xF6: // SET 6, (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(SET_BIT(cpu->opcode_compute_storage, 6));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
+    case 0xF7: // SET 6, A (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.a, 6); END_OPCODE;);
+    case 0xF8: // SET 7, B (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.b, 7); END_OPCODE;);
+    case 0xF9: // SET 7, C (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.c, 7); END_OPCODE;);
+    case 0xFA: // SET 7, D (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.d, 7); END_OPCODE;);
+    case 0xFB: // SET 7, E (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.e, 7); END_OPCODE;);
+    case 0xFC: // SET 7, H (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.h, 7); END_OPCODE;);
+    case 0xFD: // SET 7, L (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.l, 7); END_OPCODE;);
+    case 0xFE: // SET 7, (HL) (12 cycles)
+        CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
+        CLOCK(SET_BIT(cpu->opcode_compute_storage, 7));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); END_OPCODE;);
+    case 0xFF: // SET 7, A (4 cycles)
+        CLOCK(SET_BIT(cpu->registers.a, 7); END_OPCODE;);
     default:
         handle_missing_opcode(emu, 1);
         break;
@@ -1792,7 +1437,6 @@ static void exec_opcode(emulator_t *emu) {
     case 0x10: // STOP (4 cycles)
         // TODO Halts until button press. Blargg's cpu_instrs.gb test rom wrongly assumes this is a CGB emulator and will reach this opcode.
         CLOCK(eprintf("STOP instruction not implemented\n"); END_OPCODE;);
-        break;
     case 0x11: // LD DE, nn (12 cycles)
         GET_OPERAND_16();
         CLOCK(cpu->registers.de = cpu->operand; END_OPCODE;);
@@ -2304,11 +1948,9 @@ static void exec_opcode(emulator_t *emu) {
         );
         CLOCK();
         POP(&cpu->registers.pc, END_OPCODE);
-        break;
     case 0xC9: // RET (16 cycles)
         POP(&cpu->registers.pc);
         CLOCK(END_OPCODE);
-        break;
     case 0xCA: // JP Z, nn (12 or 16 cycles)
         GET_OPERAND_16();
         CLOCK(
@@ -2317,7 +1959,7 @@ static void exec_opcode(emulator_t *emu) {
         );
         CLOCK(cpu->registers.pc = cpu->operand; END_OPCODE;);
     case 0xCB: // CB nn (prefix instruction) (4 cycles)
-        GET_OPERAND_8(cpu->is_opcode_cb = 1; cpu->opcode_state = OPCODE_STATE_FETCH);
+        GET_OPERAND_8(cpu->exec_state = EXEC_OPCODE_CB; START_OPCODE_CB;);
     case 0xCC: // CALL Z, nn
         GET_OPERAND_16();
         CLOCK(
@@ -2344,7 +1986,7 @@ static void exec_opcode(emulator_t *emu) {
             if (CHECK_FLAG(cpu, FLAG_C))
                 END_OPCODE;
         );
-        POP(&cpu->registers.pc);
+        POP(&cpu->registers.pc, END_OPCODE);
     case 0xD1: // POP DE (12 cycles)
         POP(&cpu->registers.de, END_OPCODE);
     case 0xD2: // JP NC, nn (12 or 16 cycles)
@@ -2400,7 +2042,6 @@ static void exec_opcode(emulator_t *emu) {
             cpu->registers.pc = cpu->operand;
             END_OPCODE;
         );
-        break;
     case 0xDE: // SBC A, n (8 cycles)
         GET_OPERAND_8();
         CLOCK(sbc(cpu, cpu->operand); END_OPCODE;);
@@ -2419,7 +2060,6 @@ static void exec_opcode(emulator_t *emu) {
     case 0xE5: // PUSH HL (16 cycles)
         PUSH(cpu->registers.hl);
         CLOCK(END_OPCODE);
-        break;
     case 0xE6: // AND n (8 cycles)
         GET_OPERAND_8();
         CLOCK(and(cpu, cpu->operand); END_OPCODE;);
@@ -2528,87 +2168,86 @@ static void print_trace(emulator_t *emu) {
 }
 // #endif
 
-static int handle_interrupts(emulator_t *emu) {
+static void push_interrupt(emulator_t *emu) {
     cpu_t *cpu = emu->cpu;
     mmu_t *mmu = emu->mmu;
 
-    // wake cpu if there is one (or more) interrupt
-    if (cpu->halt && (mmu->mem[IE] & mmu->mem[IF]))
-        cpu->halt = 0;
-
-    // cpu_ime is truly enabled when its value is 2 to emulate the EI delay by one instruction
-    if (cpu->ime == 1) {
-        cpu->ime++;
-        errnoprintf("--------- IMPLEMENT INTERRUPTS ---------\n");
-        exit(0);
-    } else if (cpu->ime == 2 && (mmu->mem[IE] & mmu->mem[IF])) { // if cpu_ime is enabled and at least 1 interrupt is enabled and fired
-        cpu->ime = 0;
-        // push(emu, cpu->registers.pc);
-
-        if (CHECK_BIT(mmu->mem[IF], IRQ_VBLANK)) {
-            RESET_BIT(mmu->mem[IF], IRQ_VBLANK);
-            cpu->registers.pc = 0x0040;
-        } else if (CHECK_BIT(mmu->mem[IF], IRQ_STAT)) {
-            RESET_BIT(mmu->mem[IF], IRQ_STAT);
-            cpu->registers.pc = 0x0048;
-        } else if (CHECK_BIT(mmu->mem[IF], IRQ_TIMER)) {
-            RESET_BIT(mmu->mem[IF], IRQ_TIMER);
-            cpu->registers.pc = 0x0050;
-        } else if (CHECK_BIT(mmu->mem[IF], IRQ_SERIAL)) {
-            RESET_BIT(mmu->mem[IF], IRQ_SERIAL);
-            cpu->registers.pc = 0x0058;
-        } else if (CHECK_BIT(mmu->mem[IF], IRQ_JOYPAD)) {
-            RESET_BIT(mmu->mem[IF], IRQ_JOYPAD);
-            cpu->registers.pc = 0x0060;
-        }
-
-        return 20;
+    switch (cpu->opcode_state) {
+    case 0:
+        PUSH(cpu->registers.pc);
+        CLOCK(
+            if (CHECK_BIT(mmu->mem[IF], IRQ_VBLANK)) {
+                RESET_BIT(mmu->mem[IF], IRQ_VBLANK);
+                cpu->registers.pc = 0x0040;
+            } else if (CHECK_BIT(mmu->mem[IF], IRQ_STAT)) {
+                RESET_BIT(mmu->mem[IF], IRQ_STAT);
+                cpu->registers.pc = 0x0048;
+            } else if (CHECK_BIT(mmu->mem[IF], IRQ_TIMER)) {
+                RESET_BIT(mmu->mem[IF], IRQ_TIMER);
+                cpu->registers.pc = 0x0050;
+            } else if (CHECK_BIT(mmu->mem[IF], IRQ_SERIAL)) {
+                RESET_BIT(mmu->mem[IF], IRQ_SERIAL);
+                cpu->registers.pc = 0x0058;
+            } else if (CHECK_BIT(mmu->mem[IF], IRQ_JOYPAD)) {
+                RESET_BIT(mmu->mem[IF], IRQ_JOYPAD);
+                cpu->registers.pc = 0x0060;
+            }
+        );
+        CLOCK(END_PUSH_IRQ);
     }
-
-    return 0;
-}
-
-void cpu_request_interrupt(emulator_t *emu, int irq) {
-    SET_BIT(emu->mmu->mem[IF], irq);
 }
 
 void cpu_step(emulator_t *emu) {
     cpu_t *cpu = emu->cpu;
 
-    handle_interrupts(emu);
+    switch (cpu->exec_state) {
+    case FETCH_OPCODE:
+        // TODO halt bug https://gbdev.io/pandocs/halt.html
+        if (cpu->halt && (emu->mmu->mem[IE] & emu->mmu->mem[IF]))
+            cpu->halt = 0;
 
-    if (cpu->halt) return;
+        if (cpu->halt) return;
 
-    // fetch new instruction
-    if (cpu->opcode_state < 0) {
-        if (cpu->opcode_state != OPCODE_STATE_FETCH) {
-            // TODO remove this check
-            eprintf("cpu->opcode_state < %d\n", OPCODE_STATE_FETCH);
-            exit(EXIT_FAILURE);
+        if (cpu->ime == 1) {
+            cpu->ime = 2;
+        } else if (cpu->ime == 2 && (emu->mmu->mem[IE] & emu->mmu->mem[IF])) {
+            cpu->opcode = 0;
+            cpu->opcode_state = cpu->opcode;
+            cpu->exec_state = EXEC_PUSH_IRQ;
+            push_interrupt(emu);
+            break;
         }
 
-        if (cpu->is_opcode_cb) {
-            cpu->opcode = cpu->operand;
-            cpu->opcode_state = cpu->opcode;
-        } else {
-            // #ifdef DEBUG
-            print_trace(emu);
-            // #endif
-            cpu->opcode = mmu_read(emu, cpu->registers.pc);
-            cpu->opcode_state = cpu->opcode;
-            cpu->registers.pc++;
-        }
-    }
+        // TODO
+        // #ifdef DEBUG
+        print_trace(emu);
+        // #endif
 
-    if (cpu->is_opcode_cb)
-        exec_extended_opcode(emu);
-    else
+        cpu->opcode = mmu_read(emu, cpu->registers.pc);
+        cpu->opcode_state = cpu->opcode;
+        cpu->registers.pc++;
+        cpu->exec_state = EXEC_OPCODE;
+        // don't break, exec opcode now
+    case EXEC_OPCODE:
         exec_opcode(emu);
+        break;
+    case FETCH_OPCODE_CB:
+        cpu->opcode = cpu->operand;
+        cpu->opcode_state = cpu->opcode;
+        cpu->exec_state = EXEC_OPCODE_CB;
+        // don't break, exec extended opcode now
+    case EXEC_OPCODE_CB:
+        exec_extended_opcode(emu);
+        break;
+    case EXEC_PUSH_IRQ:
+        push_interrupt(emu);
+        break;
+    }
 }
 
 void cpu_init(emulator_t *emu) {
     emu->cpu = xcalloc(1, sizeof(cpu_t));
-    emu->cpu->opcode_state = OPCODE_STATE_FETCH; // immediately request to fetch an instruction
+    emu->cpu->exec_state = FETCH_OPCODE; // immediately request to fetch an instruction
 }
 
 void cpu_quit(emulator_t *emu) {

@@ -40,7 +40,7 @@ void timer_step(emulator_t *emu, int cycles) {
                 // TODO If a TMA write is executed on the same cycle as the content of TMA is transferred to TIMA due to a timer overflow,
                 //      the old value is transferred to TIMA.
                 mmu->mem[TIMA] = mmu->mem[TMA];
-                cpu_request_interrupt(emu, IRQ_TIMER);
+                CPU_REQUEST_INTERRUPT(emu, IRQ_TIMER);
             } else {
                 mmu->mem[TIMA]++;
             }
