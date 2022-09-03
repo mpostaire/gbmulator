@@ -27,11 +27,11 @@ void link_quit(emulator_t *emu) {
     free(emu->link);
 }
 
-void link_step(emulator_t *emu, int cycles) {
+void link_step(emulator_t *emu) {
     link_t *link = emu->link;
     mmu_t *mmu = emu->mmu;
 
-    link->cycles_counter += cycles;
+    link->cycles_counter += 4;
 
     if (link->cycles_counter >= link->clock_cycles) {
         link->cycles_counter -= link->clock_cycles; // keep leftover cycles (if any)

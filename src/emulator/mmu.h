@@ -106,7 +106,7 @@ int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size);
 
 void mmu_quit(emulator_t *emu);
 
-void mmu_step(emulator_t *emu, int cycles);
+void mmu_step(emulator_t *emu);
 
 /**
  * only used in cpu instructions (opcode execution)

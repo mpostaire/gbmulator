@@ -27,7 +27,7 @@ void inline ppu_ly_lyc_compare(emulator_t *emu) {
     }
 }
 
-void ppu_step(emulator_t *emu, int cycles);
+void ppu_step(emulator_t *emu);
 
 void ppu_init(emulator_t *emu);
 

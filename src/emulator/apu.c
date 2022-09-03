@@ -178,13 +178,14 @@ static float channel_dac(emulator_t *emu, channel_t *c) {
     return 0.0f;
 }
 
-void apu_step(emulator_t *emu, int cycles) {
+void apu_step(emulator_t *emu) {
     if (!IS_APU_ENABLED(emu))
         return;
 
     apu_t *apu = emu->apu;
     mmu_t *mmu = emu->mmu;
 
+    byte_t cycles = 4; // 4 cycles per step
     while (cycles-- > 0) {
         apu->frame_sequencer_cycles_count++;
         if (apu->frame_sequencer_cycles_count >= 8192) { // 512 Hz

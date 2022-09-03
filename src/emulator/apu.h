@@ -13,7 +13,7 @@ void apu_channel_trigger(emulator_t *emu, channel_t *c);
 /**
  * Calls samples_ready_callback given in the apu_init() function whenever there is audio to be played.
  */
-void apu_step(emulator_t *emu, int cycles);
+void apu_step(emulator_t *emu);
 
 /**
  * Initializes the internal state of the ppu.

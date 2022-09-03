@@ -1820,7 +1820,13 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(mmu_write(emu, cpu->registers.hl, cpu->registers.l));
         CLOCK(END_OPCODE);
     case 0x76: // HALT (4 cycles)
-        CLOCK(cpu->halt = 1; END_OPCODE;);
+        CLOCK(
+            if (cpu->ime != 2 && (emu->mmu->mem[IE] & emu->mmu->mem[IF] & 0x1F))
+                cpu->halt_bug = 1;
+            else
+                cpu->halt = 1;
+            END_OPCODE;
+        );
     case 0x77: // LD (HL),A (8 cycles)
         CLOCK(mmu_write(emu, cpu->registers.hl, cpu->registers.a));
         CLOCK(END_OPCODE);
@@ -2247,8 +2253,9 @@ static void push_interrupt(emulator_t *emu) {
 
     switch (cpu->opcode_state) {
     case 0:
-        PUSH(cpu->registers.pc);
-        CLOCK(
+        CLOCK();
+        CLOCK();
+        PUSH(cpu->registers.pc,
             if (CHECK_BIT(mmu->mem[IF], IRQ_VBLANK)) {
                 RESET_BIT(mmu->mem[IF], IRQ_VBLANK);
                 cpu->registers.pc = 0x0040;
@@ -2265,8 +2272,8 @@ static void push_interrupt(emulator_t *emu) {
                 RESET_BIT(mmu->mem[IF], IRQ_JOYPAD);
                 cpu->registers.pc = 0x0060;
             }
+            END_PUSH_IRQ;
         );
-        CLOCK(END_PUSH_IRQ);
     }
 }
 
@@ -2275,15 +2282,15 @@ void cpu_step(emulator_t *emu) {
 
     switch (cpu->exec_state) {
     case FETCH_OPCODE:
-        // TODO halt bug https://gbdev.io/pandocs/halt.html
-        if (cpu->halt && (emu->mmu->mem[IE] & emu->mmu->mem[IF]))
-            cpu->halt = 0;
-
-        if (cpu->halt) return;
+        if (cpu->halt) {
+            if (emu->mmu->mem[IE] & emu->mmu->mem[IF] & 0x1F)
+                cpu->halt = 0; // interrupt requested, disabling halt takes 4 cycles
+            return;
+        }
 
         if (cpu->ime == 1) {
             cpu->ime = 2;
-        } else if (cpu->ime == 2 && (emu->mmu->mem[IE] & emu->mmu->mem[IF])) {
+        } else if (cpu->ime == 2 && (emu->mmu->mem[IE] & emu->mmu->mem[IF] & 0x1F)) {
             cpu->opcode = 0;
             cpu->opcode_state = cpu->opcode;
             cpu->exec_state = EXEC_PUSH_IRQ;
@@ -2297,7 +2304,10 @@ void cpu_step(emulator_t *emu) {
 
         cpu->opcode = mmu_read(emu, cpu->registers.pc);
         cpu->opcode_state = cpu->opcode;
-        cpu->registers.pc++;
+        if (cpu->halt_bug)
+            cpu->halt_bug = 0;
+        else
+            cpu->registers.pc++;
         cpu->exec_state = EXEC_OPCODE;
         // don't break, exec opcode now
     case EXEC_OPCODE:

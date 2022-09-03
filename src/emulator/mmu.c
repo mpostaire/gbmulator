@@ -165,41 +165,37 @@ void mmu_quit(emulator_t *emu) {
     free(emu->mmu);
 }
 
-static inline void oam_dma(mmu_t *mmu) {
+static inline void oam_dma_step(mmu_t *mmu) {
     // 4 cycles to transfer 1 byte
-    if (mmu->oam_dma.step == 0) {
-        mmu->oam_dma.step = 3;
 
-        // get src memory area pointer
-        byte_t *src;
-        if (mmu->oam_dma.src_address >= ROM_BANKN && mmu->oam_dma.src_address < VRAM) {
-            src = &mmu->cartridge[(mmu->oam_dma.src_address - ROM_BANKN) + (mmu->current_rom_bank * 0x4000)];
-        } else if (mmu->oam_dma.src_address >= WRAM_BANKN && mmu->oam_dma.src_address < ECHO) {
-            byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
-            if (current_wram_bank == 0)
-                current_wram_bank = 1;
-            src = &mmu->wram_extra[(mmu->oam_dma.src_address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)];
-        } else {
-            src = &mmu->mem[mmu->oam_dma.src_address];
-        }
-
-        // copy from src to dest
-        mmu->mem[OAM + mmu->oam_dma.progress] = src[mmu->oam_dma.progress];
-
-        mmu->oam_dma.progress++;
-        mmu->oam_dma.is_active = mmu->oam_dma.progress != 0xA0;
+    // get src memory area pointer
+    byte_t *src;
+    if (mmu->oam_dma.src_address >= ROM_BANKN && mmu->oam_dma.src_address < VRAM) {
+        src = &mmu->cartridge[(mmu->oam_dma.src_address - ROM_BANKN) + (mmu->current_rom_bank * 0x4000)];
+    } else if (mmu->oam_dma.src_address >= WRAM_BANKN && mmu->oam_dma.src_address < ECHO) {
+        byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
+        if (current_wram_bank == 0)
+            current_wram_bank = 1;
+        src = &mmu->wram_extra[(mmu->oam_dma.src_address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)];
     } else {
-        mmu->oam_dma.step--;
+        src = &mmu->mem[mmu->oam_dma.src_address];
     }
+
+    // copy from src to dest
+    mmu->mem[OAM + mmu->oam_dma.progress] = src[mmu->oam_dma.progress];
+
+    mmu->oam_dma.progress++;
+    mmu->oam_dma.is_active = mmu->oam_dma.progress != 0xA0;
 }
 
-static inline void hdma_gdma(emulator_t *emu, byte_t *src, byte_t *dest) {
+static inline void hdma_gdma_step(emulator_t *emu, byte_t *src, byte_t *dest) {
     mmu_t *mmu = emu->mmu;
+    mmu->hdma.step += 4; // 4 cycles per step
 
     if (mmu->hdma.type == GDMA) {
         // 32 cycles to transfer 0x10 bytes
-        if (mmu->hdma.step == 0) {
-            mmu->hdma.step = 31;
+        if (mmu->hdma.step >= 32) {
+            mmu->hdma.step = 0;
 
             // copy a block of 16 bytes from src to dest
             for (byte_t i = 0; i < 0x10; i++)
@@ -226,16 +222,14 @@ static inline void hdma_gdma(emulator_t *emu, byte_t *src, byte_t *dest) {
             // transfer stops if mmu->mem[HDMA5] is 0xFF
             if (mmu->mem[HDMA5] == 0xFF)
                 mmu->hdma.lock_cpu = 0;
-        } else {
-            mmu->hdma.step--;
         }
     } else if (CHECK_BIT(mmu->mem[LCDC], 7) && PPU_IS_MODE(emu, PPU_MODE_HBLANK) && mmu->hdma.hdma_ly == mmu->mem[LY]) {
         // TODO hdma still not perfect? pokemon crystal/zelda link's awakening dx have some visual glitches when displaying menus/text windows
         // TODO vram viewer like bgb to see what's happening in vram for these glitches to happen
         mmu->hdma.lock_cpu = 1;
         // 32 cycles to transfer 0x10 bytes
-        if (mmu->hdma.step == 0) {
-            mmu->hdma.step = 31;
+        if (mmu->hdma.step >= 32) {
+            mmu->hdma.step = 0;
 
             mmu->hdma.hdma_ly++;
             if (mmu->hdma.hdma_ly == GB_SCREEN_HEIGHT)
@@ -264,57 +258,36 @@ static inline void hdma_gdma(emulator_t *emu, byte_t *src, byte_t *dest) {
             mmu->hdma.lock_cpu = 0;
 
             mmu->mem[HDMA5]--;
-
             // transfer stops if mmu->mem[HDMA5] is 0xFF
-        } else {
-            mmu->hdma.step--;
         }
     }
 }
 
-void mmu_step(emulator_t *emu, int cycles) {
+void mmu_step(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
-    while (cycles-- > 0) {
-        // TODO as rtc_update uses the system time there is no need to emulate the rtc clock here
-        //      --> this bit of code can still be useful if rtc_update is changed emulate accuratley the rtc and not use the system time
-        // // step rtc clock if it's present and is not halted
-        // if (mmu->has_rtc && !CHECK_BIT(mmu->rtc.dh, 6)) {
-        //     mmu->rtc.cpu_cycles_counter++;
-        //     if (mmu->rtc.cpu_cycles_counter >= GB_CPU_FREQ / 32768) { // 32768 Hz
-        //         mmu->rtc.cpu_cycles_counter = 0;
+    if (mmu->oam_dma.is_active)
+        oam_dma_step(mmu);
 
-        //         mmu->rtc.rtc_cycles_counter++;
-        //         if (CHECK_BIT(mmu->rtc.rtc_cycles_counter, 15)) {
-        //             mmu->rtc.rtc_cycles_counter = 0;
-        //             rtc_update(&mmu->rtc);
-        //         }
-        //     }
-        // }
-
-        if (mmu->oam_dma.is_active)
-            oam_dma(mmu);
-
-        // do GDMA/HDMA if in CGB mode and HDMA5 bit 7 is reset (meaning there is an active HDMAG/GDMA) 
-        if (emu->mode == CGB && !CHECK_BIT(mmu->mem[HDMA5], 7)) {
-            // get src memory area pointer
-            byte_t *src;
-            if (mmu->hdma.src_address >= ROM_BANKN && mmu->hdma.src_address < VRAM) {
-                src = &mmu->cartridge[(mmu->hdma.src_address - ROM_BANKN) + (mmu->current_rom_bank * 0x4000)];
-            } else if (mmu->hdma.src_address >= WRAM_BANKN && mmu->hdma.src_address < ECHO) {
-                byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
-                if (current_wram_bank == 0)
-                    current_wram_bank = 1;
-                src = &mmu->wram_extra[(mmu->hdma.src_address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)];
-            } else {
-                src = &mmu->mem[mmu->hdma.src_address];
-            }
-
-            // get dest memory area pointer
-            byte_t *dest = CHECK_BIT(mmu->mem[VBK], 0) ? &mmu->vram_extra[mmu->hdma.dest_address] : &mmu->mem[VRAM + mmu->hdma.dest_address];
-
-            hdma_gdma(emu, src, dest);
+    // do GDMA/HDMA if in CGB mode and HDMA5 bit 7 is reset (meaning there is an active HDMA/GDMA) 
+    if (emu->mode == CGB && !CHECK_BIT(mmu->mem[HDMA5], 7)) {
+        // get src memory area pointer
+        byte_t *src;
+        if (mmu->hdma.src_address >= ROM_BANKN && mmu->hdma.src_address < VRAM) {
+            src = &mmu->cartridge[(mmu->hdma.src_address - ROM_BANKN) + (mmu->current_rom_bank * 0x4000)];
+        } else if (mmu->hdma.src_address >= WRAM_BANKN && mmu->hdma.src_address < ECHO) {
+            byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
+            if (current_wram_bank == 0)
+                current_wram_bank = 1;
+            src = &mmu->wram_extra[(mmu->hdma.src_address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)];
+        } else {
+            src = &mmu->mem[mmu->hdma.src_address];
         }
+
+        // get dest memory area pointer
+        byte_t *dest = CHECK_BIT(mmu->mem[VBK], 0) ? &mmu->vram_extra[mmu->hdma.dest_address] : &mmu->mem[VRAM + mmu->hdma.dest_address];
+
+        hdma_gdma_step(emu, src, dest);
     }
 }
 
@@ -503,6 +476,9 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
     if (address == P1)
         return joypad_get_input(emu);
 
+    if (address == IF)
+        return mmu->mem[IF] | 0xE0;
+
     if (address == NR10)
         return mmu->mem[NR10] | 0x80;
     if (address == NR11)
@@ -626,10 +602,12 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         // writing to DIV resets it to 0
         mmu->mem[address] = 0;
         mmu->mem[DIV] = 0;
+        mmu->mem[TIMA] = mmu->mem[TMA];
     } else if (address == DIV) {
         // writing to DIV resets it to 0
         mmu->mem[address] = 0;
         mmu->mem[DIV_LSB] = 0;
+        mmu->mem[TIMA] = mmu->mem[TMA];
     } else if (address == TAC) {
         mmu->mem[address] = data;
         switch (data & 0x03) {
@@ -647,7 +625,6 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
     } else if (address == DMA) {
         // writing to this register starts an OAM DMA transfer
         mmu->oam_dma.is_active = 1;
-        mmu->oam_dma.step = 0;
         mmu->oam_dma.progress = 0;
         mmu->oam_dma.src_address = data * 0x100;
 

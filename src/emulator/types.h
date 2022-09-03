@@ -75,6 +75,7 @@ typedef struct {
     registers_t registers;
     byte_t ime; // interrupt master enable
     byte_t halt;
+    byte_t halt_bug;
     byte_t exec_state; // determines if the cpu is pushing an interrupt execution, executiong a normal opcode or a cb opcode
     byte_t opcode; // current opcode
     int opcode_state; // current opcode or current microcode inside the opcode (< 0 --> request new instruction fetch)
@@ -152,7 +153,6 @@ typedef struct {
     byte_t cram_obj[0x40]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
 
     struct {
-        byte_t step;
         byte_t is_active;
         word_t progress;
         word_t src_address;

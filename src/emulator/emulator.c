@@ -56,13 +56,11 @@ void emulator_step(emulator_t *emu) {
     // stop execution of the program while a VBLANK DMA is active
     if (!emu->mmu->hdma.lock_cpu)
         cpu_step(emu);
-
-    // TODO remove second arg of all the *_step(emu, 4) functions below once the cpu is implemented
-    mmu_step(emu, 4);
-    timer_step(emu, 4);
-    link_step(emu, 4);
-    ppu_step(emu, 4);
-    apu_step(emu, 4);
+    mmu_step(emu);
+    timer_step(emu);
+    link_step(emu);
+    ppu_step(emu);
+    apu_step(emu);
 }
 
 emulator_t *emulator_init(const byte_t *rom_data, size_t rom_size, emulator_options_t *opts) {

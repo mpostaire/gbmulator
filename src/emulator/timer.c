@@ -7,7 +7,7 @@
 
 // TODO timer actual behavior is more subtle: https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html
 
-void timer_step(emulator_t *emu, int cycles) {
+void timer_step(emulator_t *emu) {
     gbtimer_t *timer = emu->timer;
     mmu_t *mmu = emu->mmu;
 
