@@ -46,19 +46,16 @@ typedef enum {
 int server_sfd = -1;
 int client_sfd = -1;
 int is_server = 0;
-struct sockaddr server_addr;
 
 static void print_connected_to(struct sockaddr *addr) {
     char buf[INET6_ADDRSTRLEN];
     int port;
     if (addr->sa_family == AF_INET) {
-        struct sockaddr_in *temp = (struct sockaddr_in *) addr;
-        inet_ntop(addr->sa_family, &temp->sin_addr, buf, sizeof(buf));
-        port = temp->sin_port;
+        inet_ntop(addr->sa_family, &((struct sockaddr_in *) addr)->sin_addr, buf, sizeof(buf));
+        port = ((struct sockaddr_in *) addr)->sin_port;
     } else {
-        struct sockaddr_in6 *temp = (struct sockaddr_in6 *) addr;
-        inet_ntop(addr->sa_family, &temp->sin6_addr, buf, sizeof(buf));
-        port = temp->sin6_port;
+        inet_ntop(addr->sa_family, &((struct sockaddr_in6 *) addr)->sin6_addr, buf, sizeof(buf));
+        port = ((struct sockaddr_in6 *) addr)->sin6_port;
     }
     printf("Connected to %s on port %d\n", buf, ntohs(port));
 }
@@ -161,7 +158,6 @@ int link_connect_to_server(const char *address, const char *port, int is_ipv6, i
         return 0;
     }
 
-    server_addr = *res->ai_addr;
     freeaddrinfo(res);
 
     is_server = 0;
@@ -176,7 +172,7 @@ int link_connect_to_server(const char *address, const char *port, int is_ipv6, i
         errnoprintf("could not make a connection");
         return 0;
     }
-    print_connected_to(&server_addr);
+    print_connected_to(res->ai_addr);
     return 1;
 }
 
