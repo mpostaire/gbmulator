@@ -31,8 +31,6 @@ void link_step(emulator_t *emu) {
     link_t *link = emu->link;
     mmu_t *mmu = emu->mmu;
 
-    // TODO does not work in CGB mode
-
     link->cycles_counter += 4; // 4 cycles per step
 
     if (link->cycles_counter >= link->max_clock_cycles) {

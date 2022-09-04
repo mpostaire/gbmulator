@@ -28,6 +28,7 @@ typedef struct __attribute__((packed)) {
     cpu_t cpu;
     gbtimer_t timer;
     link_t link;
+    byte_t ppu[sizeof(ppu_t) - offsetof(ppu_t, is_lcd_turning_on)];
     byte_t mmu[];
 } savestate_data_t;
 
@@ -271,6 +272,7 @@ byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, byte_t compresse
     memcpy(&savestate_data->cpu, emu->cpu, sizeof(cpu_t));
     memcpy(&savestate_data->timer, emu->timer, sizeof(gbtimer_t));
     memcpy(&savestate_data->link, emu->link, sizeof(link_t));
+    memcpy(&savestate_data->ppu, &emu->ppu->is_lcd_turning_on, sizeof(savestate_data->ppu));
 
     memcpy(savestate_data->mmu, &emu->mmu->mbc, mmu_header_len);
 
@@ -377,6 +379,7 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
     memcpy(emu->cpu, &savestate_data->cpu, sizeof(cpu_t));
     memcpy(emu->timer, &savestate_data->timer, sizeof(gbtimer_t));
     memcpy(emu->link, &savestate_data->link, sizeof(link_t));
+    memcpy(&emu->ppu->is_lcd_turning_on, &savestate_data->ppu, sizeof(savestate_data->ppu));
 
     memcpy(&emu->mmu->mbc, savestate_data->mmu, mmu_header_len);
 

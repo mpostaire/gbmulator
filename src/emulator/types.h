@@ -176,6 +176,7 @@ typedef struct {
     // stores the x position of each pixel drawn by the highest priority object
     byte_t *obj_pixel_priority;
 
+    // don't move this member
     byte_t is_lcd_turning_on;
 
     struct {
