@@ -6,13 +6,13 @@
 
 void link_set_clock(emulator_t *emu) {
     if (emu->mode == CGB) {
-        // TODO handle double speed (also call this function where the double speed enable/disable is happening)
+        // TODO handle double speed
         if (CHECK_BIT(emu->mmu->mem[SC], 1))
-            emu->link->clock_cycles = GB_CPU_FREQ / 262144;
+            emu->link->max_clock_cycles = GB_CPU_FREQ / 262144;
         else
-            emu->link->clock_cycles = GB_CPU_FREQ / 8192;
+            emu->link->max_clock_cycles = GB_CPU_FREQ / 8192;
     } else {
-        emu->link->clock_cycles = GB_CPU_FREQ / 8192;
+        emu->link->max_clock_cycles = GB_CPU_FREQ / 8192;
     }
 }
 
@@ -31,10 +31,12 @@ void link_step(emulator_t *emu) {
     link_t *link = emu->link;
     mmu_t *mmu = emu->mmu;
 
-    link->cycles_counter += 4;
+    // TODO does not work in CGB mode
 
-    if (link->cycles_counter >= link->clock_cycles) {
-        link->cycles_counter -= link->clock_cycles; // keep leftover cycles (if any)
+    link->cycles_counter += 4; // 4 cycles per step
+
+    if (link->cycles_counter >= link->max_clock_cycles) {
+        link->cycles_counter -= link->max_clock_cycles; // keep leftover cycles (if any)
 
         // transfer requested / in progress with internal clock (this emu is the master of the connection)
         // --> the master emulator also does the work for the slave so we don't have to handle the case

@@ -356,9 +356,6 @@ int link_exchange_joypad(emulator_t *emu, emulator_t *linked_emu) {
             eprintf("received packet type %d but expected %d (ignored)\n", buf[0], JOYPAD);
     } while (buf[0] != JOYPAD);
 
-    printf("[incoming joypad] a=%d b=%d select=%d start=%d | right=%d left=%d up=%d down=%d\n",
-        !GET_BIT(buf[1], 7), !GET_BIT(buf[1], 6), !GET_BIT(buf[1], 5), !GET_BIT(buf[1], 4),
-        !GET_BIT(buf[1], 3), !GET_BIT(buf[1], 2), !GET_BIT(buf[1], 1), !GET_BIT(buf[1], 0));
     emulator_set_joypad_state(linked_emu, buf[1]);
     return 1;
 }

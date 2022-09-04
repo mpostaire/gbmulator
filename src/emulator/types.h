@@ -244,8 +244,8 @@ typedef struct {
 
 typedef struct {
     int cycles_counter;
-    int clock_cycles;
-    int bit_counter;
+    int max_clock_cycles;
+    byte_t bit_counter;
     emulator_t *other_emu;
 } link_t;
 

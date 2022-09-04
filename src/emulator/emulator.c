@@ -27,6 +27,7 @@ typedef struct __attribute__((packed)) {
     byte_t eram_banks;
     cpu_t cpu;
     gbtimer_t timer;
+    link_t link;
     byte_t mmu[];
 } savestate_data_t;
 
@@ -269,6 +270,7 @@ byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, byte_t compresse
     savestate_data->eram_banks = emu->mmu->eram_banks;
     memcpy(&savestate_data->cpu, emu->cpu, sizeof(cpu_t));
     memcpy(&savestate_data->timer, emu->timer, sizeof(gbtimer_t));
+    memcpy(&savestate_data->link, emu->link, sizeof(link_t));
 
     memcpy(savestate_data->mmu, &emu->mmu->mbc, mmu_header_len);
 
@@ -374,6 +376,7 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
 
     memcpy(emu->cpu, &savestate_data->cpu, sizeof(cpu_t));
     memcpy(emu->timer, &savestate_data->timer, sizeof(gbtimer_t));
+    memcpy(emu->link, &savestate_data->link, sizeof(link_t));
 
     memcpy(&emu->mmu->mbc, savestate_data->mmu, mmu_header_len);
 
