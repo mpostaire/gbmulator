@@ -165,26 +165,43 @@ void mmu_quit(emulator_t *emu) {
     free(emu->mmu);
 }
 
-static inline void oam_dma_step(mmu_t *mmu) {
+static inline void oam_dma_step(mmu_t *mmu, emulator_mode_t mode) {
     // 4 cycles to transfer 1 byte
 
-    // get src memory area pointer
-    byte_t *src;
     if (mmu->oam_dma.src_address >= ROM_BANKN && mmu->oam_dma.src_address < VRAM) {
-        src = &mmu->cartridge[(mmu->oam_dma.src_address - ROM_BANKN) + (mmu->current_rom_bank * 0x4000)];
-    } else if (mmu->oam_dma.src_address >= WRAM_BANKN && mmu->oam_dma.src_address < ECHO) {
+        mmu->mem[OAM + mmu->oam_dma.progress] = mmu->cartridge[(mmu->oam_dma.src_address - ROM_BANKN) + (mmu->current_rom_bank * 0x4000)];
+    } else if (mmu->oam_dma.src_address >= ERAM && mmu->oam_dma.src_address < WRAM_BANK0) {
+        mmu->mem[OAM + mmu->oam_dma.progress] = mmu->eram_enabled ? mmu->eram[(mmu->oam_dma.src_address - 0xA000) + (mmu->current_eram_bank * 0x2000)] : 0xFF;
+    } else if (mode == CGB && mmu->oam_dma.src_address >= WRAM_BANKN && mmu->oam_dma.src_address < ECHO) {
         byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
         if (current_wram_bank == 0)
             current_wram_bank = 1;
-        src = &mmu->wram_extra[(mmu->oam_dma.src_address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)];
+        mmu->mem[OAM + mmu->oam_dma.progress] = mmu->wram_extra[(mmu->oam_dma.src_address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)];
+    } else if (mmu->oam_dma.src_address >= ECHO && mmu->oam_dma.src_address < UNUSABLE) {
+        word_t offset;
+        if (mmu->oam_dma.src_address < OAM)
+            offset = ECHO - WRAM_BANK0;
+        else
+            offset = OAM - WRAM_BANK0;
+
+        if (mode == CGB) {
+            byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
+            if (current_wram_bank == 0)
+                current_wram_bank = 1;
+            word_t address = mmu->oam_dma.src_address - offset;
+            mmu->mem[OAM + mmu->oam_dma.progress] = mmu->wram_extra[(address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)];
+        } else {
+            mmu->mem[OAM + mmu->oam_dma.progress] = mmu->mem[mmu->oam_dma.src_address - offset];
+        }
+    } else if (mmu->oam_dma.src_address >= IO && mmu->oam_dma.src_address < 0xFFFF) {
+        // TODO doing nothing here doesn't pass mooneye acceptance/oam_dma/sources-GS test
+        // mmu->mem[OAM + mmu->oam_dma.progress] = 0xFF;
     } else {
-        src = &mmu->mem[mmu->oam_dma.src_address];
+        mmu->mem[OAM + mmu->oam_dma.progress] = mmu->mem[mmu->oam_dma.src_address];
     }
 
-    // copy from src to dest
-    mmu->mem[OAM + mmu->oam_dma.progress] = src[mmu->oam_dma.progress];
-
     mmu->oam_dma.progress++;
+    mmu->oam_dma.src_address++;
     mmu->oam_dma.is_active = mmu->oam_dma.progress != 0xA0;
 }
 
@@ -192,6 +209,7 @@ static inline void hdma_gdma_step(emulator_t *emu, byte_t *src, byte_t *dest) {
     mmu_t *mmu = emu->mmu;
     mmu->hdma.step += 4; // 4 cycles per step
 
+    // TODO handle cases where hdma.src_address goes from one region to another
     if (mmu->hdma.type == GDMA) {
         // 32 cycles to transfer 0x10 bytes
         if (mmu->hdma.step >= 32) {
@@ -267,14 +285,19 @@ void mmu_step(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
     if (mmu->oam_dma.is_active)
-        oam_dma_step(mmu);
+        oam_dma_step(mmu, emu->mode);
 
     // do GDMA/HDMA if in CGB mode and HDMA5 bit 7 is reset (meaning there is an active HDMA/GDMA) 
     if (emu->mode == CGB && !CHECK_BIT(mmu->mem[HDMA5], 7)) {
         // get src memory area pointer
+
+        // TODO handle cases where hdma.src_address goes from one region to another
         byte_t *src;
         if (mmu->hdma.src_address >= ROM_BANKN && mmu->hdma.src_address < VRAM) {
             src = &mmu->cartridge[(mmu->hdma.src_address - ROM_BANKN) + (mmu->current_rom_bank * 0x4000)];
+        } else if (mmu->eram_enabled && mmu->oam_dma.src_address >= ERAM && mmu->oam_dma.src_address < WRAM_BANK0) {
+            // TODO check if this is accurate
+            src = &mmu->eram[(mmu->oam_dma.src_address - 0xA000) + (mmu->current_eram_bank * 0x2000)];
         } else if (mmu->hdma.src_address >= WRAM_BANKN && mmu->hdma.src_address < ECHO) {
             byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
             if (current_wram_bank == 0)
@@ -429,7 +452,7 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
         if (address >= ROM_BANKN && address < VRAM) // ROM_BANKN
             return mmu->cartridge[(address - ROM_BANKN) + (mmu->current_rom_bank * 0x4000)];
 
-        if (address >= 0xA000 && address < 0xC000) { // ERAM
+        if (address >= ERAM && address < WRAM_BANK0) { // ERAM
             if (mmu->has_eram && mmu->current_eram_bank >= 0) {
                 return mmu->eram_enabled ? mmu->eram[(address - 0xA000) + (mmu->current_eram_bank * 0x2000)] : 0xFF;
             } else if (mmu->has_rtc && mmu->rtc.enabled) { // implies mbc == MBC3 (or MBC30) because rtc_enabled is set to 0 by default
@@ -468,6 +491,18 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
         return mmu->wram_extra[(address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)];
     }
 
+    if (address >= ECHO && address < OAM) {
+        if (emu->mode == CGB) {
+            byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
+            if (current_wram_bank == 0)
+                current_wram_bank = 1;
+            address -= ECHO - WRAM_BANK0;
+            return mmu->wram_extra[(address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)];
+        } else {
+            return mmu->mem[address - (ECHO - WRAM_BANK0)];
+        }
+    }
+
     // UNUSABLE memory is unusable
     if (address >= UNUSABLE && address < IO)
         return 0xFF;
@@ -475,6 +510,18 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
     // Reading from P1 register returns joypad input state according to its current bit 4 or 5 value
     if (address == P1)
         return joypad_get_input(emu);
+
+    if (address == SC)
+        return mmu->mem[address] | (emu->mode == CGB ? 0x7C : 0x7E);
+
+    if (address == DIV_LSB)
+        return 0xFF;
+    
+    if (address == TAC)
+        return mmu->mem[address] | 0xF8;
+
+    if (address >= 0xFF08 && address < IF)
+        return 0xFF;
 
     if (address == IF)
         return mmu->mem[IF] | 0xE0;
@@ -531,9 +578,9 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
         return mmu->mem[NR52] | 0x70;
     if (address > NR52 && address < WAVE_RAM)
         return 0xFF;
-
-    if (address == 0xFF72)
-        return emu->mode == CGB ? mmu->mem[address] : 0xFF; // only readable in CGB mode
+    
+    if (address == KEY0 || address == KEY1)
+        return emu->mode == CGB ? mmu->mem[address] : 0xFF;
 
     if (emu->mode == CGB) {
         if (address == 0xFF75)
@@ -562,6 +609,9 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
                 return mmu->cram_obj[cram_address];
             }
         }
+    } else {
+        if (address > KEY1 && address < HRAM)
+            return 0xFF;
     }
 
     return mmu->mem[address];
@@ -594,6 +644,16 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         if (current_wram_bank == 0)
             current_wram_bank = 1;
         mmu->wram_extra[(address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)] = data;
+    } else if (address > ECHO && address <= OAM){
+        if (emu->mode == CGB) {
+            byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
+            if (current_wram_bank == 0)
+                current_wram_bank = 1;
+            address -= ECHO - WRAM_BANK0;
+            mmu->wram_extra[(address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)] = data;
+        } else {
+            mmu->mem[address - (ECHO - WRAM_BANK0)] = data;
+        }
     } else if ((address >= OAM && address < UNUSABLE) && ((PPU_IS_MODE(emu, PPU_MODE_OAM) || PPU_IS_MODE(emu, PPU_MODE_DRAWING)) && CHECK_BIT(mmu->mem[LCDC], 7))) {
         // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD enabled
     } else if (address >= UNUSABLE && address < IO) {
