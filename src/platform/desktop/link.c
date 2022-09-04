@@ -57,7 +57,7 @@ static void print_connected_to(struct sockaddr *addr) {
         inet_ntop(addr->sa_family, &((struct sockaddr_in6 *) addr)->sin6_addr, buf, sizeof(buf));
         port = ((struct sockaddr_in6 *) addr)->sin6_port;
     }
-    printf("Connected to %s on port %d\n", buf, ntohs(port));
+    printf("Link cable connected to %s on port %d\n", buf, ntohs(port));
 }
 
 int link_start_server(const char *port, int is_ipv6, int mptcp_enabled) {
@@ -158,8 +158,6 @@ int link_connect_to_server(const char *address, const char *port, int is_ipv6, i
         return 0;
     }
 
-    freeaddrinfo(res);
-
     is_server = 0;
 
     printf("Link client connecting to server %s on port %s...\n", address, port);
@@ -173,6 +171,7 @@ int link_connect_to_server(const char *address, const char *port, int is_ipv6, i
         return 0;
     }
     print_connected_to(res->ai_addr);
+    freeaddrinfo(res);
     return 1;
 }
 
@@ -331,10 +330,8 @@ int link_init_transfer(emulator_t *emu, emulator_t **linked_emu) {
         return 0;
     }
     emulator_link_connect(emu, *linked_emu);
-    printf("Link cable successfully connected\n");
 
     free(savestate_data);
-
     return 1;
 }
 
@@ -346,8 +343,12 @@ int link_exchange_joypad(emulator_t *emu, emulator_t *linked_emu) {
     send(sfd, buf, 2, 0);
 
     do {
-        if (!receive(sfd, buf, 2, 0))
+        if (!receive(sfd, buf, 2, 0)) {
+            printf("Link cable disconnected\n");
+            emulator_link_disconnect(emu);
+            emulator_quit(linked_emu);
             return 0;
+        }
         if (buf[0] != JOYPAD)
             eprintf("received packet type %d but expected %d (ignored)\n", buf[0], JOYPAD);
     } while (buf[0] != JOYPAD);

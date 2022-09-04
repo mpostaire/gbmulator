@@ -29,7 +29,6 @@ SDL_bool is_paused = SDL_TRUE;
 SDL_Window *window;
 
 SDL_Texture *ppu_texture;
-SDL_Texture *linked_ppu_texture;
 int ppu_texture_pitch;
 
 SDL_AudioDeviceID audio_device;
@@ -47,6 +46,9 @@ int cycles_per_frame = GB_CPU_CYCLES_PER_FRAME;
 emulator_t *emu;
 emulator_t *linked_emu;
 
+static void on_link_connect(emulator_t *new_linked_emu);
+static void on_link_disconnect(void);
+
 static void gbmulator_exit(menu_entry_t *entry) {
     is_running = SDL_FALSE;
 }
@@ -58,10 +60,6 @@ static void gbmulator_unpause(menu_entry_t *entry) {
 
 static void ppu_vblank_cb(byte_t *pixels) {
     SDL_UpdateTexture(ppu_texture, NULL, pixels, ppu_texture_pitch);
-}
-
-static void linked_ppu_vblank_cb(byte_t *pixels) {
-    SDL_UpdateTexture(linked_ppu_texture, NULL, pixels, ppu_texture_pitch);
 }
 
 static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
@@ -196,8 +194,14 @@ static void load_cartridge(char *path) {
     load_battery_from_file(new_emu, save_path);
     free(save_path);
 
-    if (emu)
+    if (emu) {
+        if (linked_emu) {
+            emulator_link_disconnect(emu);
+            emulator_quit(linked_emu);
+            on_link_disconnect();
+        }
         emulator_quit(emu);
+    }
     emu = new_emu;
     emulator_print_status(emu);
 
@@ -278,22 +282,8 @@ static void start_link(menu_entry_t *entry) {
         success = link_start_server(config.link_port, config.is_ipv6, config.mptcp_enabled);
 
     emulator_t *new_linked_emu;
-    if (success && link_init_transfer(emu, &new_linked_emu)) {
-        linked_emu = new_linked_emu;
-        emulator_options_t opts;
-        emulator_get_options(linked_emu, &opts);
-        opts.on_new_frame = linked_ppu_vblank_cb;
-        emulator_set_options(linked_emu, &opts);
-        is_paused = SDL_FALSE;
-
-        entry->parent->entries[0].disabled = 1;
-        entry->parent->entries[1].disabled = 1;
-        entry->parent->entries[2].disabled = 1;
-        entry->parent->entries[3].disabled = 1;
-        entry->parent->entries[4].disabled = 1;
-        entry->parent->entries[5].disabled = 1;
-        entry->parent->position = 6;
-    }
+    if (success && link_init_transfer(emu, &new_linked_emu))
+        on_link_connect(new_linked_emu);
 }
 
 static void open_rom(menu_entry_t *entry) {
@@ -313,6 +303,11 @@ static void open_rom(menu_entry_t *entry) {
 static void reset_rom(menu_entry_t *entry) {
     if (!emu)
         return;
+    if (linked_emu) {
+        emulator_link_disconnect(emu);
+        emulator_quit(linked_emu);
+        on_link_disconnect();
+    }
     emulator_reset(emu, config.mode);
     emulator_print_status(emu);
     is_paused = SDL_FALSE;
@@ -379,8 +374,32 @@ menu_t main_menu = {
 
 
 
+static void on_link_connect(emulator_t *new_linked_emu) {
+    linked_emu = new_linked_emu;
+    is_paused = SDL_FALSE;
 
+    link_menu.entries[0].disabled = 1;
+    link_menu.entries[1].disabled = 1;
+    link_menu.entries[2].disabled = 1;
+    link_menu.entries[3].disabled = 1;
+    link_menu.entries[4].disabled = 1;
+    link_menu.entries[5].disabled = 1;
 
+    options_menu.entries[1].disabled = 1;
+}
+
+static void on_link_disconnect(void) {
+    linked_emu = NULL;
+
+    link_menu.entries[0].disabled = 0;
+    link_menu.entries[1].disabled = 0;
+    link_menu.entries[2].disabled = 0;
+    link_menu.entries[3].disabled = 0;
+    link_menu.entries[4].disabled = 0;
+    link_menu.entries[5].disabled = 0;
+
+    options_menu.entries[1].disabled = 0;
+}
 
 static void handle_input(void) {
     SDL_Event event;
@@ -545,7 +564,7 @@ int main(int argc, char **argv) {
     window = SDL_CreateWindow(
         EMULATOR_NAME,
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        GB_SCREEN_WIDTH * scale * 2,
+        GB_SCREEN_WIDTH * scale,
         GB_SCREEN_HEIGHT * scale,
         SDL_WINDOW_HIDDEN /*| SDL_WINDOW_RESIZABLE*/
     );
@@ -554,21 +573,6 @@ int main(int argc, char **argv) {
         load_cartridge(argv[1]);
 
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-
-    // supported:
-    // SDL_PIXELFORMAT_ARGB8888
-    // SDL_PIXELFORMAT_ABGR8888
-    // SDL_PIXELFORMAT_RGB888
-    // SDL_PIXELFORMAT_BGR888
-    // SDL_PIXELFORMAT_YV12
-    // SDL_PIXELFORMAT_IYUV
-    // SDL_PIXELFORMAT_NV12
-    // SDL_PIXELFORMAT_NV21
-
-    // SDL_RendererInfo info;
-    // SDL_GetRendererInfo(renderer, &info);
-    // for (int i = 0; i < info.num_texture_formats; i++)
-    //     puts(SDL_GetPixelFormatName(info.texture_formats[i]));
 
     if (scale == 0) {
         is_fullscreen = SDL_TRUE;
@@ -580,7 +584,6 @@ int main(int argc, char **argv) {
     SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
 
     ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    linked_ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
     ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
     SDL_Texture *ui_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
     int ui_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
@@ -643,30 +646,18 @@ int main(int argc, char **argv) {
         if (cycles >= cycles_per_frame) {
             cycles -= cycles_per_frame;
             SDL_RenderClear(renderer);
-            SDL_Rect ppu_rect = { .x = 0, .y = 0, .w = GB_SCREEN_WIDTH * config.scale, .h = GB_SCREEN_HEIGHT * config.scale };
-            SDL_Rect linked_ppu_rect = { .x = GB_SCREEN_WIDTH * config.scale, .y = 0, .w = GB_SCREEN_WIDTH * config.scale, .h = GB_SCREEN_HEIGHT * config.scale };
-            SDL_RenderCopy(renderer, ppu_texture, NULL, &ppu_rect);
-            if (linked_emu)
-                SDL_RenderCopy(renderer, linked_ppu_texture, NULL, &linked_ppu_rect);
+            SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
             // this SDL_Delay() isn't needed as the audio sync adds it's own delay
             // SDL_Delay(1.0f / 60.0f); // even with SDL waiting for vsync, delay here for monitors with different refresh rates than 60Hz
             SDL_RenderPresent(renderer);
 
             // keep this the closest possible before emulator_step() to reduce input inaccuracies
             handle_input();
-            if (linked_emu && !link_exchange_joypad(emu, linked_emu)) {
-                printf("Link cable disconnected\n");
-                emulator_link_disconnect(emu);
-                emulator_quit(linked_emu);
-                linked_emu = NULL;
-            }
+            if (linked_emu && !link_exchange_joypad(emu, linked_emu))
+                on_link_disconnect();
         }
 
         // run one step of the emulator
-        // TODO for the link to work both emulators MUST run at the same time.
-        //      in this current implementation, one emulator may run for a bit more cycles than the other
-        //      --> sync errors (e.g. tetris tetronimoes not the same because the rng is based on the DIV
-        //          register that depend on the cycle)
         emulator_step(emu);
         if (linked_emu)
             emulator_step(linked_emu);
