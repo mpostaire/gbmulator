@@ -541,7 +541,7 @@ static inline void oam_scan(emulator_t *emu) {
  * This does not implement the pixel FIFO but draws each scanline instantly when starting PPU_HBLANK (mode 0).
  * TODO if STAT interrupts are a problem, implement these corner cases: http://gameboy.mongenel.com/dmg/istat98.txt
  */
-void ppu_step(emulator_t *emu, int cycles) {
+void ppu_step(emulator_t *emu) {
     ppu_t *ppu = emu->ppu;
     mmu_t *mmu = emu->mmu;
 
@@ -581,7 +581,7 @@ void ppu_step(emulator_t *emu, int cycles) {
     if (ppu->is_lcd_turning_on)
         ppu_ly_lyc_compare(emu);
 
-    ppu->cycles += cycles;
+    ppu->cycles += 4; // 4 cycles per step
 
     switch (mmu->mem[STAT] & 0x03) { // switch current mode
     case PPU_MODE_OAM:
@@ -596,7 +596,7 @@ void ppu_step(emulator_t *emu, int cycles) {
             ppu->cycles -= 172;
             PPU_SET_MODE(PPU_MODE_HBLANK);
             if (CHECK_BIT(mmu->mem[STAT], 3))
-                cpu_request_interrupt(emu, IRQ_STAT);
+                CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
 
             if (emu->mode == CGB) {
                 draw_bg_win_cgb(emu);
@@ -616,9 +616,9 @@ void ppu_step(emulator_t *emu, int cycles) {
             if (mmu->mem[LY] == GB_SCREEN_HEIGHT) {
                 PPU_SET_MODE(PPU_MODE_VBLANK);
                 if (CHECK_BIT(mmu->mem[STAT], 4))
-                    cpu_request_interrupt(emu, IRQ_STAT);
+                    CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
 
-                cpu_request_interrupt(emu, IRQ_VBLANK);
+                CPU_REQUEST_INTERRUPT(emu, IRQ_VBLANK);
 
                 // skip first screen rendering after the LCD was just turned on
                 if (ppu->is_lcd_turning_on) {
@@ -631,7 +631,7 @@ void ppu_step(emulator_t *emu, int cycles) {
             } else {
                 PPU_SET_MODE(PPU_MODE_OAM);
                 if (CHECK_BIT(mmu->mem[STAT], 5))
-                    cpu_request_interrupt(emu, IRQ_STAT);
+                    CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
             }
         }
         break;
@@ -648,7 +648,7 @@ void ppu_step(emulator_t *emu, int cycles) {
                 ppu->wly = 0;
                 PPU_SET_MODE(PPU_MODE_OAM);
                 if (CHECK_BIT(mmu->mem[STAT], 5))
-                    cpu_request_interrupt(emu, IRQ_STAT);
+                    CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
             }
         }
         break;

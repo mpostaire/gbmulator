@@ -1,7 +1,7 @@
 SDIR=src
 ODIR=out
 IDIR=$(SDIR)
-CFLAGS=-std=gnu11 -Wall -O2 -I$(IDIR)
+CFLAGS=-std=gnu11 -Wall -O3 -I$(IDIR)
 LDLIBS=-lSDL2 $(shell pkg-config --libs zlib 2> /dev/null && echo -n "-D__HAVE_ZLIB__")
 CC=gcc
 EXEC=gbmulator
@@ -59,7 +59,7 @@ debug_android: android
 
 web: CC:=emcc
 web: LDLIBS:=
-web: CFLAGS+=-O3 -sUSE_SDL=2 -sUSE_ZLIB=1
+web: CFLAGS+=-sUSE_SDL=2 -sUSE_ZLIB=1
 web: $(PLATFORM_ODIR_STRUCTURE) $(ICONS) docs docs/index.html 
 
 debug_web: web
@@ -92,7 +92,7 @@ $(ICONS): $(ICONDIR)/$(EXEC).svg
 	[ $(patsubst $(ICONDIR)/%/$(EXEC).png,%,$@) = 192x192 ] && cp $(ICONDIR)/192x192/$(EXEC).png src/platform/android/android-project/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png || true
 
 run: desktop
-	./$(EXEC) "roms/Tetris.gb"
+	./$(EXEC) "roms/tetris_dx.gbc"
 
 check: $(SDIR)/**/*.c
 	cppcheck --enable=all --suppress=missingIncludeSystem $(SDIR)

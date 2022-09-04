@@ -27,11 +27,11 @@ void link_quit(emulator_t *emu) {
     free(emu->link);
 }
 
-void link_step(emulator_t *emu, int cycles) {
+void link_step(emulator_t *emu) {
     link_t *link = emu->link;
     mmu_t *mmu = emu->mmu;
 
-    link->cycles_counter += cycles;
+    link->cycles_counter += 4;
 
     if (link->cycles_counter >= link->clock_cycles) {
         link->cycles_counter -= link->clock_cycles; // keep leftover cycles (if any)
@@ -61,11 +61,11 @@ void link_step(emulator_t *emu, int cycles) {
                 link->bit_counter = 0;
 
                 RESET_BIT(mmu->mem[SC], 7);
-                cpu_request_interrupt(emu, IRQ_SERIAL);
+                CPU_REQUEST_INTERRUPT(emu, IRQ_SERIAL);
 
                 if (link->other_emu) {
                     RESET_BIT(link->other_emu->mmu->mem[SC], 7);
-                    cpu_request_interrupt(link->other_emu, IRQ_SERIAL);
+                    CPU_REQUEST_INTERRUPT(link->other_emu, IRQ_SERIAL);
                 }
             }
         }

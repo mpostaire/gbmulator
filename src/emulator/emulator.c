@@ -52,19 +52,15 @@ const char *mbc_names[] = {
     "HuC1"
 };
 
-int emulator_step(emulator_t *emu) {
+void emulator_step(emulator_t *emu) {
     // stop execution of the program while a VBLANK DMA is active
-    int cycles;
-    if (emu->mmu->hdma.lock_cpu) // implies that the emulator is running in CGB mode
-        cycles = 4;
-    else
-        cycles = cpu_step(emu);
-    mmu_step(emu, cycles);
-    timer_step(emu, cycles);
-    link_step(emu, cycles);
-    ppu_step(emu, cycles);
-    apu_step(emu, cycles);
-    return cycles;
+    if (!emu->mmu->hdma.lock_cpu)
+        cpu_step(emu);
+    mmu_step(emu);
+    timer_step(emu);
+    link_step(emu);
+    ppu_step(emu);
+    apu_step(emu);
 }
 
 emulator_t *emulator_init(const byte_t *rom_data, size_t rom_size, emulator_options_t *opts) {
@@ -408,7 +404,7 @@ void emulator_set_joypad_state(emulator_t *emu, byte_t state) {
     emu->joypad->direction = state & 0x0F;
 
     if (!CHECK_BIT(emu->mmu->mem[P1], 4) || !CHECK_BIT(emu->mmu->mem[P1], 5))
-        cpu_request_interrupt(emu, IRQ_JOYPAD);
+        CPU_REQUEST_INTERRUPT(emu, IRQ_JOYPAD);
 }
 
 char *emulator_get_rom_title(emulator_t *emu) {

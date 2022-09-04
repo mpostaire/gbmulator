@@ -40,7 +40,7 @@ void joypad_press(emulator_t *emu, joypad_button_t key) {
     case JOYPAD_DOWN:
         RESET_BIT(joypad->direction, key);
         if (!CHECK_BIT(mmu->mem[P1], 4))
-            cpu_request_interrupt(emu, IRQ_JOYPAD);
+            CPU_REQUEST_INTERRUPT(emu, IRQ_JOYPAD);
         break;
     case JOYPAD_A:
     case JOYPAD_B:
@@ -48,7 +48,7 @@ void joypad_press(emulator_t *emu, joypad_button_t key) {
     case JOYPAD_START:
         RESET_BIT(joypad->action, key - 4);
         if (!CHECK_BIT(mmu->mem[P1], 5))
-            cpu_request_interrupt(emu, IRQ_JOYPAD);
+            CPU_REQUEST_INTERRUPT(emu, IRQ_JOYPAD);
         break;
     }
 }
