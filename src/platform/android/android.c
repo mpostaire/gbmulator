@@ -5,12 +5,14 @@
 #include <jni.h>
 
 #include "../common/utils.h"
+#include "../common/link.h"
 #include "layout_editor.h"
 #include "emulator/emulator.h"
 
-#define log(...) __android_log_print(ANDROID_LOG_INFO, "GBmulator", __VA_ARGS__)
+#define log(...) __android_log_print(ANDROID_LOG_WARN, "GBmulator", __VA_ARGS__)
 
 // going higher than 2048 starts to add noticeable audio lag
+// TODO try lower value
 #define APU_SAMPLE_COUNT 2048
 
 // TODO savestates ui
@@ -125,16 +127,16 @@ static inline s_byte_t is_finger_over_button(float x, float y) {
         y -= hitbox->y;
         if (x < hitbox->w / 3) {
             if (y < hitbox->h / 3) // up left
-                return JOYPAD_SELECT + 1;
+                return JOYPAD_START + 1;
             else if (y > 2 * (hitbox->h / 3)) // down left
-                return JOYPAD_SELECT + 3;
+                return JOYPAD_START + 3;
             else
                 return JOYPAD_LEFT;
         } else if (x > 2 * (hitbox->w / 3)) {
             if (y < hitbox->h / 3) // up right
-                return JOYPAD_SELECT + 2;
+                return JOYPAD_START + 2;
             else if (y > 2 * (hitbox->h / 3)) // down right
-                return JOYPAD_SELECT + 4;
+                return JOYPAD_START + 4;
             else
                 return JOYPAD_RIGHT;
         } else {
@@ -158,19 +160,19 @@ static inline s_byte_t is_finger_over_button(float x, float y) {
 
 static void button_press(emulator_t *emu, joypad_button_t button) {
     switch ((int) button) { // cast to int to shut compiler warnings
-    case JOYPAD_SELECT + 1:
+    case JOYPAD_START + 1:
         emulator_joypad_press(emu, JOYPAD_UP);
         emulator_joypad_press(emu, JOYPAD_LEFT);
         break;
-    case JOYPAD_SELECT + 2:
+    case JOYPAD_START + 2:
         emulator_joypad_press(emu, JOYPAD_UP);
         emulator_joypad_press(emu, JOYPAD_RIGHT);
         break;
-    case JOYPAD_SELECT + 3:
+    case JOYPAD_START + 3:
         emulator_joypad_press(emu, JOYPAD_DOWN);
         emulator_joypad_press(emu, JOYPAD_LEFT);
         break;
-    case JOYPAD_SELECT + 4:
+    case JOYPAD_START + 4:
         emulator_joypad_press(emu, JOYPAD_DOWN);
         emulator_joypad_press(emu, JOYPAD_RIGHT);
         break;
@@ -180,10 +182,10 @@ static void button_press(emulator_t *emu, joypad_button_t button) {
     }
 
     switch ((int) button) { // cast to int to shut compiler warnings
+    case JOYPAD_RIGHT:
+    case JOYPAD_LEFT:
     case JOYPAD_UP:
     case JOYPAD_DOWN:
-    case JOYPAD_LEFT:
-    case JOYPAD_RIGHT:
         SET_BIT(dpad_status, button);
         break;
     case JOYPAD_A:
@@ -192,25 +194,25 @@ static void button_press(emulator_t *emu, joypad_button_t button) {
     case JOYPAD_B:
         buttons[2].texture = b_pressed_texture;
         return;
-    case JOYPAD_START:
-        buttons[3].texture = start_pressed_texture;
-        return;
     case JOYPAD_SELECT:
-        buttons[4].texture = select_pressed_texture;
+        buttons[3].texture = select_pressed_texture;
         return;
-    case JOYPAD_SELECT + 1:
+    case JOYPAD_START:
+        buttons[4].texture = start_pressed_texture;
+        return;
+    case JOYPAD_START + 1:
         SET_BIT(dpad_status, JOYPAD_UP);
         SET_BIT(dpad_status, JOYPAD_LEFT);
         break;
-    case JOYPAD_SELECT + 2:
+    case JOYPAD_START + 2:
         SET_BIT(dpad_status, JOYPAD_UP);
         SET_BIT(dpad_status, JOYPAD_RIGHT);
         break;
-    case JOYPAD_SELECT + 3:
+    case JOYPAD_START + 3:
         SET_BIT(dpad_status, JOYPAD_DOWN);
         SET_BIT(dpad_status, JOYPAD_LEFT);
         break;
-    case JOYPAD_SELECT + 4:
+    case JOYPAD_START + 4:
         SET_BIT(dpad_status, JOYPAD_DOWN);
         SET_BIT(dpad_status, JOYPAD_RIGHT);
         break;
@@ -220,7 +222,7 @@ static void button_press(emulator_t *emu, joypad_button_t button) {
 }
 
 static void button_release(SDL_TouchID touch_id) {
-    for (int i = JOYPAD_LEFT; i <= JOYPAD_SELECT; i++)
+    for (int i = JOYPAD_RIGHT; i <= JOYPAD_START; i++)
         emulator_joypad_release(emu, i);
     dpad_status = 0;
     buttons[0].texture = dpad_textures[dpad_status];
@@ -310,31 +312,6 @@ static void ppu_vblank_cb(byte_t *pixels) {
 }
 
 static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
-    // FIXME audio crackling and emulation stuttering at 512 samples bigger sample count is better but there is still
-    // some crackling... A better audio/video syncing is needed.
-
-    // TODO this is audio_buffer_size * 8 on web and desktop platforms...
-    // TODO to help see what's going on:
-    // there are a lot of need refill (and no need delay): the emulation doesn't produce samples at a fast enough rate??
-    //   ---> compare these results with desktop platform
-    // maybe find a way for the apu to produce samples at a varying rate:
-    //      increase rate if we hit 'need refill',
-    //      decrease rate if we hit 'need delay'
-    // find and algorithm to balance this (maybe take the time it took to render a frame a change the sample rate
-    //                                      accordingly or don't change the rate but the sample count)
-    // ----> changing the sample count seems better than changing the sample rate
-
-    // TODO
-    // the culprit is sdl rendercopy is slow on my phone... causing the audio buffer to starve and needing refills as
-    // the apu can't function when the rendering is taking place.
-    //  --> make the apu vary it's sample freq or sample size depending on the time the previous frame took to render
-    //  --> OR make the entire emulator into another thread: may complicate things a lot
-
-    // if (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 4)
-    //     log("need delay");
-    // else if (SDL_GetQueuedAudioSize(audio_device) == 0)
-    //     log("need refill");
-
     while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 4)
         SDL_Delay(1);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
@@ -392,6 +369,20 @@ static void start_emulation_loop(void) {
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
     SDL_PauseAudioDevice(audio_device, 0);
 
+    // TODO
+    // int success = link_connect_to_server("192.168.1.30", "7777", 0, 0);
+    // emulator_t *linked_emu;
+    // if (success && link_init_transfer(emu, &linked_emu)) {
+    //     speed = 1.0f;
+    //     log("--------------------");
+    //     log("CONNECTED YCACSa");
+    //     log("--------------------");
+    // } else {
+    //     log("--------------------");
+    //     log("ERROR NOT CONNECTED YCACSa");
+    //     log("--------------------");
+    // }
+
     int cycles = 0;
     int frame_count = 0;
     while (is_running) {
@@ -403,8 +394,6 @@ static void start_emulation_loop(void) {
                 // draw buttons
                 for (int i = 0; i < 5; i++)
                     SDL_RenderCopy(renderer, buttons[i].texture, NULL, &buttons[i].shape);
-                // this SDL_Delay() isn't needed as the audio sync adds it's own delay
-                // TODO??? SDL_Delay((1.0f / 60.0f) - time_to_render_last_frame); // even with SDL waiting for vsync, delay here for monitors with different refresh rates than 60Hz
                 SDL_RenderPresent(renderer);
                 frame_count = 0;
             } else {
@@ -416,7 +405,8 @@ static void start_emulation_loop(void) {
         }
 
         // run one step of the emulator
-        cycles += emulator_step(emu);
+        emulator_step(emu);
+        cycles += 4;
 
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).
     }
@@ -532,11 +522,11 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
 
     set_layout(is_landscape);
 
-    SDL_Surface *surface = SDL_LoadBMP("dpad_pressed_left.bmp");
+    SDL_Surface *surface = SDL_LoadBMP("dpad_pressed_right.bmp");
     dpad_textures[1] = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
-    surface = SDL_LoadBMP("dpad_pressed_right.bmp");
+    surface = SDL_LoadBMP("dpad_pressed_left.bmp");
     dpad_textures[2] = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
@@ -718,14 +708,14 @@ int main(int argc, char **argv) {
     buttons[2].texture = b_texture;
     SDL_FreeSurface(surface);
 
-    surface = SDL_LoadBMP("start.bmp");
-    start_texture = SDL_CreateTextureFromSurface(renderer, surface);
-    buttons[3].texture = start_texture;
-    SDL_FreeSurface(surface);
-
     surface = SDL_LoadBMP("select.bmp");
     select_texture = SDL_CreateTextureFromSurface(renderer, surface);
-    buttons[4].texture = select_texture;
+    buttons[3].texture = select_texture;
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("start.bmp");
+    start_texture = SDL_CreateTextureFromSurface(renderer, surface);
+    buttons[4].texture = start_texture;
     SDL_FreeSurface(surface);
 
     ready();

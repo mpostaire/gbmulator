@@ -216,18 +216,18 @@ public class Emulator extends SDLActivity {
             float dpadX, float dpadY,
             float aX, float aY,
             float bX, float bY,
-            float startX, float startY,
-            float selectX, float selectY) {
+            float selectX, float selectY,
+            float startX, float startY) {
         preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_DPAD_X : UserSettings.PORTRAIT_DPAD_X, dpadX);
         preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_DPAD_Y : UserSettings.PORTRAIT_DPAD_Y, dpadY);
         preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_A_X : UserSettings.PORTRAIT_A_X, aX);
         preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_A_Y : UserSettings.PORTRAIT_A_Y, aY);
         preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_B_X : UserSettings.PORTRAIT_B_X, bX);
         preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_B_Y : UserSettings.PORTRAIT_B_Y, bY);
-        preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_START_X : UserSettings.PORTRAIT_START_X, startX);
-        preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_START_Y : UserSettings.PORTRAIT_START_Y, startY);
         preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_SELECT_X : UserSettings.PORTRAIT_SELECT_X, selectX);
         preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_SELECT_Y : UserSettings.PORTRAIT_SELECT_Y, selectY);
+        preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_START_X : UserSettings.PORTRAIT_START_X, startX);
+        preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_START_Y : UserSettings.PORTRAIT_START_Y, startY);
 
         preferencesEditor.apply();
     }

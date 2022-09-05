@@ -3,7 +3,7 @@
 #include <SDL2/SDL.h>
 
 #include "ui.h"
-#include "link.h"
+#include "../common/link.h"
 #include "../common/config.h"
 #include "../common/utils.h"
 #include "emulator/emulator.h"
@@ -377,6 +377,7 @@ menu_t main_menu = {
 static void on_link_connect(emulator_t *new_linked_emu) {
     linked_emu = new_linked_emu;
     is_paused = SDL_FALSE;
+    config.speed = 1.0f;
 
     link_menu.entries[0].disabled = 1;
     link_menu.entries[1].disabled = 1;
@@ -651,7 +652,7 @@ int main(int argc, char **argv) {
             SDL_RenderClear(renderer);
             SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
             // this SDL_Delay() isn't needed as the audio sync adds it's own delay
-            // SDL_Delay(1.0f / 60.0f); // even with SDL waiting for vsync, delay here for monitors with different refresh rates than 60Hz
+            // TODO??? SDL_Delay((1.0f / 60.0f) - last_frame_time); // even with SDL waiting for vsync, delay here for monitors with different refresh rates than 60Hz
             SDL_RenderPresent(renderer);
 
             // keep this the closest possible before emulator_step() to reduce input inaccuracies
