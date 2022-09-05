@@ -465,10 +465,12 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
 
         if (address >= ERAM && address < WRAM_BANK0) { // ERAM
             if (mmu->has_eram && mmu->current_eram_bank >= 0) {
-                byte_t eram_bank_size = mmu->mbc == MBC2 ? 0x200 : 0x2000;
-                if (mmu->mbc == MBC2)
+                if (mmu->mbc == MBC2) {
                     address = ERAM + (address & 0x1FF); // wrap around from 0xA200 to 0xBFFF (eg: address 0xA200 reads as address 0xA000)
-                return mmu->eram_enabled ? mmu->eram[(address - ERAM) + (mmu->current_eram_bank * eram_bank_size)] | 0xF0 : 0xFF;
+                    return mmu->eram_enabled ? mmu->eram[(address - ERAM) + (mmu->current_eram_bank * 0x0200)] | 0xF0 : 0xFF;
+                } else {
+                    return mmu->eram_enabled ? mmu->eram[(address - ERAM) + (mmu->current_eram_bank * 0x2000)] : 0xFF;
+                }
             } else if (mmu->has_rtc && mmu->rtc.enabled) { // implies mbc == MBC3 (or MBC30) because rtc_enabled is set to 0 by default
                 switch (mmu->rtc.reg) {
                 case 0x08: return mmu->rtc.latched_s;
