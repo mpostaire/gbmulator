@@ -3,7 +3,7 @@
 #include <SDL2/SDL.h>
 
 #include "ui.h"
-#include "../common/link.h"
+#include "link.h"
 #include "../common/config.h"
 #include "../common/utils.h"
 #include "emulator/emulator.h"

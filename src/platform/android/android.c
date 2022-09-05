@@ -12,7 +12,6 @@
 #define log(...) __android_log_print(ANDROID_LOG_WARN, "GBmulator", __VA_ARGS__)
 
 // going higher than 2048 starts to add noticeable audio lag
-// TODO try lower value
 #define APU_SAMPLE_COUNT 2048
 
 // TODO savestates ui
