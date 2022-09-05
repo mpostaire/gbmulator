@@ -38,6 +38,7 @@ static int parse_cartridge(emulator_t *emu) {
         break;
     case 0x06:
         mmu->mbc = MBC2;
+        mmu->has_eram = 1;
         mmu->has_battery = 1;
         break;
     case 0x0F:
@@ -321,23 +322,33 @@ static void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) {
         break; // read only, do nothing
     case MBC1:
         if (address < 0x2000) {
-            mmu->eram_enabled = (data & 0x0F) == 0x0A;
+            mmu->eram_enabled = mmu->has_eram && (data & 0x0F) == 0x0A;
         } else if (address < 0x4000) {
-            mmu->current_rom_bank = data & 0x1F;
-            if (mmu->current_rom_bank == 0x00)
-                mmu->current_rom_bank = 0x01;
+            data &= 0x1F;
+            if (data == 0x00)
+                data = 0x01;
+
+            if (mmu->mbc1_mode == 0)
+                mmu->current_rom_bank = (mmu->mbc_rom_bank_hi << 5) | data;
+            else
+                mmu->current_rom_bank = data;
+
+            // printf("mode=%d requested: %d (%02X), got: %d (%02X) --- %d\n", mmu->mbc1_mode, data, data, mmu->current_rom_bank, mmu->current_rom_bank, mmu->mbc_rom_bank_hi);
+
             mmu->current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
         } else if (address < 0x6000) {
-            if (mmu->mbc1_mode) { // ROM mode
-                mmu->current_eram_bank = data & 0x03;
-                mmu->current_eram_bank &= mmu->eram_banks - 1; // in this case, equivalent to current_eram_bank %= eram_banks but avoid division by 0
-            } else {
-                mmu->current_rom_bank = ((data & 0x03) << 5) | (mmu->current_rom_bank & 0x1F);
+            data &= 0x03;
+            if (mmu->mbc1_mode == 0) { // ROM mode
+                mmu->mbc_rom_bank_hi = data;
+                mmu->current_rom_bank = (mmu->mbc_rom_bank_hi << 5) | (mmu->current_rom_bank & 0x1F);
                 // TODO commenting this passes more tests but I think its necessary to keep it so the problem may come from the read instead of the write?
                 // if (mmu->current_rom_bank == 0x00 || mmu->current_rom_bank == 0x20 || mmu->current_rom_bank == 0x40 || mmu->current_rom_bank == 0x60)
                 //     mmu->current_rom_bank++;
                 mmu->current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
                 mmu->current_eram_bank = 0x00;
+            } else {
+                mmu->current_eram_bank = data;
+                mmu->current_eram_bank &= mmu->eram_banks - 1; // in this case, equivalent to current_eram_bank %= eram_banks but avoid division by 0
             }
         } else if (address < 0x8000) {
             mmu->mbc1_mode = data & 0x01;
@@ -411,16 +422,16 @@ static void write_mbc_eram(mmu_t *mmu, word_t address, byte_t data) {
     switch (mmu->mbc) {
     case MBC1:
         if (mmu->has_eram && mmu->eram_enabled)
-            mmu->eram[(address - 0xA000) + (mmu->current_eram_bank * 0x2000)] = data;
+            mmu->eram[(address - ERAM) + (mmu->current_eram_bank * 0x2000)] = data;
         break;
     case MBC2:
         if (mmu->has_eram && mmu->eram_enabled)
-            mmu->eram[(address - 0xA000) + (mmu->current_eram_bank * 0x2000)] = data & 0x0F;
+            mmu->eram[(address - ERAM) + (mmu->current_eram_bank * 0x0200)] = data;
         break;
     case MBC3:
     case MBC30:
         if (mmu->has_eram && mmu->eram_enabled && mmu->current_eram_bank >= 0) {
-            mmu->eram[(address - 0xA000) + (mmu->current_eram_bank * 0x2000)] = data;
+            mmu->eram[(address - ERAM) + (mmu->current_eram_bank * 0x2000)] = data;
         } else if (mmu->has_rtc && mmu->rtc.enabled) {
             switch (mmu->rtc.reg) {
             case 0x08: mmu->rtc.s = data; break;
@@ -434,7 +445,7 @@ static void write_mbc_eram(mmu_t *mmu, word_t address, byte_t data) {
         break;
     case MBC5:
         if (mmu->has_eram && mmu->eram_enabled)
-            mmu->eram[(address - 0xA000) + (mmu->current_eram_bank * 0x2000)] = data;
+            mmu->eram[(address - ERAM) + (mmu->current_eram_bank * 0x2000)] = data;
         // TODO MBC5 eram is the same as for MBC1, except that RAM sizes are 8 KiB, 32 KiB and 128 KiB.
         break;
     default:
@@ -454,7 +465,10 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
 
         if (address >= ERAM && address < WRAM_BANK0) { // ERAM
             if (mmu->has_eram && mmu->current_eram_bank >= 0) {
-                return mmu->eram_enabled ? mmu->eram[(address - 0xA000) + (mmu->current_eram_bank * 0x2000)] : 0xFF;
+                byte_t eram_bank_size = mmu->mbc == MBC2 ? 0x200 : 0x2000;
+                if (mmu->mbc == MBC2)
+                    address = ERAM + (address & 0x1FF); // wrap around from 0xA200 to 0xBFFF (eg: address 0xA200 reads as address 0xA000)
+                return mmu->eram_enabled ? mmu->eram[(address - ERAM) + (mmu->current_eram_bank * eram_bank_size)] | 0xF0 : 0xFF;
             } else if (mmu->has_rtc && mmu->rtc.enabled) { // implies mbc == MBC3 (or MBC30) because rtc_enabled is set to 0 by default
                 switch (mmu->rtc.reg) {
                 case 0x08: return mmu->rtc.latched_s;

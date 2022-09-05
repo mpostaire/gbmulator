@@ -132,9 +132,10 @@ typedef struct {
     // do not move the 'mbc' member (emulator.c uses offsetof mbc on this struct)
     // everything that is below this line will be saved in the savestates
     mbc_type_t mbc;
-    byte_t rom_banks;
+    word_t rom_banks;
     byte_t eram_banks;
     word_t current_rom_bank;
+    byte_t mbc_rom_bank_hi;
     s_word_t current_eram_bank;
     byte_t mbc1_mode;
     byte_t eram_enabled;

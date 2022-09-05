@@ -137,7 +137,7 @@ void emulator_print_status(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
     char *ram_str = NULL;
-    if (mmu->has_eram) {
+    if (mmu->has_eram && mmu->eram_banks > 0) {
         ram_str = xmalloc(18);
         snprintf(ram_str, 17, " + %d RAM banks", mmu->eram_banks);
     }

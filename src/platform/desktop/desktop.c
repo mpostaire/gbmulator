@@ -8,20 +8,19 @@
 #include "../common/utils.h"
 #include "emulator/emulator.h"
 
-// TODO fix pause menu when starting game link connexion while pause menu is still active (it's working but weirdly so low priority)
-
 // TODO implemented MBCs have a few bugs (see https://github.com/drhelius/Gearboy to understand how its handled)
 
 // FIXME dmg-acid2 test: everything good but missing exclamation mark. In fact it works for the 1st frame after
-//       turning lcd on and it don't show for the other frames (as the ppu doesn't draw the first frame after lcd on,
+//       turning lcd on and it doesn't show for the other frames (as the ppu doesn't draw the first frame after lcd on,
 //       it isn't visible). cgb-acid2 doesn't have this problem, the exclamation mark works well.
 
 // TODO fix audio sync: it's "working" but I don't really know how and it's not perfect (good enough compromise of audio/video smoothness and sync)
 // make audio sync to video (effectively replacing the audio sdl_delay by the vsync delay)
-// TODO a cpu_step which do only 1 cycle at a time instead of instructions can improve audio syncing because a frame will always be the same ammount of cycles
 
 // TODO: in pokemon gold (in CGB and DMG modes) at the beginning animation of a battle, when the wild pokemon slides to the
 // right, at the last moment, the top of the pokemon's sprite will appear for a few frames where the combat menu should be located
+
+// TODO make tests and implement mooneye's test suite (and blargg)
 
 SDL_bool is_running = SDL_TRUE;
 SDL_bool is_paused = SDL_TRUE;
