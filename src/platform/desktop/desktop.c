@@ -39,6 +39,7 @@ char window_title[sizeof(EMULATOR_NAME) + 19];
 
 ui_t *ui;
 char *rom_path;
+char *forced_save_path;
 
 int cycles_per_frame = GB_CPU_CYCLES_PER_FRAME;
 
@@ -154,7 +155,7 @@ static void load_cartridge(char *path) {
 
     if (emu) {
         char *save_path = get_save_path(rom_path);
-        save_battery_to_file(emu, save_path);
+        save_battery_to_file(emu, forced_save_path ? forced_save_path : save_path);
         free(save_path);
     }
 
@@ -190,7 +191,7 @@ static void load_cartridge(char *path) {
     if (!new_emu) return;
 
     char *save_path = get_save_path(rom_path);
-    load_battery_from_file(new_emu, save_path);
+    load_battery_from_file(new_emu, forced_save_path ? forced_save_path : save_path);
     free(save_path);
 
     if (emu) {
@@ -568,8 +569,11 @@ int main(int argc, char **argv) {
         SDL_WINDOW_HIDDEN /*| SDL_WINDOW_RESIZABLE*/
     );
 
-    if (argc == 2)
+    if (argc > 1) {
+        if (argc > 2)
+            forced_save_path = argv[2];
         load_cartridge(argv[1]);
+    }
 
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
@@ -667,7 +671,7 @@ int main(int argc, char **argv) {
 
     if (emu) {
         char *save_path = get_save_path(rom_path);
-        save_battery_to_file(emu, save_path);
+        save_battery_to_file(emu, forced_save_path ? forced_save_path : save_path);
         free(save_path);
         emulator_quit(emu);
     }
