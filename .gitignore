@@ -10,5 +10,6 @@
 !icons/**
 !docs
 src/platform/android/android-project/.*
+src/platform/android/android-project/local.properties
 src/platform/android/android-project/app/build
 *.out
