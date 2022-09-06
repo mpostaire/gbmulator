@@ -16,10 +16,10 @@ LOCAL_SRC_FILES := $(wildcard $(LOCAL_PATH)/$(SRC_PATH)/emulator/*.c) \
 				   $(wildcard $(LOCAL_PATH)/$(SRC_PATH)/platform/common/*.c) \
 				   $(wildcard $(LOCAL_PATH)/$(SRC_PATH)/platform/android/*.c)
 
-LOCAL_CFLAGS := -std=gnu11 -O3
+LOCAL_CFLAGS := -std=gnu11 -O3 -D__HAVE_ZLIB__
 
 LOCAL_SHARED_LIBRARIES := SDL2
 
-LOCAL_LDLIBS := -lGLESv1_CM -lGLESv2 -lOpenSLES -llog -landroid
+LOCAL_LDLIBS := -lGLESv1_CM -lGLESv2 -lOpenSLES -llog -landroid -lz
 
 include $(BUILD_SHARED_LIBRARY)

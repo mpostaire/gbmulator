@@ -1,4 +1,4 @@
-package io.github.mpostaire.gbmulator;
+package io.github.mpostaire.gbmulator.bluetooth;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -14,6 +14,8 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import java.util.ArrayList;
+
+import io.github.mpostaire.gbmulator.R;
 
 public class BluetoothDeviceAdapter extends BaseAdapter {
 

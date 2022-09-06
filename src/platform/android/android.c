@@ -36,6 +36,7 @@ int ppu_texture_pitch;
 SDL_AudioDeviceID audio_device;
 
 emulator_t *emu;
+emulator_t *linked_emu;
 
 SDL_Rect gb_screen_rect;
 
@@ -368,20 +369,6 @@ static void start_emulation_loop(void) {
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
     SDL_PauseAudioDevice(audio_device, 0);
 
-    // TODO
-    // int success = link_connect_to_server("192.168.1.30", "7777", 0, 0);
-    // emulator_t *linked_emu;
-    // if (success && link_init_transfer(emu, &linked_emu)) {
-    //     speed = 1.0f;
-    //     log("--------------------");
-    //     log("CONNECTED YCACSa");
-    //     log("--------------------");
-    // } else {
-    //     log("--------------------");
-    //     log("ERROR NOT CONNECTED YCACSa");
-    //     log("--------------------");
-    // }
-
     int cycles = 0;
     int frame_count = 0;
     while (is_running) {
@@ -401,10 +388,14 @@ static void start_emulation_loop(void) {
             frame_count++;
             // handle_input is a slow function: don't call it every step
             handle_input(); // keep this the closest possible before emulator_step() to reduce input inaccuracies
+            if (linked_emu && !link_exchange_joypad(emu, linked_emu))
+                linked_emu = NULL;
         }
 
         // run one step of the emulator
         emulator_step(emu);
+        if (linked_emu)
+            emulator_step(linked_emu);
         cycles += 4;
 
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).
@@ -462,6 +453,7 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
         jbyteArray data,
         jsize size,
         jboolean resume,
+        jboolean is_link_connected,
         jint emu_mode,
         jint palette,
         jfloat emu_speed,
@@ -496,6 +488,12 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
     frame_skip = emu_frame_skip;
 
     (*env)->ReleaseByteArrayElements(env, data, rom_data, JNI_ABORT);
+
+    if (is_link_connected) {
+        emulator_t *new_linked_emu;
+        if (link_init_transfer(emu, &new_linked_emu))
+            linked_emu = new_linked_emu;
+    }
 
     portrait_dpad_x = port_dpad_x * (float) screen_width;
     portrait_dpad_y = port_dpad_y * (float) screen_height;
@@ -660,6 +658,7 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_enterLayoutEd
 
 int main(int argc, char **argv) {
     emu = NULL;
+    linked_emu = NULL;
 
     // initialize global variables here and not at their initialization as they can still have their
     // previous values because of android's activities lifecycle

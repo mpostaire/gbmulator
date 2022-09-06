@@ -3,6 +3,7 @@ package io.github.mpostaire.gbmulator;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothSocket;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -35,6 +36,8 @@ public class MainMenu extends AppCompatActivity {
 
     SharedPreferences preferences;
     int emu_mode = 0;
+
+    BluetoothSocket socket = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -215,8 +218,13 @@ public class MainMenu extends AppCompatActivity {
 
     public void goToLinkMenu() {
         BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        if (bluetoothAdapter == null) {
+            Toast.makeText(MainMenu.this, "Bluetooth is not available", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         if (bluetoothAdapter.isEnabled()) {
-            startActivity(new Intent(MainMenu.this, LinkMenu.class));
+            startActivityForResult(new Intent(MainMenu.this, LinkMenu.class), 222);
             return;
         }
 

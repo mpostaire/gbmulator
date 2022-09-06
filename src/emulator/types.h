@@ -78,7 +78,7 @@ typedef struct {
     byte_t halt_bug;
     byte_t exec_state; // determines if the cpu is pushing an interrupt execution, executiong a normal opcode or a cb opcode
     byte_t opcode; // current opcode
-    int opcode_state; // current opcode or current microcode inside the opcode (< 0 --> request new instruction fetch)
+    s_word_t opcode_state; // current opcode or current microcode inside the opcode (< 0 --> request new instruction fetch)
     word_t operand; // operand for the current opcode
     word_t opcode_compute_storage; // storage used for an easier implementation of some opcodes
 } cpu_t;
@@ -101,9 +101,6 @@ typedef enum {
 } hdma_type_t;
 
 typedef struct {
-    int cpu_cycles_counter;
-    word_t rtc_cycles_counter;
-
     byte_t latched_s;
     byte_t latched_m;
     byte_t latched_h;
@@ -127,11 +124,7 @@ typedef struct {
 } rtc_t;
 
 typedef struct {
-    byte_t cartridge[8400000];
-    size_t cartridge_size;
-    // do not move the 'mbc' member (emulator.c uses offsetof mbc on this struct)
-    // everything that is below this line will be saved in the savestates
-    mbc_type_t mbc;
+    byte_t mbc;
     word_t rom_banks;
     byte_t eram_banks;
     word_t current_rom_bank;
@@ -146,7 +139,7 @@ typedef struct {
     byte_t has_rtc;
 
     byte_t mem[0x10000];
-    // do not move the 'eram' member for the same reason as the 'mbc' member
+    // do not move the 'eram' member
     byte_t eram[0x20000]; // max 16 banks of size 0x2000
     byte_t wram_extra[0x7000]; // 7 extra banks of wram of size 0x1000 for a total of 8 banks
     byte_t vram_extra[0x2000]; // 1 extra bank of wram of size 0x1000 for a total of 2 banks
@@ -163,21 +156,20 @@ typedef struct {
         byte_t step;
         byte_t hdma_ly;
         byte_t lock_cpu;
-        hdma_type_t type;
+        byte_t type;
         word_t src_address;
         word_t dest_address;
     } hdma;
 
     rtc_t rtc;
+
+    // do not move the 'cartridge' member (emulator.c uses offsetof cartridge on this struct)
+    // everything that is above this line will be used for serialization
+    byte_t cartridge[8400000];
+    size_t cartridge_size;
 } mmu_t;
 
 typedef struct {
-    byte_t *pixels;
-    byte_t *scanline_cache_color_data;
-    // stores the x position of each pixel drawn by the highest priority object
-    byte_t *obj_pixel_priority;
-
-    // don't move this member
     byte_t is_lcd_turning_on;
 
     struct {
@@ -186,7 +178,12 @@ typedef struct {
     } oam_scan;
 
     byte_t wly; // window "LY" internal counter
-    int cycles;
+    word_t cycles;
+
+    byte_t *pixels;
+    byte_t *scanline_cache_color_data;
+    // stores the x position of each pixel drawn by the highest priority object
+    byte_t *obj_pixel_priority;
 } ppu_t;
 
 typedef enum {
@@ -235,8 +232,8 @@ typedef struct {
 } apu_t;
 
 typedef struct {
-    int max_tima_cycles;
-    int tima_counter;
+    word_t max_tima_cycles;
+    word_t tima_counter;
 } gbtimer_t;
 
 typedef struct {
@@ -245,9 +242,10 @@ typedef struct {
 } joypad_t;
 
 typedef struct {
-    int cycles_counter;
-    int max_clock_cycles;
+    word_t cycles_counter;
+    word_t max_clock_cycles;
     byte_t bit_counter;
+    // don't move this member
     emulator_t *other_emu;
 } link_t;
 

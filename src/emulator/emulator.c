@@ -17,18 +17,18 @@
 
 #define FORMAT_STRING EMULATOR_NAME"-sav"
 
-typedef struct __attribute__((packed)) {
+typedef struct {
     char identifier[sizeof(FORMAT_STRING)];
     char rom_title[16];
     byte_t mode; // DMG or CGB
 } savestate_header_t;
 
-typedef struct __attribute__((packed)) {
+typedef struct {
     byte_t eram_banks;
     cpu_t cpu;
     gbtimer_t timer;
-    link_t link;
-    byte_t ppu[sizeof(ppu_t) - offsetof(ppu_t, is_lcd_turning_on)];
+    byte_t link[offsetof(link_t, other_emu)];
+    byte_t ppu[offsetof(ppu_t, cycles)];
     byte_t mmu[];
 } savestate_data_t;
 
@@ -255,7 +255,7 @@ byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, byte_t compresse
         hdma_len = sizeof(emu->mmu->hdma);
         rtc_len = sizeof(emu->mmu->rtc);
     }
-    size_t mmu_header_len = (sizeof(mmu_t) - offsetof(mmu_t, mbc)) - (sizeof(mmu_t) - offsetof(mmu_t, eram));
+    size_t mmu_header_len = offsetof(mmu_t, eram);
     size_t mmu_len = mmu_header_len + eram_len + wram_extra_len + vram_extra_len + cram_len + hdma_len + rtc_len;
 
     // make savestate header
@@ -271,8 +271,8 @@ byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, byte_t compresse
     savestate_data->eram_banks = emu->mmu->eram_banks;
     memcpy(&savestate_data->cpu, emu->cpu, sizeof(cpu_t));
     memcpy(&savestate_data->timer, emu->timer, sizeof(gbtimer_t));
-    memcpy(&savestate_data->link, emu->link, sizeof(link_t));
-    memcpy(&savestate_data->ppu, &emu->ppu->is_lcd_turning_on, sizeof(savestate_data->ppu));
+    memcpy(&savestate_data->link, emu->link, sizeof(savestate_data->link));
+    memcpy(&savestate_data->ppu, &emu->ppu, sizeof(savestate_data->ppu));
 
     memcpy(savestate_data->mmu, &emu->mmu->mbc, mmu_header_len);
 
@@ -314,7 +314,7 @@ byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, byte_t compresse
 
 int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) {
     if (length <= sizeof(savestate_header_t)) {
-        eprintf("invalid savestate length (%ld)\n", length);
+        eprintf("invalid savestate length (%zu)\n", length);
         return 0;
     }
 
@@ -365,7 +365,7 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
         hdma_len = sizeof(emu->mmu->hdma);
         rtc_len = sizeof(emu->mmu->rtc);
     }
-    size_t mmu_header_len = (sizeof(mmu_t) - offsetof(mmu_t, mbc)) - (sizeof(mmu_t) - offsetof(mmu_t, eram));
+    size_t mmu_header_len = offsetof(mmu_t, eram);
     size_t mmu_len = mmu_header_len + eram_len + wram_extra_len + vram_extra_len + cram_len + hdma_len + rtc_len;
 
     if (savestate_data->eram_banks > 16 || savestate_data_len != sizeof(savestate_data_t) + mmu_len) {
@@ -379,7 +379,7 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
     memcpy(emu->cpu, &savestate_data->cpu, sizeof(cpu_t));
     memcpy(emu->timer, &savestate_data->timer, sizeof(gbtimer_t));
     memcpy(emu->link, &savestate_data->link, sizeof(link_t));
-    memcpy(&emu->ppu->is_lcd_turning_on, &savestate_data->ppu, sizeof(savestate_data->ppu));
+    memcpy(&emu->ppu, &savestate_data->ppu, sizeof(savestate_data->ppu));
 
     memcpy(&emu->mmu->mbc, savestate_data->mmu, mmu_header_len);
 

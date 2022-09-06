@@ -2,12 +2,15 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/types.h>
-#include <sys/socket.h>
 #include <netdb.h>
 #include <arpa/inet.h>
 
 #include "emulator/emulator.h"
+#ifdef __ANDROID__
+#include "../android/socket.h"
+#else
+#include "../desktop/socket.h"
+#endif
 
 #ifndef IPPROTO_MPTCP
 #define IPPROTO_MPTCP 262
@@ -96,6 +99,7 @@ int link_start_server(const char *port, int is_ipv6, int mptcp_enabled) {
     client_sfd = accept(server_sfd, client_addr, &client_addr_len);
     if (client_sfd == -1)
         return 0;
+    close(server_sfd); // don't accept additional connections
     print_connected_to(client_addr);
     free(client_addr);
     return 1;
@@ -155,7 +159,7 @@ int link_connect_to_server(const char *address, const char *port, int is_ipv6, i
 static inline int receive(int fd, void *buf, size_t n, int flags) {
     ssize_t total_ret = 0;
     while (total_ret != n) {
-        ssize_t ret = recv(fd, &((char *) buf)[total_ret], n - total_ret, flags);
+        ssize_t ret = recv_pkt(fd, &((char *) buf)[total_ret], n - total_ret, flags);
         if (ret <= 0)
             return 0;
         total_ret += ret;
@@ -170,7 +174,7 @@ static int exchange_info(int sfd, emulator_t *emu, emulator_mode_t *mode, int *c
     for (int i = 0; i < sizeof(emu->mmu->cartridge); i += 2)
         checksum = checksum - (emu->mmu->cartridge[i] + emu->mmu->cartridge[i + 1]) - 1;
 
-    byte_t pkt[4];
+    byte_t pkt[4] = { 0 };
     pkt[0] = INFO;
     pkt[1] = emu->mode;
     #ifdef __HAVE_ZLIB__
@@ -178,7 +182,7 @@ static int exchange_info(int sfd, emulator_t *emu, emulator_mode_t *mode, int *c
     #endif
     memcpy(&pkt[2], &checksum, 2);
 
-    send(sfd, pkt, 4, 0);
+    send_pkt(sfd, pkt, 4, 0);
 
     // --- RECEIVE INFO ---
 
@@ -212,16 +216,16 @@ static int exchange_rom(int sfd, emulator_t *emu, byte_t **rom_data, size_t *rom
 
     byte_t *pkt = xcalloc(1, *rom_len + 9);
     pkt[0] = ROM;
-    memcpy(&pkt[1], rom_len, 8);
+    memcpy(&pkt[1], rom_len, sizeof(size_t));
     memcpy(&pkt[9], &rom, *rom_len);
 
-    send(sfd, pkt, *rom_len + 9, 0);
+    send_pkt(sfd, pkt, *rom_len + 9, 0);
     free(pkt);
 
     // --- RECEIVE ROM ---
 
     // TODO compression
-    byte_t pkt_header[9];
+    byte_t pkt_header[9] = { 0 };
     receive(sfd, pkt_header, 9, 0);
 
     if (pkt_header[0] != ROM) {
@@ -229,7 +233,7 @@ static int exchange_rom(int sfd, emulator_t *emu, byte_t **rom_data, size_t *rom
         return 0;
     }
 
-    memcpy(rom_len, &pkt_header[1], 8);
+    memcpy(rom_len, &pkt_header[1], sizeof(size_t));
     *rom_data = xcalloc(1, *rom_len);
 
     receive(sfd, *rom_data, *rom_len, 0);
@@ -244,16 +248,16 @@ static int exchange_savestate(int sfd, emulator_t *emu, int can_compress, byte_t
 
     byte_t *pkt = xcalloc(1, *savestate_len + 9);
     pkt[0] = STATE;
-    memcpy(&pkt[1], savestate_len, 8);
+    memcpy(&pkt[1], savestate_len, sizeof(size_t));
     memcpy(&pkt[9], local_savestate_data, *savestate_len);
 
-    send(sfd, pkt, *savestate_len + 9, 0);
+    send_pkt(sfd, pkt, *savestate_len + 9, 0);
     free(pkt);
     free(local_savestate_data);
 
     // --- RECEIVE SAVESTATE ---
 
-    byte_t pkt_header[9];
+    byte_t pkt_header[9] = { 0 };
     receive(sfd, pkt_header, 9, 0);
 
     if (pkt_header[0] != STATE) {
@@ -261,7 +265,7 @@ static int exchange_savestate(int sfd, emulator_t *emu, int can_compress, byte_t
         return 0;
     }
 
-    memcpy(savestate_len, &pkt_header[1], 8);
+    memcpy(savestate_len, &pkt_header[1], sizeof(size_t));
 
     *savestate_data = xcalloc(1, *savestate_len);
 
@@ -283,11 +287,12 @@ int link_init_transfer(emulator_t *emu, emulator_t **linked_emu) {
 
     // TODO handle wrong packet type received
     int ret = exchange_info(sfd, emu, &mode, &can_compress);
-    if (ret == 0)
+    if (ret == 0) {
         exchange_rom(sfd, emu, &rom_data, &rom_len);
+    }
     exchange_savestate(sfd, emu, can_compress, &savestate_data, &savestate_len);
 
-    // --- LINK BACKGROUND EMUALATOR ---
+    // --- LINK BACKGROUND EMULATOR ---
 
     emulator_options_t opts = { .mode = mode };
     if (rom_data) {
@@ -302,10 +307,13 @@ int link_init_transfer(emulator_t *emu, emulator_t **linked_emu) {
         rom_data = emulator_get_rom(emu, &rom_len);
         *linked_emu = emulator_init(rom_data, rom_len, &opts);
     }
+
+    // FIXME this function fails (received invalid or corrupted savestate)
     if (!emulator_load_savestate(*linked_emu, savestate_data, savestate_len)) {
         eprintf("received invalid or corrupted savestate\n");
         return 0;
     }
+
     emulator_link_connect(emu, *linked_emu);
 
     free(savestate_data);
@@ -317,13 +325,14 @@ int link_exchange_joypad(emulator_t *emu, emulator_t *linked_emu) {
     char buf[2];
     buf[0] = JOYPAD;
     buf[1] = emulator_get_joypad_state(emu);
-    send(sfd, buf, 2, 0);
+    send_pkt(sfd, buf, 2, 0);
 
     do {
         if (!receive(sfd, buf, 2, 0)) {
             printf("Link cable disconnected\n");
             emulator_link_disconnect(emu);
             emulator_quit(linked_emu);
+            close(is_server ? client_sfd : server_sfd);
             return 0;
         }
         if (buf[0] != JOYPAD)

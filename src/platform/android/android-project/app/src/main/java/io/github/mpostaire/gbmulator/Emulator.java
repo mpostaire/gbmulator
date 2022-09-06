@@ -1,5 +1,6 @@
 package io.github.mpostaire.gbmulator;
 
+import android.bluetooth.BluetoothSocket;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.database.ContentObserver;
@@ -10,6 +11,7 @@ import java.io.IOException;
 
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.ParcelFileDescriptor;
 import android.provider.Settings;
 import android.util.Log;
 import android.widget.Toast;
@@ -19,6 +21,8 @@ public class Emulator extends SDLActivity {
 
     SharedPreferences preferences;
     SharedPreferences.Editor preferencesEditor;
+
+    BluetoothSocket socket;
 
     Uri romUri;
     boolean resume;
@@ -45,7 +49,7 @@ public class Emulator extends SDLActivity {
 
     public native void receiveROMData(
         byte[] data, int size,
-        boolean resume, int emu_mode, int palette, float emu_speed, float sound, int emu_frame_skip,
+        boolean resume, boolean is_link_connected, int emu_mode, int palette, float emu_speed, float sound, int emu_frame_skip,
         float buttons_opacity,
         float portraitDpadX, float portraitDpadY,
         float portraitAX, float portraitAY,
@@ -95,6 +99,8 @@ public class Emulator extends SDLActivity {
             finish();
             return;
         }
+
+        socket = ((GBmulatorApp) getApplication()).socket;
 
         preferences = getSharedPreferences(UserSettings.PREFERENCES, MODE_PRIVATE);
         preferencesEditor = preferences.edit();
@@ -200,7 +206,7 @@ public class Emulator extends SDLActivity {
             in.close();
 
             receiveROMData(
-                    rom, rom.length, resume, emuMode, palette, speed, sound, frameSkip,
+                    rom, rom.length, resume, ((GBmulatorApp) getApplication()).isLinkConnected, emuMode, palette, speed, sound, frameSkip,
                     buttonOpacity,
                     portraitDpadX, portraitDpadY, portraitAX, portraitAY, portraitBX, portraitBY, portraitStartX, portraitStartY, portraitSelectX, portraitSelectY,
                     landscapeDpadX, landscapeDpadY, landscapeAX, landscapeAY, landscapeBX, landscapeBY, landscapeStartX, landscapeStartY, landscapeSelectX, landscapeSelectY);
@@ -230,6 +236,27 @@ public class Emulator extends SDLActivity {
         preferencesEditor.putFloat(isLandscape ? UserSettings.LANDSCAPE_START_Y : UserSettings.PORTRAIT_START_Y, startY);
 
         preferencesEditor.apply();
+    }
+
+    public int linkSendData(byte[] data) {
+        try {
+            socket.getOutputStream().write(data);
+            return data.length;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return -1;
+        }
+    }
+
+    public byte[] linkReceiveData(int size) {
+        byte[] buf = new byte[size];
+        try {
+            socket.getInputStream().read(buf);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+        return buf;
     }
 
 }

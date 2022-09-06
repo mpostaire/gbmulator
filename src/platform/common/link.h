@@ -1,5 +1,7 @@
 #pragma once
 
+#include "emulator/emulator.h"
+
 int link_start_server(const char *port, int is_ipv6, int mptcp_enabled);
 
 int link_connect_to_server(const char *address, const char *port, int is_ipv6, int mptcp_enabled);
