@@ -149,3 +149,9 @@ inline void rtc_update(rtc_t *rtc) {
     if (CHECK_BIT(rtc->dh, 7))
         rtc->value_in_seconds = rtc->s + rtc->m * 60 + rtc->h * 3600 + d * 86400;
 }
+
+size_t mmu_serialized_length(emulator_t *emu);
+
+byte_t *mmu_serialize(emulator_t *emu, size_t *size);
+
+void mmu_unserialize(emulator_t *emu, byte_t *buf);

@@ -1700,7 +1700,7 @@ static void exec_opcode(emulator_t *emu) {
             END_OPCODE;
         );
     case 0x40: // LD B,B (4 cycles)
-        CLOCK(cpu->registers.b = cpu->registers.b; END_OPCODE;);
+        CLOCK(/*cpu->registers.b = cpu->registers.b;*/ END_OPCODE;);
     case 0x41: // LD B,C (4 cycles)
         CLOCK(cpu->registers.b = cpu->registers.c; END_OPCODE;);
     case 0x42: // LD B,D (4 cycles)
@@ -1719,7 +1719,7 @@ static void exec_opcode(emulator_t *emu) {
     case 0x48: // LD C,B (4 cycles)
         CLOCK(cpu->registers.c = cpu->registers.b; END_OPCODE;);
     case 0x49: // LD C,C (4 cycles)
-        CLOCK(cpu->registers.c = cpu->registers.c; END_OPCODE;);
+        CLOCK(/*cpu->registers.c = cpu->registers.c;*/ END_OPCODE;);
     case 0x4A: // LD C,D (4 cycles)
         CLOCK(cpu->registers.c = cpu->registers.d; END_OPCODE;);
     case 0x4B: // LD C,E (4 cycles)
@@ -1738,7 +1738,7 @@ static void exec_opcode(emulator_t *emu) {
     case 0x51: // LD D,C (4 cycles)
         CLOCK(cpu->registers.d = cpu->registers.c; END_OPCODE;);
     case 0x52: // LD D,D (4 cycles)
-        CLOCK(cpu->registers.d = cpu->registers.d; END_OPCODE;);
+        CLOCK(/*cpu->registers.d = cpu->registers.d;*/ END_OPCODE;);
     case 0x53: // LD D,E (4 cycles)
         CLOCK(cpu->registers.d = cpu->registers.e; END_OPCODE;);
     case 0x54: // LD D,H (4 cycles)
@@ -1757,7 +1757,7 @@ static void exec_opcode(emulator_t *emu) {
     case 0x5A: // LD E,D (4 cycles)
         CLOCK(cpu->registers.e = cpu->registers.d; END_OPCODE;);
     case 0x5B: // LD E,E (4 cycles)
-        CLOCK(cpu->registers.e = cpu->registers.e; END_OPCODE;);
+        CLOCK(/*cpu->registers.e = cpu->registers.e;*/ END_OPCODE;);
     case 0x5C: // LD E,H (4 cycles)
         CLOCK(cpu->registers.e = cpu->registers.h; END_OPCODE;);
     case 0x5D: // LD E,L (4 cycles)
@@ -1776,7 +1776,7 @@ static void exec_opcode(emulator_t *emu) {
     case 0x63: // LD H,E (4 cycles)
         CLOCK(cpu->registers.h = cpu->registers.e; END_OPCODE;);
     case 0x64: // LD H,H (4 cycles)
-        CLOCK(cpu->registers.h = cpu->registers.h; END_OPCODE;);
+        CLOCK(/*cpu->registers.h = cpu->registers.h;*/ END_OPCODE;);
     case 0x65: // LD H,L (4 cycles)
         CLOCK(cpu->registers.h = cpu->registers.l; END_OPCODE;);
     case 0x66: // LD H,(HL) (8 cycles)
@@ -1795,7 +1795,7 @@ static void exec_opcode(emulator_t *emu) {
     case 0x6C: // LD L,H (4 cycles)
         CLOCK(cpu->registers.l = cpu->registers.h; END_OPCODE;);
     case 0x6D: // LD L,L (4 cycles)
-        CLOCK(cpu->registers.l = cpu->registers.l; END_OPCODE;);
+        CLOCK(/*cpu->registers.l = cpu->registers.l;*/ END_OPCODE;);
     case 0x6E: // LD L,(HL) (8 cycles)
         CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
         CLOCK(cpu->registers.l = cpu->opcode_compute_storage; END_OPCODE;);
@@ -1846,7 +1846,7 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl));
         CLOCK(cpu->registers.a = cpu->opcode_compute_storage; END_OPCODE;);
     case 0x7F: // LD A,A (4 cycles)
-        CLOCK(cpu->registers.a = cpu->registers.a; END_OPCODE;);
+        CLOCK(/*cpu->registers.a = cpu->registers.a;*/ END_OPCODE;);
     case 0x80: // ADD A, B (4 cycles)
         CLOCK(add8(cpu, cpu->registers.b); END_OPCODE;);
     case 0x81: // ADD A, C (4 cycles)
@@ -2040,7 +2040,7 @@ static void exec_opcode(emulator_t *emu) {
         );
         CLOCK(cpu->registers.pc = cpu->operand; END_OPCODE;);
     case 0xCB: // CB nn (prefix instruction) (4 cycles)
-        GET_OPERAND_8(cpu->exec_state = EXEC_OPCODE_CB; START_OPCODE_CB;);
+        GET_OPERAND_8(START_OPCODE_CB);
     case 0xCC: // CALL Z, nn (12 or 24 cycles)
         GET_OPERAND_16();
         CLOCK(
@@ -2334,4 +2334,49 @@ void cpu_init(emulator_t *emu) {
 
 void cpu_quit(emulator_t *emu) {
     free(emu->cpu);
+}
+
+size_t cpu_serialized_length(emulator_t *emu) {
+    return 23;
+}
+
+byte_t *cpu_serialize(emulator_t *emu, size_t *size) {
+    *size = cpu_serialized_length(emu);
+    byte_t *buf = xmalloc(*size);
+
+    memcpy(buf, &emu->cpu->registers.af, 2);
+    memcpy(&buf[2], &emu->cpu->registers.bc, 2);
+    memcpy(&buf[4], &emu->cpu->registers.de, 2);
+    memcpy(&buf[6], &emu->cpu->registers.hl, 2);
+    memcpy(&buf[8], &emu->cpu->registers.sp, 2);
+    memcpy(&buf[10], &emu->cpu->registers.pc, 2);
+
+    memcpy(&buf[12], &emu->cpu->ime, 1);
+    memcpy(&buf[13], &emu->cpu->halt, 1);
+    memcpy(&buf[14], &emu->cpu->halt_bug, 1);
+    memcpy(&buf[15], &emu->cpu->exec_state, 1);
+    memcpy(&buf[16], &emu->cpu->opcode, 1);
+    memcpy(&buf[17], &emu->cpu->opcode_state, 2);
+    memcpy(&buf[19], &emu->cpu->operand, 2);
+    memcpy(&buf[21], &emu->cpu->opcode_compute_storage, 2);
+
+    return buf;
+}
+
+void cpu_unserialize(emulator_t *emu, byte_t *buf) {
+    memcpy(&emu->cpu->registers.af, buf, 2);
+    memcpy(&emu->cpu->registers.bc, &buf[2], 2);
+    memcpy(&emu->cpu->registers.de, &buf[4], 2);
+    memcpy(&emu->cpu->registers.hl, &buf[6], 2);
+    memcpy(&emu->cpu->registers.sp, &buf[8], 2);
+    memcpy(&emu->cpu->registers.pc, &buf[10], 2);
+
+    memcpy(&emu->cpu->ime, &buf[12], 1);
+    memcpy(&emu->cpu->halt, &buf[13], 1);
+    memcpy(&emu->cpu->halt_bug, &buf[14], 1);
+    memcpy(&emu->cpu->exec_state, &buf[15], 1);
+    memcpy(&emu->cpu->opcode, &buf[16], 1);
+    memcpy(&emu->cpu->opcode_state, &buf[17], 2);
+    memcpy(&emu->cpu->operand, &buf[19], 2);
+    memcpy(&emu->cpu->opcode_compute_storage, &buf[21], 2);
 }

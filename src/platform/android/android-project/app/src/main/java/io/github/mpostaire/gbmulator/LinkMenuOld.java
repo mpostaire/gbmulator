@@ -35,7 +35,7 @@ import io.github.mpostaire.gbmulator.bluetooth.BluetoothConnectionCallback;
 import io.github.mpostaire.gbmulator.bluetooth.BluetoothDeviceAdapter;
 import io.github.mpostaire.gbmulator.bluetooth.BluetoothServerConnectionThread;
 
-public class LinkMenu extends AppCompatActivity {
+public class LinkMenuOld extends AppCompatActivity {
 
     private BluetoothAdapter bluetoothManager;
     BluetoothDeviceAdapter listAdapter;
@@ -44,13 +44,11 @@ public class LinkMenu extends AppCompatActivity {
     LinearLayout deviceListContainer;
     ProgressDialog linkConnectProgressDialog;
 
-    CountDownTimer timer;
-
     @SuppressLint("MissingPermission")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_link_menu);
+        //setContentView(R.layout.activity_link);
         Objects.requireNonNull(getSupportActionBar()).setDisplayHomeAsUpEnabled(true);
 
         status = findViewById(R.id.status);
@@ -66,30 +64,11 @@ public class LinkMenu extends AppCompatActivity {
                 @Override
                 public void run() {
                     GBmulatorApp app = (GBmulatorApp) getApplication();
-                    app.isLinkConnected = true;
-                    app.socket = getSocket();
+                    app.bluetoothSocket = getSocket();
                     linkConnectProgressDialog.dismiss();
-                    timer.cancel();
-                    Toast.makeText(LinkMenu.this, "Connected to server: " + app.socket.getRemoteDevice().getName(), Toast.LENGTH_SHORT).show();
+                    Toast.makeText(LinkMenuOld.this, "Connected to server: " + app.bluetoothSocket.getRemoteDevice().getName(), Toast.LENGTH_SHORT).show();
                 }
             });
-
-            timer = new CountDownTimer(15000, 15000) {
-                @Override
-                public void onTick(long l) {
-
-                }
-
-                @Override
-                public void onFinish() {
-                    GBmulatorApp app = (GBmulatorApp) getApplication();
-                    if (!app.isLinkConnected) {
-                        connectionThread.cancel();
-                        linkConnectProgressDialog.cancel();
-                        Toast.makeText(LinkMenu.this, "Connection timeout", Toast.LENGTH_SHORT).show();
-                    }
-                }
-            };
 
             linkConnectProgressDialog = new ProgressDialog(this);
             linkConnectProgressDialog.setTitle("Starting client");
@@ -99,16 +78,13 @@ public class LinkMenu extends AppCompatActivity {
             linkConnectProgressDialog.setCanceledOnTouchOutside(false);
             linkConnectProgressDialog.setButton("Cancel", (dialogInterface, j) -> {
                 GBmulatorApp app = (GBmulatorApp) getApplication();
-                app.isLinkConnected = false;
                 linkConnectProgressDialog.cancel();
                 connectionThread.cancel();
-                timer.cancel();
-                Toast.makeText(LinkMenu.this, "Connection cancelled", Toast.LENGTH_SHORT).show();
+                Toast.makeText(LinkMenuOld.this, "Connection cancelled", Toast.LENGTH_SHORT).show();
             });
             linkConnectProgressDialog.show();
 
             connectionThread.start();
-            timer.start();
         });
 
         // TODO ALL OF THIS MAY BE USELESS...
@@ -145,35 +121,16 @@ public class LinkMenu extends AppCompatActivity {
     }
 
     public void startServer(View view) {
-        BluetoothServerConnectionThread connectionThread =new BluetoothServerConnectionThread(bluetoothManager, new BluetoothConnectionCallback() {
+        BluetoothServerConnectionThread connectionThread = new BluetoothServerConnectionThread(bluetoothManager, new BluetoothConnectionCallback() {
             @SuppressLint("MissingPermission")
             @Override
             public void run() {
                 GBmulatorApp app = (GBmulatorApp) getApplication();
-                app.isLinkConnected = true;
-                app.socket = getSocket();
+                app.bluetoothSocket = getSocket();
                 linkConnectProgressDialog.dismiss();
-                timer.cancel();
-                Toast.makeText(LinkMenu.this, "Connected to client: " + app.socket.getRemoteDevice().getName(), Toast.LENGTH_SHORT).show();
+                Toast.makeText(LinkMenuOld.this, "Connected to client: " + app.bluetoothSocket.getRemoteDevice().getName(), Toast.LENGTH_SHORT).show();
             }
         });
-
-        timer = new CountDownTimer(15000, 15000) {
-            @Override
-            public void onTick(long l) {
-
-            }
-
-            @Override
-            public void onFinish() {
-                GBmulatorApp app = (GBmulatorApp) getApplication();
-                if (!app.isLinkConnected) {
-                    connectionThread.cancel();
-                    linkConnectProgressDialog.cancel();
-                    Toast.makeText(LinkMenu.this, "Connection timeout", Toast.LENGTH_SHORT).show();
-                }
-            }
-        };
 
         linkConnectProgressDialog = new ProgressDialog(this);
         linkConnectProgressDialog.setTitle("Starting server");
@@ -183,16 +140,13 @@ public class LinkMenu extends AppCompatActivity {
         linkConnectProgressDialog.setCanceledOnTouchOutside(false);
         linkConnectProgressDialog.setButton("Cancel", (dialogInterface, i) -> {
             GBmulatorApp app = (GBmulatorApp) getApplication();
-            app.isLinkConnected = false;
             linkConnectProgressDialog.cancel();
             connectionThread.cancel();
-            timer.cancel();
-            Toast.makeText(LinkMenu.this, "Connection cancelled", Toast.LENGTH_SHORT).show();
+            Toast.makeText(LinkMenuOld.this, "Connection cancelled", Toast.LENGTH_SHORT).show();
         });
         linkConnectProgressDialog.show();
 
         connectionThread.start();
-        timer.start();
     }
 
     @Override

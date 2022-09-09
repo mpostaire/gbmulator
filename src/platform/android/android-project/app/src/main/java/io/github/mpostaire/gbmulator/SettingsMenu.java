@@ -282,6 +282,8 @@ public class SettingsMenu extends AppCompatActivity {
             preferencesEditor.putFloat(UserSettings.PORTRAIT_START_Y, UserSettings.PORTRAIT_START_Y_DEFAULT);
             preferencesEditor.putFloat(UserSettings.PORTRAIT_SELECT_X, UserSettings.PORTRAIT_SELECT_X_DEFAULT);
             preferencesEditor.putFloat(UserSettings.PORTRAIT_SELECT_Y, UserSettings.PORTRAIT_SELECT_Y_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.PORTRAIT_LINK_X, UserSettings.PORTRAIT_LINK_X_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.PORTRAIT_LINK_Y, UserSettings.PORTRAIT_LINK_Y_DEFAULT);
 
             preferencesEditor.putFloat(UserSettings.LANDSCAPE_DPAD_X, UserSettings.LANDSCAPE_DPAD_X_DEFAULT);
             preferencesEditor.putFloat(UserSettings.LANDSCAPE_DPAD_Y, UserSettings.LANDSCAPE_DPAD_Y_DEFAULT);
@@ -293,6 +295,8 @@ public class SettingsMenu extends AppCompatActivity {
             preferencesEditor.putFloat(UserSettings.LANDSCAPE_START_Y, UserSettings.LANDSCAPE_START_Y_DEFAULT);
             preferencesEditor.putFloat(UserSettings.LANDSCAPE_SELECT_X, UserSettings.LANDSCAPE_SELECT_X_DEFAULT);
             preferencesEditor.putFloat(UserSettings.LANDSCAPE_SELECT_Y, UserSettings.LANDSCAPE_SELECT_Y_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.LANDSCAPE_LINK_X, UserSettings.LANDSCAPE_LINK_X_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.LANDSCAPE_LINK_Y, UserSettings.LANDSCAPE_LINK_Y_DEFAULT);
 
             preferencesEditor.apply();
         });

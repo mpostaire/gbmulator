@@ -43,6 +43,8 @@ char *forced_save_path;
 
 int cycles_per_frame = GB_CPU_CYCLES_PER_FRAME;
 
+int sfd;
+
 emulator_t *emu;
 emulator_t *linked_emu;
 
@@ -275,14 +277,13 @@ static void on_input_link_port(menu_entry_t *entry) {
 static void start_link(menu_entry_t *entry) {
     if (!emu) return;
 
-    int success;
     if (entry->parent->entries[0].choices.position)
-        success = link_connect_to_server(config.link_host, config.link_port, config.is_ipv6, config.mptcp_enabled);
+        sfd = link_connect_to_server(config.link_host, config.link_port, config.is_ipv6, config.mptcp_enabled);
     else
-        success = link_start_server(config.link_port, config.is_ipv6, config.mptcp_enabled);
+        sfd = link_start_server(config.link_port, config.is_ipv6, config.mptcp_enabled);
 
     emulator_t *new_linked_emu;
-    if (success && link_init_transfer(emu, &new_linked_emu))
+    if (sfd > 0 && link_init_transfer(sfd, emu, &new_linked_emu))
         on_link_connect(new_linked_emu);
 }
 
@@ -657,7 +658,7 @@ int main(int argc, char **argv) {
 
             // keep this the closest possible before emulator_step() to reduce input inaccuracies
             handle_input();
-            if (linked_emu && !link_exchange_joypad(emu, linked_emu))
+            if (linked_emu && !link_exchange_joypad(sfd, emu, linked_emu))
                 on_link_disconnect();
         }
 

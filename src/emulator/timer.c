@@ -41,3 +41,20 @@ void timer_init(emulator_t *emu) {
 void timer_quit(emulator_t *emu) {
     free(emu->timer);
 }
+
+size_t timer_serialized_length(emulator_t *emu) {
+    return 4;
+}
+
+byte_t *timer_serialize(emulator_t *emu, size_t *size) {
+    *size = timer_serialized_length(emu);
+    byte_t *buf = xmalloc(*size);
+    memcpy(buf, &emu->timer->max_tima_cycles, 2);
+    memcpy(&buf[2], &emu->timer->tima_counter, 2);
+    return buf;
+}
+
+void timer_unserialize(emulator_t *emu, byte_t *buf) {
+    memcpy(&emu->timer->max_tima_cycles, buf, 2);
+    memcpy(&emu->timer->tima_counter, &buf[2], 2);
+}

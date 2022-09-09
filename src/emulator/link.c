@@ -71,3 +71,22 @@ void link_step(emulator_t *emu) {
         }
     }
 }
+
+size_t link_serialized_length(emulator_t *emu) {
+    return 5;
+}
+
+byte_t *link_serialize(emulator_t *emu, size_t *size) {
+    *size = link_serialized_length(emu);
+    byte_t *buf = xmalloc(*size);
+    memcpy(buf, &emu->link->cycles_counter, 2);
+    memcpy(&buf[2], &emu->link->max_clock_cycles, 2);
+    memcpy(&buf[4], &emu->link->bit_counter, 1);
+    return buf;
+}
+
+void link_unserialize(emulator_t *emu, byte_t *buf) {
+    memcpy(&emu->link->cycles_counter, buf, 2);
+    memcpy(&emu->link->max_clock_cycles, &buf[2], 2);
+    memcpy(&emu->link->bit_counter, &buf[4], 1);
+}

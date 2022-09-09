@@ -31,14 +31,6 @@
         android:label="@string/app_name"
         android:theme="@style/GBmulatorTheme">
         <activity
-            android:name=".LinkMenu"
-            android:label="@string/link_title"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.bluetooth.adapter.action.STATE_CHANGED"/>
-            </intent-filter>
-        </activity>
-        <activity
             android:name=".SettingsMenu"
             android:exported="false"
             android:label="@string/settings_title" />

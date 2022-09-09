@@ -10,6 +10,8 @@ import android.util.Log;
 
 import java.io.IOException;
 
+import io.github.mpostaire.gbmulator.GBmulatorApp;
+
 public class BluetoothServerConnectionThread extends Thread {
     private final BluetoothServerSocket serverSocket;
     BluetoothConnectionCallback callback;
@@ -22,9 +24,9 @@ public class BluetoothServerConnectionThread extends Thread {
         this.callback = callback;
         try {
             // MY_UUID is the app's UUID string, also used by the client code.
-            tmp = bluetoothAdapter.listenUsingRfcommWithServiceRecord(BluetoothConstants.SERVICE_NAME, BluetoothConstants.SERVICE_UUID);
+            tmp = bluetoothAdapter.listenUsingRfcommWithServiceRecord(GBmulatorApp.BLUETOOTH_SERVICE_NAME, GBmulatorApp.BLUETOOTH_SERVICE_UUID);
         } catch (IOException e) {
-            Log.e(BluetoothConstants.SERVICE_NAME, "Socket's listen() method failed", e);
+            Log.e(GBmulatorApp.BLUETOOTH_SERVICE_NAME, "Socket's listen() method failed", e);
         }
         serverSocket = tmp;
     }
@@ -36,7 +38,7 @@ public class BluetoothServerConnectionThread extends Thread {
             try {
                 socket = serverSocket.accept();
             } catch (IOException e) {
-                Log.e(BluetoothConstants.SERVICE_NAME, "Socket's accept() method failed", e);
+                Log.e(GBmulatorApp.BLUETOOTH_SERVICE_NAME, "Socket's accept() method failed", e);
                 break;
             }
 
@@ -49,7 +51,7 @@ public class BluetoothServerConnectionThread extends Thread {
                 try {
                     serverSocket.close();
                 } catch (IOException e) {
-                    Log.e(BluetoothConstants.SERVICE_NAME, "Socket's close() method failed", e);
+                    Log.e(GBmulatorApp.BLUETOOTH_SERVICE_NAME, "Socket's close() method failed", e);
                 }
                 break;
             }
@@ -61,7 +63,7 @@ public class BluetoothServerConnectionThread extends Thread {
         try {
             serverSocket.close();
         } catch (IOException e) {
-            Log.e(BluetoothConstants.SERVICE_NAME, "Could not close the connect socket", e);
+            Log.e(GBmulatorApp.BLUETOOTH_SERVICE_NAME, "Could not close the connect socket", e);
         }
     }
 }

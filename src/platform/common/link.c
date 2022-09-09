@@ -8,6 +8,9 @@
 #include "emulator/emulator.h"
 #ifdef __ANDROID__
 #include "../android/socket.h"
+#include <android/log.h>
+#define log(...) __android_log_print(ANDROID_LOG_WARN, "GBmulator", __VA_ARGS__)
+
 #else
 #include "../desktop/socket.h"
 #endif
@@ -23,8 +26,6 @@ typedef enum {
     JOYPAD
 } pkt_type_t;
 
-int server_sfd = -1;
-int client_sfd = -1;
 int is_server = 0;
 
 static void print_connected_to(struct sockaddr *addr) {
@@ -44,49 +45,48 @@ int link_start_server(const char *port, int is_ipv6, int mptcp_enabled) {
     // if (server_sfd != -1 || is_server)
     //     return 0;
 
-    struct addrinfo hints = {
-        .ai_family = is_ipv6 ? AF_INET6 : AF_INET,
-        .ai_socktype = SOCK_STREAM,
-        .ai_protocol = IPPROTO_TCP
-    };
+    struct addrinfo hints = { 0 };
+	hints.ai_family = is_ipv6 ? AF_INET6 : AF_INET;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = AI_PASSIVE; // use my IP
     struct addrinfo *res;
     int ret;
     if ((ret = getaddrinfo(NULL, port, &hints, &res)) != 0) {
         eprintf("getaddrinfo: %s\n", gai_strerror(ret));
-        return 0;
+        return -1;
     }
 
+    int server_sfd;
     for (; res != NULL; res = res->ai_next) {
         // getaddrinfo doesn't work with IPPROTO_MPTCP
         if ((server_sfd = socket(res->ai_family, res->ai_socktype, mptcp_enabled ? IPPROTO_MPTCP : res->ai_protocol)) == -1)
             continue;
 
-        if (!bind(server_sfd, res->ai_addr, res->ai_addrlen))
-            break;
+        if (setsockopt(server_sfd, SOL_SOCKET, SO_REUSEADDR, &(int) { 1 }, sizeof(int))) {
+            errnoprintf("setsockopt");
+            close(server_sfd);
+            return -1;
+        };
 
-        close(server_sfd);
+        if (bind(server_sfd, res->ai_addr, res->ai_addrlen) == -1) {
+            close(server_sfd);
+            continue;
+        }
+
+        break;
     }
 
     if (res == NULL) {
         eprintf("bind: Could not bind\n");
-        server_sfd = -1;
-        return 0;
+        return -1;
     }
 
     freeaddrinfo(res);
 
-    if (setsockopt(server_sfd, SOL_SOCKET, SO_REUSEADDR, &(int) { 1 }, sizeof(int))) {
-        errnoprintf("setsockopt");
-        close(server_sfd);
-        server_sfd = -1;
-        return 0;
-    };
-
     if (listen(server_sfd, 1) == -1) {
         errnoprintf("listen");
         close(server_sfd);
-        server_sfd = -1;
-        return 0;
+        return -1;
     }
 
     is_server = 1;
@@ -96,13 +96,15 @@ int link_start_server(const char *port, int is_ipv6, int mptcp_enabled) {
     // wait for a client connection
     socklen_t client_addr_len = sizeof(struct sockaddr_in6); // take the largest possible size regardless of IP version
     struct sockaddr *client_addr = xmalloc(client_addr_len);
-    client_sfd = accept(server_sfd, client_addr, &client_addr_len);
+    int client_sfd = accept(server_sfd, client_addr, &client_addr_len);
     if (client_sfd == -1)
-        return 0;
+        return -1;
+
     close(server_sfd); // don't accept additional connections
     print_connected_to(client_addr);
     free(client_addr);
-    return 1;
+
+    return client_sfd;
 }
 
 int link_connect_to_server(const char *address, const char *port, int is_ipv6, int mptcp_enabled) {
@@ -118,9 +120,10 @@ int link_connect_to_server(const char *address, const char *port, int is_ipv6, i
     int ret;
     if ((ret = getaddrinfo(address, port, &hints, &res)) != 0) {
         eprintf("getaddrinfo: %s\n", gai_strerror(ret));
-        return 0;
+        return -1;
     }
 
+    int server_sfd;
     for (; res != NULL; res = res->ai_next) {
         // getaddrinfo doesn't work with IPPROTO_MPTCP
         if ((server_sfd = socket(res->ai_family, res->ai_socktype, mptcp_enabled ? IPPROTO_MPTCP : res->ai_protocol)) == -1)
@@ -133,27 +136,15 @@ int link_connect_to_server(const char *address, const char *port, int is_ipv6, i
     }
 
     if (res == NULL) {
-        eprintf("connect: Could not connect\n");
-        errnoprintf("connect");
-        server_sfd = -1;
-        return 0;
+        errnoprintf("connect %d", ret);
+        return -1;
     }
 
     is_server = 0;
 
-    printf("Link client connecting to server %s on port %s...\n", address, port);
-
-    // confirm connection to the server
-    char buf;
-    if (send(server_sfd, &buf, 0, MSG_NOSIGNAL) == -1) {
-        close(server_sfd);
-        server_sfd = -1;
-        errnoprintf("could not make a connection");
-        return 0;
-    }
     print_connected_to(res->ai_addr);
     freeaddrinfo(res);
-    return 1;
+    return server_sfd;
 }
 
 static inline int receive(int fd, void *buf, size_t n, int flags) {
@@ -274,9 +265,8 @@ static int exchange_savestate(int sfd, emulator_t *emu, int can_compress, byte_t
     return 1;
 }
 
-int link_init_transfer(emulator_t *emu, emulator_t **linked_emu) {
+int link_init_transfer(int sfd, emulator_t *emu, emulator_t **linked_emu) {
     // TODO connection lost detection (return -1)
-    int sfd = is_server ? client_sfd : server_sfd;
     *linked_emu = NULL;
     emulator_mode_t mode = 0;
     int can_compress = 0;
@@ -320,8 +310,7 @@ int link_init_transfer(emulator_t *emu, emulator_t **linked_emu) {
     return 1;
 }
 
-int link_exchange_joypad(emulator_t *emu, emulator_t *linked_emu) {
-    int sfd = is_server ? client_sfd : server_sfd;
+int link_exchange_joypad(int sfd, emulator_t *emu, emulator_t *linked_emu) {
     char buf[2];
     buf[0] = JOYPAD;
     buf[1] = emulator_get_joypad_state(emu);
@@ -332,7 +321,7 @@ int link_exchange_joypad(emulator_t *emu, emulator_t *linked_emu) {
             printf("Link cable disconnected\n");
             emulator_link_disconnect(emu);
             emulator_quit(linked_emu);
-            close(is_server ? client_sfd : server_sfd);
+            close(sfd);
             return 0;
         }
         if (buf[0] != JOYPAD)

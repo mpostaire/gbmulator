@@ -17,20 +17,11 @@
 
 #define FORMAT_STRING EMULATOR_NAME"-sav"
 
-typedef struct {
+typedef struct __attribute__((packed)) {
     char identifier[sizeof(FORMAT_STRING)];
     char rom_title[16];
     byte_t mode; // DMG or CGB
 } savestate_header_t;
-
-typedef struct {
-    byte_t eram_banks;
-    cpu_t cpu;
-    gbtimer_t timer;
-    byte_t link[offsetof(link_t, other_emu)];
-    byte_t ppu[offsetof(ppu_t, cycles)];
-    byte_t mmu[];
-} savestate_data_t;
 
 emulator_options_t defaults_opts = {
     .mode = DMG,
@@ -217,7 +208,7 @@ int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
     if (!emu->mmu->has_battery || (!emu->mmu->has_rtc && emu->mmu->eram_banks == 0))
         return 0;
 
-    size_t eram_len = emu->mmu->has_battery ? 0x2000 * emu->mmu->eram_banks : 0;
+    size_t eram_len = 0x2000 * emu->mmu->eram_banks;
 
     size_t rtc_value_len = 0;
     size_t rtc_timestamp_len = 0;
@@ -242,22 +233,6 @@ int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
 }
 
 byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, byte_t compressed) {
-    size_t eram_len = 0x2000 * emu->mmu->eram_banks;
-    size_t wram_extra_len = 0;
-    size_t vram_extra_len = 0;
-    size_t cram_len = 0;
-    size_t hdma_len = 0;
-    size_t rtc_len = 0;
-    if (emu->mode == CGB) {
-        wram_extra_len = sizeof(emu->mmu->wram_extra);
-        vram_extra_len = sizeof(emu->mmu->vram_extra);
-        cram_len = sizeof(emu->mmu->cram_bg) + sizeof(emu->mmu->cram_obj);
-        hdma_len = sizeof(emu->mmu->hdma);
-        rtc_len = sizeof(emu->mmu->rtc);
-    }
-    size_t mmu_header_len = offsetof(mmu_t, eram);
-    size_t mmu_len = mmu_header_len + eram_len + wram_extra_len + vram_extra_len + cram_len + hdma_len + rtc_len;
-
     // make savestate header
     savestate_header_t *savestate_header = xmalloc(sizeof(savestate_header_t));
     savestate_header->mode = emu->mode;
@@ -265,38 +240,51 @@ byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, byte_t compresse
     memcpy(savestate_header->rom_title, emu->rom_title, sizeof(savestate_header->rom_title));
 
     // make savestate data
-    size_t savestate_data_len = sizeof(savestate_data_t) + mmu_len;
-    savestate_data_t *savestate_data = xmalloc(savestate_data_len);
+    size_t cpu_len;
+    byte_t *cpu = cpu_serialize(emu, &cpu_len);
+    size_t timer_len;
+    byte_t *timer = timer_serialize(emu, &timer_len);
+    size_t link_len;
+    byte_t *link = link_serialize(emu, &link_len);
+    size_t ppu_len;
+    byte_t *ppu = ppu_serialize(emu, &ppu_len);
+    size_t mmu_len;
+    byte_t *mmu = mmu_serialize(emu, &mmu_len);
 
-    savestate_data->eram_banks = emu->mmu->eram_banks;
-    memcpy(&savestate_data->cpu, emu->cpu, sizeof(cpu_t));
-    memcpy(&savestate_data->timer, emu->timer, sizeof(gbtimer_t));
-    memcpy(&savestate_data->link, emu->link, sizeof(savestate_data->link));
-    memcpy(&savestate_data->ppu, &emu->ppu, sizeof(savestate_data->ppu));
+    // don't write each component length into the savestate as the only variable length is the mmu which is written
+    // last and it's length can be computed using the eram_banks number and the mode (both in the header)
+    size_t savestate_data_len = cpu_len + timer_len + link_len + ppu_len + mmu_len;
+    byte_t *savestate_data = xmalloc(savestate_data_len);
+    size_t offset = 0;
+    memcpy(savestate_data, cpu, cpu_len);
+    offset += cpu_len;
+    memcpy(&savestate_data[offset], timer, timer_len);
+    offset += timer_len;
+    memcpy(&savestate_data[offset], link, link_len);
+    offset += link_len;
+    memcpy(&savestate_data[offset], ppu, ppu_len);
+    offset += ppu_len;
+    memcpy(&savestate_data[offset], mmu, mmu_len);
 
-    memcpy(savestate_data->mmu, &emu->mmu->mbc, mmu_header_len);
-
-    size_t offset = mmu_header_len;
-    memcpy(savestate_data->mmu + offset, &emu->mmu->eram, eram_len);
-
-    if (emu->mode == CGB) {
-        offset += eram_len;
-        memcpy(savestate_data->mmu + offset, &emu->mmu->wram_extra, mmu_len - offset);
-    }
+    free(cpu);
+    free(timer);
+    free(link);
+    free(ppu);
+    free(mmu);
 
     // compress savestate data if specified
     #ifdef __HAVE_ZLIB__
     if (compressed) {
         SET_BIT(savestate_header->mode, 7);
         size_t t = compressBound(savestate_data_len);
-        savestate_data_t *dest = xmalloc(t);
+        byte_t *dest = xmalloc(t);
         size_t dest_len;
-        int ret = compress((byte_t *) dest, &dest_len, (byte_t *) savestate_data, savestate_data_len);
+        int ret = compress(dest, &dest_len, savestate_data, savestate_data_len);
         free(savestate_data);
         savestate_data_len = dest_len;
         savestate_data = dest;
 
-        printf("get_savestate %ld (compress:%d) buf=%ld\n", sizeof(savestate_header_t) + savestate_data_len, ret, t);
+        printf("get_savestate %zu (compress:%d) buf=%zu\n", sizeof(savestate_header_t) + savestate_data_len, ret, t);
     }
     #endif
 
@@ -323,23 +311,31 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
 
     if (strncmp(savestate_header->identifier, FORMAT_STRING, sizeof(FORMAT_STRING))) {
         eprintf("invalid format\n");
+        free(savestate_header);
         return 0;
     }
     if (strncmp(savestate_header->rom_title, emu->rom_title, sizeof(savestate_header->rom_title))) {
-        eprintf("rom title mismatch (expected: [%.16s]; got: [%.16s])\n", emu->rom_title, savestate_header->rom_title);
+        eprintf("rom title mismatch (expected: '%.16s'; got: '%.16s')\n", emu->rom_title, savestate_header->rom_title);
+        free(savestate_header);
         return 0;
     }
 
     size_t savestate_data_len = length - sizeof(savestate_header_t);
-    savestate_data_t *savestate_data = xmalloc(savestate_data_len);
+    byte_t *savestate_data = xmalloc(savestate_data_len);
     memcpy(savestate_data, data + sizeof(savestate_header_t), savestate_data_len);
+
+    size_t cpu_len = cpu_serialized_length(emu);
+    size_t timer_len = timer_serialized_length(emu);
+    size_t link_len = link_serialized_length(emu);
+    size_t ppu_len = ppu_serialized_length(emu);
+    size_t mmu_len = mmu_serialized_length(emu);
+    size_t expected_len = cpu_len + timer_len + link_len + ppu_len + mmu_len;
 
     if (CHECK_BIT(savestate_header->mode, 7)) {
         #ifdef __HAVE_ZLIB__
-        size_t t = sizeof(savestate_data_t) + (sizeof(mmu_t) - offsetof(mmu_t, mbc)) + 1e5;
-        savestate_data_t *dest = xmalloc(t);
+        byte_t *dest = xmalloc(expected_len);
         size_t dest_len;
-        int ret = uncompress((byte_t *) dest, &dest_len, (byte_t *) savestate_data, savestate_data_len);
+        int ret = uncompress(dest, &dest_len, savestate_data, savestate_data_len);
         printf("uncompress=%d\n", ret);
         free(savestate_data);
         savestate_data_len = dest_len;
@@ -352,44 +348,26 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
         #endif
     }
 
-    size_t eram_len = 0x2000 * savestate_data->eram_banks;
-    size_t wram_extra_len = 0;
-    size_t vram_extra_len = 0;
-    size_t cram_len = 0;
-    size_t hdma_len = 0;
-    size_t rtc_len = 0;
-    if ((savestate_header->mode & 0x03) == CGB) {
-        wram_extra_len = sizeof(emu->mmu->wram_extra);
-        vram_extra_len = sizeof(emu->mmu->vram_extra);
-        cram_len = sizeof(emu->mmu->cram_bg) + sizeof(emu->mmu->cram_obj);
-        hdma_len = sizeof(emu->mmu->hdma);
-        rtc_len = sizeof(emu->mmu->rtc);
-    }
-    size_t mmu_header_len = offsetof(mmu_t, eram);
-    size_t mmu_len = mmu_header_len + eram_len + wram_extra_len + vram_extra_len + cram_len + hdma_len + rtc_len;
-
-    if (savestate_data->eram_banks > 16 || savestate_data_len != sizeof(savestate_data_t) + mmu_len) {
-        eprintf("invalid savestate data length\n");
+    if (savestate_data_len != expected_len) {
+        eprintf("invalid savestate data length (expected: %zu; got: %zu)\n", expected_len, savestate_data_len);
+        free(savestate_header);
+        free(savestate_data);
         return 0;
     }
 
     if ((savestate_header->mode & 0x03) != emu->mode)
         emulator_reset(emu, savestate_header->mode & 0x03);
 
-    memcpy(emu->cpu, &savestate_data->cpu, sizeof(cpu_t));
-    memcpy(emu->timer, &savestate_data->timer, sizeof(gbtimer_t));
-    memcpy(emu->link, &savestate_data->link, sizeof(link_t));
-    memcpy(&emu->ppu, &savestate_data->ppu, sizeof(savestate_data->ppu));
-
-    memcpy(&emu->mmu->mbc, savestate_data->mmu, mmu_header_len);
-
-    size_t offset = mmu_header_len;
-    memcpy(&emu->mmu->eram, savestate_data->mmu + offset, eram_len);
-
-    if (emu->mode == CGB) {
-        offset += eram_len;
-        memcpy(&emu->mmu->wram_extra, savestate_data->mmu + offset, mmu_len - offset);
-    }
+    size_t offset = 0;
+    cpu_unserialize(emu, savestate_data);
+    offset += cpu_len;
+    timer_unserialize(emu, &savestate_data[offset]);
+    offset += timer_len;
+    link_unserialize(emu, &savestate_data[offset]);
+    offset += link_len;
+    ppu_unserialize(emu, &savestate_data[offset]);
+    offset += ppu_len;
+    mmu_unserialize(emu, &savestate_data[offset]);
 
     free(savestate_header);
     free(savestate_data);

@@ -103,23 +103,6 @@
                 android:text="@string/reset_rom_button" />
 
             <View
-                android:id="@+id/divider3"
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="?android:attr/listDivider" />
-
-            <Button
-                android:id="@+id/linkButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="?android:attr/selectableItemBackground"
-                android:drawableStart="@drawable/round_cable_black_24dp"
-                android:onClick="linkCable"
-                android:paddingStart="10dp"
-                android:paddingEnd="34dp"
-                android:text="@string/link_button" />
-
-            <View
                 android:id="@+id/divider2"
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
@@ -157,6 +140,6 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        app:layout_constraintGuide_percent="0.42" />
+        app:layout_constraintGuide_percent="0.48" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

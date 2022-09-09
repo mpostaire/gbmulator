@@ -17,3 +17,9 @@ void cpu_step(emulator_t *emu);
 void cpu_init(emulator_t *emu);
 
 void cpu_quit(emulator_t *emu);
+
+size_t cpu_serialized_length(emulator_t *emu);
+
+byte_t *cpu_serialize(emulator_t *emu, size_t *size);
+
+void cpu_unserialize(emulator_t *emu, byte_t *buf);

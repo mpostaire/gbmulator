@@ -32,3 +32,9 @@ void ppu_step(emulator_t *emu);
 void ppu_init(emulator_t *emu);
 
 void ppu_quit(emulator_t *emu);
+
+size_t ppu_serialized_length(emulator_t *emu);
+
+byte_t *ppu_serialize(emulator_t *emu, size_t *size);
+
+void ppu_unserialize(emulator_t *emu, byte_t *buf);

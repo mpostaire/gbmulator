@@ -15,11 +15,11 @@
 #define APU_SAMPLE_COUNT 2048
 
 // TODO savestates ui
-// TODO bluetooth (and wifi) link cable --> make a link connection pausable and resumeable (because the whole emulator is
-//      reset each time we leave the Emulator activity)
 
 SDL_bool is_running;
 SDL_bool is_landscape;
+SDL_bool show_link_dialog;
+SDL_bool init_handshake;
 
 float speed;
 int frame_skip;
@@ -34,6 +34,8 @@ SDL_Texture *ppu_texture;
 int ppu_texture_pitch;
 
 SDL_AudioDeviceID audio_device;
+
+int link_sfd;
 
 emulator_t *emu;
 emulator_t *linked_emu;
@@ -50,6 +52,8 @@ float portrait_start_x;
 float portrait_start_y;
 float portrait_select_x;
 float portrait_select_y;
+float portrait_link_x;
+float portrait_link_y;
 
 float landscape_dpad_x;
 float landscape_dpad_y;
@@ -61,6 +65,8 @@ float landscape_start_x;
 float landscape_start_y;
 float landscape_select_x;
 float landscape_select_y;
+float landscape_link_x;
+float landscape_link_y;
 
 int dpad_status;
 
@@ -74,6 +80,8 @@ SDL_Texture *a_pressed_texture;
 SDL_Texture *b_pressed_texture;
 SDL_Texture *start_pressed_texture;
 SDL_Texture *select_pressed_texture;
+SDL_Texture *link_texture;
+SDL_Texture *link_pressed_texture;
 
 button_t buttons[] = {
     {
@@ -109,6 +117,13 @@ button_t buttons[] = {
             .w = 30
         },
         .button = JOYPAD_START
+    },
+    {
+        .shape = {
+            .h = 16,
+            .w = 16
+        },
+        .button = JOYPAD_START + 5
     }
 };
 
@@ -149,7 +164,7 @@ static inline s_byte_t is_finger_over_button(float x, float y) {
         }
     }
 
-    for (s_byte_t i = 1; i < 5; i++) {
+    for (s_byte_t i = 1; i < 6; i++) {
         SDL_Rect *hitbox = &buttons[i].shape;
         if (x > hitbox->x && x < hitbox->x + hitbox->w && y > hitbox->y && y < hitbox->y + hitbox->h)
             return buttons[i].button;
@@ -175,6 +190,9 @@ static void button_press(emulator_t *emu, joypad_button_t button) {
     case JOYPAD_START + 4:
         emulator_joypad_press(emu, JOYPAD_DOWN);
         emulator_joypad_press(emu, JOYPAD_RIGHT);
+        break;
+    case JOYPAD_START + 5:
+        show_link_dialog = SDL_TRUE;
         break;
     default:
         emulator_joypad_press(emu, button);
@@ -216,6 +234,9 @@ static void button_press(emulator_t *emu, joypad_button_t button) {
         SET_BIT(dpad_status, JOYPAD_DOWN);
         SET_BIT(dpad_status, JOYPAD_RIGHT);
         break;
+    case JOYPAD_START + 5:
+        buttons[5].texture = link_pressed_texture;
+        break;
     }
 
     buttons[0].texture = dpad_textures[dpad_status];
@@ -230,6 +251,7 @@ static void button_release(SDL_TouchID touch_id) {
     buttons[2].texture = b_texture;
     buttons[3].texture = select_texture;
     buttons[4].texture = start_texture;
+    buttons[5].texture = link_texture;
 
     for (int i = 0; i < SDL_GetNumTouchFingers(touch_id); i++) {
         SDL_Finger *f = SDL_GetTouchFinger(touch_id, i);
@@ -237,6 +259,23 @@ static void button_release(SDL_TouchID touch_id) {
         s_byte_t hovered = is_finger_over_button(f->x, f->y);
         if (hovered >= 0)
             button_press(emu, hovered);
+    }
+
+    if (show_link_dialog) {
+        show_link_dialog = SDL_FALSE;
+
+        JNIEnv *env = (JNIEnv *) SDL_AndroidGetJNIEnv();
+
+        jobject activity = (jobject) SDL_AndroidGetActivity();
+
+        jclass clazz = (*env)->GetObjectClass(env, activity);
+
+        jmethodID method_id = (*env)->GetMethodID(env, clazz, "linkMenu", "()V");
+
+        (*env)->CallVoidMethod(env, activity, method_id);
+
+        (*env)->DeleteLocalRef(env, activity);
+        (*env)->DeleteLocalRef(env, clazz);
     }
 }
 
@@ -257,8 +296,11 @@ static inline void touch_motion(SDL_TouchFingerEvent *event) {
     s_byte_t hovered = is_finger_over_button(event->x, event->y);
 
     if (previous != hovered) {
-        if (previous >= 0)
+        if (previous >= 0) {
+            if (previous == JOYPAD_START + 5)
+                show_link_dialog = SDL_FALSE;
             button_release(event->touchId);
+        }
         if (hovered >= 0)
             button_press(emu, hovered);
     }
@@ -285,6 +327,8 @@ static void set_layout(int layout) {
         buttons[3].shape.y = portrait_select_y;
         buttons[4].shape.x = portrait_start_x;
         buttons[4].shape.y = portrait_start_y;
+        buttons[5].shape.x = portrait_link_x;
+        buttons[5].shape.y = portrait_link_y;
         break;
     case 1: // landscape
         SDL_RenderSetLogicalSize(renderer, screen_height, screen_width);
@@ -303,6 +347,8 @@ static void set_layout(int layout) {
         buttons[3].shape.y = landscape_select_y;
         buttons[4].shape.x = landscape_start_x;
         buttons[4].shape.y = landscape_start_y;
+        buttons[5].shape.x = landscape_link_x;
+        buttons[5].shape.y = landscape_link_y;
         break;
     }
 }
@@ -378,7 +424,7 @@ static void start_emulation_loop(void) {
                 SDL_RenderClear(renderer);
                 SDL_RenderCopy(renderer, ppu_texture, NULL, &gb_screen_rect);
                 // draw buttons
-                for (int i = 0; i < 5; i++)
+                for (int i = 0; i < 6; i++)
                     SDL_RenderCopy(renderer, buttons[i].texture, NULL, &buttons[i].shape);
                 SDL_RenderPresent(renderer);
                 frame_count = 0;
@@ -388,7 +434,13 @@ static void start_emulation_loop(void) {
             frame_count++;
             // handle_input is a slow function: don't call it every step
             handle_input(); // keep this the closest possible before emulator_step() to reduce input inaccuracies
-            if (linked_emu && !link_exchange_joypad(emu, linked_emu))
+            if (init_handshake) {
+                init_handshake = SDL_FALSE;
+                emulator_t *new_linked_emu;
+                if (link_init_transfer(link_sfd, emu, &new_linked_emu))
+                    linked_emu = new_linked_emu;
+            }
+            if (linked_emu && !link_exchange_joypad(link_sfd, emu, linked_emu))
                 linked_emu = NULL;
         }
 
@@ -453,7 +505,6 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
         jbyteArray data,
         jsize size,
         jboolean resume,
-        jboolean is_link_connected,
         jint emu_mode,
         jint palette,
         jfloat emu_speed,
@@ -470,6 +521,8 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
         jfloat port_start_y,
         jfloat port_select_x,
         jfloat port_select_y,
+        jfloat port_link_x,
+        jfloat port_link_y,
         jfloat land_dpad_x,
         jfloat land_dpad_y,
         jfloat land_a_x,
@@ -479,7 +532,9 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
         jfloat land_start_x,
         jfloat land_start_y,
         jfloat land_select_x,
-        jfloat land_select_y)
+        jfloat land_select_y,
+        jfloat land_link_x,
+        jfloat land_link_y)
 {
     jboolean is_copy;
     jbyte *rom_data = (*env)->GetByteArrayElements(env, data, &is_copy);
@@ -488,12 +543,6 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
     frame_skip = emu_frame_skip;
 
     (*env)->ReleaseByteArrayElements(env, data, rom_data, JNI_ABORT);
-
-    if (is_link_connected) {
-        emulator_t *new_linked_emu;
-        if (link_init_transfer(emu, &new_linked_emu))
-            linked_emu = new_linked_emu;
-    }
 
     portrait_dpad_x = port_dpad_x * (float) screen_width;
     portrait_dpad_y = port_dpad_y * (float) screen_height;
@@ -505,6 +554,8 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
     portrait_start_y = port_start_y * (float) screen_height;
     portrait_select_x = port_select_x * (float) screen_width;
     portrait_select_y = port_select_y * (float) screen_height;
+    portrait_link_x = port_link_x * (float) screen_width;
+    portrait_link_y = port_link_y * (float) screen_height;
 
     landscape_dpad_x = land_dpad_x * (float) screen_height;
     landscape_dpad_y = land_dpad_y * (float) screen_width;
@@ -516,6 +567,8 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
     landscape_start_y = land_start_y * (float) screen_width;
     landscape_select_x = land_select_x * (float) screen_height;
     landscape_select_y = land_select_y * (float) screen_width;
+    landscape_link_x = land_link_x * (float) screen_height;
+    landscape_link_y = land_link_y * (float) screen_width;
 
     set_layout(is_landscape);
 
@@ -535,11 +588,11 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
     dpad_textures[4] = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
-    surface = SDL_LoadBMP("dpad_pressed_up-left.bmp");
+    surface = SDL_LoadBMP("dpad_pressed_up-right.bmp");
     dpad_textures[5] = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
-    surface = SDL_LoadBMP("dpad_pressed_up-right.bmp");
+    surface = SDL_LoadBMP("dpad_pressed_up-left.bmp");
     dpad_textures[6] = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
@@ -551,11 +604,11 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
     dpad_textures[8] = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
-    surface = SDL_LoadBMP("dpad_pressed_down-left.bmp");
+    surface = SDL_LoadBMP("dpad_pressed_down-right.bmp");
     dpad_textures[9] = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
-    surface = SDL_LoadBMP("dpad_pressed_down-right.bmp");
+    surface = SDL_LoadBMP("dpad_pressed_down-left.bmp");
     dpad_textures[10] = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
@@ -567,11 +620,11 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
     dpad_textures[12] = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
-    surface = SDL_LoadBMP("dpad_pressed_up-left-down.bmp");
+    surface = SDL_LoadBMP("dpad_pressed_up-right-down.bmp");
     dpad_textures[13] = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
-    surface = SDL_LoadBMP("dpad_pressed_up-right-down.bmp");
+    surface = SDL_LoadBMP("dpad_pressed_up-left-down.bmp");
     dpad_textures[14] = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
@@ -595,11 +648,16 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
     select_pressed_texture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
+    surface = SDL_LoadBMP("link_pressed.bmp");
+    link_pressed_texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
     SDL_SetTextureAlphaMod(a_pressed_texture, buttons_opacity * 0xFF);
     SDL_SetTextureAlphaMod(b_pressed_texture, buttons_opacity * 0xFF);
     SDL_SetTextureAlphaMod(start_pressed_texture, buttons_opacity * 0xFF);
     SDL_SetTextureAlphaMod(select_pressed_texture, buttons_opacity * 0xFF);
-    for (int i = 0; i < 5; i++)
+    SDL_SetTextureAlphaMod(link_pressed_texture, buttons_opacity * 0xFF);
+    for (int i = 0; i < 6; i++)
         SDL_SetTextureAlphaMod(buttons[i].texture, buttons_opacity * 0xFF);
     for (int i = 0; i < 16; i++)
         SDL_SetTextureAlphaMod(dpad_textures[i], buttons_opacity * 0xFF);
@@ -621,7 +679,9 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_enterLayoutEd
         jfloat start_x,
         jfloat start_y,
         jfloat select_x,
-        jfloat select_y)
+        jfloat select_y,
+        jfloat link_x,
+        jfloat link_y)
 {
     portrait_dpad_x = dpad_x * (float) screen_width;
     portrait_dpad_y = dpad_y * (float) screen_height;
@@ -633,6 +693,8 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_enterLayoutEd
     portrait_start_y = start_y * (float) screen_height;
     portrait_select_x = select_x * (float) screen_width;
     portrait_select_y = select_y * (float) screen_height;
+    portrait_link_x = link_x * (float) screen_width;
+    portrait_link_y = link_y * (float) screen_height;
 
     landscape_dpad_x = dpad_x * (float) screen_height;
     landscape_dpad_y = dpad_y * (float) screen_width;
@@ -644,11 +706,13 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_enterLayoutEd
     landscape_start_y = start_y * (float) screen_width;
     landscape_select_x = select_x * (float) screen_height;
     landscape_select_y = select_y * (float) screen_width;
+    landscape_link_x = link_x * (float) screen_height;
+    landscape_link_y = link_y * (float) screen_width;
 
     set_layout(is_landscape);
 
-    button_t *bs = xmalloc(sizeof(button_t) * 5);
-    for (int i = 0; i < 5; i++) {
+    button_t *bs = xmalloc(sizeof(button_t) * 6);
+    for (int i = 0; i < 6; i++) {
         SDL_SetTextureAlphaMod(buttons[i].texture, buttons_opacity * 0xFF);
         bs[i] = buttons[i];
     }
@@ -656,13 +720,21 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_enterLayoutEd
     free(bs);
 }
 
+JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_tcpLinkReady(JNIEnv* env, jobject thiz, jint sfd) {
+    link_sfd = sfd;
+    init_handshake = SDL_TRUE;
+}
+
 int main(int argc, char **argv) {
     emu = NULL;
     linked_emu = NULL;
+    link_sfd = -1;
+    init_handshake = SDL_FALSE;
 
     // initialize global variables here and not at their initialization as they can still have their
     // previous values because of android's activities lifecycle
     is_running = SDL_TRUE;
+    show_link_dialog = SDL_FALSE;
     speed = 1.0f;
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
@@ -714,6 +786,11 @@ int main(int argc, char **argv) {
     surface = SDL_LoadBMP("start.bmp");
     start_texture = SDL_CreateTextureFromSurface(renderer, surface);
     buttons[4].texture = start_texture;
+    SDL_FreeSurface(surface);
+
+    surface = SDL_LoadBMP("link.bmp");
+    link_texture = SDL_CreateTextureFromSurface(renderer, surface);
+    buttons[5].texture = link_texture;
     SDL_FreeSurface(surface);
 
     ready();

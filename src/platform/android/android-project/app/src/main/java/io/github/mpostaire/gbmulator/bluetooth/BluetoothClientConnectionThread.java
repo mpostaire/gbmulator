@@ -10,6 +10,8 @@ import android.util.Log;
 
 import java.io.IOException;
 
+import io.github.mpostaire.gbmulator.GBmulatorApp;
+
 public class BluetoothClientConnectionThread extends Thread {
     final BluetoothSocket serverSocket;
     private final BluetoothDevice serverDevice;
@@ -27,9 +29,9 @@ public class BluetoothClientConnectionThread extends Thread {
         try {
             // Get a BluetoothSocket to connect with the given BluetoothDevice.
             // MY_UUID is the app's UUID string, also used in the server code.
-            tmp = serverDevice.createRfcommSocketToServiceRecord(BluetoothConstants.SERVICE_UUID);
+            tmp = serverDevice.createRfcommSocketToServiceRecord(GBmulatorApp.BLUETOOTH_SERVICE_UUID);
         } catch (IOException e) {
-            Log.e(BluetoothConstants.SERVICE_NAME, "Socket's create() method failed", e);
+            Log.e(GBmulatorApp.BLUETOOTH_SERVICE_NAME, "Socket's create() method failed", e);
         }
         this.callback = callback;
         serverSocket = tmp;
@@ -49,7 +51,7 @@ public class BluetoothClientConnectionThread extends Thread {
             try {
                 serverSocket.close();
             } catch (IOException closeException) {
-                Log.e(BluetoothConstants.SERVICE_NAME, "Could not close the client socket", closeException);
+                Log.e(GBmulatorApp.BLUETOOTH_SERVICE_NAME, "Could not close the client socket", closeException);
             }
             return;
         }
@@ -66,7 +68,7 @@ public class BluetoothClientConnectionThread extends Thread {
         try {
             serverSocket.close();
         } catch (IOException e) {
-            Log.e(BluetoothConstants.SERVICE_NAME, "Could not close the client socket", e);
+            Log.e(GBmulatorApp.BLUETOOTH_SERVICE_NAME, "Could not close the client socket", e);
         }
     }
 }

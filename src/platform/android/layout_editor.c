@@ -27,7 +27,7 @@ static inline s_byte_t is_finger_over_ui_element(float x, float y) {
         y *= screen_height;
     }
 
-    for (s_byte_t i = 4; i >= 0; i--) {
+    for (s_byte_t i = 5; i >= 0; i--) {
         SDL_Rect *hitbox = &buttons[i].shape;
         if (x > hitbox->x && x < hitbox->x + hitbox->w && y > hitbox->y && y < hitbox->y + hitbox->h)
             return i;
@@ -130,7 +130,7 @@ static void apply_layout_preferences(void) {
 
     jclass clazz = (*env)->GetObjectClass(env, activity);
 
-    jmethodID method_id = (*env)->GetMethodID(env, clazz, "applyLayoutPreferences", "(ZFFFFFFFFFF)V");
+    jmethodID method_id = (*env)->GetMethodID(env, clazz, "applyLayoutPreferences", "(ZFFFFFFFFFFFF)V");
 
     if (is_landscape) {
         (*env)->CallVoidMethod(
@@ -140,7 +140,8 @@ static void apply_layout_preferences(void) {
             buttons[1].shape.x / (float) screen_height, buttons[1].shape.y / (float) screen_width,
             buttons[2].shape.x / (float) screen_height, buttons[2].shape.y / (float) screen_width,
             buttons[3].shape.x / (float) screen_height, buttons[3].shape.y / (float) screen_width,
-            buttons[4].shape.x / (float) screen_height, buttons[4].shape.y / (float) screen_width);
+            buttons[4].shape.x / (float) screen_height, buttons[4].shape.y / (float) screen_width,
+            buttons[5].shape.x / (float) screen_height, buttons[5].shape.y / (float) screen_width);
     } else {
         (*env)->CallVoidMethod(
             env, activity, method_id,
@@ -149,7 +150,8 @@ static void apply_layout_preferences(void) {
             buttons[1].shape.x / (float) screen_width, buttons[1].shape.y / (float) screen_height,
             buttons[2].shape.x / (float) screen_width, buttons[2].shape.y / (float) screen_height,
             buttons[3].shape.x / (float) screen_width, buttons[3].shape.y / (float) screen_height,
-            buttons[4].shape.x / (float) screen_width, buttons[4].shape.y / (float) screen_height);
+            buttons[4].shape.x / (float) screen_width, buttons[4].shape.y / (float) screen_height,
+            buttons[5].shape.x / (float) screen_width, buttons[5].shape.y / (float) screen_height);
     }
 
     (*env)->DeleteLocalRef(env, activity);
@@ -182,7 +184,7 @@ void start_layout_editor(
         SDL_RenderClear(renderer);
 
         SDL_RenderCopy(renderer, gb_screen_texture, NULL, gb_screen_rect);
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < 6; i++)
             SDL_RenderCopy(renderer, buttons[i].texture, NULL, &buttons[i].shape);
 
         SDL_RenderPresent(renderer);

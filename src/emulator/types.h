@@ -117,13 +117,36 @@ typedef struct {
     byte_t reg; // rtc register
     byte_t latch;
 
-    // do not move the 'value_in_seconds' member (mmu.c and emulator.c use offsetof value_in_seconds on this struct)
-    // everything that is below this line will be saved in the save file
     time_t value_in_seconds; // current rtc time in seconds
     time_t timestamp; // real unix time at the moment the rtc was clocked
 } rtc_t;
 
 typedef struct {
+    byte_t cartridge[8400000];
+    size_t cartridge_size;
+
+    byte_t mem[0x10000];
+    byte_t eram[0x20000]; // max 16 banks of size 0x2000
+    byte_t wram_extra[0x7000]; // 7 extra banks of wram of size 0x1000 for a total of 8 banks
+    byte_t vram_extra[0x2000]; // 1 extra bank of wram of size 0x1000 for a total of 2 banks
+    byte_t cram_bg[0x40]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
+    byte_t cram_obj[0x40]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
+
+    struct {
+        byte_t step;
+        byte_t hdma_ly;
+        byte_t lock_cpu;
+        byte_t type;
+        word_t src_address;
+        word_t dest_address;
+    } hdma;
+
+    struct {
+        byte_t is_active;
+        word_t progress;
+        word_t src_address;
+    } oam_dma;
+
     byte_t mbc;
     word_t rom_banks;
     byte_t eram_banks;
@@ -138,47 +161,18 @@ typedef struct {
     byte_t has_rumble;
     byte_t has_rtc;
 
-    byte_t mem[0x10000];
-    // do not move the 'eram' member
-    byte_t eram[0x20000]; // max 16 banks of size 0x2000
-    byte_t wram_extra[0x7000]; // 7 extra banks of wram of size 0x1000 for a total of 8 banks
-    byte_t vram_extra[0x2000]; // 1 extra bank of wram of size 0x1000 for a total of 2 banks
-    byte_t cram_bg[0x40]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
-    byte_t cram_obj[0x40]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
-
-    struct {
-        byte_t is_active;
-        word_t progress;
-        word_t src_address;
-    } oam_dma;
-
-    struct {
-        byte_t step;
-        byte_t hdma_ly;
-        byte_t lock_cpu;
-        byte_t type;
-        word_t src_address;
-        word_t dest_address;
-    } hdma;
-
     rtc_t rtc;
-
-    // do not move the 'cartridge' member (emulator.c uses offsetof cartridge on this struct)
-    // everything that is above this line will be used for serialization
-    byte_t cartridge[8400000];
-    size_t cartridge_size;
 } mmu_t;
 
 typedef struct {
     byte_t is_lcd_turning_on;
+    byte_t wly; // window "LY" internal counter
+    word_t cycles;
 
     struct {
         word_t objs_addresses[10];
         byte_t size;
     } oam_scan;
-
-    byte_t wly; // window "LY" internal counter
-    word_t cycles;
 
     byte_t *pixels;
     byte_t *scanline_cache_color_data;
@@ -245,7 +239,6 @@ typedef struct {
     word_t cycles_counter;
     word_t max_clock_cycles;
     byte_t bit_counter;
-    // don't move this member
     emulator_t *other_emu;
 } link_t;
 

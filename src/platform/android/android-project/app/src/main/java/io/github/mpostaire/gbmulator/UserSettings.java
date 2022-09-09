@@ -26,6 +26,12 @@ public class UserSettings {
     public static final String BUTTONS_OPACITY = "buttons_opacity";
     public static final float BUTTONS_OPACITY_DEFAULT = 1.0f;
 
+    public static final String LAST_IP = "last_ip";
+    public static final String LAST_IP_DEFAULT = "";
+
+    public static final String LAST_PORT = "last_port";
+    public static final String LAST_PORT_DEFAULT = "";
+
     // Portrait buttons positions
     public static final String PORTRAIT_DPAD_X = "portrait_dpad_x";
     public static final float PORTRAIT_DPAD_X_DEFAULT = 0.0f;
@@ -57,6 +63,12 @@ public class UserSettings {
     public static final String PORTRAIT_SELECT_Y = "portrait_select_y";
     public static final float PORTRAIT_SELECT_Y_DEFAULT = 0.93f;
 
+    public static final String PORTRAIT_LINK_X = "portrait_link_x";
+    public static final float PORTRAIT_LINK_X_DEFAULT = 0.45f;
+
+    public static final String PORTRAIT_LINK_Y = "portrait_link_y";
+    public static final float PORTRAIT_LINK_Y_DEFAULT = 0.52f;
+
     // Landscape buttons positions
     public static final String LANDSCAPE_DPAD_X = "landscape_dpad_x";
     public static final float LANDSCAPE_DPAD_X_DEFAULT = 0.0f;
@@ -87,4 +99,10 @@ public class UserSettings {
 
     public static final String LANDSCAPE_SELECT_Y = "landscape_select_y";
     public static final float LANDSCAPE_SELECT_Y_DEFAULT = 0.88f;
+
+    public static final String LANDSCAPE_LINK_X = "landscape_link_x";
+    public static final float LANDSCAPE_LINK_X_DEFAULT = 0.94f;
+
+    public static final String LANDSCAPE_LINK_Y = "landscape_link_y";
+    public static final float LANDSCAPE_LINK_Y_DEFAULT = 0.02f;
 }

@@ -668,3 +668,26 @@ void ppu_quit(emulator_t *emu) {
     free(emu->ppu->obj_pixel_priority);
     free(emu->ppu);
 }
+
+size_t ppu_serialized_length(emulator_t *emu) {
+    return 25;
+}
+
+byte_t *ppu_serialize(emulator_t *emu, size_t *size) {
+    *size = ppu_serialized_length(emu);
+    byte_t *buf = xmalloc(*size);
+    memcpy(buf, &emu->ppu->is_lcd_turning_on, 1);
+    memcpy(&buf[1], &emu->ppu->wly, 1);
+    memcpy(&buf[2], &emu->ppu->cycles, 2);
+    memcpy(&buf[4], &emu->ppu->oam_scan.objs_addresses, sizeof(emu->ppu->oam_scan.objs_addresses));
+    memcpy(&buf[4 + sizeof(emu->ppu->oam_scan.objs_addresses)], &emu->ppu->oam_scan.size, 1);
+    return buf;
+}
+
+void ppu_unserialize(emulator_t *emu, byte_t *buf) {
+    memcpy(&emu->ppu->is_lcd_turning_on, buf, 1);
+    memcpy(&emu->ppu->wly, &buf[1], 1);
+    memcpy(&emu->ppu->cycles, &buf[2], 2);
+    memcpy(&emu->ppu->oam_scan.objs_addresses, &buf[4], sizeof(emu->ppu->oam_scan.objs_addresses));
+    memcpy(&emu->ppu->oam_scan.size, &buf[4 + sizeof(emu->ppu->oam_scan.objs_addresses)], 1);
+}

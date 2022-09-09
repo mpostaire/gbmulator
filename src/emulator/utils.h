@@ -25,6 +25,8 @@ void *xcalloc(size_t nmemb, size_t size);
 
 void *xrealloc(void *ptr, size_t size);
 
+size_t time_to_string_length(void);
+
 char *time_to_string(time_t t, size_t *len);
 
 time_t string_to_time(const char *time_str);
