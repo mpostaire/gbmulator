@@ -1,72 +1,328 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <SDL2/SDL.h>
-
-#include "ui.h"
-#include "../common/link.h"
-#include "../common/config.h"
-#include "../common/utils.h"
 #include "emulator/emulator.h"
 
-// TODO implemented MBCs have a few bugs (see https://github.com/drhelius/Gearboy to understand how its handled)
+#include <adwaita.h>
+#include <libmanette.h>
+#include <linux/input-event-codes.h>
+// TODO wayland support
+#include <gdk/x11/gdkx.h>
+#define GL_GLEXT_PROTOTYPES
+#include <GL/gl.h>
+#include <ctype.h>
+#include <netdb.h>
+#include <string.h>
 
-// FIXME dmg-acid2 test: everything good but missing exclamation mark. In fact it works for the 1st frame after
-//       turning lcd on and it doesn't show for the other frames (as the ppu doesn't draw the first frame after lcd on,
-//       it isn't visible). cgb-acid2 doesn't have this problem, the exclamation mark works well.
+#include <SDL2/SDL.h>
 
-// TODO fix audio sync: it's "working" but I don't really know how and it's not perfect (good enough compromise of audio/video smoothness and sync)
-// make audio sync to video (effectively replacing the audio sdl_delay by the vsync delay)
+#include "glrenderer.h"
+#include "../common/utils.h"
+#include "../common/link.h"
+#include "../common/config.h"
 
-// TODO: in pokemon gold (in CGB and DMG modes) at the beginning animation of a battle, when the wild pokemon slides to the
-// right, at the last moment, the top of the pokemon's sprite will appear for a few frames where the combat menu should be located
+#define APP_NAME EMULATOR_NAME
+#define APP_ICON "gbmulator"
+#define APP_VERSION "0.2"
 
-// TODO make tests and implement mooneye's test suite (and blargg)
+#define CASE_THEN_STRING(x) case x: return #x
+#define STRING(x) #x
 
-SDL_bool is_running = SDL_TRUE;
-SDL_bool is_paused = SDL_TRUE;
+static gboolean keycode_filter(guint keyval);
+const char *gamepad_gamepad_button_parser(guint16 button);
+int gamepad_button_name_parser(const char *button_name);
 
-SDL_Window *window;
-
-SDL_Texture *ppu_texture;
-int ppu_texture_pitch;
-
-SDL_AudioDeviceID audio_device;
-
-SDL_GameController *pad;
-SDL_bool is_controller_present = SDL_FALSE;
-
-char window_title[sizeof(EMULATOR_NAME) + 19];
-
-ui_t *ui;
-char *rom_path;
-char *forced_save_path;
-
-int cycles_per_frame = GB_CPU_CYCLES_PER_FRAME;
-
-int sfd;
-
-emulator_t *emu;
-emulator_t *linked_emu;
-
+static gboolean loop(gpointer user_data);
 static void on_link_connect(emulator_t *new_linked_emu);
 static void on_link_disconnect(void);
 
-static void gbmulator_exit(menu_entry_t *entry) {
-    is_running = SDL_FALSE;
+// config struct initialized to defaults
+config_t config = {
+    .mode = CGB,
+    .color_palette = PPU_COLOR_PALETTE_ORIG,
+    .scale = 2,
+    .sound = 1.0f,
+    .speed = 1.0f,
+    .link_host = "127.0.0.1",
+    .link_port = "7777",
+
+    .gamepad_bindings = {
+        BTN_DPAD_RIGHT,
+        BTN_DPAD_LEFT,
+        BTN_DPAD_UP,
+        BTN_DPAD_DOWN,
+        BTN_A,
+        BTN_B,
+        BTN_SELECT,
+        BTN_START
+    },
+    .gamepad_button_parser = (keycode_parser_t) gamepad_gamepad_button_parser,
+    .gamepad_button_name_parser = (keyname_parser_t) gamepad_button_name_parser,
+
+    .keybindings = {
+        GDK_KEY_Right,
+        GDK_KEY_Left,
+        GDK_KEY_Up,
+        GDK_KEY_Down,
+        GDK_KEY_KP_0,
+        GDK_KEY_period,
+        GDK_KEY_KP_2,
+        GDK_KEY_KP_1
+    },
+    .keycode_filter = keycode_filter,
+    .keycode_parser = gdk_keyval_name,
+    .keyname_parser = gdk_keyval_from_name
+};
+
+enum {
+    GAMEPAD_DISABLED,
+    GAMEPAD_PLAYING,
+    GAMEPAD_BINDING
+};
+
+typedef struct {
+    const char *name;
+    const char *label_name;
+    int id;
+    GtkWidget *widget;
+} setter_handler_t;
+
+setter_handler_t key_handlers[] = {
+    { "key_setter_right", "key_setter_right_label", 0, NULL },
+    { "key_setter_left", "key_setter_left_label", 1, NULL },
+    { "key_setter_up", "key_setter_up_label", 2, NULL },
+    { "key_setter_down", "key_setter_down_label", 3, NULL },
+    { "key_setter_a", "key_setter_a_label", 4, NULL },
+    { "key_setter_b", "key_setter_b_label", 5, NULL },
+    { "key_setter_select", "key_setter_select_label", 6, NULL },
+    { "key_setter_start", "key_setter_start_label", 7, NULL }
+};
+
+setter_handler_t gamepad_handlers[] = {
+    { "gamepad_setter_right", "gamepad_setter_right_label", 0, NULL },
+    { "gamepad_setter_left", "gamepad_setter_left_label", 1, NULL },
+    { "gamepad_setter_up", "gamepad_setter_up_label", 2, NULL },
+    { "gamepad_setter_down", "gamepad_setter_down_label", 3, NULL },
+    { "gamepad_setter_a", "gamepad_setter_a_label", 4, NULL },
+    { "gamepad_setter_b", "gamepad_setter_b_label", 5, NULL },
+    { "gamepad_setter_select", "gamepad_setter_select_label", 6, NULL },
+    { "gamepad_setter_start", "gamepad_setter_start_label", 7, NULL }
+};
+
+const char *joypad_names[] = {
+    "Right:",
+    "Left:",
+    "Up:",
+    "Down:",
+    "A:",
+    "B:",
+    "Select:",
+    "Start:"
+};
+
+setter_handler_t scale_handlers[] = {
+    { "pref_scale_setter_x2", "", 2, NULL },
+    { "pref_scale_setter_x3", "", 3, NULL },
+    { "pref_scale_setter_x4", "", 4, NULL },
+    { "pref_scale_setter_x5", "", 5, NULL },
+};
+
+gint argc;
+gchar **argv = NULL;
+
+int current_bind_setter;
+int surface_width_handler = -1, binding_setter_handler = -1;
+int previous_scale;
+int window_width_offset = -1, window_height_offset = -1;
+int gamepad_state = GAMEPAD_DISABLED;
+
+AdwApplication *app;
+GtkWidget *main_window, *preferences_window, *window_title, *toast_overlay, *gl_area, *keybind_dialog, *bind_value;
+GtkWidget *joypad_name, *restart_dialog, *link_dialog, *status, *link_mode_setter_server, *link_host, *link_host_revealer;
+guint loop_source;
+
+gboolean is_paused = TRUE, link_is_server = TRUE;
+int cycles_per_frame, sfd;
+emulator_t *emu, *linked_emu;
+byte_t joypad_state = 0xFF;
+
+char *rom_path, *forced_save_path, *config_path;
+
+SDL_AudioDeviceID audio_device;
+
+static gboolean keycode_filter(guint keyval) {
+    switch (keyval) {
+    case GDK_KEY_F1: case GDK_KEY_F2:
+    case GDK_KEY_F3: case GDK_KEY_F4:
+    case GDK_KEY_F5: case GDK_KEY_F6:
+    case GDK_KEY_F7: case GDK_KEY_F8:
+        return FALSE;
+    default:
+        return TRUE;
+    }
 }
 
-static void gbmulator_unpause(menu_entry_t *entry) {
+const char *gamepad_gamepad_button_parser(guint16 button) {
+    switch (button) {
+        CASE_THEN_STRING(BTN_A);
+        CASE_THEN_STRING(BTN_B);
+        CASE_THEN_STRING(BTN_C);
+        CASE_THEN_STRING(BTN_X);
+        CASE_THEN_STRING(BTN_Y);
+        CASE_THEN_STRING(BTN_Z);
+        CASE_THEN_STRING(BTN_TL);
+        CASE_THEN_STRING(BTN_TR);
+        CASE_THEN_STRING(BTN_TL2);
+        CASE_THEN_STRING(BTN_TR2);
+        CASE_THEN_STRING(BTN_SELECT);
+        CASE_THEN_STRING(BTN_START);
+        CASE_THEN_STRING(BTN_MODE);
+        CASE_THEN_STRING(BTN_THUMBL);
+        CASE_THEN_STRING(BTN_THUMBR);
+        CASE_THEN_STRING(BTN_DPAD_UP);
+        CASE_THEN_STRING(BTN_DPAD_DOWN);
+        CASE_THEN_STRING(BTN_DPAD_LEFT);
+        CASE_THEN_STRING(BTN_DPAD_RIGHT);
+    default:
+        return NULL;
+    }
+}
+
+int gamepad_button_name_parser(const char *button_name) {
+    size_t max_len = sizeof(STRING(BTN_DPAD_RIGHT));
+    if (!strncmp(button_name, STRING(BTN_A), max_len))
+        return BTN_A;
+    if (!strncmp(button_name, STRING(BTN_B), max_len))
+        return BTN_B;
+    if (!strncmp(button_name, STRING(BTN_C), max_len))
+        return BTN_C;
+    if (!strncmp(button_name, STRING(BTN_X), max_len))
+        return BTN_X;
+    if (!strncmp(button_name, STRING(BTN_Y), max_len))
+        return BTN_Y;
+    if (!strncmp(button_name, STRING(BTN_Z), max_len))
+        return BTN_Z;
+    if (!strncmp(button_name, STRING(BTN_TL), max_len))
+        return BTN_TL;
+    if (!strncmp(button_name, STRING(BTN_TR), max_len))
+        return BTN_TR;
+    if (!strncmp(button_name, STRING(BTN_TL2), max_len))
+        return BTN_TL2;
+    if (!strncmp(button_name, STRING(BTN_TR2), max_len))
+        return BTN_TR2;
+    if (!strncmp(button_name, STRING(BTN_SELECT), max_len))
+        return BTN_SELECT;
+    if (!strncmp(button_name, STRING(BTN_START), max_len))
+        return BTN_START;
+    if (!strncmp(button_name, STRING(BTN_MODE), max_len))
+        return BTN_MODE;
+    if (!strncmp(button_name, STRING(BTN_THUMBL), max_len))
+        return BTN_THUMBL;
+    if (!strncmp(button_name, STRING(BTN_THUMBR), max_len))
+        return BTN_THUMBR;
+    if (!strncmp(button_name, STRING(BTN_DPAD_UP), max_len))
+        return BTN_DPAD_UP;
+    if (!strncmp(button_name, STRING(BTN_DPAD_DOWN), max_len))
+        return BTN_DPAD_DOWN;
+    if (!strncmp(button_name, STRING(BTN_DPAD_LEFT), max_len))
+        return BTN_DPAD_LEFT;
+    if (!strncmp(button_name, STRING(BTN_DPAD_RIGHT), max_len))
+        return BTN_DPAD_RIGHT;
+    return 0;
+}
+
+static void start_loop(void) {
+    loop_source = g_timeout_add(1000 / 60, G_SOURCE_FUNC(loop), NULL);
+    is_paused = FALSE;
+}
+
+static void stop_loop(void) {
+    g_source_remove(loop_source);
+    is_paused = TRUE;
+}
+
+static void toggle_loop(void) {
+    if (is_paused)
+        start_loop();
+    else
+        stop_loop();
+}
+
+static gboolean loop(gpointer user_data) {
+    // set emulator joypad state only once per loop (and not as soon as an input is detected) to allow link cable synchronization
+    emulator_set_joypad_state(emu, joypad_state);
+
+    // run the emulator for the approximate number of cycles it takes for the ppu to render a frame
+    if (linked_emu)
+        emulator_linked_run_cycles(emu, linked_emu, GB_CPU_CYCLES_PER_FRAME);
+    else
+        emulator_run_cycles(emu, cycles_per_frame);
+
+    gtk_gl_area_queue_render(GTK_GL_AREA(gl_area));
+    return TRUE;
+}
+
+static void on_realize(GtkGLArea *area, gpointer user_data) {
+    // HACK set window subtitle here, once glarea is realized, to avoid auto window resize on long rom titles
     if (emu)
-        is_paused = SDL_FALSE;
+        adw_window_title_set_subtitle(ADW_WINDOW_TITLE(window_title), emulator_get_rom_title(emu));
+
+    gtk_gl_area_make_current(area);
+    if (gtk_gl_area_get_error(area) != NULL) {
+        fprintf(stderr, "Unknown error\n");
+        return;
+    }
+
+    const GLubyte *renderer = glGetString(GL_RENDERER);
+    const GLubyte *version = glGetString(GL_VERSION);
+
+    printf("Renderer: %s\n", renderer);
+    printf("OpenGL version supported %s\n", version);
+
+    glrenderer_init(160, 144, NULL);
+}
+
+static void on_unrealize(GtkGLArea *area, gpointer user_data) {
+    if (!is_paused)
+        stop_loop();
+}
+
+static gboolean on_render(GtkGLArea *area, GdkGLContext *context) {
+    // inside this function it's safe to use GL; the given
+    // GdkGLContext has been made current to the drawable
+    // surface used by the `GtkGLArea` and the viewport has
+    // already been set to be the size of the allocation
+
+    glrenderer_render();
+
+    // we completed our drawing; the draw commands will be
+    // flushed at the end of the signal emission chain, and
+    // the buffers will be drawn on the window
+    return TRUE;
+}
+
+static void show_toast(const char *text) {
+    AdwToast *toast = adw_toast_new(text);
+    adw_toast_set_timeout(toast, 1);
+    adw_toast_overlay_add_toast(ADW_TOAST_OVERLAY(toast_overlay), toast);
+}
+
+static void on_link_connect(emulator_t *new_linked_emu) {
+    linked_emu = new_linked_emu;
+    is_paused = FALSE;
+    config.speed = 1.0f;
+}
+
+static void on_link_disconnect(void) {
+    linked_emu = NULL;
 }
 
 static void ppu_vblank_cb(byte_t *pixels) {
-    SDL_UpdateTexture(ppu_texture, NULL, pixels, ppu_texture_pitch);
+    glrenderer_update_screen_texture(0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, pixels);
 }
 
-static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
+static void apu_samples_ready_cb(byte_t *audio_buffer, int audio_buffer_size) {
+    // TODO use OpenAL ?
     while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 8)
         SDL_Delay(1);
+    // printf("%d %d\n", SDL_GetQueuedAudioSize(audio_device), audio_buffer_size);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
 
@@ -152,10 +408,132 @@ static char *get_savestate_path(const char *rom_filepath, int slot) {
     return save_path;
 }
 
-static void load_cartridge(char *path) {
-    if (!emu && !path) return;
+static void toggle_pause(GSimpleAction *action, GVariant *parameter, gpointer app) {
+    show_toast(is_paused ? "Resume" : "Paused");
+    toggle_loop();
+}
+
+static void restart_emulator(AdwMessageDialog *self, gchar *response, gpointer user_data) {
+    if (!strncmp(response, "restart", 8)) {
+        if (linked_emu) {
+            emulator_link_disconnect(emu);
+            emulator_quit(linked_emu);
+            on_link_disconnect();
+        }
+        emulator_reset(emu, config.mode);
+        emulator_print_status(emu);
+    }
+}
+
+static void ask_restart_emulator(GSimpleAction *action, GVariant *parameter, gpointer app) {
+    if (emu) {
+        gamepad_state = GAMEPAD_DISABLED;
+        gtk_window_present(GTK_WINDOW(restart_dialog));
+    }
+}
+
+gboolean link_server_incoming(GSocketService *service, GSocketConnection *connection, GObject *source_object, gpointer user_data) {
+    printf("Received Connection from client! Refusing new requests. %d %d\n", g_socket_service_is_active(service), g_socket_get_fd(g_socket_connection_get_socket(connection)));
+    g_socket_service_stop(service); // TODO useless? this works stopping this signal but the print Hurray client still works and new file descriptor are still created...
+    return TRUE;
+}
+
+void link_client_connected(GObject *client, GAsyncResult *res, gpointer user_data) {
+    GError *err = NULL;
+    GSocketConnection *connection = g_socket_client_connect_finish(G_SOCKET_CLIENT(client), res, &err);
+
+    // https://docs.gtk.org/gio/index.html
+    // https://docs.gtk.org/gio/class.SocketService.html
+
+    // TODO maybe put loop() (emulator_run_cycles() and gtk_gl_area_queue_render()) code in another thread so that the gui is not affected by the frames that may be slow due to a bad connection
+
+    if (connection) {
+        printf("Hurray! %d\n", g_socket_get_fd(g_socket_connection_get_socket(connection)));
+        sfd = g_socket_get_fd(g_socket_connection_get_socket(connection));
+        // on_link_connect();
+        show_toast("Link cable connected");
+    } else {
+        fprintf(stderr, "%s\n", err->message);
+        show_toast(err->message);
+        g_error_free(err);
+    }
+}
+
+static void start_link(void) {
+    if (!emu) return;
+
+    if (link_is_server) {
+        puts("TODO server");
+        struct addrinfo hints = {
+            .ai_family = AF_UNSPEC,
+            .ai_socktype = SOCK_STREAM,
+            .ai_protocol = IPPROTO_TCP,
+            .ai_flags = AI_PASSIVE // use my IP
+        };
+        struct addrinfo *res;
+        int ret;
+        if ((ret = getaddrinfo(NULL, config.link_port, &hints, &res)) != 0) {
+            eprintf("getaddrinfo: %s\n", gai_strerror(ret));
+            show_toast("Server connection setup error");
+            return;
+        }
+
+        GSocketAddress *address = g_socket_address_new_from_native(res->ai_addr, res->ai_addrlen);
+        GSocketService *server = g_socket_service_new();
+        g_signal_connect(server, "incoming", G_CALLBACK(link_server_incoming), NULL);
+
+        if (g_socket_listener_add_address(G_SOCKET_LISTENER(server), address, G_SOCKET_TYPE_STREAM, G_SOCKET_PROTOCOL_TCP, NULL, NULL, NULL))
+            show_toast("Link server listening...");
+        else
+            show_toast("Error listening to given address");
+    } else {
+        puts("TODO client");
+        struct addrinfo hints = {
+            .ai_family = AF_UNSPEC,
+            .ai_socktype = SOCK_STREAM,
+            .ai_protocol = IPPROTO_TCP
+        };
+        struct addrinfo *res;
+        int ret;
+        if ((ret = getaddrinfo(config.link_host, config.link_port, &hints, &res)) != 0) {
+            eprintf("getaddrinfo: %s\n", gai_strerror(ret));
+            show_toast("Client connection setup error");
+            return;
+        }
+
+        GSocketAddress *address = g_socket_address_new_from_native(res->ai_addr, res->ai_addrlen);
+        GSocketClient *client = g_socket_client_new();
+        g_socket_client_connect_async(client, G_SOCKET_CONNECTABLE(address), NULL, link_client_connected, NULL);
+
+        freeaddrinfo(res);
+    }
+
+    // if (link_is_server)
+    //     sfd = link_connect_to_server(config.link_host, config.link_port, config.mptcp_enabled);
+    // else
+    //     sfd = link_start_server(config.link_port, config.mptcp_enabled);
+
+    // emulator_t *new_linked_emu;
+    // if (sfd > 0 && link_init_transfer(sfd, emu, &new_linked_emu))
+    //     on_link_connect(new_linked_emu);
+}
+
+static void link_dialog_response(GtkDialog *self, gint response_id, gpointer user_data) {
+    gtk_window_close(GTK_WINDOW(self));
+    if (response_id == GTK_RESPONSE_OK)
+        start_link(); // TODO parse dialog input
+}
+
+static void show_link_dialog(GSimpleAction *action, GVariant *parameter, gpointer app) {
+    gamepad_state = GAMEPAD_DISABLED;
+    gtk_window_present(GTK_WINDOW(link_dialog));
+}
+
+static int load_cartridge(char *path) {
+    if (!emu && !path) return 0;
 
     if (emu) {
+        stop_loop();
         char *save_path = get_save_path(rom_path);
         save_battery_to_file(emu, forced_save_path ? forced_save_path : save_path);
         free(save_path);
@@ -172,7 +550,7 @@ static void load_cartridge(char *path) {
         if (!rom_data) {
             free(rom_path);
             rom_path = NULL;
-            return;
+            return 0;
         }
     } else {
         byte_t *data = emulator_get_rom(emu, &rom_size);
@@ -190,7 +568,7 @@ static void load_cartridge(char *path) {
     };
     emulator_t *new_emu = emulator_init(rom_data, rom_size, &opts);
     free(rom_data);
-    if (!new_emu) return;
+    if (!new_emu) return 0;
 
     char *save_path = get_save_path(rom_path);
     load_battery_from_file(new_emu, forced_save_path ? forced_save_path : save_path);
@@ -207,492 +585,578 @@ static void load_cartridge(char *path) {
     emu = new_emu;
     emulator_print_status(emu);
 
-    snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", emulator_get_rom_title(emu));
-    SDL_SetWindowTitle(window, window_title);
+    cycles_per_frame = GB_CPU_CYCLES_PER_FRAME * config.speed;
 
-    ui->root_menu->entries[0].disabled = 0; // enable resume menu entry
-    ui->root_menu->entries[2].disabled = 0; // enable reset rom menu entry
-    ui->root_menu->entries[3].disabled = 0; // enable link cable menu entry
+    const GActionEntry app_entries[] = {
+        { "play_pause", toggle_pause, NULL, NULL, NULL },
+        { "restart", ask_restart_emulator, NULL, NULL, NULL },
+        { "link_cable", show_link_dialog, NULL, NULL, NULL },
+    };
+    g_action_map_add_action_entries(G_ACTION_MAP(app), app_entries, G_N_ELEMENTS(app_entries), app);
 
-    is_paused = SDL_FALSE;
+    gamepad_state = GAMEPAD_PLAYING;
+    start_loop();
+
+    return 1;
 }
 
+static void set_window_size(int width, int height) {
+    // TODO wayland support: https://docs.gtk.org/gdk4/x11.html
+    GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(main_window));
+    GdkDisplay *display = gtk_widget_get_display(main_window);
 
+    if (!surface || !display) return;
+    Window wid = gdk_x11_surface_get_xid(surface);
 
+    int new_w = GB_SCREEN_WIDTH * config.scale + window_width_offset;
+    int new_h = GB_SCREEN_HEIGHT * config.scale + window_height_offset;
 
-
-
-
-
-
-static void choose_scale(menu_entry_t *entry) {
-    config.scale = entry->choices.position;
+    XResizeWindow(gdk_x11_display_get_xdisplay(display), wid, new_w, new_h);
 }
 
-static void choose_speed(menu_entry_t *entry) {
-    config.speed = (entry->choices.position * 0.5f) + 1;
+static void set_scale(GtkButton* self, gpointer user_data) {
+    previous_scale = config.scale;
+    config.scale = *((int *) user_data);
+    set_window_size(GB_SCREEN_WIDTH * config.scale, GB_SCREEN_HEIGHT * config.scale);
+}
+
+static void set_speed(AdwComboRow *self, GParamSpec *pspec, gpointer user_data) {
+    config.speed = adw_combo_row_get_selected(self) * 0.5f + 1;
     cycles_per_frame = GB_CPU_CYCLES_PER_FRAME * config.speed;
     if (emu)
         emulator_set_apu_speed(emu, config.speed);
 }
 
-static void choose_sound(menu_entry_t *entry) {
-    config.sound = entry->choices.position * 0.25f;
-    if (emu)
-        emulator_set_apu_sound_level(emu, config.sound);
+static void set_sound(GtkRange* self, gpointer user_data) {
+    config.sound = gtk_range_get_value(self);
+    emulator_set_apu_sound_level(emu, config.sound);
 }
 
-static void choose_color(menu_entry_t *entry) {
-    config.color_palette = entry->choices.position;
-    if (emu)
-        emulator_set_palette(emu, config.color_palette);
+static void set_palette(AdwComboRow *self, GParamSpec *pspec, gpointer user_data) {
+    config.color_palette = adw_combo_row_get_selected(self);
 }
 
-static void choose_mode(menu_entry_t *entry) {
-    config.mode = entry->choices.position + 1;
+static void set_keybinding(GtkDialog *self, gint response_id, gpointer user_data) {
+    gtk_window_close(GTK_WINDOW(self));
+    if (response_id == GTK_RESPONSE_APPLY) {
+        const char *keyname = gtk_label_get_label(GTK_LABEL(bind_value));
+        if (!strncmp(keyname, "Press a key", 12)) return;
+        unsigned int keyval = gdk_keyval_from_name(keyname);
+
+        // detect if the key is already attributed, if yes, swap them
+        for (int i = JOYPAD_RIGHT; i < JOYPAD_START; i++) {
+            if (config.keybindings[i] == keyval && current_bind_setter != i) {
+                config.keybindings[i] = config.keybindings[current_bind_setter];
+                gtk_label_set_label(GTK_LABEL(key_handlers[i].widget), gdk_keyval_name(config.keybindings[i]));
+                break;
+            }
+        }
+
+        config.keybindings[current_bind_setter] = keyval;
+        gtk_label_set_label(GTK_LABEL(key_handlers[current_bind_setter].widget), gdk_keyval_name(config.keybindings[current_bind_setter]));
+    }
 }
 
-static void choose_link_mode(menu_entry_t *entry) {
-    entry->parent->entries[3].disabled = !entry->choices.position;
+static void set_gamepad_binding(GtkDialog *self, gint response_id, gpointer user_data) {
+    gtk_window_close(GTK_WINDOW(self));
+    if (response_id == GTK_RESPONSE_APPLY) {
+        const char *button_name = gtk_label_get_label(GTK_LABEL(bind_value));
+        if (!strncmp(button_name, "Press a key", 12)) return;
+        unsigned int button = gamepad_button_name_parser(button_name);
+
+        // detect if the key is already attributed, if yes, swap them
+        for (int i = JOYPAD_RIGHT; i < JOYPAD_START; i++) {
+            if (config.gamepad_bindings[i] == button && current_bind_setter != i) {
+                config.gamepad_bindings[i] = config.gamepad_bindings[current_bind_setter];
+                gtk_label_set_label(GTK_LABEL(gamepad_handlers[i].widget), gamepad_gamepad_button_parser(config.gamepad_bindings[i]));
+                break;
+            }
+        }
+
+        config.gamepad_bindings[current_bind_setter] = button;
+        gtk_label_set_label(GTK_LABEL(gamepad_handlers[current_bind_setter].widget), gamepad_gamepad_button_parser(config.gamepad_bindings[current_bind_setter]));
+    }
 }
 
-static void choose_link_ip(menu_entry_t *entry) {
-    config.is_ipv6 = entry->choices.position;
+static void host_insert_text_handler(GtkEditable *self, const char *text, int length, int *position, gpointer data) {
+    g_signal_handlers_block_by_func(self, (gpointer) host_insert_text_handler, data);
+    if (strlen(gtk_editable_get_text(self)) < INET6_ADDRSTRLEN)
+        gtk_editable_insert_text(self, text, strlen(text), position);
+    else
+        gtk_editable_insert_text(self, "", 0, position);
+    g_signal_handlers_unblock_by_func(self, (gpointer) host_insert_text_handler, data);
+    g_signal_stop_emission_by_name(self, "insert_text");
 }
 
-static void choose_link_protocol(menu_entry_t *entry) {
-    config.mptcp_enabled = entry->choices.position;
-}
-
-static void on_input_link_host(menu_entry_t *entry) {
-    strncpy(config.link_host, entry->user_input.input, INET6_ADDRSTRLEN);
+static void set_link_host(GtkEditable *self, gpointer user_data) {
+    strncpy(config.link_host, gtk_editable_get_text(self), INET6_ADDRSTRLEN);
     config.link_host[INET6_ADDRSTRLEN - 1] = '\0';
 }
 
-static void on_input_link_port(menu_entry_t *entry) {
-    strncpy(config.link_port, entry->user_input.input, 6);
+static void set_link_port(GtkSpinButton *self, gpointer user_data) {
+    snprintf(config.link_port, sizeof(config.link_port), "%d", (int) gtk_spin_button_get_value(self));
     config.link_port[5] = '\0';
 }
 
-static void start_link(menu_entry_t *entry) {
-    if (!emu) return;
-
-    if (entry->parent->entries[0].choices.position)
-        sfd = link_connect_to_server(config.link_host, config.link_port, config.is_ipv6, config.mptcp_enabled);
-    else
-        sfd = link_start_server(config.link_port, config.is_ipv6, config.mptcp_enabled);
-
-    emulator_t *new_linked_emu;
-    if (sfd > 0 && link_init_transfer(sfd, emu, &new_linked_emu))
-        on_link_connect(new_linked_emu);
+static void link_mode_setter_server_toggled(GtkToggleButton *self, gpointer user_data) {
+    if (gtk_toggle_button_get_active(self)) {
+        gtk_revealer_set_reveal_child(GTK_REVEALER(link_host_revealer), FALSE);
+        link_is_server = TRUE;
+    } else {
+        gtk_revealer_set_reveal_child(GTK_REVEALER(link_host_revealer), TRUE);
+        link_is_server = FALSE;
+    }
 }
 
-static void open_rom(menu_entry_t *entry) {
-    char filepath[1024] = { 0 };
-    FILE *f = popen("zenity --file-selection", "r");
-    if (!f) {
-        errnoprintf("zenity");
-        return;
-    }
-    fgets(filepath, 1024, f);
-    pclose(f);
-    filepath[strcspn(filepath, "\r\n")] = '\0';
-    if (strlen(filepath))
-        load_cartridge(filepath);
+static void set_mode(AdwComboRow *self, GParamSpec *pspec, gpointer user_data) {
+    config.mode = adw_combo_row_get_selected(self) + 1;
 }
 
-static void reset_rom(menu_entry_t *entry) {
-    if (!emu)
-        return;
-    if (linked_emu) {
-        emulator_link_disconnect(emu);
-        emulator_quit(linked_emu);
-        on_link_disconnect();
-    }
-    emulator_reset(emu, config.mode);
-    emulator_print_status(emu);
-    is_paused = SDL_FALSE;
+static void key_setter_activated(AdwActionRow *self, gpointer user_data) {
+    current_bind_setter = *((int *) user_data);
+    gtk_label_set_label(GTK_LABEL(joypad_name), joypad_names[current_bind_setter]);
+    gtk_label_set_label(GTK_LABEL(bind_value), "Press a key");
+    if (binding_setter_handler > 0)
+        g_signal_handler_disconnect(keybind_dialog, binding_setter_handler);
+    binding_setter_handler = g_signal_connect(keybind_dialog, "response", G_CALLBACK(set_keybinding), NULL);
+    gtk_window_present(GTK_WINDOW(keybind_dialog));
 }
 
-menu_t link_menu = {
-    .title = "Link cable",
-    .length = 7,
-    .entries = {
-        { "Mode:     |server,client", UI_CHOICE, .choices = { choose_link_mode, 0 } },
-        { "IP:           |v4,v6", UI_CHOICE, .choices = { choose_link_ip, 0 } },
-        { "Protocol:  | TCP ,MPTCP", UI_CHOICE, .choices = { choose_link_protocol, 0 } },
-        { "Host: ", UI_INPUT, .disabled = 1, .user_input.on_input = on_input_link_host },
-        { "Port: ", UI_INPUT, .user_input = { .is_numeric = 1, .on_input = on_input_link_port } },
-        { "Start link", UI_ACTION, .action = start_link },
-        { "Back...", UI_BACK }
-    }
-};
-
-menu_t options_menu = {
-    .title = "Options",
-    .length = 6,
-    .entries = {
-        { "Scale:      |Full, 1x , 2x , 3x , 4x , 5x ", UI_CHOICE, .choices = { choose_scale, 0 } },
-        { "Speed:      |1.0x,1.5x,2.0x,2.5x,3.0x,3.5x,4.0x", UI_CHOICE, .choices = { choose_speed, 0 } },
-        { "Sound:      | OFF, 25%, 50%, 75%,100%", UI_CHOICE, .choices = { choose_sound, 0 } },
-        { "Color:      |gray,orig", UI_CHOICE, .choices = { choose_color, 0 } },
-        { "Mode:       | DMG, CGB", UI_CHOICE, .choices = { choose_mode, 0 } },
-        { "Back...", UI_BACK }
-    }
-};
-
-menu_t keybindings_menu = {
-    .title = "Keybindings",
-    .length = 9,
-    .entries = {
-        { "LEFT:", UI_KEY_SETTER, .setter.button = JOYPAD_LEFT },
-        { "RIGHT:", UI_KEY_SETTER, .setter.button = JOYPAD_RIGHT },
-        { "UP:", UI_KEY_SETTER, .setter.button = JOYPAD_UP },
-        { "DOWN:", UI_KEY_SETTER, .setter.button = JOYPAD_DOWN },
-        { "A:", UI_KEY_SETTER, .setter.button = JOYPAD_A },
-        { "B:", UI_KEY_SETTER, .setter.button = JOYPAD_B },
-        { "START:", UI_KEY_SETTER, .setter.button = JOYPAD_START },
-        { "SELECT:", UI_KEY_SETTER, .setter.button = JOYPAD_SELECT },
-        { "Back...", UI_BACK }
-    }
-};
-
-menu_t main_menu = {
-    .title = "GBmulator",
-    .length = 7,
-    .entries = {
-        { "Resume", UI_ACTION, .disabled = 1, .action = gbmulator_unpause },
-        { "Open ROM...", UI_ACTION, .action = open_rom },
-        { "Reset ROM", UI_ACTION, .disabled = 1, .action = reset_rom },
-        { "Link cable...", UI_SUBMENU, .disabled = 1, .submenu = &link_menu },
-        { "Options...", UI_SUBMENU, .submenu = &options_menu },
-        { "Keybindings...", UI_SUBMENU, .submenu = &keybindings_menu },
-        { "Exit", UI_ACTION, .action = gbmulator_exit }
-    }
-};
-
-
-
-
-
-static void on_link_connect(emulator_t *new_linked_emu) {
-    linked_emu = new_linked_emu;
-    is_paused = SDL_FALSE;
-    config.speed = 1.0f;
-
-    link_menu.entries[0].disabled = 1;
-    link_menu.entries[1].disabled = 1;
-    link_menu.entries[2].disabled = 1;
-    link_menu.entries[3].disabled = 1;
-    link_menu.entries[4].disabled = 1;
-    link_menu.entries[5].disabled = 1;
-
-    options_menu.entries[1].disabled = 1;
+static void gamepad_setter_activated(AdwActionRow *self, gpointer user_data) {
+    current_bind_setter = *((int *) user_data);
+    gtk_label_set_label(GTK_LABEL(joypad_name), joypad_names[current_bind_setter]);
+    gtk_label_set_label(GTK_LABEL(bind_value), "Press a button");
+    if (binding_setter_handler > 0)
+        g_signal_handler_disconnect(keybind_dialog, binding_setter_handler);
+    binding_setter_handler = g_signal_connect(keybind_dialog, "response", G_CALLBACK(set_gamepad_binding), NULL);
+    gamepad_state = GAMEPAD_BINDING;
+    gtk_window_present(GTK_WINDOW(keybind_dialog));
 }
 
-static void on_link_disconnect(void) {
-    linked_emu = NULL;
-
-    link_menu.entries[0].disabled = 0;
-    link_menu.entries[1].disabled = 0;
-    link_menu.entries[2].disabled = 0;
-    link_menu.entries[3].disabled = 0;
-    link_menu.entries[4].disabled = 0;
-    link_menu.entries[5].disabled = 0;
-
-    options_menu.entries[1].disabled = 0;
+static void show_preferences(GSimpleAction *action, GVariant *parameter, gpointer app) {
+    gamepad_state = GAMEPAD_DISABLED;
+    gtk_window_present(GTK_WINDOW(preferences_window));
 }
 
-static void handle_input(void) {
-    SDL_Event event;
-    char *savestate_path;
-    while (SDL_PollEvent(&event)) {
-        switch (event.type) {
-        case SDL_TEXTINPUT:
-            if (is_paused) {
-                if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
-                    if (emu)
-                        is_paused = SDL_FALSE;
-                    else
-                        ui_back_to_root_menu(ui);
-                } else {
-                    ui_text_input(ui, event.text.text);
-                }
-            }
-            break;
-        case SDL_KEYDOWN:
-            if (is_paused) {
-                if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
-                    if (emu)
-                        is_paused = SDL_FALSE;
-                    else
-                        ui_back_to_root_menu(ui);
-                } else {
-                    ui_keyboard_press(ui, &event.key);
-                }
-                break;
-            }
-            if (event.key.repeat)
-                break;
-            switch (event.key.keysym.sym) {
-            case SDLK_PAUSE:
-            case SDLK_ESCAPE:
-                is_paused = SDL_TRUE;
-                ui_back_to_root_menu(ui);
-                break;
-            case SDLK_F1: case SDLK_F2:
-            case SDLK_F3: case SDLK_F4:
-            case SDLK_F5: case SDLK_F6:
-            case SDLK_F7: case SDLK_F8:
-                if (!emu)
-                    break;
-                savestate_path = get_savestate_path(rom_path, event.key.keysym.sym - SDLK_F1);
-                if (event.key.keysym.mod & KMOD_SHIFT) {
-                    save_state_to_file(emu, savestate_path, 1);
-                } else {
-                    int ret = load_state_from_file(emu, savestate_path);
-                    if (ret > 0) {
-                        config.mode = ret;
-                        options_menu.entries[4].choices.position = config.mode - 1;
-                    }
-                }
-                free(savestate_path);
-                break;
-            }
-            if (!is_paused)
-                emulator_joypad_press(emu, sdl_key_to_joypad(event.key.keysym.sym));
-            break;
-        case SDL_KEYUP:
-            if (!event.key.repeat && !is_paused)
-                emulator_joypad_release(emu, sdl_key_to_joypad(event.key.keysym.sym));
-            break;
-        case SDL_CONTROLLERBUTTONDOWN:
-            if (is_paused) {
-                if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
-                    if (emu)
-                        is_paused = SDL_FALSE;
-                    else
-                        ui_back_to_root_menu(ui);
-                } else {
-                    ui_controller_press(ui, event.cbutton.button);
-                }
-                break;
-            }
-            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
-                is_paused = SDL_TRUE;
-                ui_back_to_root_menu(ui);
-                break;
-            }
-            if (!is_paused)
-                emulator_joypad_press(emu, sdl_controller_to_joypad(event.cbutton.button));
-            break;
-        case SDL_CONTROLLERBUTTONUP:
-            if (!is_paused)
-                emulator_joypad_release(emu, sdl_controller_to_joypad(event.cbutton.button));
-            break;
-        case SDL_CONTROLLERDEVICEADDED:
-            if (!is_controller_present) {
-                pad = SDL_GameControllerOpen(event.cdevice.which);
-                is_controller_present = SDL_TRUE;
-                printf("%s connected\n", SDL_GameControllerName(pad));
-            }
-            break;
-        case SDL_CONTROLLERDEVICEREMOVED:
-            if (is_controller_present) {
-                SDL_GameControllerClose(pad);
-                is_controller_present = SDL_FALSE;
-                printf("%s disconnected\n", SDL_GameControllerName(pad));
-            }
-            break;
-        case SDL_QUIT:
-            is_running = SDL_FALSE;
-            break;
+static void show_about(GSimpleAction *action, GVariant *parameter, gpointer app) {
+    const char *developers[] = {
+        "Maxime Postaire https://github.com/mpostaire",
+        NULL
+    };
+
+    adw_show_about_window(gtk_application_get_active_window(GTK_APPLICATION(app)),
+                          "application-name", APP_NAME,
+                          "application-icon", APP_ICON,
+                          "version", APP_VERSION,
+                          "copyright", "© 2022 Maxime Postaire",
+                          "issue-url", "https://github.com/mpostaire/gbmulator/issues/new",
+                          "license-type", GTK_LICENSE_MIT_X11, 
+                          "developers", developers,
+                          "website", "https://github.com/mpostaire/gbmulator",
+                          "comments", "A Game Boy Color emulator with sound and link cable support over tcp.",
+                          NULL);
+}
+
+static void on_open_response(GtkDialog *dialog, int response) {
+    if (response == GTK_RESPONSE_ACCEPT) {
+        GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
+        g_autoptr(GFile) file = gtk_file_chooser_get_file(chooser);
+        if (load_cartridge(g_file_get_path(file))) {
+            gtk_widget_set_visible(status, FALSE);
+            gtk_widget_set_visible(gl_area, TRUE);
+            gtk_widget_grab_focus(gl_area);
+        } else {
+            show_toast("Invalid ROM");
         }
     }
+
+    gtk_window_destroy(GTK_WINDOW(dialog));
 }
 
-int main(int argc, char **argv) {
-    char *config_path = get_config_path();
-    // must be called before emulator_init() and ui_init()
-    config_load_from_file(config_path);
-    emu = NULL;
-    cycles_per_frame = GB_CPU_CYCLES_PER_FRAME * config.speed;
+static void open_btn_clicked(AdwActionRow *self, gpointer user_data) {
+    GtkWidget *dialog = gtk_file_chooser_dialog_new("Open File",
+                                                    GTK_WINDOW(main_window),
+                                                    GTK_FILE_CHOOSER_ACTION_OPEN,
+                                                    "Cancel",
+                                                    GTK_RESPONSE_CANCEL,
+                                                    "Open",
+                                                    GTK_RESPONSE_ACCEPT,
+                                                    NULL);
 
+    gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
+    gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(main_window));
+    gtk_widget_show(dialog);
 
+    g_signal_connect(dialog, "response", G_CALLBACK(on_open_response), NULL);
+}
 
+static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guint keycode, GdkModifierType state, gpointer user_data) {
+    if (state & GDK_CONTROL_MASK) {
+        switch (keyval) {
+        case GDK_KEY_p:
+            toggle_pause(NULL, NULL, NULL);
+            break;
+        case GDK_KEY_r:
+            ask_restart_emulator(NULL, NULL, NULL);
+            break;
+        case GDK_KEY_l:
+            show_link_dialog(NULL, NULL, NULL);
+            break;
+        }
+        return TRUE;
+    }
 
+    if (!emu || is_paused) return FALSE;
 
-    ui = ui_init(&main_menu, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    options_menu.entries[0].choices.position = config.scale;
-    options_menu.entries[1].choices.position = config.speed / 0.5f - 2;
-    options_menu.entries[2].choices.position = config.sound * 4;
-    options_menu.entries[3].choices.position = config.color_palette;
-    options_menu.entries[4].choices.position = config.mode - 1;
-    options_menu.entries[4].choices.description = xmalloc(16);
-    snprintf(options_menu.entries[4].choices.description, 16, "Effect on reset");
+    // don't use emulator_joypad_press() here as we want to keep track of the joypad state and set it once per loop for link cable synchronization
+    RESET_BIT(joypad_state, keycode_to_joypad(&config, keyval));
+    return TRUE;
+}
 
-    link_menu.entries[3].user_input.input = xmalloc(INET6_ADDRSTRLEN);
-    snprintf(link_menu.entries[3].user_input.input, sizeof(config.link_host), "%s", config.link_host);
+static gboolean key_released_main(GtkEventControllerKey *self, guint keyval, guint keycode, GdkModifierType state, gpointer user_data) {
+    if (!emu || is_paused) return FALSE;
 
-    link_menu.entries[1].choices.position = config.is_ipv6;
-    link_menu.entries[2].choices.position = config.mptcp_enabled;
+    // don't use emulator_joypad_release() here as we want to keep track of the joypad state and set it once per loop for link cable synchronization
+    SET_BIT(joypad_state, keycode_to_joypad(&config, keyval));
+    return TRUE;
+}
 
-    link_menu.entries[3].user_input.cursor = strlen(config.link_host);
-    link_menu.entries[3].user_input.max_length = 39;
-    link_menu.entries[3].user_input.visible_hi = 12;
+static gboolean key_pressed_keybind(GtkEventControllerKey *self, guint keyval, guint keycode, GdkModifierType state, gpointer user_data) {
+    if (keyval == GDK_KEY_Escape || gamepad_state == GAMEPAD_BINDING)
+        return FALSE;
+    if (config.keycode_filter(keyval))
+        gtk_label_set_label(GTK_LABEL(bind_value), gdk_keyval_name(keyval));
+    return TRUE;
+}
 
-    char **link_port_buf = &link_menu.entries[4].user_input.input;
-    *link_port_buf = xmalloc(6);
+static void popover_closed(GtkPopover *self, gpointer user_data) {
+    gtk_widget_grab_focus(gl_area);
+}
 
-    link_menu.entries[4].user_input.cursor = snprintf(*link_port_buf, 6, "%s", config.link_port);
-    link_menu.entries[4].user_input.input = *link_port_buf;
-    link_menu.entries[4].user_input.max_length = 5;
-    link_menu.entries[4].user_input.visible_hi = 5;
+static gboolean on_drop(GtkDropTarget *target, const GValue *value, double x, double y, gpointer data) {
+    // GdkFileList is a boxed value so we use the boxed API.
+    GdkFileList *file_list = g_value_get_boxed(value);
+    GSList *list = gdk_file_list_get_files(file_list);
+    GFile *file = list->data;
 
+    if (load_cartridge(g_file_get_path(file))) {
+        gtk_widget_set_visible(status, FALSE);
+        gtk_widget_set_visible(gl_area, TRUE);
+        gtk_widget_grab_focus(gl_area);
+    } else {
+        show_toast("Invalid ROM");
+    }
 
+    return TRUE;
+}
 
+static gchar *sound_slider_format(GtkScale *self, gdouble value, gpointer user_data) {
+    return g_strdup_printf("%d%%", (int) (value * 100));
+}
 
+static void on_surface_notify_witdh(GObject *self, GParamSpec *pspec, gpointer user_data) {
+    // this function is a hack to get the window size because I can't figure how to get it before it's been shown to the screen
+    if (window_width_offset >= 0 && window_height_offset >= 0) return;
 
+    // TODO wayland support
+    GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(main_window));
+    GdkDisplay *display = gtk_widget_get_display(main_window);
 
+    if (!surface || !display) return;
 
+    window_width_offset = gdk_surface_get_width(surface) - (GB_SCREEN_WIDTH * previous_scale);
+    window_height_offset = gdk_surface_get_height(surface) - (GB_SCREEN_HEIGHT * previous_scale);
 
+    if (window_width_offset < 0 || window_height_offset < 0) return;
 
+    // set window min size to scale == 2x
+    gtk_widget_set_size_request(gl_area, GB_SCREEN_WIDTH * 2, GB_SCREEN_HEIGHT * 2);
 
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
+    g_signal_handler_disconnect(GDK_SURFACE(self), surface_width_handler);
+}
 
-    SDL_bool is_fullscreen = SDL_FALSE;
-    byte_t scale = config.scale;
+static void gamepad_button_press_event_cb(ManetteDevice *emitter, ManetteEvent *event, gpointer user_data) {
+    guint16 button;
+    switch (gamepad_state) {
+    case GAMEPAD_DISABLED:
+        break;
+    case GAMEPAD_PLAYING:;
+        if (!emu || is_paused) return;
+        if (manette_event_get_button(event, &button))
+            RESET_BIT(joypad_state, button_to_joypad(&config, button));
+        break;
+    case GAMEPAD_BINDING:
+        if (manette_event_get_button(event, &button))
+            gtk_label_set_label(GTK_LABEL(bind_value), gamepad_gamepad_button_parser(button));
+        break;
+    }
+}
 
-    window = SDL_CreateWindow(
-        EMULATOR_NAME,
-        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        GB_SCREEN_WIDTH * scale,
-        GB_SCREEN_HEIGHT * scale,
-        SDL_WINDOW_HIDDEN /*| SDL_WINDOW_RESIZABLE*/
-    );
+static void gamepad_button_release_event_cb(ManetteDevice *emitter, ManetteEvent *event, gpointer user_data) {
+    switch (gamepad_state) {
+    case GAMEPAD_DISABLED:
+        break;
+    case GAMEPAD_PLAYING:
+        if (!emu || is_paused) return;
+        guint16 button;
+        if (manette_event_get_button(event, &button))
+            SET_BIT(joypad_state, button_to_joypad(&config, button));
+        break;
+    case GAMEPAD_BINDING:
+        break;
+    }
+}
 
+static void gamepad_disconnected_cb(ManetteDevice *emitter, gpointer user_data) {
+    printf("%s: disconnected\n", manette_device_get_name(emitter));
+    g_object_unref(G_OBJECT(emitter));
+}
+
+static void gamepad_connected_cb(ManetteMonitor *emitter, ManetteDevice *device, gpointer user_data) {
+    printf("%s: connected\n", manette_device_get_name(device));
+    g_signal_connect_object(G_OBJECT(device), "disconnected", (GCallback) gamepad_disconnected_cb, NULL, 0);
+    g_signal_connect_object(G_OBJECT(device), "button-press-event", (GCallback) gamepad_button_press_event_cb, NULL, 0);
+    g_signal_connect_object(G_OBJECT(device), "button-release-event", (GCallback) gamepad_button_release_event_cb, NULL, 0);
+}
+
+static void preferences_window_hide_cb(GtkWidget *self, gpointer user_data) {
+    gamepad_state = (!emu || is_paused) ? GAMEPAD_DISABLED : GAMEPAD_PLAYING;
+}
+
+static void keybind_dialog_hide_cb(GtkWidget *self, gpointer user_data) {
+    gamepad_state = GAMEPAD_DISABLED;
+}
+
+static void restart_dialog_hide_cb(GtkWidget *self, gpointer user_data) {
+    gamepad_state = (!emu || is_paused) ? GAMEPAD_DISABLED : GAMEPAD_PLAYING;
+}
+
+static void link_dialog_hide_cb(GtkWidget *self, gpointer user_data) {
+    gamepad_state = (!emu || is_paused) ? GAMEPAD_DISABLED : GAMEPAD_PLAYING;
+}
+
+static void activate_cb(GtkApplication *app) {
+    // Load config
+    config_path = get_config_path();
+    config_load_from_file(&config, config_path);
+
+    // Main window
+    GtkBuilder *builder = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/main.ui");
+    main_window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
+
+    status = GTK_WIDGET(gtk_builder_get_object(builder, "status"));
+
+    gl_area = GTK_WIDGET(gtk_builder_get_object(builder, "gl_area"));
+    g_signal_connect(gl_area, "realize", G_CALLBACK(on_realize), NULL);
+    g_signal_connect(gl_area, "unrealize", G_CALLBACK(on_unrealize), NULL); // call stop_loop() on unrealize to avoid annoying warnings when app is quitting
+    g_signal_connect(gl_area, "render", G_CALLBACK(on_render), NULL);
+
+    GtkWidget *open_btn = GTK_WIDGET(gtk_builder_get_object(builder, "open_btn"));
+    g_signal_connect(open_btn, "clicked", G_CALLBACK(open_btn_clicked), NULL);
+
+    toast_overlay = GTK_WIDGET(gtk_builder_get_object(builder, "overlay"));
+
+    GtkWidget *menu_btn = GTK_WIDGET(gtk_builder_get_object(builder, "menu_btn"));
+    GtkPopover *popover = gtk_menu_button_get_popover(GTK_MENU_BUTTON(menu_btn));
+    g_signal_connect(popover, "closed", G_CALLBACK(popover_closed), NULL);
+
+    window_title = GTK_WIDGET(gtk_builder_get_object(builder, "window_title"));
+
+    g_object_unref(builder);
+
+    const GActionEntry app_entries[] = {
+        { "preferences", show_preferences, NULL, NULL, NULL },
+        { "about", show_about, NULL, NULL, NULL },
+    };
+    g_action_map_add_action_entries(G_ACTION_MAP(app), app_entries, G_N_ELEMENTS(app_entries), app);
+
+    gtk_window_set_application(GTK_WINDOW(main_window), GTK_APPLICATION(app));
+
+    // Preferences window
+    builder = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/preferences.ui");
+    preferences_window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
+    g_signal_connect(preferences_window, "hide", G_CALLBACK(preferences_window_hide_cb), NULL);
+
+    gtk_window_set_application(GTK_WINDOW(preferences_window), GTK_APPLICATION(app));
+    gtk_window_set_transient_for(GTK_WINDOW(preferences_window), GTK_WINDOW(main_window));
+
+    GtkWidget *widget;
+    for (int i = 0; i < G_N_ELEMENTS(scale_handlers); i++) {
+        widget = GTK_WIDGET(gtk_builder_get_object(builder, scale_handlers[i].name));
+        g_signal_connect(widget, "clicked", G_CALLBACK(set_scale), (gpointer) &scale_handlers[i].id);
+    }
+
+    widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_speed"));
+    g_signal_connect(widget, "notify::selected", G_CALLBACK(set_speed), NULL);
+    adw_combo_row_set_selected(ADW_COMBO_ROW(widget), config.speed / 0.5f - 2);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_sound"));
+    GtkAdjustment *sound_adjustment = gtk_adjustment_new(config.sound, 0.0, 1.0, 0.05, 0.25, 0.0);
+    gtk_scale_set_format_value_func(GTK_SCALE(widget), sound_slider_format, NULL, NULL);
+    gtk_range_set_adjustment(GTK_RANGE(widget), sound_adjustment);
+    g_signal_connect(widget, "value-changed", G_CALLBACK(set_sound), NULL);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_palette"));
+    g_signal_connect(widget, "notify::selected", G_CALLBACK(set_palette), NULL);
+    adw_combo_row_set_selected(ADW_COMBO_ROW(widget), config.color_palette);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_mode"));
+    g_signal_connect(widget, "notify::selected", G_CALLBACK(set_mode), NULL);
+    adw_combo_row_set_selected(ADW_COMBO_ROW(widget), config.mode - 1);
+
+    for (int i = 0; i < G_N_ELEMENTS(key_handlers); i++) {
+        widget = GTK_WIDGET(gtk_builder_get_object(builder, key_handlers[i].name));
+        g_signal_connect(widget, "activated", G_CALLBACK(key_setter_activated), (gpointer) &key_handlers[i].id);
+        key_handlers[i].widget = GTK_WIDGET(gtk_builder_get_object(builder, key_handlers[i].label_name));
+        gtk_label_set_label(GTK_LABEL(key_handlers[i].widget), gdk_keyval_name(config.keybindings[i]));
+    }
+
+    for (int i = 0; i < G_N_ELEMENTS(gamepad_handlers); i++) {
+        widget = GTK_WIDGET(gtk_builder_get_object(builder, gamepad_handlers[i].name));
+        g_signal_connect(widget, "activated", G_CALLBACK(gamepad_setter_activated), (gpointer) &gamepad_handlers[i].id);
+        gamepad_handlers[i].widget = GTK_WIDGET(gtk_builder_get_object(builder, gamepad_handlers[i].label_name));
+        gtk_label_set_label(GTK_LABEL(gamepad_handlers[i].widget), gamepad_gamepad_button_parser(config.gamepad_bindings[i]));
+    }
+
+    g_object_unref(builder);
+
+    // Keybind dialog
+    builder = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/bind_setter.ui");
+    keybind_dialog = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
+    gtk_window_set_transient_for(GTK_WINDOW(keybind_dialog), GTK_WINDOW(preferences_window));
+    g_signal_connect(keybind_dialog, "hide", G_CALLBACK(keybind_dialog_hide_cb), NULL);
+    bind_value = GTK_WIDGET(gtk_builder_get_object(builder, "bind_value"));
+    joypad_name = GTK_WIDGET(gtk_builder_get_object(builder, "joypad_name"));
+
+    g_object_unref(builder);
+
+    // Restart dialog
+    restart_dialog = adw_message_dialog_new(GTK_WINDOW(main_window), "Restart emulator?", NULL);
+    g_signal_connect(preferences_window, "hide", G_CALLBACK(restart_dialog_hide_cb), NULL);
+    adw_message_dialog_format_body(ADW_MESSAGE_DIALOG(restart_dialog), "This will restart the emulator and any unsaved progress will be lost.");
+    adw_message_dialog_add_responses(ADW_MESSAGE_DIALOG(restart_dialog), "cancel", "Cancel", "restart", "Restart", NULL);
+    adw_message_dialog_set_response_appearance(ADW_MESSAGE_DIALOG(restart_dialog), "restart", ADW_RESPONSE_DESTRUCTIVE);
+    adw_message_dialog_set_default_response(ADW_MESSAGE_DIALOG(restart_dialog), "cancel");
+    adw_message_dialog_set_close_response(ADW_MESSAGE_DIALOG(restart_dialog), "cancel");
+    gtk_window_set_hide_on_close(GTK_WINDOW(restart_dialog), TRUE);
+    g_signal_connect(restart_dialog, "response", G_CALLBACK(restart_emulator), NULL);
+
+    // Link dialog
+    builder = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/link.ui");
+    g_signal_connect(preferences_window, "hide", G_CALLBACK(link_dialog_hide_cb), NULL);
+    link_dialog = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
+    gtk_window_set_transient_for(GTK_WINDOW(link_dialog), GTK_WINDOW(main_window));
+    g_signal_connect(link_dialog, "response", G_CALLBACK(link_dialog_response), NULL);
+
+    link_host_revealer = GTK_WIDGET(gtk_builder_get_object(builder, "link_host_revealer"));
+
+    link_mode_setter_server = GTK_WIDGET(gtk_builder_get_object(builder, "link_mode_setter_server"));
+    g_signal_connect(GTK_TOGGLE_BUTTON(link_mode_setter_server), "toggled", G_CALLBACK(link_mode_setter_server_toggled), NULL);
+
+    link_host = GTK_WIDGET(gtk_builder_get_object(builder, "link_host"));
+    g_signal_connect(gtk_editable_get_delegate(GTK_EDITABLE(link_host)), "changed", G_CALLBACK(set_link_host), NULL);
+	g_signal_connect(gtk_editable_get_delegate(GTK_EDITABLE(link_host)), "insert-text", G_CALLBACK(host_insert_text_handler), NULL);
+    gtk_editable_set_text(GTK_EDITABLE(link_host), config.link_host);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(builder, "link_port"));
+    GtkAdjustment *link_port_adjustment = gtk_adjustment_new(7777.0, 0.0, 65535.0, 1.0, 5.0, 0.0);
+    gtk_spin_button_set_adjustment(GTK_SPIN_BUTTON(adw_action_row_get_activatable_widget(ADW_ACTION_ROW(widget))), link_port_adjustment);
+    gtk_spin_button_set_range(GTK_SPIN_BUTTON(adw_action_row_get_activatable_widget(ADW_ACTION_ROW(widget))), 0.0, 65535.0);
+    gtk_spin_button_set_climb_rate(GTK_SPIN_BUTTON(adw_action_row_get_activatable_widget(ADW_ACTION_ROW(widget))), 1.0);
+    gtk_spin_button_set_digits(GTK_SPIN_BUTTON(adw_action_row_get_activatable_widget(ADW_ACTION_ROW(widget))), 0);
+    g_signal_connect(adw_action_row_get_activatable_widget(ADW_ACTION_ROW(widget)), "value-changed", G_CALLBACK(set_link_port), NULL);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(adw_action_row_get_activatable_widget(ADW_ACTION_ROW(widget))), (gdouble) atoi(config.link_port));
+
+    g_object_unref(builder);
+
+    // Keyboard input (main)
+    GtkEventController *key_controller = gtk_event_controller_key_new();
+    gtk_widget_add_controller(GTK_WIDGET(main_window), GTK_EVENT_CONTROLLER(key_controller));
+    g_signal_connect(key_controller, "key-pressed", G_CALLBACK(key_pressed_main), NULL);
+    g_signal_connect(key_controller, "key-released", G_CALLBACK(key_released_main), NULL);
+
+    // Keyboard input (keybind)
+    key_controller = gtk_event_controller_key_new();
+    gtk_widget_add_controller(GTK_WIDGET(keybind_dialog), GTK_EVENT_CONTROLLER(key_controller));
+    g_signal_connect(key_controller, "key-pressed", G_CALLBACK(key_pressed_keybind), NULL);
+
+    // Drag and drop
+    GtkDropTarget *target = gtk_drop_target_new(G_TYPE_INVALID, GDK_ACTION_COPY);
+    gtk_drop_target_set_gtypes(target, (GType[1]) { GDK_TYPE_FILE_LIST }, 1);
+    g_signal_connect(target, "drop", G_CALLBACK(on_drop), NULL);
+    gtk_widget_add_controller(GTK_WIDGET(main_window), GTK_EVENT_CONTROLLER(target));
+
+    // Parse command line arguments
     if (argc > 1) {
         if (argc > 2)
             forced_save_path = argv[2];
-        load_cartridge(argv[1]);
+        if (load_cartridge(argv[1])) {
+            gtk_widget_set_visible(status, FALSE);
+            gtk_widget_set_visible(gl_area, TRUE);
+            gtk_widget_grab_focus(gl_area);
+        } else {
+            show_toast("Invalid ROM");
+        }
     }
+    if (argv)
+        g_strfreev(argv);
 
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    // show main_window
+    gtk_window_present(GTK_WINDOW(main_window));
+    gtk_widget_set_size_request(gl_area, GB_SCREEN_WIDTH * config.scale, GB_SCREEN_HEIGHT * config.scale);
+    // notify when width changed, to then get the initial window size
+    surface_width_handler = g_signal_connect(gtk_native_get_surface(GTK_NATIVE(main_window)), "notify::width", G_CALLBACK(on_surface_notify_witdh), NULL);
 
-    if (scale == 0) {
-        is_fullscreen = SDL_TRUE;
-        SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
-        // TODO set render logical size for all fullscreen status changes and all window size changes
-        // to check if it fixes the broken window after fullscreen bug
-    }
+    previous_scale = config.scale;
 
-    SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
-
-    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
-    SDL_Texture *ui_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    int ui_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
-    SDL_SetTextureBlendMode(ui_texture, SDL_BLENDMODE_BLEND);
+    SDL_Init(SDL_INIT_AUDIO);
 
     SDL_AudioSpec audio_settings = {
         .freq = GB_APU_SAMPLE_RATE,
-        .format = AUDIO_F32SYS,
+        .format = AUDIO_U8,
         .channels = GB_APU_CHANNELS,
         .samples = GB_APU_DEFAULT_SAMPLE_COUNT
     };
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
     SDL_PauseAudioDevice(audio_device, 0);
+}
 
-    // main gbmulator loop
-    int cycles = 0;
-    while (is_running) {
-        // emulation paused
-        if (is_paused) {
-            handle_input();
-            if (!is_paused) // if user input disable pause, don't draw ui
-                continue;
-
-            // display ui
-            ui_draw(ui);
-
-            if (scale != config.scale) {
-                scale = config.scale;
-                if (scale == 0) {
-                    is_fullscreen = SDL_TRUE;
-                    SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
-                    SDL_RenderSetLogicalSize(renderer, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-                } else {
-                    if (is_fullscreen) {
-                        is_fullscreen = SDL_FALSE;
-                        SDL_SetWindowFullscreen(window, 0);
-                    }
-                    SDL_SetWindowSize(window, GB_SCREEN_WIDTH * scale, GB_SCREEN_HEIGHT * scale);
-                }
-            }
-
-            SDL_RenderClear(renderer);
-
-            // update ppu_texture to show color palette changes behind the menu
-            if (emu) {
-                SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(emu), ppu_texture_pitch);
-                SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
-            }
-
-            SDL_UpdateTexture(ui_texture, NULL, ui->pixels, ui_texture_pitch);
-            SDL_RenderCopy(renderer, ui_texture, NULL, NULL);
-
-            SDL_RenderPresent(renderer);
-            // delay to match 30 fps to render the blinking elements of the ui but at a lower cpu usage
-            SDL_Delay(1.0f / 30.0f);
-            continue;
-        }
-
-        // handle_input is a slow function: don't call it every step
-        if (cycles >= cycles_per_frame) {
-            cycles -= cycles_per_frame;
-            SDL_RenderClear(renderer);
-            SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
-            // this SDL_Delay() isn't needed as the audio sync adds it's own delay
-            // TODO??? SDL_Delay((1.0f / 60.0f) - last_frame_time); // even with SDL waiting for vsync, delay here for monitors with different refresh rates than 60Hz
-            SDL_RenderPresent(renderer);
-
-            // keep this the closest possible before emulator_step() to reduce input inaccuracies
-            handle_input();
-            if (linked_emu && !link_exchange_joypad(sfd, emu, linked_emu))
-                on_link_disconnect();
-        }
-
-        // run one step of the emulator
-        emulator_step(emu);
-        if (linked_emu)
-            emulator_step(linked_emu);
-        cycles += 4;
-
-        // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).
-    }
-
+static void shutdown_cb(GtkApplication *app) {
     if (emu) {
         char *save_path = get_save_path(rom_path);
         save_battery_to_file(emu, forced_save_path ? forced_save_path : save_path);
         free(save_path);
-        emulator_quit(emu);
     }
-
-    config_save_to_file(config_path);
+    config_save_to_file(&config, config_path);
     free(config_path);
+}
 
-    ui_free(ui);
+static gint command_line_cb(GtkApplication *app, GApplicationCommandLine *command_line, gpointer user_data) {
+    argv = g_application_command_line_get_arguments(command_line, &argc);
 
-    if (is_controller_present)
-        SDL_GameControllerClose(pad);
+    // prevent app to close immediately after parsing command line arguments
+    g_application_activate(G_APPLICATION(app));
+    return 0;
+}
 
-    SDL_DestroyWindow(window);
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyTexture(ppu_texture);
-    SDL_DestroyTexture(ui_texture);
+// TODO make palettes and CGB color correction into fragment shader
+// TODO convert all platforms where possible into pure opengl (or SDL with opengl mix: it's possible and can be useful for easy portage of android and web)
 
-    SDL_CloseAudioDevice(audio_device);
+// TODO finish link cable
+int main(int argc, char **argv) {
+    app = adw_application_new(NULL, G_APPLICATION_HANDLES_COMMAND_LINE);
+    g_signal_connect(app, "activate", G_CALLBACK(activate_cb), NULL);
+    g_signal_connect(app, "shutdown", G_CALLBACK(shutdown_cb), NULL);
+    g_signal_connect(app, "command-line", G_CALLBACK(command_line_cb), NULL);
 
-    SDL_Quit();
-    return EXIT_SUCCESS;
+    g_autoptr(ManetteMonitor) monitor = manette_monitor_new(); 
+    g_autoptr(ManetteMonitorIter) iter = manette_monitor_iterate(monitor);
+
+    g_signal_connect_object(G_OBJECT(monitor), "device-connected", (GCallback) gamepad_connected_cb, NULL, 0);
+
+    ManetteDevice *device;
+    while (manette_monitor_iter_next(iter, &device))
+        gamepad_connected_cb(NULL, device, NULL);
+
+    return g_application_run(G_APPLICATION(app), argc, argv);
 }

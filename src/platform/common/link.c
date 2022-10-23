@@ -10,13 +10,8 @@
 #include "../android/socket.h"
 #include <android/log.h>
 #define log(...) __android_log_print(ANDROID_LOG_WARN, "GBmulator", __VA_ARGS__)
-
 #else
-#include "../desktop/socket.h"
-#endif
-
-#ifndef IPPROTO_MPTCP
-#define IPPROTO_MPTCP 262
+#include "../desktop/socket.h" // TODO this works by coincidence because of the similarity between desktop and destop_sdl platforms: fix this
 #endif
 
 typedef enum {
@@ -41,12 +36,12 @@ static void print_connected_to(struct sockaddr *addr) {
     printf("Link cable connected to %s on port %d\n", buf, ntohs(port));
 }
 
-int link_start_server(const char *port, int is_ipv6, int mptcp_enabled) {
+int link_start_server(const char *port) {
     // if (server_sfd != -1 || is_server)
     //     return 0;
 
     struct addrinfo hints = { 0 };
-	hints.ai_family = is_ipv6 ? AF_INET6 : AF_INET;
+	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE; // use my IP
     struct addrinfo *res;
@@ -58,8 +53,7 @@ int link_start_server(const char *port, int is_ipv6, int mptcp_enabled) {
 
     int server_sfd;
     for (; res != NULL; res = res->ai_next) {
-        // getaddrinfo doesn't work with IPPROTO_MPTCP
-        if ((server_sfd = socket(res->ai_family, res->ai_socktype, mptcp_enabled ? IPPROTO_MPTCP : res->ai_protocol)) == -1)
+        if ((server_sfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) == -1)
             continue;
 
         if (setsockopt(server_sfd, SOL_SOCKET, SO_REUSEADDR, &(int) { 1 }, sizeof(int))) {
@@ -107,12 +101,12 @@ int link_start_server(const char *port, int is_ipv6, int mptcp_enabled) {
     return client_sfd;
 }
 
-int link_connect_to_server(const char *address, const char *port, int is_ipv6, int mptcp_enabled) {
+int link_connect_to_server(const char *address, const char *port) {
     // if (server_sfd != -1 || is_server)
     //     return 0;
 
     struct addrinfo hints = {
-        .ai_family = is_ipv6 ? AF_INET6 : AF_INET,
+        .ai_family = AF_UNSPEC,
         .ai_socktype = SOCK_STREAM,
         .ai_protocol = IPPROTO_TCP
     };
@@ -125,8 +119,7 @@ int link_connect_to_server(const char *address, const char *port, int is_ipv6, i
 
     int server_sfd;
     for (; res != NULL; res = res->ai_next) {
-        // getaddrinfo doesn't work with IPPROTO_MPTCP
-        if ((server_sfd = socket(res->ai_family, res->ai_socktype, mptcp_enabled ? IPPROTO_MPTCP : res->ai_protocol)) == -1)
+        if ((server_sfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) == -1)
             continue;
 
         if (connect(server_sfd, res->ai_addr, res->ai_addrlen) == -1)

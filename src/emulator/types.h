@@ -214,7 +214,7 @@ typedef struct {
     int take_sample_cycles_count;
 
     int audio_buffer_index;
-    float *audio_buffer;
+    byte_t *audio_buffer;
 
     byte_t frame_sequencer;
     int frame_sequencer_cycles_count;
@@ -253,7 +253,7 @@ struct emulator_t {
     float apu_speed;
     int apu_sample_count;
     byte_t ppu_color_palette;
-    void (*on_apu_samples_ready)(float *audio_buffer, int audio_buffer_size);
+    void (*on_apu_samples_ready)(byte_t *audio_buffer, int audio_buffer_size);
     void (*on_new_frame)(byte_t *pixels);
 
     char rom_title[17];
@@ -274,5 +274,5 @@ typedef struct {
     float apu_sound_level;
     int apu_sample_count;
     void (*on_new_frame)(byte_t *pixels); // the function called whenever the ppu has finished rendering a new frame
-    void (*on_apu_samples_ready)(float *audio_buffer, int audio_buffer_size); // the function called whenever the samples buffer of the apu is full
+    void (*on_apu_samples_ready)(byte_t *audio_buffer, int audio_buffer_size); // the function called whenever the samples buffer of the apu is full
 } emulator_options_t;

@@ -8,6 +8,44 @@
 #include "emulator/emulator.h"
 #include "base64.h"
 
+static int keycode_filter(SDL_Keycode key);
+
+// config struct initialized to defaults
+config_t config = {
+    .mode = CGB,
+    .color_palette = PPU_COLOR_PALETTE_ORIG,
+    .scale = 2,
+    .sound = 0.25f,
+    .speed = 1.0f,
+    .link_host = "127.0.0.1",
+    .link_port = "7777",
+
+    .gamepad_bindings = {
+        SDL_CONTROLLER_BUTTON_DPAD_RIGHT,
+        SDL_CONTROLLER_BUTTON_DPAD_LEFT,
+        SDL_CONTROLLER_BUTTON_DPAD_UP,
+        SDL_CONTROLLER_BUTTON_DPAD_DOWN,
+        SDL_CONTROLLER_BUTTON_A,
+        SDL_CONTROLLER_BUTTON_B,
+        SDL_CONTROLLER_BUTTON_BACK,
+        SDL_CONTROLLER_BUTTON_START
+    },
+
+    .keybindings = {
+        SDLK_RIGHT,
+        SDLK_LEFT,
+        SDLK_UP,
+        SDLK_DOWN,
+        SDLK_KP_0,
+        SDLK_KP_PERIOD,
+        SDLK_KP_2,
+        SDLK_KP_1
+    },
+    .keycode_filter = (keycode_filter_t) keycode_filter,
+    .keycode_parser = (keycode_parser_t) SDL_GetKeyName,
+    .keyname_parser = (keyname_parser_t) SDL_GetKeyFromName
+};
+
 SDL_bool is_paused = SDL_TRUE;
 
 SDL_Renderer *renderer;
@@ -29,11 +67,26 @@ char window_title[sizeof(EMULATOR_NAME) + 19];
 
 emulator_t *emu;
 
+static int keycode_filter(SDL_Keycode key) {
+    switch (key) {
+    case SDLK_RETURN: case SDLK_KP_ENTER:
+    case SDLK_DELETE: case SDLK_BACKSPACE:
+    case SDLK_PAUSE: case SDLK_ESCAPE:
+    case SDLK_F1: case SDLK_F2:
+    case SDLK_F3: case SDLK_F4:
+    case SDLK_F5: case SDLK_F6:
+    case SDLK_F7: case SDLK_F8:
+        return 0;
+    default:
+        return 1;
+    }
+}
+
 static void ppu_vblank_cb(byte_t *pixels) {
     SDL_UpdateTexture(ppu_texture, NULL, pixels, ppu_texture_pitch);
 }
 
-static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
+static void apu_samples_ready_cb(byte_t *audio_buffer, int audio_buffer_size) {
     while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 8)
         emscripten_sleep(1);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
@@ -95,14 +148,13 @@ void load_config(char *path) {
     byte_t *data = local_storage_get_item(path, NULL, 0);
     if (!data)
         return;
-    config_load_from_buffer((const char *) data);
+    config_load_from_string(&config, (const char *) data);
     free(data);
 }
 
 static void save_config(const char *path) {
-    size_t len;
-    char *config_buf = config_save_to_buffer(&len);
-    local_storage_set_item(path, (byte_t *) config_buf, 0, len);
+    char *config_buf = config_save_to_string(&config);
+    local_storage_set_item(path, (byte_t *) config_buf, 0, strlen(config_buf));
     free(config_buf);
 }
 
@@ -261,7 +313,7 @@ static void handle_input(void) {
                         }, editing_keybind);
                         editing_keybind = -1;
                     }
-                } else if (editing_keybind >= JOYPAD_RIGHT && editing_keybind <= JOYPAD_START && config_verif_key(event.key.keysym.sym)) {
+                } else if (editing_keybind >= JOYPAD_RIGHT && editing_keybind <= JOYPAD_START && config.keycode_filter(event.key.keysym.sym)) {
                     // check if another keybind is already bound to this key and swap them if this is the case
                     for (int i = JOYPAD_RIGHT; i <= JOYPAD_START; i++) {
                         if (i != editing_keybind && config.keybindings[i] == event.key.keysym.sym) {
@@ -319,11 +371,11 @@ static void handle_input(void) {
                 break;
             }
             if (!is_paused)
-                emulator_joypad_press(emu, sdl_key_to_joypad(event.key.keysym.sym));
+                emulator_joypad_press(emu, keycode_to_joypad(&config, event.key.keysym.sym));
             break;
         case SDL_KEYUP:
             if (!event.key.repeat && !is_paused)
-                emulator_joypad_release(emu, sdl_key_to_joypad(event.key.keysym.sym));
+                emulator_joypad_release(emu, keycode_to_joypad(&config, event.key.keysym.sym));
             break;
         case SDL_CONTROLLERBUTTONDOWN:
             if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
@@ -338,11 +390,11 @@ static void handle_input(void) {
                 break;
             }
             if (!is_paused)
-                emulator_joypad_press(emu, sdl_controller_to_joypad(event.cbutton.button));
+                emulator_joypad_press(emu, button_to_joypad(&config, event.cbutton.button));
             break;
         case SDL_CONTROLLERBUTTONUP:
             if (!is_paused)
-                emulator_joypad_release(emu, sdl_controller_to_joypad(event.cbutton.button));
+                emulator_joypad_release(emu, button_to_joypad(&config, event.cbutton.button));
             break;
         case SDL_CONTROLLERDEVICEADDED:
             if (!is_controller_present) {
@@ -431,12 +483,12 @@ int main(int argc, char **argv) {
     SDL_RenderClear(renderer);
     SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
 
-    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
+    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 3;
 
     SDL_AudioSpec audio_settings = {
         .freq = GB_APU_SAMPLE_RATE,
-        .format = AUDIO_F32SYS,
+        .format = AUDIO_U8,
         .channels = GB_APU_CHANNELS,
         .samples = GB_APU_DEFAULT_SAMPLE_COUNT
     };

@@ -8,13 +8,13 @@
 
 #define PPU_SET_MODE(m) mmu->mem[STAT] = (mmu->mem[STAT] & 0xFC) | (m)
 
-#define SET_PIXEL_DMG(ppu_ptr, x, y, color, palette) { *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)) = ppu_color_palettes[(palette)][(color)][0]; \
-                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1) = ppu_color_palettes[(palette)][(color)][1]; \
-                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2) = ppu_color_palettes[(palette)][(color)][2]; }
+#define SET_PIXEL_DMG(ppu_ptr, x, y, color, palette) { *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = ppu_color_palettes[(palette)][(color)][0]; \
+                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 1) = ppu_color_palettes[(palette)][(color)][1]; \
+                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 2) = ppu_color_palettes[(palette)][(color)][2]; }
 
-#define SET_PIXEL_CGB(ppu_ptr, x, y, r, g, b) { *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)) = (r); \
-                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1) = (g); \
-                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2) = (b); }
+#define SET_PIXEL_CGB(ppu_ptr, x, y, r, g, b) { *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = (r); \
+                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 1) = (g); \
+                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 2) = (b); }
 
 byte_t ppu_color_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
     { // grayscale colors

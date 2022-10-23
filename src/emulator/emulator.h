@@ -34,6 +34,17 @@ static inline void emulator_run_cycles(emulator_t *emu, int cycles_limit) {
 }
 
 /**
+ * Runs both the emulator and the linked emulator in parallel for the given ammount of cpu cycles.
+ * @param cycles_limit the ammount of cycles the emulator will run for
+ */
+static inline void emulator_linked_run_cycles(emulator_t *emu, emulator_t *linked_emu, int cycles_limit) {
+    for (int cycles_count = 0; cycles_count < cycles_limit; cycles_count += 4) { // 4 cycles per step
+        emulator_step(emu);
+        emulator_step(linked_emu);
+    }
+}
+
+/**
  * Inits the emulator.
  * @param rom_data a buffer containing the rom the emulator will play
  * @param rom_size the size of the `rom_data`

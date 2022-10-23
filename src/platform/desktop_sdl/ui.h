@@ -7,6 +7,7 @@
 #endif
 
 #include "emulator/emulator.h"
+#include "../common/config.h"
 
 typedef struct menu_t menu_t;
 typedef struct menu_entry_t menu_entry_t;
@@ -66,9 +67,10 @@ typedef struct {
     byte_t blink_counter;
     byte_t w;
     byte_t h;
+    config_t *config;
 } ui_t;
 
-ui_t *ui_init(menu_t *menu, int w, int h);
+ui_t *ui_init(menu_t *menu, int w, int h, config_t *config);
 
 void ui_free(ui_t *ui);
 

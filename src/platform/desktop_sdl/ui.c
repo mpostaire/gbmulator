@@ -8,8 +8,8 @@
 
 // TODO fix this file (it's ugly code with lots of copy pasted repetitions).
 
-#define SET_PIXEL_RGBA(buf, x, y, color, alpha) \
-    { byte_t *_tmp_color_values = emulator_get_color_values_from_palette(config.color_palette, (color)); \
+#define SET_PIXEL_RGBA(buf, config, x, y, color, alpha) \
+    { byte_t *_tmp_color_values = emulator_get_color_values_from_palette((config)->color_palette, (color)); \
     *(buf + ((y) * ui->w * 4) + ((x) * 4)) = _tmp_color_values[0]; \
     *(buf + ((y) * ui->w * 4) + ((x) * 4) + 1) = _tmp_color_values[1]; \
     *(buf + ((y) * ui->w * 4) + ((x) * 4) + 2) = _tmp_color_values[2]; \
@@ -113,33 +113,33 @@ const byte_t font[0x5F][0x8] = {
     { 0x00, 0x00, 0x00, 0x10, 0x2A, 0x04, 0x00, 0x00 }
 };
 
-static void key_setter_set_key(menu_entry_t *entry, SDL_Keycode key) {
+static void key_setter_set_key(menu_entry_t *entry, SDL_Keycode key, config_t *config) {
     for (int i = 0; i < entry->parent->length - 1; i++) {
         if (entry == &entry->parent->entries[i]) {
-            config.keybindings[entry->setter.button] = key;
+            config->keybindings[entry->setter.button] = key;
             break;
         }
     }
 
-    const char *key_name = SDL_GetKeyName(config.keybindings[entry->setter.button]);
+    const char *key_name = SDL_GetKeyName(config->keybindings[entry->setter.button]);
     int l = strlen(key_name);
     entry->setter.key_name = xrealloc(entry->setter.key_name, l + 1);
     snprintf(entry->setter.key_name, l + 1, "%s", key_name);
 }
 
-static void key_setter_set_keybind(menu_entry_t *entry, SDL_Keycode key) {
+static void key_setter_set_keybind(menu_entry_t *entry, SDL_Keycode key, config_t *config) {
     int same = -1;
     for (int i = 0; i < entry->parent->length - 1; i++) {
-        if (entry->parent->position != i && config.keybindings[entry->parent->entries[i].setter.button] == key) {
+        if (entry->parent->position != i && config->keybindings[entry->parent->entries[i].setter.button] == key) {
             same = i;
             break;
         }
     }
 
     if (same >= 0)
-        key_setter_set_key(&entry->parent->entries[same], config.keybindings[entry->setter.button]);
+        key_setter_set_key(&entry->parent->entries[same], config->keybindings[entry->setter.button], config);
 
-    key_setter_set_key(entry, key);
+    key_setter_set_key(entry, key, config);
 }
 
 void ui_set_position(ui_t *ui, int pos, int go_up) {
@@ -182,12 +182,12 @@ static void menu_set_parents(menu_t *menu) {
     }
 }
 
-static void init_keysetters(menu_t *menu) {
+static void init_keysetters(menu_t *menu, config_t *config) {
     for (int i = 0; i < menu->length; i++) {
         if (menu->entries[i].type == UI_SUBMENU)
-            init_keysetters(menu->entries[i].submenu);
+            init_keysetters(menu->entries[i].submenu, config);
         if (menu->entries[i].type == UI_KEY_SETTER)
-            key_setter_set_key(&menu->entries[i], config.keybindings[menu->entries[i].setter.button]);
+            key_setter_set_key(&menu->entries[i], config->keybindings[menu->entries[i].setter.button], config);
     }
 }
 
@@ -204,8 +204,9 @@ static void init_choices(menu_t *menu) {
     }
 }
 
-ui_t *ui_init(menu_t *menu, int w, int h) {
+ui_t *ui_init(menu_t *menu, int w, int h, config_t *config) {
     ui_t *ui = xmalloc(sizeof(ui_t));
+    ui->config = config;
     ui->pixels = xmalloc(w * h * 4);
     ui->root_menu = menu;
     ui->w = w;
@@ -214,7 +215,7 @@ ui_t *ui_init(menu_t *menu, int w, int h) {
     ui->current_menu = ui->root_menu;
     ui->root_menu->parent = NULL;
     menu_set_parents(ui->root_menu);
-    init_keysetters(ui->root_menu);
+    init_keysetters(ui->root_menu, config);
     init_choices(ui->root_menu);
     ui_set_position(ui, 0, 0);
     return ui;
@@ -227,7 +228,7 @@ void ui_free(ui_t *ui) {
 
 static void print_cursor(ui_t *ui, int x, int y, dmg_color_t color) {
     for (int i = 0; i < 8; i++)
-        SET_PIXEL_RGBA(ui->pixels, x, y + i, color, 0xFF);
+        SET_PIXEL_RGBA(ui->pixels, ui->config, x, y + i, color, 0xFF);
 }
 
 static void print_char(ui_t *ui, const char c, int x, int y, dmg_color_t color) {
@@ -238,7 +239,7 @@ static void print_char(ui_t *ui, const char c, int x, int y, dmg_color_t color) 
     for (int i = 0; i < 8; i++)
         for (int j = 0; j < 8; j++)
             if (GET_BIT(char_data[j], SDL_abs(i - 7)))
-                SET_PIXEL_RGBA(ui->pixels, x + i, y + j, color, 0xFF);
+                SET_PIXEL_RGBA(ui->pixels, ui->config, x + i, y + j, color, 0xFF);
 }
 
 static void print_text(ui_t *ui, const char *text, int x, int y, dmg_color_t color) {
@@ -252,7 +253,7 @@ static void print_text(ui_t *ui, const char *text, int x, int y, dmg_color_t col
 static void ui_clear(ui_t *ui) {
     for (int i = 0; i < ui->w; i++)
         for (int j = 0; j < ui->h; j++)
-            SET_PIXEL_RGBA(ui->pixels, i, j, DMG_BLACK, 0xD5);
+            SET_PIXEL_RGBA(ui->pixels, ui->config, i, j, DMG_BLACK, 0xD5);
 }
 
 static void print_choice(ui_t *ui, const char *choices, int x, int y, int n, dmg_color_t text_color, dmg_color_t arrow_color) {
@@ -535,12 +536,12 @@ static void ui_press(ui_t *ui, int key, int repeat, int is_controller) {
 
 void ui_keyboard_press(ui_t *ui, SDL_KeyboardEvent *keyevent) {
     SDL_Keysym keysym = keyevent->keysym;
-    int key = sdl_key_to_joypad(keysym.sym);
+    int key = keycode_to_joypad(ui->config, keysym.sym);
     menu_entry_t *entry = &ui->current_menu->entries[ui->current_menu->position];
 
     if (entry->type == UI_KEY_SETTER && entry->setter.editing) {
-        if (config_verif_key(keysym.sym))
-            key_setter_set_keybind(entry, keysym.sym);
+        if (ui->config->keycode_filter(keysym.sym))
+            key_setter_set_keybind(entry, keysym.sym, ui->config);
         entry->setter.editing = 0;
         return;
     }
@@ -549,7 +550,7 @@ void ui_keyboard_press(ui_t *ui, SDL_KeyboardEvent *keyevent) {
 }
 
 void ui_controller_press(ui_t *ui, int button) {
-    ui_press(ui, sdl_controller_to_joypad(button), 0, 1);
+    ui_press(ui, button, 0, 1);
 }
 
 void ui_text_input(ui_t *ui, const char *text) {

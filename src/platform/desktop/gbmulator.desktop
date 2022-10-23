@@ -8,4 +8,4 @@ Keywords=game;boy;gameboy;color;emulator
 Categories=Game;Emulator;
 MimeType=application/x-gameboy-rom;application/x-gameboy-color-rom
 Terminal=false
-Exec=gbmulator
+Exec=env LIBGL_DRI3_DISABLE=1 gbmulator
