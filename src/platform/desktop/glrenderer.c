@@ -101,6 +101,9 @@ static GLuint create_screen_texture(GLsizei width, GLsizei height, const GLvoid 
 }
 
 void glrenderer_init(GLsizei width, GLsizei height, const GLvoid *pixels) {
+    // printf("Renderer: %s\n", glGetString(GL_RENDERER));
+    // printf("OpenGL version supported %s\n", glGetString(GL_VERSION));
+
     // Create and load shader
     shader_program = create_shader_program(
         "/io/github/mpostaire/gbmulator/src/platform/desktop/ui/default.vs.glsl",

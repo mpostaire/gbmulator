@@ -247,14 +247,17 @@ typedef enum {
     CGB
 } emulator_mode_t;
 
+typedef void (*on_new_frame_t)(byte_t *pixels);
+typedef void (*on_apu_samples_ready_t)(byte_t *audio_buffer, int audio_buffer_size);
+
 struct emulator_t {
     emulator_mode_t mode;
     float apu_sound_level;
     float apu_speed;
     int apu_sample_count;
     byte_t ppu_color_palette;
-    void (*on_apu_samples_ready)(byte_t *audio_buffer, int audio_buffer_size);
-    void (*on_new_frame)(byte_t *pixels);
+    on_new_frame_t on_new_frame;
+    on_apu_samples_ready_t on_apu_samples_ready;
 
     char rom_title[17];
 
@@ -273,6 +276,6 @@ typedef struct {
     float apu_speed;
     float apu_sound_level;
     int apu_sample_count;
-    void (*on_new_frame)(byte_t *pixels); // the function called whenever the ppu has finished rendering a new frame
-    void (*on_apu_samples_ready)(byte_t *audio_buffer, int audio_buffer_size); // the function called whenever the samples buffer of the apu is full
+    on_new_frame_t on_new_frame; // the function called whenever the ppu has finished rendering a new frame
+    on_apu_samples_ready_t on_apu_samples_ready; // the function called whenever the samples buffer of the apu is full
 } emulator_options_t;

@@ -6,14 +6,12 @@
 // TODO wayland support
 #include <gdk/x11/gdkx.h>
 #define GL_GLEXT_PROTOTYPES
-#include <GL/gl.h>
 #include <ctype.h>
 #include <netdb.h>
 #include <string.h>
 
-#include <SDL2/SDL.h>
-
 #include "glrenderer.h"
+#include "alrenderer.h"
 #include "../common/utils.h"
 #include "../common/link.h"
 #include "../common/config.h"
@@ -145,8 +143,6 @@ byte_t joypad_state = 0xFF;
 
 char *rom_path, *forced_save_path, *config_path;
 
-SDL_AudioDeviceID audio_device;
-
 static gboolean keycode_filter(guint keyval) {
     switch (keyval) {
     case GDK_KEY_F1: case GDK_KEY_F2:
@@ -245,6 +241,20 @@ static void toggle_loop(void) {
         stop_loop();
 }
 
+static void set_window_size(int width, int height) {
+    // TODO wayland support: https://docs.gtk.org/gdk4/x11.html
+    GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(main_window));
+    GdkDisplay *display = gtk_widget_get_display(main_window);
+
+    if (!surface || !display) return;
+    Window wid = gdk_x11_surface_get_xid(surface);
+
+    int new_w = GB_SCREEN_WIDTH * config.scale + window_width_offset;
+    int new_h = GB_SCREEN_HEIGHT * config.scale + window_height_offset;
+
+    XResizeWindow(gdk_x11_display_get_xdisplay(display), wid, new_w, new_h);
+}
+
 static gboolean loop(gpointer user_data) {
     // set emulator joypad state only once per loop (and not as soon as an input is detected) to allow link cable synchronization
     emulator_set_joypad_state(emu, joypad_state);
@@ -260,21 +270,14 @@ static gboolean loop(gpointer user_data) {
 }
 
 static void on_realize(GtkGLArea *area, gpointer user_data) {
-    // HACK set window subtitle here, once glarea is realized, to avoid auto window resize on long rom titles
-    if (emu)
-        adw_window_title_set_subtitle(ADW_WINDOW_TITLE(window_title), emulator_get_rom_title(emu));
+    // set window size here, once glarea is realized, to ensure thath the window size is not changed by long rom titles
+    set_window_size(GB_SCREEN_WIDTH * config.scale, GB_SCREEN_HEIGHT * config.scale);
 
     gtk_gl_area_make_current(area);
     if (gtk_gl_area_get_error(area) != NULL) {
         fprintf(stderr, "Unknown error\n");
         return;
     }
-
-    const GLubyte *renderer = glGetString(GL_RENDERER);
-    const GLubyte *version = glGetString(GL_VERSION);
-
-    printf("Renderer: %s\n", renderer);
-    printf("OpenGL version supported %s\n", version);
 
     glrenderer_init(160, 144, NULL);
 }
@@ -316,14 +319,6 @@ static void on_link_disconnect(void) {
 
 static void ppu_vblank_cb(byte_t *pixels) {
     glrenderer_update_screen_texture(0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, pixels);
-}
-
-static void apu_samples_ready_cb(byte_t *audio_buffer, int audio_buffer_size) {
-    // TODO use OpenAL ?
-    while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 8)
-        SDL_Delay(1);
-    // printf("%d %d\n", SDL_GetQueuedAudioSize(audio_device), audio_buffer_size);
-    SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
 
 static byte_t *get_rom_data(const char *path, size_t *rom_size) {
@@ -560,7 +555,7 @@ static int load_cartridge(char *path) {
 
     emulator_options_t opts = {
         .mode = config.mode,
-        .on_apu_samples_ready = apu_samples_ready_cb,
+        .on_apu_samples_ready = (on_apu_samples_ready_t) alrenderer_queue_audio,
         .on_new_frame = ppu_vblank_cb,
         .apu_speed = config.speed,
         .apu_sound_level = config.sound,
@@ -581,6 +576,9 @@ static int load_cartridge(char *path) {
             on_link_disconnect();
         }
         emulator_quit(emu);
+    } else {
+        // init audio at the first successful call to load_cartridge to avoid opening audio device when there is no rom loaded
+        alrenderer_init(GB_APU_SAMPLE_RATE);
     }
     emu = new_emu;
     emulator_print_status(emu);
@@ -594,24 +592,11 @@ static int load_cartridge(char *path) {
     };
     g_action_map_add_action_entries(G_ACTION_MAP(app), app_entries, G_N_ELEMENTS(app_entries), app);
 
+    adw_window_title_set_subtitle(ADW_WINDOW_TITLE(window_title), emulator_get_rom_title(emu));
     gamepad_state = GAMEPAD_PLAYING;
     start_loop();
 
     return 1;
-}
-
-static void set_window_size(int width, int height) {
-    // TODO wayland support: https://docs.gtk.org/gdk4/x11.html
-    GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(main_window));
-    GdkDisplay *display = gtk_widget_get_display(main_window);
-
-    if (!surface || !display) return;
-    Window wid = gdk_x11_surface_get_xid(surface);
-
-    int new_w = GB_SCREEN_WIDTH * config.scale + window_width_offset;
-    int new_h = GB_SCREEN_HEIGHT * config.scale + window_height_offset;
-
-    XResizeWindow(gdk_x11_display_get_xdisplay(display), wid, new_w, new_h);
 }
 
 static void set_scale(GtkButton* self, gpointer user_data) {
@@ -1108,17 +1093,6 @@ static void activate_cb(GtkApplication *app) {
     surface_width_handler = g_signal_connect(gtk_native_get_surface(GTK_NATIVE(main_window)), "notify::width", G_CALLBACK(on_surface_notify_witdh), NULL);
 
     previous_scale = config.scale;
-
-    SDL_Init(SDL_INIT_AUDIO);
-
-    SDL_AudioSpec audio_settings = {
-        .freq = GB_APU_SAMPLE_RATE,
-        .format = AUDIO_U8,
-        .channels = GB_APU_CHANNELS,
-        .samples = GB_APU_DEFAULT_SAMPLE_COUNT
-    };
-    audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
-    SDL_PauseAudioDevice(audio_device, 0);
 }
 
 static void shutdown_cb(GtkApplication *app) {
@@ -1142,7 +1116,6 @@ static gint command_line_cb(GtkApplication *app, GApplicationCommandLine *comman
 // TODO make palettes and CGB color correction into fragment shader
 // TODO convert all platforms where possible into pure opengl (or SDL with opengl mix: it's possible and can be useful for easy portage of android and web)
 
-// TODO finish link cable
 int main(int argc, char **argv) {
     app = adw_application_new(NULL, G_APPLICATION_HANDLES_COMMAND_LINE);
     g_signal_connect(app, "activate", G_CALLBACK(activate_cb), NULL);
