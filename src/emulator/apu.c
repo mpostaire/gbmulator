@@ -251,9 +251,9 @@ void apu_step(emulator_t *emu) {
             S02_output = S02_output * S02_volume * emu->apu_sound_level;
 
             // S02 (left) -->  convert from float [0, 1] to uint8 [0, 255], 128 is volume output level 0
-            apu->audio_buffer[apu->audio_buffer_index++] = (S02_output * 128) + 128;
+            apu->audio_buffer[apu->audio_buffer_index++] = (S02_output * 127) + 128;
             // S01 (right) --> convert from float [0, 1] to unt8 [0, 255], 128 is volume output level 0
-            apu->audio_buffer[apu->audio_buffer_index++] = (S01_output * 128) + 128;
+            apu->audio_buffer[apu->audio_buffer_index++] = (S01_output * 127) + 128;
         }
 
         if (apu->audio_buffer_index >= emu->apu_sample_count) {
