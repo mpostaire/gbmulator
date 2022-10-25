@@ -26,12 +26,8 @@ static void parse_config_line(config_t *config, const char *line) {
         return;
     }
     if (sscanf(line, "speed=%f", &speed)) {
-        if (speed == 1.0f || speed == 1.5f || speed == 2.0f ||
-            speed == 2.5f || speed == 3.0f || speed == 3.5f ||
-            speed == 4.0f) {
-
+        if (speed >= 1.0f && speed <= 8.0f)
             config->speed = speed;
-        }
         return;
     }
     if (sscanf(line, "sound=%f", &sound)) {

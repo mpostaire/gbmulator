@@ -5,7 +5,6 @@
 #include <linux/input-event-codes.h>
 // TODO wayland support
 #include <gdk/x11/gdkx.h>
-#define GL_GLEXT_PROTOTYPES
 #include <ctype.h>
 #include <netdb.h>
 #include <string.h>
@@ -605,8 +604,8 @@ static void set_scale(GtkButton* self, gpointer user_data) {
     set_window_size(GB_SCREEN_WIDTH * config.scale, GB_SCREEN_HEIGHT * config.scale);
 }
 
-static void set_speed(AdwComboRow *self, GParamSpec *pspec, gpointer user_data) {
-    config.speed = adw_combo_row_get_selected(self) * 0.5f + 1;
+static void set_speed(GtkRange* self, gpointer user_data) {
+    config.speed = gtk_range_get_value(self);
     cycles_per_frame = GB_CPU_CYCLES_PER_FRAME * config.speed;
     if (emu)
         emulator_set_apu_speed(emu, config.speed);
@@ -839,6 +838,10 @@ static gchar *sound_slider_format(GtkScale *self, gdouble value, gpointer user_d
     return g_strdup_printf("%d%%", (int) (value * 100));
 }
 
+static gchar *speed_slider_format(GtkScale *self, gdouble value, gpointer user_data) {
+    return g_strdup_printf("x%0.1f", value);
+}
+
 static void on_surface_notify_witdh(GObject *self, GParamSpec *pspec, gpointer user_data) {
     // this function is a hack to get the window size because I can't figure how to get it before it's been shown to the screen
     if (window_width_offset >= 0 && window_height_offset >= 0) return;
@@ -971,15 +974,19 @@ static void activate_cb(GtkApplication *app) {
         g_signal_connect(widget, "clicked", G_CALLBACK(set_scale), (gpointer) &scale_handlers[i].id);
     }
 
-    widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_speed"));
-    g_signal_connect(widget, "notify::selected", G_CALLBACK(set_speed), NULL);
-    adw_combo_row_set_selected(ADW_COMBO_ROW(widget), config.speed / 0.5f - 2);
-
     widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_sound"));
     GtkAdjustment *sound_adjustment = gtk_adjustment_new(config.sound, 0.0, 1.0, 0.05, 0.25, 0.0);
     gtk_scale_set_format_value_func(GTK_SCALE(widget), sound_slider_format, NULL, NULL);
     gtk_range_set_adjustment(GTK_RANGE(widget), sound_adjustment);
     g_signal_connect(widget, "value-changed", G_CALLBACK(set_sound), NULL);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_speed"));
+    GtkAdjustment *speed_adjustment = gtk_adjustment_new(config.speed, 1.0, 8.0, 0.5, 1, 0.0);
+    gtk_scale_set_format_value_func(GTK_SCALE(widget), speed_slider_format, NULL, NULL);
+    gtk_range_set_adjustment(GTK_RANGE(widget), speed_adjustment);
+    g_signal_connect(widget, "value-changed", G_CALLBACK(set_speed), NULL);
+
+    g_signal_connect(widget, "notify::selected", G_CALLBACK(set_speed), NULL);
 
     widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_palette"));
     g_signal_connect(widget, "notify::selected", G_CALLBACK(set_palette), NULL);

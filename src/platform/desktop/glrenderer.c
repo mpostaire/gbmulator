@@ -1,7 +1,8 @@
 #include "emulator/emulator.h"
 
+#include <stdlib.h>
 #include <adwaita.h>
-#define GL_GLEXT_PROTOTYPES
+#include <GL/glew.h>
 #include <GL/gl.h>
 
 // Vertices coordinates
@@ -103,6 +104,12 @@ static GLuint create_screen_texture(GLsizei width, GLsizei height, const GLvoid 
 void glrenderer_init(GLsizei width, GLsizei height, const GLvoid *pixels) {
     // printf("Renderer: %s\n", glGetString(GL_RENDERER));
     // printf("OpenGL version supported %s\n", glGetString(GL_VERSION));
+
+    GLenum glewError = glewInit();
+    if (glewError != GLEW_OK) {
+        eprintf("Error initializing GLEW! %s\n", glewGetErrorString(glewError));
+        exit(EXIT_FAILURE);
+    }
 
     // Create and load shader
     shader_program = create_shader_program(

@@ -59,7 +59,7 @@
                                 <property name="activatable">false</property>
                                 <property name="focusable">false</property>
                                 <property name="title">Sound</property>
-                                <property name="subtitle">Toggles sound emulation.</property>
+                                <property name="subtitle">Sets the sound level.              </property>
                                 <child>
                                     <object class="GtkScale" id="pref_sound">
                                         <property name="hexpand">true</property>
@@ -72,29 +72,26 @@
                         </child>
 
                         <child>
-                            <object class="AdwComboRow" id="pref_speed">
+                            <object class="AdwActionRow">
+                                <property name="activatable">false</property>
+                                <property name="focusable">false</property>
                                 <property name="title">Speed</property>
                                 <property name="subtitle">Sets the emulation speed.</property>
-                                <property name="model">
-                                    <object class="GtkStringList">
-                                        <items>
-                                            <item>1.0x</item>
-                                            <item>1.5x</item>
-                                            <item>2.0x</item>
-                                            <item>2.5x</item>
-                                            <item>3.0x</item>
-                                            <item>3.5x</item>
-                                            <item>4.0x</item>
-                                        </items>
+                                <child>
+                                    <object class="GtkScale" id="pref_speed">
+                                        <property name="hexpand">true</property>
+                                        <property name="draw-value">true</property>
+                                        <property name="value-pos">right</property>
+                                        <property name="digits">2</property>
                                     </object>
-                                </property>
+                                </child>
                             </object>
                         </child>
 
                         <child>
                             <object class="AdwComboRow" id="pref_palette">
                                 <property name="title">Color palette</property>
-                                <property name="subtitle">Sets the color palette when the emulator is in DMG mode.</property>
+                                <property name="subtitle">Sets the color palette when the emulator is in Game Boy mode.</property>
                                 <property name="model">
                                     <object class="GtkStringList">
                                         <items>
