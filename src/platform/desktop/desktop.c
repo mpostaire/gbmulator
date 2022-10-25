@@ -3,7 +3,6 @@
 #include <adwaita.h>
 #include <libmanette.h>
 #include <linux/input-event-codes.h>
-// TODO wayland support
 #include <gdk/x11/gdkx.h>
 #include <ctype.h>
 #include <netdb.h>
@@ -241,7 +240,6 @@ static void toggle_loop(void) {
 }
 
 static void set_window_size(int width, int height) {
-    // TODO wayland support: https://docs.gtk.org/gdk4/x11.html
     GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(main_window));
     GdkDisplay *display = gtk_widget_get_display(main_window);
 
@@ -846,7 +844,6 @@ static void on_surface_notify_witdh(GObject *self, GParamSpec *pspec, gpointer u
     // this function is a hack to get the window size because I can't figure how to get it before it's been shown to the screen
     if (window_width_offset >= 0 && window_height_offset >= 0) return;
 
-    // TODO wayland support
     GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(main_window));
     GdkDisplay *display = gtk_widget_get_display(main_window);
 
@@ -1119,9 +1116,6 @@ static gint command_line_cb(GtkApplication *app, GApplicationCommandLine *comman
     g_application_activate(G_APPLICATION(app));
     return 0;
 }
-
-// TODO make palettes and CGB color correction into fragment shader
-// TODO convert all platforms where possible into pure opengl (or SDL with opengl mix: it's possible and can be useful for easy portage of android and web)
 
 int main(int argc, char **argv) {
     app = adw_application_new(NULL, G_APPLICATION_HANDLES_COMMAND_LINE);

@@ -98,7 +98,7 @@ docs:
 
 $(ICONS): $(ICONDIR)/$(BIN).svg
 	mkdir -p $(ICONDIR)/$(patsubst $(ICONDIR)/%/$(BIN).png,%,$@)
-	convert -background none -size $(patsubst $(ICONDIR)/%/$(BIN).png,%,$@) $^ $(ICONDIR)/$(patsubst $(ICONDIR)/%/$(BIN).png,%,$@)/$(BIN).png
+	convert -density 1200 -background none -size $(patsubst $(ICONDIR)/%/$(BIN).png,%,$@) $^ $(ICONDIR)/$(patsubst $(ICONDIR)/%/$(BIN).png,%,$@)/$(BIN).png
 	[ $(patsubst $(ICONDIR)/%/$(BIN).png,%,$@) = 16x16 ] && cp $(ICONDIR)/16x16/$(BIN).png docs/favicon.png || true
 	[ $(patsubst $(ICONDIR)/%/$(BIN).png,%,$@) = 48x48 ] && cp $(ICONDIR)/48x48/$(BIN).png src/platform/android/android-project/app/src/main/res/mipmap-mdpi/ic_launcher.png || true
 	[ $(patsubst $(ICONDIR)/%/$(BIN).png,%,$@) = 72x72 ] && cp $(ICONDIR)/72x72/$(BIN).png src/platform/android/android-project/app/src/main/res/mipmap-hdpi/ic_launcher.png || true
