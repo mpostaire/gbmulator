@@ -253,6 +253,8 @@ static void set_window_size(int width, int height) {
 }
 
 static gboolean loop(gpointer user_data) {
+    gint64 start = g_get_monotonic_time();
+
     // set emulator joypad state only once per loop (and not as soon as an input is detected) to allow link cable synchronization
     emulator_set_joypad_state(emu, joypad_state);
 
@@ -263,7 +265,10 @@ static gboolean loop(gpointer user_data) {
         emulator_run_cycles(emu, cycles_per_frame);
 
     gtk_gl_area_queue_render(GTK_GL_AREA(gl_area));
-    return TRUE;
+
+    gint64 elapsed = (g_get_monotonic_time() - start) / 1000; // from us to ms
+    loop_source = g_timeout_add((1000 / 60) - elapsed, G_SOURCE_FUNC(loop), NULL);
+    return FALSE;
 }
 
 static void on_realize(GtkGLArea *area, gpointer user_data) {
@@ -513,7 +518,7 @@ static void start_link(void) {
 static void link_dialog_response(GtkDialog *self, gint response_id, gpointer user_data) {
     gtk_window_close(GTK_WINDOW(self));
     if (response_id == GTK_RESPONSE_OK)
-        start_link(); // TODO parse dialog input
+        start_link();
 }
 
 static void show_link_dialog(GSimpleAction *action, GVariant *parameter, gpointer app) {
