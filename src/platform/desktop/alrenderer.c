@@ -4,8 +4,7 @@
 
 #include "emulator/emulator.h"
 
-// this should be >= 2
-#define N_BUFFERS 8
+#define N_BUFFERS 32
 
 ALuint buffers[N_BUFFERS];
 ALuint source;
@@ -50,7 +49,7 @@ ALboolean alrenderer_init(ALsizei sampling_freq) {
     return AL_TRUE;
 }
 
-// TODO maybe this dooes not do exactelty what I think
+// TODO maybe this does not do exactlty what I think
 ALint alrenderer_get_queue_size(void) {
     ALint queued;
     alGetSourcei(source, AL_BUFFERS_QUEUED, &queued);
