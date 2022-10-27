@@ -130,7 +130,7 @@ int window_width_offset = -1, window_height_offset = -1;
 int gamepad_state = GAMEPAD_DISABLED;
 
 AdwApplication *app;
-GtkWidget *main_window, *preferences_window, *window_title, *toast_overlay, *gl_area, *keybind_dialog, *bind_value;
+GtkWidget *main_window, *preferences_window, *window_title, *toast_overlay, *gl_area, *keybind_dialog, *bind_value, *mode_setter;
 GtkWidget *joypad_name, *restart_dialog, *link_dialog, *status, *link_mode_setter_server, *link_host, *link_host_revealer;
 guint loop_source;
 
@@ -795,6 +795,25 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
 
     if (!emu || is_paused) return FALSE;
 
+    switch (keyval) {
+    case GDK_KEY_F1: case GDK_KEY_F2:
+    case GDK_KEY_F3: case GDK_KEY_F4:
+    case GDK_KEY_F5: case GDK_KEY_F6:
+    case GDK_KEY_F7: case GDK_KEY_F8:
+        char *savestate_path = get_savestate_path(rom_path, keyval - GDK_KEY_F1);
+        if (state & GDK_SHIFT_MASK) {
+            save_state_to_file(emu, savestate_path, 1);
+        } else {
+            int ret = load_state_from_file(emu, savestate_path);
+            if (ret > 0) {
+                config.mode = ret;
+                adw_combo_row_set_selected(ADW_COMBO_ROW(mode_setter), config.mode - 1);
+            }
+        }
+        free(savestate_path);
+        return TRUE;
+    }
+
     // don't use emulator_joypad_press() here as we want to keep track of the joypad state and set it once per loop for link cable synchronization
     RESET_BIT(joypad_state, keycode_to_joypad(&config, keyval));
     return TRUE;
@@ -994,9 +1013,9 @@ static void activate_cb(GtkApplication *app) {
     g_signal_connect(widget, "notify::selected", G_CALLBACK(set_palette), NULL);
     adw_combo_row_set_selected(ADW_COMBO_ROW(widget), config.color_palette);
 
-    widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_mode"));
-    g_signal_connect(widget, "notify::selected", G_CALLBACK(set_mode), NULL);
-    adw_combo_row_set_selected(ADW_COMBO_ROW(widget), config.mode - 1);
+    mode_setter = GTK_WIDGET(gtk_builder_get_object(builder, "pref_mode"));
+    g_signal_connect(mode_setter, "notify::selected", G_CALLBACK(set_mode), NULL);
+    adw_combo_row_set_selected(ADW_COMBO_ROW(mode_setter), config.mode - 1);
 
     for (int i = 0; i < G_N_ELEMENTS(key_handlers); i++) {
         widget = GTK_WIDGET(gtk_builder_get_object(builder, key_handlers[i].name));
