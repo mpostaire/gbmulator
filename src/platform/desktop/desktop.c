@@ -21,8 +21,6 @@
 #define CASE_THEN_STRING(x) case x: return #x
 #define STRING(x) #x
 
-// TODO there is some audio sample loops that may be fixed by introducing sleep when audio buffer is full (or just dropping but that introduces crackles)
-
 static gboolean keycode_filter(guint keyval);
 const char *gamepad_gamepad_button_parser(guint16 button);
 int gamepad_button_name_parser(const char *button_name);
@@ -255,7 +253,7 @@ static void set_window_size(int width, int height) {
 }
 
 static gboolean loop(gpointer user_data) {
-    gint64 start = g_get_monotonic_time();
+    // gint64 start = g_get_monotonic_time();
 
     // set emulator joypad state only once per loop (and not as soon as an input is detected) to allow link cable synchronization
     emulator_set_joypad_state(emu, joypad_state);
@@ -268,9 +266,10 @@ static gboolean loop(gpointer user_data) {
 
     gtk_gl_area_queue_render(GTK_GL_AREA(gl_area));
 
-    gint64 elapsed = (g_get_monotonic_time() - start) / 1000; // from us to ms
-    loop_source = g_timeout_add((1000 / 60) - elapsed, G_SOURCE_FUNC(loop), NULL);
-    return FALSE;
+    // TODO don't adjust loop interval as it introduces micro loops in the audio
+    // gint64 elapsed = (g_get_monotonic_time() - start) / 1000; // from us to ms
+    // loop_source = g_timeout_add((1000 / 60) - elapsed, G_SOURCE_FUNC(loop), NULL);
+    return TRUE;
 }
 
 static void on_realize(GtkGLArea *area, gpointer user_data) {
