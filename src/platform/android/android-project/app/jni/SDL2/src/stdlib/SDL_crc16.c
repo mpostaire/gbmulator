@@ -20,17 +20,38 @@
 */
 #include "../SDL_internal.h"
 
-#include "../video/SDL_sysvideo.h"
+#include "SDL_stdinc.h"
 
-/* Useful functions and variables from SDL_sysevents.c */
 
-#if defined(__HAIKU__)
-/* The Haiku event loops run in a separate thread */
-#define MUST_THREAD_EVENTS
-#endif
+/* Public domain CRC implementation adapted from:
+   http://home.thep.lu.se/~bjorn/crc/crc32_simple.c
 
-#ifdef __WIN32__              /* Windows doesn't allow a separate event thread */
-#define CANT_THREAD_EVENTS
-#endif
+   This algorithm is compatible with the 16-bit CRC described here:
+   https://www.lammertbies.nl/comm/info/crc-calculation
+*/
+/* NOTE: DO NOT CHANGE THIS ALGORITHM
+   There is code that relies on this in the joystick code
+*/
+
+static Uint16 crc16_for_byte(Uint8 r)
+{
+    Uint16 crc = 0;
+    int i;
+    for (i = 0; i < 8; ++i) {
+        crc = ((crc ^ r) & 1? 0xA001 : 0) ^ crc >> 1;
+        r >>= 1;
+    }
+    return crc;
+}
+
+Uint16 SDL_crc16(Uint16 crc, const void *data, size_t len)
+{
+    /* As an optimization we can precalculate a 256 entry table for each byte */
+    size_t i;
+    for(i = 0; i < len; ++i) {
+        crc = crc16_for_byte((Uint8)crc ^ ((const Uint8*)data)[i]) ^ crc >> 8;
+    }
+    return crc;
+}
 
 /* vi: set ts=4 sw=4 expandtab: */
