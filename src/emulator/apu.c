@@ -250,16 +250,26 @@ void apu_step(emulator_t *emu) {
             S01_output = S01_output * S01_volume * emu->apu_sound_level;
             S02_output = S02_output * S02_volume * emu->apu_sound_level;
 
-            // S02 (left) -->  convert from float [0, 1] to uint8 [0, 255], 128 is volume output level 0
-            apu->audio_buffer[apu->audio_buffer_index++] = (S02_output * 127) + 128;
-            // S01 (right) --> convert from float [0, 1] to unt8 [0, 255], 128 is volume output level 0
-            apu->audio_buffer[apu->audio_buffer_index++] = (S01_output * 127) + 128;
+            switch (emu->apu_format) {
+            case APU_FORMAT_F32:
+                // S02 (left)
+                ((float *) apu->audio_buffer)[apu->audio_buffer_index++] = S02_output;
+                // S01 (right)
+                ((float *) apu->audio_buffer)[apu->audio_buffer_index++] = S01_output;
+                break;
+            case APU_FORMAT_U8:
+                // S02 (left) -->  convert from float [0, 1] to uint8 [0, 255], 128 is volume output level 0
+                ((byte_t *) apu->audio_buffer)[apu->audio_buffer_index++] = (S02_output * 127) + 128;
+                // S01 (right) --> convert from float [0, 1] to unt8 [0, 255], 128 is volume output level 0
+                ((byte_t *) apu->audio_buffer)[apu->audio_buffer_index++] = (S01_output * 127) + 128;
+                break;
+            }
         }
 
         if (apu->audio_buffer_index >= emu->apu_sample_count) {
             apu->audio_buffer_index = 0;
             if (emu->on_apu_samples_ready)
-                emu->on_apu_samples_ready(apu->audio_buffer, sizeof(*apu->audio_buffer) * emu->apu_sample_count);
+                emu->on_apu_samples_ready(apu->audio_buffer, apu->audio_buffer_sample_size * emu->apu_sample_count);
         }
     }
 }
@@ -268,7 +278,8 @@ void apu_step(emulator_t *emu) {
 void apu_init(emulator_t *emu) {
     apu_t *apu = xcalloc(1, sizeof(apu_t));
 
-    apu->audio_buffer = xmalloc(sizeof(*apu->audio_buffer) * emu->apu_sample_count);
+    apu->audio_buffer_sample_size = emu->apu_format == APU_FORMAT_F32 ? sizeof(float) : sizeof(byte_t);
+    apu->audio_buffer = xmalloc(apu->audio_buffer_sample_size * emu->apu_sample_count);
 
     apu->channel1 = (channel_t) {
         .NRx0 = &emu->mmu->mem[NR10],

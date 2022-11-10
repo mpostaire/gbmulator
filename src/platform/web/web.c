@@ -82,11 +82,11 @@ static int keycode_filter(SDL_Keycode key) {
     }
 }
 
-static void ppu_vblank_cb(byte_t *pixels) {
+static void ppu_vblank_cb(const byte_t *pixels) {
     SDL_UpdateTexture(ppu_texture, NULL, pixels, ppu_texture_pitch);
 }
 
-static void apu_samples_ready_cb(byte_t *audio_buffer, int audio_buffer_size) {
+static void apu_samples_ready_cb(const void *audio_buffer, int audio_buffer_size) {
     while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 8)
         emscripten_sleep(1);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
@@ -488,7 +488,7 @@ int main(int argc, char **argv) {
 
     SDL_AudioSpec audio_settings = {
         .freq = GB_APU_SAMPLE_RATE,
-        .format = AUDIO_U8,
+        .format = AUDIO_F32SYS,
         .channels = GB_APU_CHANNELS,
         .samples = GB_APU_DEFAULT_SAMPLE_COUNT
     };

@@ -340,12 +340,9 @@ public class SettingsMenu extends AppCompatActivity {
 
                                 driveSyncSaves(driveService);
                             })
-                            .addOnFailureListener(new OnFailureListener() {
-                                @Override
-                                public void onFailure(@NonNull Exception e) {
-                                    e.printStackTrace();
-                                    Toast.makeText(SettingsMenu.this, "Failed to connect to Google Drive", Toast.LENGTH_SHORT).show();
-                                }
+                            .addOnFailureListener(e -> {
+                                e.printStackTrace();
+                                Toast.makeText(SettingsMenu.this, "Failed to connect to Google Drive", Toast.LENGTH_SHORT).show();
                             });
                 }
                 break;
@@ -363,8 +360,8 @@ public class SettingsMenu extends AppCompatActivity {
                 return;
             }
             driveServiceHelper.listSaveFiles(driveSaveDirId).addOnSuccessListener(files ->
-                    driveCompare(files.toArray(new File[] {}))
-                ).addOnFailureListener(e -> driveCompare(new File[] {}));
+                driveCompare(files.toArray(new File[] {}))
+            ).addOnFailureListener(e -> driveCompare(new File[] {}));
         }).addOnFailureListener(e -> driveCompare(new File[] {}));
     }
 

@@ -214,7 +214,8 @@ typedef struct {
     int take_sample_cycles_count;
 
     int audio_buffer_index;
-    byte_t *audio_buffer;
+    size_t audio_buffer_sample_size;
+    void *audio_buffer;
 
     byte_t frame_sequencer;
     int frame_sequencer_cycles_count;
@@ -247,14 +248,31 @@ typedef enum {
     CGB
 } emulator_mode_t;
 
-typedef void (*on_new_frame_t)(byte_t *pixels);
-typedef void (*on_apu_samples_ready_t)(byte_t *audio_buffer, int audio_buffer_size);
+typedef enum {
+    APU_FORMAT_F32 = 1,
+    APU_FORMAT_U8,
+} apu_audio_format_t;
+
+typedef void (*on_new_frame_t)(const byte_t *pixels);
+typedef void (*on_apu_samples_ready_t)(const void *audio_buffer, int audio_buffer_size);
+
+typedef struct {
+    emulator_mode_t mode; // either `DMG` for original game boy emulation or `CGB` for game boy color emulation
+    color_palette_t palette;
+    float apu_speed;
+    float apu_sound_level;
+    int apu_sample_count;
+    apu_audio_format_t apu_format;
+    on_new_frame_t on_new_frame; // the function called whenever the ppu has finished rendering a new frame
+    on_apu_samples_ready_t on_apu_samples_ready; // the function called whenever the samples buffer of the apu is full
+} emulator_options_t;
 
 struct emulator_t {
     emulator_mode_t mode;
     float apu_sound_level;
     float apu_speed;
     int apu_sample_count;
+    apu_audio_format_t apu_format;
     byte_t ppu_color_palette;
     on_new_frame_t on_new_frame;
     on_apu_samples_ready_t on_apu_samples_ready;
@@ -269,13 +287,3 @@ struct emulator_t {
     joypad_t *joypad;
     link_t *link;
 };
-
-typedef struct {
-    emulator_mode_t mode; // either `DMG` for original game boy emulation or `CGB` for game boy color emulation
-    color_palette_t palette;
-    float apu_speed;
-    float apu_sound_level;
-    int apu_sample_count;
-    on_new_frame_t on_new_frame; // the function called whenever the ppu has finished rendering a new frame
-    on_apu_samples_ready_t on_apu_samples_ready; // the function called whenever the samples buffer of the apu is full
-} emulator_options_t;

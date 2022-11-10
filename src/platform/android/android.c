@@ -353,11 +353,11 @@ static void set_layout(int layout) {
     }
 }
 
-static void ppu_vblank_cb(byte_t *pixels) {
+static void ppu_vblank_cb(const byte_t *pixels) {
     SDL_UpdateTexture(ppu_texture, NULL, pixels, ppu_texture_pitch);
 }
 
-static void apu_samples_ready_cb(float *audio_buffer, int audio_buffer_size) {
+static void apu_samples_ready_cb(const void *audio_buffer, int audio_buffer_size) {
     while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 4)
         SDL_Delay(1);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
@@ -403,14 +403,14 @@ static void handle_input(void) {
 }
 
 static void start_emulation_loop(void) {
-    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
+    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 3;
 
     SDL_AudioSpec audio_settings = {
-            .freq = GB_APU_SAMPLE_RATE,
-            .format = AUDIO_F32SYS,
-            .channels = GB_APU_CHANNELS,
-            .samples = APU_SAMPLE_COUNT
+        .freq = GB_APU_SAMPLE_RATE,
+        .format = AUDIO_F32SYS,
+        .channels = GB_APU_CHANNELS,
+        .samples = APU_SAMPLE_COUNT
     };
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
     SDL_PauseAudioDevice(audio_device, 0);
@@ -454,8 +454,14 @@ static void start_emulation_loop(void) {
     }
 
     if (emu) {
-        save_battery_to_file(emu, emulator_get_rom_title(emu));
-        save_state_to_file(emu, "resume", 0);
+        char buf[512];
+
+        snprintf(buf, sizeof(buf), "%s/%s", SDL_AndroidGetInternalStoragePath(), emulator_get_rom_title(emu));
+        save_battery_to_file(emu, buf);
+
+        snprintf(buf, sizeof(buf), "%s/resume", SDL_AndroidGetInternalStoragePath());
+        save_state_to_file(emu, buf, 0);
+
         emulator_quit(emu);
     }
 
@@ -476,10 +482,15 @@ static void load_cartridge(const byte_t *rom_data, size_t rom_size, int resume, 
     emu = emulator_init(rom_data, rom_size, &opts);
     if (!emu) return;
 
-    if (resume)
-        load_state_from_file(emu, "resume");
-    else
-        load_battery_from_file(emu, emulator_get_rom_title(emu));
+    if (resume) {
+        char buf[512];
+        snprintf(buf, sizeof(buf), "%s/resume", SDL_AndroidGetInternalStoragePath());
+        load_state_from_file(emu, buf);
+    } else {
+        char buf[512];
+        snprintf(buf, sizeof(buf), "%s/%s", SDL_AndroidGetInternalStoragePath(), emulator_get_rom_title(emu));
+        load_battery_from_file(emu, buf);
+    }
 
     speed = emu_speed;
 }

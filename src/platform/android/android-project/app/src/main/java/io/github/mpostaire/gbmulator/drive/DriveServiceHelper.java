@@ -112,7 +112,7 @@ public class DriveServiceHelper {
     public Task<List<File>> listSaveFiles(String dirId) {
         return Tasks.call(executor, () -> {
             FileList fileList = driveService.files().list()
-                    .setQ("'" + dirId +"' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false")
+                    .setQ("'" + dirId + "' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false")
                     .setSpaces("drive")
                     .setFields("nextPageToken, files(id, name, parents, modifiedTime)")
                     .execute();

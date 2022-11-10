@@ -21,6 +21,8 @@
 #define CASE_THEN_STRING(x) case x: return #x
 #define STRING(x) #x
 
+// TODO there is some audio sample loops that may be fixed by introducing sleep when audio buffer is full (or just dropping but that introduces crackles)
+
 static gboolean keycode_filter(guint keyval);
 const char *gamepad_gamepad_button_parser(guint16 button);
 int gamepad_button_name_parser(const char *button_name);
@@ -319,7 +321,7 @@ static void on_link_disconnect(void) {
     linked_emu = NULL;
 }
 
-static void ppu_vblank_cb(byte_t *pixels) {
+static void ppu_vblank_cb(const byte_t *pixels) {
     glrenderer_update_screen_texture(0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, pixels);
 }
 
@@ -561,6 +563,7 @@ static int load_cartridge(char *path) {
         .on_new_frame = ppu_vblank_cb,
         .apu_speed = config.speed,
         .apu_sound_level = config.sound,
+        .apu_format = APU_FORMAT_U8,
         .palette = config.color_palette
     };
     emulator_t *new_emu = emulator_init(rom_data, rom_size, &opts);
@@ -815,7 +818,9 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
     }
 
     // don't use emulator_joypad_press() here as we want to keep track of the joypad state and set it once per loop for link cable synchronization
-    RESET_BIT(joypad_state, keycode_to_joypad(&config, keyval));
+    int joypad = keycode_to_joypad(&config, keyval);
+    if (joypad < 0) return TRUE;
+    RESET_BIT(joypad_state, joypad);
     return TRUE;
 }
 
@@ -823,7 +828,9 @@ static gboolean key_released_main(GtkEventControllerKey *self, guint keyval, gui
     if (!emu || is_paused) return FALSE;
 
     // don't use emulator_joypad_release() here as we want to keep track of the joypad state and set it once per loop for link cable synchronization
-    SET_BIT(joypad_state, keycode_to_joypad(&config, keyval));
+    int joypad = keycode_to_joypad(&config, keyval);
+    SET_BIT(joypad_state, joypad);
+    if (joypad < 0) return TRUE;
     return TRUE;
 }
 
@@ -891,8 +898,11 @@ static void gamepad_button_press_event_cb(ManetteDevice *emitter, ManetteEvent *
         break;
     case GAMEPAD_PLAYING:;
         if (!emu || is_paused) return;
-        if (manette_event_get_button(event, &button))
-            RESET_BIT(joypad_state, button_to_joypad(&config, button));
+        if (manette_event_get_button(event, &button)) {
+            int joypad = button_to_joypad(&config, button);
+            if (joypad < 0) return;
+            RESET_BIT(joypad_state, joypad);
+        }
         break;
     case GAMEPAD_BINDING:
         if (manette_event_get_button(event, &button))
@@ -908,8 +918,11 @@ static void gamepad_button_release_event_cb(ManetteDevice *emitter, ManetteEvent
     case GAMEPAD_PLAYING:
         if (!emu || is_paused) return;
         guint16 button;
-        if (manette_event_get_button(event, &button))
-            SET_BIT(joypad_state, button_to_joypad(&config, button));
+        if (manette_event_get_button(event, &button)) {
+            int joypad = button_to_joypad(&config, button);
+            if (joypad < 0) return;
+            SET_BIT(joypad_state, joypad);
+        }
         break;
     case GAMEPAD_BINDING:
         break;

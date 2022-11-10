@@ -29,6 +29,7 @@ emulator_options_t defaults_opts = {
     .apu_speed = 1.0f,
     .apu_sound_level = 1.0f,
     .apu_sample_count = GB_APU_DEFAULT_SAMPLE_COUNT,
+    .apu_format = APU_FORMAT_F32,
     .on_apu_samples_ready = NULL,
     .on_new_frame = NULL
 };
@@ -276,15 +277,15 @@ byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, byte_t compresse
     #ifdef __HAVE_ZLIB__
     if (compressed) {
         SET_BIT(savestate_header->mode, 7);
-        size_t t = compressBound(savestate_data_len);
+        int t = compressBound(savestate_data_len);
         byte_t *dest = xmalloc(t);
-        size_t dest_len;
+        uLongf dest_len;
         int ret = compress(dest, &dest_len, savestate_data, savestate_data_len);
         free(savestate_data);
         savestate_data_len = dest_len;
         savestate_data = dest;
 
-        printf("get_savestate %zu (compress:%d) buf=%zu\n", sizeof(savestate_header_t) + savestate_data_len, ret, t);
+        printf("get_savestate %zu (compress:%d) buf=%d\n", sizeof(savestate_header_t) + savestate_data_len, ret, t);
     }
     #endif
 
@@ -334,7 +335,7 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
     if (CHECK_BIT(savestate_header->mode, 7)) {
         #ifdef __HAVE_ZLIB__
         byte_t *dest = xmalloc(expected_len);
-        size_t dest_len;
+        uLongf dest_len;
         int ret = uncompress(dest, &dest_len, savestate_data, savestate_data_len);
         printf("uncompress=%d\n", ret);
         free(savestate_data);
@@ -443,6 +444,7 @@ void emulator_get_options(emulator_t *emu, emulator_options_t *opts) {
     opts->on_apu_samples_ready = emu->on_apu_samples_ready;
     opts->apu_speed = emu->apu_speed;
     opts->apu_sound_level = emu->apu_sound_level;
+    opts->apu_format = emu->apu_format;
     opts->on_new_frame = emu->on_new_frame;
     opts->palette = emu->ppu_color_palette;
 }
@@ -451,10 +453,11 @@ void emulator_set_options(emulator_t *emu, emulator_options_t *opts) {
     if (!opts)
         opts = &defaults_opts;
 
-    // allow changes of mode and apu_sample_count only once (inside emulator_init())
+    // allow changes of mode, apu_sample_count and apu_format only once (inside emulator_init())
     if (!emu->mode) {
         emu->mode = opts->mode >= DMG && opts->mode <= CGB ? opts->mode : defaults_opts.mode;
         emu->apu_sample_count = opts->apu_sample_count >= 128 ? opts->apu_sample_count : defaults_opts.apu_sample_count;
+        emu->apu_format = opts->apu_format >= APU_FORMAT_F32 && opts->apu_format <= APU_FORMAT_U8 ? opts->apu_format : defaults_opts.apu_format;
     }
 
     emu->on_apu_samples_ready = opts->on_apu_samples_ready;

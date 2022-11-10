@@ -4,7 +4,7 @@
 
 #include "emulator/emulator.h"
 
-#define N_BUFFERS 32
+#define N_BUFFERS 16
 
 ALuint buffers[N_BUFFERS];
 ALuint source;
@@ -56,7 +56,7 @@ ALint alrenderer_get_queue_size(void) {
     return queued;
 }
 
-ALboolean alrenderer_queue_audio(const byte_t *samples, ALsizei size) {
+ALboolean alrenderer_queue_audio(const void *samples, ALsizei size) {
     ALint processed;
     alGetSourcei(source, AL_BUFFERS_PROCESSED, &processed);
     if (alGetError() != AL_NO_ERROR) {
@@ -64,11 +64,11 @@ ALboolean alrenderer_queue_audio(const byte_t *samples, ALsizei size) {
         return AL_FALSE;
     }
 
-    ALuint available_buffer;
-    if (processed > 0)
-        alSourceUnqueueBuffers(source, 1, &available_buffer);
-    else
+    if (processed <= 0)
         return AL_FALSE;
+
+    ALuint available_buffer;
+    alSourceUnqueueBuffers(source, 1, &available_buffer);
 
     alBufferData(available_buffer, AL_FORMAT_STEREO8, samples, size, freq);
     alSourceQueueBuffers(source, 1, &available_buffer);

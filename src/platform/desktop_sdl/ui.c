@@ -537,6 +537,7 @@ static void ui_press(ui_t *ui, int key, int repeat, int is_controller) {
 void ui_keyboard_press(ui_t *ui, SDL_KeyboardEvent *keyevent) {
     SDL_Keysym keysym = keyevent->keysym;
     int key = keycode_to_joypad(ui->config, keysym.sym);
+    if (key < 0) key = keysym.sym;
     menu_entry_t *entry = &ui->current_menu->entries[ui->current_menu->position];
 
     if (entry->type == UI_KEY_SETTER && entry->setter.editing) {
