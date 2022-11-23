@@ -42,7 +42,7 @@ void timer_quit(emulator_t *emu) {
     free(emu->timer);
 }
 
-size_t timer_serialized_length(emulator_t *emu) {
+size_t timer_serialized_length(UNUSED emulator_t *emu) {
     return 4;
 }
 

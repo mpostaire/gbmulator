@@ -7,7 +7,7 @@
 #include "../common/utils.h"
 #include "../common/link.h"
 #include "layout_editor.h"
-#include "emulator/emulator.h"
+#include "../../emulator/emulator.h"
 
 #define log(...) __android_log_print(ANDROID_LOG_WARN, "GBmulator", __VA_ARGS__)
 
@@ -358,7 +358,7 @@ static void ppu_vblank_cb(const byte_t *pixels) {
 }
 
 static void apu_samples_ready_cb(const void *audio_buffer, int audio_buffer_size) {
-    while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 4)
+    while (SDL_GetQueuedAudioSize(audio_device) > (unsigned int) (audio_buffer_size * 4))
         SDL_Delay(1);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }

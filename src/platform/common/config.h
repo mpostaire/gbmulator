@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <arpa/inet.h>
 
-#include "emulator/emulator.h"
+#include "../../emulator/emulator.h"
 
 typedef int (*keycode_filter_t)(unsigned int keycode);
 typedef const char *(*keycode_parser_t)(unsigned int keycode);

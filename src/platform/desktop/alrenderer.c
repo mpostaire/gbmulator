@@ -2,7 +2,7 @@
 #include <AL/al.h>
 #include <AL/alc.h>
 
-#include "emulator/emulator.h"
+#include "../../emulator/emulator.h"
 
 #define N_BUFFERS 16
 

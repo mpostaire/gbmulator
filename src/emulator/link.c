@@ -72,7 +72,7 @@ void link_step(emulator_t *emu) {
     }
 }
 
-size_t link_serialized_length(emulator_t *emu) {
+size_t link_serialized_length(UNUSED emulator_t *emu) {
     return 5;
 }
 

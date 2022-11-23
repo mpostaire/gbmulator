@@ -5,7 +5,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 
-#include "emulator/emulator.h"
+#include "../../emulator/emulator.h"
 #ifdef __ANDROID__
 #include "../android/socket.h"
 #include <android/log.h>
@@ -142,7 +142,7 @@ int link_connect_to_server(const char *address, const char *port) {
 
 static inline int receive(int fd, void *buf, size_t n, int flags) {
     ssize_t total_ret = 0;
-    while (total_ret != n) {
+    while (total_ret != (ssize_t) n) {
         ssize_t ret = recv_pkt(fd, &((char *) buf)[total_ret], n - total_ret, flags);
         if (ret <= 0)
             return 0;
@@ -155,7 +155,7 @@ static int exchange_info(int sfd, emulator_t *emu, emulator_mode_t *mode, int *c
     // --- SEND INFO ---
 
     word_t checksum = 0;
-    for (int i = 0; i < sizeof(emu->mmu->cartridge); i += 2)
+    for (unsigned int i = 0; i < sizeof(emu->mmu->cartridge); i += 2)
         checksum = checksum - (emu->mmu->cartridge[i] + emu->mmu->cartridge[i + 1]) - 1;
 
     byte_t pkt[4] = { 0 };

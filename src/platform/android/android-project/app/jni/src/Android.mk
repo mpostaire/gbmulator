@@ -16,7 +16,7 @@ LOCAL_SRC_FILES := $(wildcard $(LOCAL_PATH)/$(SRC_PATH)/emulator/*.c) \
 				   $(wildcard $(LOCAL_PATH)/$(SRC_PATH)/platform/common/*.c) \
 				   $(wildcard $(LOCAL_PATH)/$(SRC_PATH)/platform/android/*.c)
 
-LOCAL_CFLAGS := -std=gnu11 -O3 -D__HAVE_ZLIB__
+LOCAL_CFLAGS := -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wno-bad-function-cast -O3 -D__HAVE_ZLIB__
 
 LOCAL_SHARED_LIBRARIES := SDL2
 

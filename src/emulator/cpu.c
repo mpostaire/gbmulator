@@ -2310,6 +2310,7 @@ void cpu_step(emulator_t *emu) {
             cpu->registers.pc++;
         cpu->exec_state = EXEC_OPCODE;
         // don't break, exec opcode now
+        // fall through
     case EXEC_OPCODE:
         exec_opcode(emu);
         break;
@@ -2318,6 +2319,7 @@ void cpu_step(emulator_t *emu) {
         cpu->opcode_state = cpu->opcode;
         cpu->exec_state = EXEC_OPCODE_CB;
         // don't break, exec extended opcode now
+        // fall through
     case EXEC_OPCODE_CB:
         exec_extended_opcode(emu);
         break;
@@ -2336,7 +2338,7 @@ void cpu_quit(emulator_t *emu) {
     free(emu->cpu);
 }
 
-size_t cpu_serialized_length(emulator_t *emu) {
+size_t cpu_serialized_length(UNUSED emulator_t *emu) {
     return 23;
 }
 

@@ -4,7 +4,7 @@
 #include "../common/config.h"
 #include "../common/utils.h"
 #include "ui.h"
-#include "emulator/emulator.h"
+#include "../../emulator/emulator.h"
 
 // TODO fix this file (it's ugly code with lots of copy pasted repetitions).
 
@@ -130,7 +130,7 @@ static void key_setter_set_key(menu_entry_t *entry, SDL_Keycode key, config_t *c
 static void key_setter_set_keybind(menu_entry_t *entry, SDL_Keycode key, config_t *config) {
     int same = -1;
     for (int i = 0; i < entry->parent->length - 1; i++) {
-        if (entry->parent->position != i && config->keybindings[entry->parent->entries[i].setter.button] == key) {
+        if (entry->parent->position != i && (int) config->keybindings[entry->parent->entries[i].setter.button] == key) {
             same = i;
             break;
         }
@@ -483,6 +483,7 @@ static void ui_press(ui_t *ui, int key, int repeat, int is_controller) {
     case JOYPAD_A:
         if (entry->type == UI_INPUT)
             break;
+        // fall through
     case SDLK_RETURN:
     case SDLK_KP_ENTER:
         switch (entry->type) {

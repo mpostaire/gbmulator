@@ -5,7 +5,7 @@
 
 #include "../common/config.h"
 #include "../common/utils.h"
-#include "emulator/emulator.h"
+#include "../../emulator/emulator.h"
 #include "base64.h"
 
 static int keycode_filter(SDL_Keycode key);
@@ -87,7 +87,7 @@ static void ppu_vblank_cb(const byte_t *pixels) {
 }
 
 static void apu_samples_ready_cb(const void *audio_buffer, int audio_buffer_size) {
-    while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 8)
+    while (SDL_GetQueuedAudioSize(audio_device) > (unsigned int) (audio_buffer_size * 8))
         emscripten_sleep(1);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
@@ -316,7 +316,7 @@ static void handle_input(void) {
                 } else if (editing_keybind >= JOYPAD_RIGHT && editing_keybind <= JOYPAD_START && config.keycode_filter(event.key.keysym.sym)) {
                     // check if another keybind is already bound to this key and swap them if this is the case
                     for (int i = JOYPAD_RIGHT; i <= JOYPAD_START; i++) {
-                        if (i != editing_keybind && config.keybindings[i] == event.key.keysym.sym) {
+                        if (i != editing_keybind && (int) config.keybindings[i] == event.key.keysym.sym) {
                             config.keybindings[i] = config.keybindings[editing_keybind];
                             EM_ASM({
                                 document.getElementById("keybind-setter-" + $0).innerHTML = UTF8ToString($1);

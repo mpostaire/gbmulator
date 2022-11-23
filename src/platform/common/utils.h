@@ -1,6 +1,6 @@
 #pragma once
 
-#include "emulator/emulator.h"
+#include "../../emulator/emulator.h"
 #include "../common/config.h"
 
 int keycode_to_joypad(config_t *config, unsigned int keycode);

@@ -5,6 +5,12 @@
 #include <errno.h>
 #include <time.h>
 
+#ifdef __GNUC__
+#   define UNUSED __attribute__((unused))
+#else
+#   define UNUSED
+#endif
+
 #define CHECK_BIT(var, pos) ((var) & (1 << (pos)))
 #define SET_BIT(var, pos) ((var) |= (1 << (pos)))
 #define RESET_BIT(var, pos) ((var) &= ~(1 << (pos)))

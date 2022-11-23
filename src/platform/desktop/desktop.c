@@ -1,4 +1,4 @@
-#include "emulator/emulator.h"
+#include "../../emulator/emulator.h"
 
 #include <adwaita.h>
 #include <libmanette.h>
@@ -246,8 +246,8 @@ static void set_window_size(int width, int height) {
     if (!surface || !display) return;
     Window wid = gdk_x11_surface_get_xid(surface);
 
-    int new_w = GB_SCREEN_WIDTH * config.scale + window_width_offset;
-    int new_h = GB_SCREEN_HEIGHT * config.scale + window_height_offset;
+    int new_w = width + window_width_offset;
+    int new_h = height + window_height_offset;
 
     XResizeWindow(gdk_x11_display_get_xdisplay(display), wid, new_w, new_h);
 }
@@ -273,7 +273,7 @@ static gboolean loop(gpointer user_data) {
 }
 
 static void on_realize(GtkGLArea *area, gpointer user_data) {
-    // set window size here, once glarea is realized, to ensure thath the window size is not changed by long rom titles
+    // set window size here, once glarea is realized, to ensure that the window size is not changed by long rom titles
     set_window_size(GB_SCREEN_WIDTH * config.scale, GB_SCREEN_HEIGHT * config.scale);
 
     gtk_gl_area_make_current(area);
@@ -381,7 +381,7 @@ static char *get_save_path(const char *rom_filepath) {
 
     char *last_slash = strrchr(rom_filepath, '/');
     char *last_period = strrchr(last_slash ? last_slash : rom_filepath, '.');
-    int last_period_index = last_period ? (int) (last_period - last_slash) : strlen(rom_filepath);
+    int last_period_index = last_period ? (int) (last_period - last_slash) : (int) strlen(rom_filepath);
 
     size_t len = strlen(xdg_data) + strlen(last_slash ? last_slash : rom_filepath);
     char *save_path = xmalloc(len + 13);
@@ -396,7 +396,7 @@ static char *get_savestate_path(const char *rom_filepath, int slot) {
 
     char *last_slash = strrchr(rom_filepath, '/');
     char *last_period = strrchr(last_slash ? last_slash : rom_filepath, '.');
-    int last_period_index = last_period ? (int) (last_period - last_slash) : strlen(rom_filepath);
+    int last_period_index = last_period ? (int) (last_period - last_slash) : (int) strlen(rom_filepath);
 
     size_t len = strlen(xdg_data) + strlen(last_slash);
     char *save_path = xmalloc(len + 33);
@@ -1002,7 +1002,7 @@ static void activate_cb(GtkApplication *app) {
     gtk_window_set_transient_for(GTK_WINDOW(preferences_window), GTK_WINDOW(main_window));
 
     GtkWidget *widget;
-    for (int i = 0; i < G_N_ELEMENTS(scale_handlers); i++) {
+    for (size_t i = 0; i < G_N_ELEMENTS(scale_handlers); i++) {
         widget = GTK_WIDGET(gtk_builder_get_object(builder, scale_handlers[i].name));
         g_signal_connect(widget, "clicked", G_CALLBACK(set_scale), (gpointer) &scale_handlers[i].id);
     }
@@ -1029,14 +1029,14 @@ static void activate_cb(GtkApplication *app) {
     g_signal_connect(mode_setter, "notify::selected", G_CALLBACK(set_mode), NULL);
     adw_combo_row_set_selected(ADW_COMBO_ROW(mode_setter), config.mode - 1);
 
-    for (int i = 0; i < G_N_ELEMENTS(key_handlers); i++) {
+    for (size_t i = 0; i < G_N_ELEMENTS(key_handlers); i++) {
         widget = GTK_WIDGET(gtk_builder_get_object(builder, key_handlers[i].name));
         g_signal_connect(widget, "activated", G_CALLBACK(key_setter_activated), (gpointer) &key_handlers[i].id);
         key_handlers[i].widget = GTK_WIDGET(gtk_builder_get_object(builder, key_handlers[i].label_name));
         gtk_label_set_label(GTK_LABEL(key_handlers[i].widget), gdk_keyval_name(config.keybindings[i]));
     }
 
-    for (int i = 0; i < G_N_ELEMENTS(gamepad_handlers); i++) {
+    for (size_t i = 0; i < G_N_ELEMENTS(gamepad_handlers); i++) {
         widget = GTK_WIDGET(gtk_builder_get_object(builder, gamepad_handlers[i].name));
         g_signal_connect(widget, "activated", G_CALLBACK(gamepad_setter_activated), (gpointer) &gamepad_handlers[i].id);
         gamepad_handlers[i].widget = GTK_WIDGET(gtk_builder_get_object(builder, gamepad_handlers[i].label_name));

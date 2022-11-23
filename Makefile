@@ -1,7 +1,7 @@
 SDIR=src
 ODIR=out
 IDIR=$(SDIR)
-CFLAGS=-std=gnu11 -Wall -O3 -I$(IDIR)
+CFLAGS=-std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wno-cast-function-type -O3 -I$(IDIR)
 LDLIBS=$(shell pkg-config --libs zlib 2> /dev/null && echo -n "-D__HAVE_ZLIB__")
 CC=gcc
 BIN=gbmulator
@@ -109,7 +109,7 @@ $(ICONS): $(ICONDIR)/$(BIN).svg
 run: desktop
 	LIBGL_DRI3_DISABLE=1 ./$(BIN) "roms/tetris.gb"
 
-check: $(SDIR)/**/*.c
+check: $(SDIR)
 	cppcheck --enable=all --suppress=missingIncludeSystem $(SDIR)
 
 clean:

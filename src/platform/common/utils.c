@@ -3,7 +3,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 
-#include "emulator/emulator.h"
+#include "../../emulator/emulator.h"
 #include "config.h"
 
 static long fsize(FILE *f) {

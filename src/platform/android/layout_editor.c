@@ -2,7 +2,7 @@
 #include <jni.h>
 #include <android/log.h>
 
-#include "emulator/emulator.h"
+#include "../../emulator/emulator.h"
 #include "layout_editor.h"
 
 #define log(...) __android_log_print(ANDROID_LOG_INFO, "GBmulator", __VA_ARGS__)

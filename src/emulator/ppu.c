@@ -669,7 +669,7 @@ void ppu_quit(emulator_t *emu) {
     free(emu->ppu);
 }
 
-size_t ppu_serialized_length(emulator_t *emu) {
+size_t ppu_serialized_length(UNUSED emulator_t *emu) {
     return 25;
 }
 

@@ -15,7 +15,7 @@ typedef enum {
 
 extern byte_t ppu_color_palettes[PPU_COLOR_PALETTE_MAX][4][3];
 
-void inline ppu_ly_lyc_compare(emulator_t *emu) {
+inline void ppu_ly_lyc_compare(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
     if (mmu->mem[LY] == mmu->mem[LYC]) {

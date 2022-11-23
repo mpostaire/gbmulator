@@ -6,7 +6,7 @@
 #include "../common/link.h"
 #include "../common/config.h"
 #include "../common/utils.h"
-#include "emulator/emulator.h"
+#include "../../emulator/emulator.h"
 
 // TODO implemented MBCs have a few bugs (see https://github.com/drhelius/Gearboy to understand how its handled)
 
@@ -117,7 +117,7 @@ static void ppu_vblank_cb(const byte_t *pixels) {
 }
 
 static void apu_samples_ready_cb(const void *audio_buffer, int audio_buffer_size) {
-    while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 8)
+    while (SDL_GetQueuedAudioSize(audio_device) > (unsigned int) (audio_buffer_size * 8))
         SDL_Delay(1);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
@@ -179,7 +179,7 @@ static char *get_save_path(const char *rom_filepath) {
 
     char *last_slash = strrchr(rom_filepath, '/');
     char *last_period = strrchr(last_slash ? last_slash : rom_filepath, '.');
-    int last_period_index = last_period ? (int) (last_period - last_slash) : strlen(rom_filepath);
+    int last_period_index = last_period ? (int) (last_period - last_slash) : (int) strlen(rom_filepath);
 
     size_t len = strlen(xdg_data) + strlen(last_slash ? last_slash : rom_filepath);
     char *save_path = xmalloc(len + 13);
@@ -194,7 +194,7 @@ static char *get_savestate_path(const char *rom_filepath, int slot) {
 
     char *last_slash = strrchr(rom_filepath, '/');
     char *last_period = strrchr(last_slash ? last_slash : rom_filepath, '.');
-    int last_period_index = last_period ? (int) (last_period - last_slash) : strlen(rom_filepath);
+    int last_period_index = last_period ? (int) (last_period - last_slash) : (int) strlen(rom_filepath);
 
     size_t len = strlen(xdg_data) + strlen(last_slash);
     char *save_path = xmalloc(len + 33);

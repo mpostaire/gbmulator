@@ -1,6 +1,6 @@
 #pragma once
 
-#include "emulator/emulator.h"
+#include "../../emulator/emulator.h"
 
 int link_start_server(const char *port);
 
