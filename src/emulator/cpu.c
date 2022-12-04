@@ -1437,7 +1437,7 @@ static void exec_extended_opcode(emulator_t *emu) {
             cpu->opcode_compute_storage = mmu_read(emu, cpu->registers.hl);
             SET_BIT(cpu->opcode_compute_storage, 7)
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage); ;);
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_compute_storage));
         CLOCK(END_OPCODE);
     case 0xFF: // SET 7, A (4 cycles)
         CLOCK(SET_BIT(cpu->registers.a, 7); END_OPCODE;);

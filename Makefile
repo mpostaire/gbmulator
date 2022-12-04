@@ -61,7 +61,7 @@ desktop_sdl: CFLAGS+=$(shell pkg-config --cflags sdl2)
 desktop_sdl: LDLIBS+=$(shell pkg-config --libs sdl2)
 desktop_sdl: $(PLATFORM_ODIR_STRUCTURE) $(BIN) $(ICONS)
 
-profile: CFLAGS+=-p
+profile: CFLAGS+=-pg
 profile: run
 	gprof ./$(BIN) gmon.out > prof_output
 

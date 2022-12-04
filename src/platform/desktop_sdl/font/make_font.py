@@ -1,7 +1,8 @@
 import imageio as iio
 import os.path as path
 
-img = iio.imread(path.join(path.dirname(__file__), "font.png"))
+dirname = path.dirname(path.realpath(__file__))
+img = iio.imread(path.join(dirname, "font.png"))
 
 def parse_char(c, endl=', '):
     x = ord(c) - 32
@@ -28,4 +29,8 @@ code = f"const byte_t font[0x{len(CHARS):X}][0x8] = {{\n"
 for c in CHARS:
     code += parse_char(c, endl='' if c == '~' else ',')
 code += "};"
-print(code)
+
+with open(path.join(dirname, "font.h"), 'w') as f:
+    f.write("#pragma once\n\n")
+    f.write(code)
+    f.write("\n")
