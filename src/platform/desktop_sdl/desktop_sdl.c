@@ -305,7 +305,7 @@ static void choose_mode(menu_entry_t *entry) {
 }
 
 static void choose_link_mode(menu_entry_t *entry) {
-    entry->parent->entries[3].disabled = !entry->choices.position;
+    entry->parent->entries[1].disabled = !entry->choices.position;
 }
 
 static void on_input_link_host(menu_entry_t *entry) {
@@ -569,20 +569,20 @@ int main(int argc, char **argv) {
     options_menu.entries[4].choices.description = xmalloc(16);
     snprintf(options_menu.entries[4].choices.description, 16, "Effect on reset");
 
-    link_menu.entries[2].user_input.input = xmalloc(INET6_ADDRSTRLEN);
-    snprintf(link_menu.entries[2].user_input.input, sizeof(config.link_host), "%s", config.link_host);
+    link_menu.entries[1].user_input.input = xmalloc(INET6_ADDRSTRLEN);
+    snprintf(link_menu.entries[1].user_input.input, sizeof(config.link_host), "%s", config.link_host);
 
-    link_menu.entries[2].user_input.cursor = strlen(config.link_host);
-    link_menu.entries[2].user_input.max_length = 39;
-    link_menu.entries[2].user_input.visible_hi = 12;
+    link_menu.entries[1].user_input.cursor = strlen(config.link_host);
+    link_menu.entries[1].user_input.max_length = 39;
+    link_menu.entries[1].user_input.visible_hi = 12;
 
-    char **link_port_buf = &link_menu.entries[3].user_input.input;
+    char **link_port_buf = &link_menu.entries[2].user_input.input;
     *link_port_buf = xmalloc(6);
 
-    link_menu.entries[3].user_input.cursor = snprintf(*link_port_buf, 6, "%s", config.link_port);
-    link_menu.entries[3].user_input.input = *link_port_buf;
-    link_menu.entries[3].user_input.max_length = 5;
-    link_menu.entries[3].user_input.visible_hi = 5;
+    link_menu.entries[2].user_input.cursor = snprintf(*link_port_buf, 6, "%s", config.link_port);
+    link_menu.entries[2].user_input.input = *link_port_buf;
+    link_menu.entries[2].user_input.max_length = 5;
+    link_menu.entries[2].user_input.visible_hi = 5;
 
 
 
