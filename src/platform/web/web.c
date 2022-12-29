@@ -167,11 +167,11 @@ EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
     if (is_controller_present)
         SDL_GameControllerClose(pad);
 
-    SDL_DestroyWindow(window);
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyTexture(ppu_texture);
-
     SDL_CloseAudioDevice(audio_device);
+
+    SDL_DestroyTexture(ppu_texture);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
 
     SDL_Quit();
 }
