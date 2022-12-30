@@ -137,22 +137,22 @@ canvas.emscripten {
 }
 
 .topnav a:hover {
-    background-color: darkgray;
+    background-color: #a4a6af;
     color: black;
 }
 
 .topnav a.split {
     float: right;
-    background-color: gray;
+    background-color: #272727;
     color: white;
 }
 
 .topnav a.split:hover {
-    background-color: dimgray;
+    background-color: #000000;
 }
 
 .topnav a.active {
-    background-color: black;
+    background-color: #9bbc09;
     color: white;
 }
 
