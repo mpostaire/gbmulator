@@ -170,7 +170,7 @@ int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size) {
     mmu->bank1_reg = 1;
     mmu->rom_bank0_pointer = mmu->mem;
     mmu->rom_bankn_pointer = mmu->mem;
-    mmu->eram_bank_pointer = mmu->eram;
+    mmu->eram_bank_pointer = mmu->eram - ERAM;
 
     mmu->cartridge_size = rom_size;
     memcpy(mmu->cartridge, rom_data, mmu->cartridge_size);
@@ -347,7 +347,7 @@ static inline void set_bank_pointers(mmu_t *mmu, byte_t bank1_reg_size) {
         mmu->rom_bank0_pointer = &mmu->cartridge[current_rom_bank0 * ROM_BANK_SIZE];
 
         byte_t current_eram_bank = mmu->bank2_reg & (mmu->eram_banks - 1);
-        mmu->eram_bank_pointer = &mmu->eram[current_eram_bank * ERAM_BANK_SIZE];
+        mmu->eram_bank_pointer = &mmu->eram[current_eram_bank * ERAM_BANK_SIZE] - ERAM;
     } else { // ROM mode
         // safer to use mmu->mem instead of mmu->cartridge when changing BANK0 pointer
         // because the boot rom can be mapped inside and mmu->mem reflects this
@@ -355,7 +355,7 @@ static inline void set_bank_pointers(mmu_t *mmu, byte_t bank1_reg_size) {
         // in the memory address region ROM_BANK0.
         mmu->rom_bank0_pointer = mmu->mem;
 
-        mmu->eram_bank_pointer = mmu->eram;
+        mmu->eram_bank_pointer = mmu->eram - ERAM;
     }
 
     byte_t current_rom_bankn = (mmu->bank2_reg << bank1_reg_size) | mmu->bank1_reg;
@@ -411,24 +411,19 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
             break;
         }
         break;
-    // case MBC2:
-    //     switch (address & 0xE000) {
-    //     case 0x4000:
-    //         /* code */
-    //         break;
-    //     }
-    //     // if (address >= 0x4000)
-    //     //     break;
+    case MBC2:
+        if (address >= 0x4000)
+            break;
 
-    //     // if (!CHECK_BIT(address, 8)) {
-    //     //     mmu->ramg_reg = (data & 0x0F) == 0x0A;
-    //     // } else {
-    //     //     mmu->current_rom_bank = data & 0x0F;
-    //     //     if (mmu->current_rom_bank == 0x00)
-    //     //         mmu->current_rom_bank = 0x01; // 0x00 not allowed
-    //     //     mmu->current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
-    //     // }
-    //     break;
+        if (!CHECK_BIT(address, 8)) {
+            mmu->ramg_reg = (data & 0x0F) == 0x0A;
+        } else {
+            data &= 0x0F;
+            mmu->bank1_reg = data == 0x00 ? 0x01 : data; // BANK1 can't be 0
+            mmu->bank1_reg &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
+            mmu->rom_bankn_pointer = &mmu->cartridge[(mmu->bank1_reg - 1) * ROM_BANK_SIZE];
+        }
+        break;
     // case MBC3:
     // case MBC30:
     //     if (address < 0x2000) {
@@ -483,14 +478,6 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
 
 // static void write_mbc_eram(mmu_t *mmu, word_t address, byte_t data) {
 //     switch (mmu->mbc) {
-//     case MBC1:
-//         if (mmu->has_eram && mmu->ramg_reg)
-//             mmu->eram[(address - ERAM) + (mmu->current_eram_bank * 0x2000)] = data;
-//         break;
-//     case MBC2:
-//         if (mmu->has_eram && mmu->ramg_reg)
-//             mmu->eram[(address - ERAM) + (mmu->current_eram_bank * 0x0200)] = data;
-//         break;
 //     case MBC3:
 //     case MBC30:
 //         if (mmu->has_eram && mmu->ramg_reg && mmu->current_eram_bank >= 0) {
@@ -567,8 +554,14 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
             return mmu->mem[address];
     }
 
-    if (address >= ERAM && address < WRAM_BANK0)
-        return mmu->ramg_reg ? mmu->eram_bank_pointer[address] : 0xFF;
+    if (address >= ERAM && address < WRAM_BANK0) {
+        if (mmu->mbc == MBC2) {
+            // wrap around from 0xA200 to 0xBFFF (eg: address 0xA200 reads as address 0xA000)
+            return mmu->ramg_reg ? mmu->eram_bank_pointer[ERAM + (address & 0x1FF)] | 0xF0 : 0xFF;
+        } else {
+            return mmu->ramg_reg ? mmu->eram_bank_pointer[address] : 0xFF;
+        }
+    }
 
     // If in CGB mode, access to extra wram banks
     if (emu->mode == CGB && address >= WRAM_BANKN && address < ECHO) {
@@ -1142,7 +1135,12 @@ void mmu_unserialize(emulator_t *emu, byte_t *buf) {
     memcpy(&emu->mmu->mode_reg, &buf[offset + 7], 1);
 
     // reset bank and eram pointers
-    set_bank_pointers(emu->mmu, emu->mmu->mbc == MBC1M ? 4 : 5);
+    if (emu->mmu->mbc == MBC2) {
+        emu->mmu->eram_bank_pointer = emu->mmu->eram - ERAM;
+        emu->mmu->rom_bankn_pointer = &emu->mmu->cartridge[(emu->mmu->bank1_reg - 1) * ROM_BANK_SIZE];
+    } else {
+        set_bank_pointers(emu->mmu, emu->mmu->mbc == MBC1M ? 4 : 5);
+    }
 
     memcpy(&emu->mmu->has_eram, &buf[offset + 8], 1);
     memcpy(&emu->mmu->has_battery, &buf[offset + 9], 1);

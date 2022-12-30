@@ -161,9 +161,10 @@ typedef struct {
     // pointer to the start of the ROM memory region when accessing the 0x0000-0x3FFF range.
     byte_t *rom_bank0_pointer;
     // pointer to the start of the ROM memory region  when accessing the 0x4000-0x7FFF range
-    // (actually with an offset of -0x4000 to avoid converting the address passes to the mmu_read() function).
+    // (actually with an offset of -0x4000 to avoid converting the address passed to the mmu_read() function).
     byte_t *rom_bankn_pointer;
     // pointer to the start of the ERAM memory region when accessing the 0x8000-0x9FFF range.
+    // (actually with an offset of -0xA000 to avoid converting the address passed to the mmu_read() and mmu_write() functions).
     byte_t *eram_bank_pointer;
 
     byte_t has_eram;
