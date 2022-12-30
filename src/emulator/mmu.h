@@ -4,6 +4,9 @@
 
 #include "types.h"
 
+#define ROM_BANK_SIZE 0x4000
+#define ERAM_BANK_SIZE 0x2000
+
 typedef enum {
     ROM_BANK0 = 0x0000, // From cartridge, usually a fixed bank.
     ROM_BANKN = 0x4000, // From cartridge, switchable bank via MBC (if any).

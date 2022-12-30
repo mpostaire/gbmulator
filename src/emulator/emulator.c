@@ -37,6 +37,7 @@ emulator_options_t defaults_opts = {
 const char *mbc_names[] = {
     STRINGIFY(ROM_ONLY),
     STRINGIFY(MBC1),
+    STRINGIFY(MBC1M),
     STRINGIFY(MBC2),
     STRINGIFY(MBC3),
     STRINGIFY(MBC30),

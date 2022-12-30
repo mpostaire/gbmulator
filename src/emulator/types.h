@@ -86,6 +86,7 @@ typedef struct {
 typedef enum {
     ROM_ONLY,
     MBC1,
+    MBC1M,
     MBC2,
     MBC3,
     MBC30,
@@ -150,11 +151,20 @@ typedef struct {
     byte_t mbc;
     word_t rom_banks;
     byte_t eram_banks;
-    word_t current_rom_bank;
-    byte_t mbc_rom_bank_hi;
-    s_word_t current_eram_bank;
-    byte_t mbc1_mode;
-    byte_t eram_enabled;
+
+    // MBC1
+    byte_t ramg_reg; // 1 if eram is enabled, else 0
+    byte_t bank1_reg; // bits 7-5: unused, bits 4-0: lower 5 bits of the ROM_BANKN number
+    byte_t bank2_reg; // bits 7-2: unused, bits 1-0: upper 2 bits (bits 6-5) of the ROM_BANKN number
+    byte_t mode_reg; // bits 7-1: unused, bit 0: BANK2 mode
+
+    // pointer to the start of the ROM memory region when accessing the 0x0000-0x3FFF range.
+    byte_t *rom_bank0_pointer;
+    // pointer to the start of the ROM memory region  when accessing the 0x4000-0x7FFF range
+    // (actually with an offset of -0x4000 to avoid converting the address passes to the mmu_read() function).
+    byte_t *rom_bankn_pointer;
+    // pointer to the start of the ERAM memory region when accessing the 0x8000-0x9FFF range.
+    byte_t *eram_bank_pointer;
 
     byte_t has_eram;
     byte_t has_battery;
