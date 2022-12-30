@@ -22,6 +22,9 @@
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 #define CLAMP(x, lo, hi) MAX(MIN((x), (hi)), (lo))
 
+#define XSTRINGIFY(x) #x
+#define STRINGIFY(x) XSTRINGIFY(x)
+
 #define eprintf(format, ...) fprintf(stderr, "ERROR - %s() - "format, __func__, ##__VA_ARGS__)
 #define errnoprintf(format, ...) eprintf(format": %s\n", ##__VA_ARGS__, strerror(errno));
 

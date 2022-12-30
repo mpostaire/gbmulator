@@ -35,15 +35,15 @@ emulator_options_t defaults_opts = {
 };
 
 const char *mbc_names[] = {
-    "ROM_ONLY",
-    "MBC1",
-    "MBC2",
-    "MBC3",
-    "MBC30",
-    "MBC5",
-    "MBC6",
-    "MBC7",
-    "HuC1"
+    STRINGIFY(ROM_ONLY),
+    STRINGIFY(MBC1),
+    STRINGIFY(MBC2),
+    STRINGIFY(MBC3),
+    STRINGIFY(MBC30),
+    STRINGIFY(MBC5),
+    STRINGIFY(MBC6),
+    STRINGIFY(MBC7),
+    STRINGIFY(HuC1)
 };
 
 void emulator_step(emulator_t *emu) {

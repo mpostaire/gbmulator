@@ -112,8 +112,10 @@ static int parse_cartridge(emulator_t *emu) {
     case 0x05: mmu->eram_banks = 8; break;
     }
 
-    if (mmu->mbc == MBC3 && mmu->eram_banks == 8)
-        mmu->mbc = MBC30;
+    // MBC3 cartridges are 2MiB, MBC30 cartridges are 4MiB (but the mbctest.gb test rom is a bit smaller)
+    if (mmu->mbc == MBC3)
+        if (mmu->eram_banks == 8 || mmu->cartridge_size > 0x00200000)
+            mmu->mbc = MBC30;
 
     // get rom title
     memcpy(emu->rom_title, (char *) &mmu->cartridge[0x134], 16);
@@ -379,7 +381,8 @@ static void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) {
                 mmu->current_rom_bank = 0x01; // 0x00 not allowed
             mmu->current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
         } else if (address < 0x6000) {
-            if (data <= 0x03) {
+            byte_t max_ram_bank = mmu->mbc == MBC30 ? 0x07 : 0x03;
+            if (data <= max_ram_bank) {
                 mmu->current_eram_bank = data;
                 mmu->current_eram_bank &= mmu->eram_banks - 1; // in this case, equivalent to current_eram_bank %= eram_banks but avoid division by 0
             } else if (mmu->has_rtc && data >= 0x08 && data <= 0x0C) {
