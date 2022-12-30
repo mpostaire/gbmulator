@@ -18,14 +18,16 @@
             <i class="fa fa-github"></i>
         </a>
     </div>
-    <figure style="overflow:visible;" id="spinner">
-        <div class="spinner"></div>
-    </figure>
-    <div class="emscripten" id="status">Downloading...</div>
-    <div class="emscripten">
-        <progress value="0" max="100" id="progress" hidden=1></progress>
+    <div id="emscripten-status">
+        <figure style="overflow:visible;" id="spinner">
+            <div class="spinner"></div>
+        </figure>
+        <div class="emscripten" id="status">Downloading...</div>
+        <div class="emscripten">
+            <progress value="0" max="100" id="progress" style="visibility: hidden;"></progress>
+        </div>
     </div>
-    <div id="gb">
+    <div id="gb" style="visibility: hidden;">
         <button id="open-menu" class="paused" disabled onclick="togglePause(this)"></button>
         <div id="menu">
             <div id="menu-container">
@@ -146,17 +148,25 @@
         </div>
     </div>
     <script type='text/javascript'>
+        let gb = document.getElementById("gb");
+
         const buttons = [ "gb-left", "gb-right", "gb-up", "gb-down", "gb-a", "gb-b", "gb-start", "gb-select" ];
+        let currentButton = null;
         buttons.forEach(function (item, index) {
             let elem = document.getElementById(item);
             elem.onmousedown = function() {
                 Module.ccall('on_gui_button_down', 'void', ['number'], [index]);
+                currentButton = elem;
             };
             elem.onmouseup = function() {
                 Module.ccall('on_gui_button_up', 'void', ['number'], [index]);
+                currentButton = null;
             };
             elem.onmouseleave = function() {
-                Module.ccall('on_gui_button_up', 'void', ['number'], [index]);
+                if (elem === currentButton) {
+                    Module.ccall('on_gui_button_up', 'void', ['number'], [index]);
+                    currentButton = null;
+                }
             };
         });
 
@@ -228,13 +238,13 @@
                     text = m[1];
                     progressElement.value = parseInt(m[2]) * 100;
                     progressElement.max = parseInt(m[4]) * 100;
-                    progressElement.hidden = false;
-                    spinnerElement.hidden = false;
+                    progressElement.style = "visibility: visible;";
+                    spinnerElement.style = "visibility: visible;";
                 } else {
                     progressElement.value = null;
                     progressElement.max = null;
-                    progressElement.hidden = true;
-                    if (!text) spinnerElement.hidden = true;
+                    progressElement.style = "visibility: hidden;";
+                    if (!text) spinnerElement.style = "visibility: hidden;";
                 }
                 statusElement.innerHTML = text;
             },
@@ -244,6 +254,10 @@
                 Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies - left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
             }
         };
+
+        Module.postRun.push(function() {
+            gb.style = "visibility: visible;";
+        });
 
         var setTheme = function(theme) {
             switch (theme) {
@@ -285,6 +299,7 @@
 
         window.onbeforeunload = function (event) {
             Module.ccall('on_before_unload');
+            gb.style = "visibility: hidden;";
         };
 
         var openROM = function(e) {
