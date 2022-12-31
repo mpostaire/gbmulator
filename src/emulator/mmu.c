@@ -439,7 +439,7 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
             mmu->bank1_reg &= mmu->rom_banks - 1; // in this case, equivalent to mmu->bank1_reg %= rom_banks but avoid division by 0
             mmu->rom_bankn_pointer = &mmu->cartridge[(mmu->bank1_reg - 1) * ROM_BANK_SIZE];
             break;
-        case 0x4000:
+        case 0x4000:;
             byte_t max_ram_bank = mmu->mbc == MBC30 ? 0x07 : 0x03;
             if (data <= max_ram_bank) {
                 mmu->bank2_reg = data;
