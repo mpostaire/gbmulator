@@ -31,10 +31,14 @@ void *xrealloc(void *ptr, size_t size) {
     return new_ptr;
 }
 
+size_t time_to_string_length(void) {
+    return 20;
+}
+
 char *time_to_string(time_t t, size_t *len) {
     struct tm *tm = localtime(&t);
-    char *buf = xmalloc(256);
-    size_t ret = strftime(buf, 256, "%Y-%m-%d %T", tm);
+    char *buf = xmalloc(time_to_string_length());
+    size_t ret = strftime(buf, time_to_string_length(), "%Y-%m-%d %T", tm);
     if (len)
         *len = ret + 1; // include the null terminating character
     return buf;

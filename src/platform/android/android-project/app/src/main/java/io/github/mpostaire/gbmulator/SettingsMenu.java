@@ -1,7 +1,6 @@
 package io.github.mpostaire.gbmulator;
 
 import android.app.ProgressDialog;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import androidx.annotation.NonNull;
@@ -18,12 +17,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.tasks.OnFailureListener;
-import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.api.client.extensions.android.http.AndroidHttp;
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
 import com.google.api.client.json.gson.GsonFactory;
@@ -33,8 +30,9 @@ import com.google.api.services.drive.model.File;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Objects;
+
+import io.github.mpostaire.gbmulator.drive.DriveServiceHelper;
 
 public class SettingsMenu extends AppCompatActivity {
 
@@ -101,45 +99,39 @@ public class SettingsMenu extends AppCompatActivity {
 
         modePopup = new PopupMenu(this, settingModeTextView);
         modePopup.inflate(R.menu.setting_mode_popup_menu);
-        modePopup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
-            @Override
-            public boolean onMenuItemClick(MenuItem menuItem) {
-                switch (menuItem.getItemId()) {
-                    case R.id.popup_menu_mode_dmg:
-                        settingModeTextView.setText(R.string.setting_mode_dmg);
-                        preferencesEditor.putInt(UserSettings.EMULATION_MODE, UserSettings.EMULATION_MODE_DMG);
-                        preferencesEditor.apply();
-                        return true;
-                    case R.id.popup_menu_mode_cgb:
-                        settingModeTextView.setText(R.string.setting_mode_cgb);
-                        preferencesEditor.putInt(UserSettings.EMULATION_MODE, UserSettings.EMULATION_MODE_CGB);
-                        preferencesEditor.apply();
-                        return true;
-                    default:
-                        return false;
-                }
+        modePopup.setOnMenuItemClickListener(menuItem -> {
+            switch (menuItem.getItemId()) {
+                case R.id.popup_menu_mode_dmg:
+                    settingModeTextView.setText(R.string.setting_mode_dmg);
+                    preferencesEditor.putInt(UserSettings.EMULATION_MODE, UserSettings.EMULATION_MODE_DMG);
+                    preferencesEditor.apply();
+                    return true;
+                case R.id.popup_menu_mode_cgb:
+                    settingModeTextView.setText(R.string.setting_mode_cgb);
+                    preferencesEditor.putInt(UserSettings.EMULATION_MODE, UserSettings.EMULATION_MODE_CGB);
+                    preferencesEditor.apply();
+                    return true;
+                default:
+                    return false;
             }
         });
 
         palettePopup = new PopupMenu(this, settingPaletteTextView);
         palettePopup.inflate(R.menu.setting_palette_popup_menu);
-        palettePopup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
-            @Override
-            public boolean onMenuItemClick(MenuItem menuItem) {
-                switch (menuItem.getItemId()) {
-                    case R.id.popup_menu_palette_gray:
-                        settingPaletteTextView.setText(R.string.setting_palette_gray);
-                        preferencesEditor.putInt(UserSettings.EMULATION_PALETTE, UserSettings.EMULATION_PALETTE_GRAY);
-                        preferencesEditor.apply();
-                        return true;
-                    case R.id.popup_menu_palette_orig:
-                        settingPaletteTextView.setText(R.string.setting_palette_orig);
-                        preferencesEditor.putInt(UserSettings.EMULATION_PALETTE, UserSettings.EMULATION_PALETTE_ORIG);
-                        preferencesEditor.apply();
-                        return true;
-                    default:
-                        return false;
-                }
+        palettePopup.setOnMenuItemClickListener(menuItem -> {
+            switch (menuItem.getItemId()) {
+                case R.id.popup_menu_palette_gray:
+                    settingPaletteTextView.setText(R.string.setting_palette_gray);
+                    preferencesEditor.putInt(UserSettings.EMULATION_PALETTE, UserSettings.EMULATION_PALETTE_GRAY);
+                    preferencesEditor.apply();
+                    return true;
+                case R.id.popup_menu_palette_orig:
+                    settingPaletteTextView.setText(R.string.setting_palette_orig);
+                    preferencesEditor.putInt(UserSettings.EMULATION_PALETTE, UserSettings.EMULATION_PALETTE_ORIG);
+                    preferencesEditor.apply();
+                    return true;
+                default:
+                    return false;
             }
         });
 
@@ -269,49 +261,44 @@ public class SettingsMenu extends AppCompatActivity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle(R.string.setting_layout_editor);
         builder.setMessage(R.string.setting_layout_editor_popup_label);
-        builder.setPositiveButton(R.string.setting_layout_editor_popup_portrait_button, new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialogInterface, int i) {
-                Intent intent = new Intent(SettingsMenu.this, Emulator.class);
-                intent.putExtra("layout_editor", 1);
-                startActivity(intent);
-            }
+        builder.setPositiveButton(R.string.setting_layout_editor_popup_portrait_button, (dialogInterface, i) -> {
+            Intent intent = new Intent(SettingsMenu.this, Emulator.class);
+            intent.putExtra("layout_editor", 1);
+            startActivity(intent);
         });
-        builder.setNegativeButton(R.string.setting_layout_editor_popup_landscape_button, new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialogInterface, int i) {
-                Intent intent = new Intent(SettingsMenu.this, Emulator.class);
-                intent.putExtra("layout_editor", 2);
-                startActivity(intent);
-            }
+        builder.setNegativeButton(R.string.setting_layout_editor_popup_landscape_button, (dialogInterface, i) -> {
+            Intent intent = new Intent(SettingsMenu.this, Emulator.class);
+            intent.putExtra("layout_editor", 2);
+            startActivity(intent);
         });
-        builder.setNeutralButton(R.string.setting_layout_editor_popup_defaults_button, new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialogInterface, int i) {
-                preferencesEditor.putFloat(UserSettings.PORTRAIT_DPAD_X, UserSettings.PORTRAIT_DPAD_X_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.PORTRAIT_DPAD_Y, UserSettings.PORTRAIT_DPAD_Y_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.PORTRAIT_A_X, UserSettings.PORTRAIT_A_X_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.PORTRAIT_A_Y, UserSettings.PORTRAIT_A_Y_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.PORTRAIT_B_X, UserSettings.PORTRAIT_B_X_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.PORTRAIT_B_Y, UserSettings.PORTRAIT_B_Y_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.PORTRAIT_START_X, UserSettings.PORTRAIT_START_X_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.PORTRAIT_START_Y, UserSettings.PORTRAIT_START_Y_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.PORTRAIT_SELECT_X, UserSettings.PORTRAIT_SELECT_X_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.PORTRAIT_SELECT_Y, UserSettings.PORTRAIT_SELECT_Y_DEFAULT);
+        builder.setNeutralButton(R.string.setting_layout_editor_popup_defaults_button, (dialogInterface, i) -> {
+            preferencesEditor.putFloat(UserSettings.PORTRAIT_DPAD_X, UserSettings.PORTRAIT_DPAD_X_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.PORTRAIT_DPAD_Y, UserSettings.PORTRAIT_DPAD_Y_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.PORTRAIT_A_X, UserSettings.PORTRAIT_A_X_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.PORTRAIT_A_Y, UserSettings.PORTRAIT_A_Y_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.PORTRAIT_B_X, UserSettings.PORTRAIT_B_X_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.PORTRAIT_B_Y, UserSettings.PORTRAIT_B_Y_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.PORTRAIT_START_X, UserSettings.PORTRAIT_START_X_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.PORTRAIT_START_Y, UserSettings.PORTRAIT_START_Y_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.PORTRAIT_SELECT_X, UserSettings.PORTRAIT_SELECT_X_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.PORTRAIT_SELECT_Y, UserSettings.PORTRAIT_SELECT_Y_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.PORTRAIT_LINK_X, UserSettings.PORTRAIT_LINK_X_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.PORTRAIT_LINK_Y, UserSettings.PORTRAIT_LINK_Y_DEFAULT);
 
-                preferencesEditor.putFloat(UserSettings.LANDSCAPE_DPAD_X, UserSettings.LANDSCAPE_DPAD_X_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.LANDSCAPE_DPAD_Y, UserSettings.LANDSCAPE_DPAD_Y_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.LANDSCAPE_A_X, UserSettings.LANDSCAPE_A_X_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.LANDSCAPE_A_Y, UserSettings.LANDSCAPE_A_Y_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.LANDSCAPE_B_X, UserSettings.LANDSCAPE_B_X_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.LANDSCAPE_B_Y, UserSettings.LANDSCAPE_B_Y_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.LANDSCAPE_START_X, UserSettings.LANDSCAPE_START_X_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.LANDSCAPE_START_Y, UserSettings.LANDSCAPE_START_Y_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.LANDSCAPE_SELECT_X, UserSettings.LANDSCAPE_SELECT_X_DEFAULT);
-                preferencesEditor.putFloat(UserSettings.LANDSCAPE_SELECT_Y, UserSettings.LANDSCAPE_SELECT_Y_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.LANDSCAPE_DPAD_X, UserSettings.LANDSCAPE_DPAD_X_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.LANDSCAPE_DPAD_Y, UserSettings.LANDSCAPE_DPAD_Y_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.LANDSCAPE_A_X, UserSettings.LANDSCAPE_A_X_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.LANDSCAPE_A_Y, UserSettings.LANDSCAPE_A_Y_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.LANDSCAPE_B_X, UserSettings.LANDSCAPE_B_X_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.LANDSCAPE_B_Y, UserSettings.LANDSCAPE_B_Y_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.LANDSCAPE_START_X, UserSettings.LANDSCAPE_START_X_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.LANDSCAPE_START_Y, UserSettings.LANDSCAPE_START_Y_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.LANDSCAPE_SELECT_X, UserSettings.LANDSCAPE_SELECT_X_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.LANDSCAPE_SELECT_Y, UserSettings.LANDSCAPE_SELECT_Y_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.LANDSCAPE_LINK_X, UserSettings.LANDSCAPE_LINK_X_DEFAULT);
+            preferencesEditor.putFloat(UserSettings.LANDSCAPE_LINK_Y, UserSettings.LANDSCAPE_LINK_Y_DEFAULT);
 
-                preferencesEditor.apply();
-            }
+            preferencesEditor.apply();
         });
         builder.show();
     }
@@ -342,26 +329,20 @@ public class SettingsMenu extends AppCompatActivity {
             case 400:
                 if (resultCode == RESULT_OK) {
                     GoogleSignIn.getSignedInAccountFromIntent(data)
-                            .addOnSuccessListener(new OnSuccessListener<GoogleSignInAccount>() {
-                                @Override
-                                public void onSuccess(GoogleSignInAccount googleSignInAccount) {
-                                    GoogleAccountCredential credential = GoogleAccountCredential
-                                            .usingOAuth2(SettingsMenu.this, Collections.singleton(DriveScopes.DRIVE_FILE));
-                                    credential.setSelectedAccount(googleSignInAccount.getAccount());
+                            .addOnSuccessListener(googleSignInAccount -> {
+                                GoogleAccountCredential credential = GoogleAccountCredential
+                                        .usingOAuth2(SettingsMenu.this, Collections.singleton(DriveScopes.DRIVE_FILE));
+                                credential.setSelectedAccount(googleSignInAccount.getAccount());
 
-                                    Drive driveService = new Drive.Builder(AndroidHttp.newCompatibleTransport(), new GsonFactory(), credential)
-                                            .setApplicationName("GBmulator")
-                                            .build();
+                                Drive driveService = new Drive.Builder(AndroidHttp.newCompatibleTransport(), new GsonFactory(), credential)
+                                        .setApplicationName("GBmulator")
+                                        .build();
 
-                                    driveSyncSaves(driveService);
-                                }
+                                driveSyncSaves(driveService);
                             })
-                            .addOnFailureListener(new OnFailureListener() {
-                                @Override
-                                public void onFailure(@NonNull Exception e) {
-                                    e.printStackTrace();
-                                    Toast.makeText(SettingsMenu.this, "Failed to connect to Google Drive", Toast.LENGTH_SHORT).show();
-                                }
+                            .addOnFailureListener(e -> {
+                                e.printStackTrace();
+                                Toast.makeText(SettingsMenu.this, "Failed to connect to Google Drive", Toast.LENGTH_SHORT).show();
                             });
                 }
                 break;
@@ -372,32 +353,16 @@ public class SettingsMenu extends AppCompatActivity {
         driveSyncProgressDialog.setMessage(getString(R.string.setting_drive_dialog_fetch_msg));
 
         driveServiceHelper = new DriveServiceHelper(driveService);
-        driveServiceHelper.getSaveDirId().addOnSuccessListener(new OnSuccessListener<String>() {
-            @Override
-            public void onSuccess(String dirId) {
-                driveSaveDirId = dirId;
-                if (driveSaveDirId == null) {
-                    driveCompare(new File[] {});
-                    return;
-                }
-                driveServiceHelper.listSaveFiles(driveSaveDirId).addOnSuccessListener(new OnSuccessListener<List<File>>() {
-                    @Override
-                    public void onSuccess(List<File> files) {
-                        driveCompare(files.toArray(new File[] {}));
-                    }
-                }).addOnFailureListener(new OnFailureListener() {
-                    @Override
-                    public void onFailure(@NonNull Exception e) {
-                        driveCompare(new File[] {});
-                    }
-                });
-            }
-        }).addOnFailureListener(new OnFailureListener() {
-            @Override
-            public void onFailure(@NonNull Exception e) {
+        driveServiceHelper.getSaveDirId().addOnSuccessListener(dirId -> {
+            driveSaveDirId = dirId;
+            if (driveSaveDirId == null) {
                 driveCompare(new File[] {});
+                return;
             }
-        });
+            driveServiceHelper.listSaveFiles(driveSaveDirId).addOnSuccessListener(files ->
+                driveCompare(files.toArray(new File[] {}))
+            ).addOnFailureListener(e -> driveCompare(new File[] {}));
+        }).addOnFailureListener(e -> driveCompare(new File[] {}));
     }
 
     public void driveCompare(File[] distantFiles) {

@@ -4,6 +4,9 @@
 
 #include "types.h"
 
+#define ROM_BANK_SIZE 0x4000
+#define ERAM_BANK_SIZE 0x2000
+
 typedef enum {
     ROM_BANK0 = 0x0000, // From cartridge, usually a fixed bank.
     ROM_BANKN = 0x4000, // From cartridge, switchable bank via MBC (if any).
@@ -22,6 +25,7 @@ typedef enum {
     SC = 0xFF02, // Serial transfer control
 
     // Timer
+    DIV_LSB = 0xFF03, // Lower byte of the Divider Register
     DIV = 0xFF04,  // Divider Register
     TIMA = 0xFF05, // Timer counter
     TMA = 0xFF06,  // Timer Modulo
@@ -105,7 +109,7 @@ int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size);
 
 void mmu_quit(emulator_t *emu);
 
-void mmu_step(emulator_t *emu, int cycles);
+void mmu_step(emulator_t *emu);
 
 /**
  * only used in cpu instructions (opcode execution)
@@ -148,3 +152,9 @@ inline void rtc_update(rtc_t *rtc) {
     if (CHECK_BIT(rtc->dh, 7))
         rtc->value_in_seconds = rtc->s + rtc->m * 60 + rtc->h * 3600 + d * 86400;
 }
+
+size_t mmu_serialized_length(emulator_t *emu);
+
+byte_t *mmu_serialize(emulator_t *emu, size_t *size);
+
+void mmu_unserialize(emulator_t *emu, byte_t *buf);

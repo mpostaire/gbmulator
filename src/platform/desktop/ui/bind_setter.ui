@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+    <requires lib="gtk" version="4.0"/>
+    <requires lib="libadwaita" version="1.2"/>
+
+    <object class="GtkDialog" id="window">
+        <property name="resizable">false</property>
+        <property name="modal">true</property>
+        <property name="hide-on-close">true</property>
+        <property name="use-header-bar">1</property>
+        <property name="title">Edit binding</property>
+
+        <child internal-child="content_area">
+            <object class="GtkBox">
+                <property name="margin-start">20</property>
+                <property name="margin-end">20</property>
+                <property name="margin-top">20</property>
+                <property name="margin-bottom">20</property>
+                <property name="orientation">horizontal</property>
+                <property name="valign">center</property>
+                <property name="halign">center</property>
+                <child>
+                    <object class="GtkLabel" id="joypad_name" />
+                </child>
+
+                <child>
+                    <object class="GtkLabel" id="bind_value">
+                        <property name="margin-start">6</property>
+                        <style>
+                            <class name="dim-label" />
+                        </style>
+                    </object>
+                </child>
+            </object>
+        </child>
+
+        <child type="action">
+            <object class="GtkButton" id="cancel_action_dialog">
+                <property name="label">Cancel</property>
+            </object>
+        </child>
+
+        <child type="action">
+            <object class="GtkButton" id="apply_action_dialog">
+                <property name="label">Apply</property>
+            </object>
+        </child>
+
+        <action-widgets>
+            <action-widget response="cancel">cancel_action_dialog</action-widget>
+            <action-widget response="apply" default="true">apply_action_dialog</action-widget>
+        </action-widgets>
+    </object>
+</interface>

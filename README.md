@@ -60,11 +60,12 @@ There is also support for gamepad controllers but the buttons aren't configurabl
 - fix mbc bugs + implement MBC6, MBC7, HuC1 and multicart MBCs
 - better audio/video sync
 - rewrite ppu from scanline rendering to cycle accurate rendering
-- fix buggy serial data transfer
+- fix buggy link cable (tetris/dr mario are working fine but pokemon red is broken)
 
 ## Resources used
 - https://gbdev.io/pandocs/
 - http://marc.rawer.de/Gameboy/Docs/GBCPUman.pdf
+- https://gekkio.fi/files/gb-docs/gbctr.pdf
 - https://izik1.github.io/gbops/
 - https://gbdev.gg8.se/wiki/
 - https://www.youtube.com/watch?v=HyzD8pNlpwI

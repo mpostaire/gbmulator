@@ -15,20 +15,26 @@ typedef enum {
 
 extern byte_t ppu_color_palettes[PPU_COLOR_PALETTE_MAX][4][3];
 
-void inline ppu_ly_lyc_compare(emulator_t *emu) {
+inline void ppu_ly_lyc_compare(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
     if (mmu->mem[LY] == mmu->mem[LYC]) {
         SET_BIT(mmu->mem[STAT], 2);
         if (CHECK_BIT(mmu->mem[STAT], 6))
-            cpu_request_interrupt(emu, IRQ_STAT);
+            CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
     } else {
         RESET_BIT(mmu->mem[STAT], 2);
     }
 }
 
-void ppu_step(emulator_t *emu, int cycles);
+void ppu_step(emulator_t *emu);
 
 void ppu_init(emulator_t *emu);
 
 void ppu_quit(emulator_t *emu);
+
+size_t ppu_serialized_length(emulator_t *emu);
+
+byte_t *ppu_serialize(emulator_t *emu, size_t *size);
+
+void ppu_unserialize(emulator_t *emu, byte_t *buf);

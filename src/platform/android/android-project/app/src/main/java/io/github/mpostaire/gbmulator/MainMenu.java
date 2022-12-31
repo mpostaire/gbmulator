@@ -1,16 +1,10 @@
 package io.github.mpostaire.gbmulator;
 
-import android.Manifest;
-import android.annotation.SuppressLint;
-import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothSocket;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
 import android.net.Uri;
-import android.os.Build;
-import androidx.annotation.NonNull;
-import androidx.core.app.ActivityCompat;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
@@ -35,6 +29,8 @@ public class MainMenu extends AppCompatActivity {
 
     SharedPreferences preferences;
     int emu_mode = 0;
+
+    BluetoothSocket socket = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -154,23 +150,6 @@ public class MainMenu extends AppCompatActivity {
         startActivityForResult(filePickerIntent, 200);
     }
 
-    public void linkCable(View view) {
-        boolean bluetooth = ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH) == PackageManager.PERMISSION_GRANTED;
-        boolean bluetoothAdmin = ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADMIN) == PackageManager.PERMISSION_GRANTED;
-        if (bluetooth && bluetoothAdmin) {
-            goToLinkMenu();
-        } else {
-            /*if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                // TODO request new bluetooth permissions (and test in emulator if this works)
-            } else */if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                requestPermissions(new String[] { Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN }, 111);
-            } else {
-                Toast.makeText(MainMenu.this, "Can't use link cable without bluetooth permissions", Toast.LENGTH_SHORT).show();
-                finish();
-            }
-        }
-    }
-
     public void resetROM(View view) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle(R.string.reset_rom_button);
@@ -187,52 +166,6 @@ public class MainMenu extends AppCompatActivity {
 
     public void openSettings(View view) {
         startActivity(new Intent(MainMenu.this, SettingsMenu.class));
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        switch (requestCode) {
-            case 111:
-                // If request is cancelled, the result arrays are empty.
-                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED && grantResults[1] == PackageManager.PERMISSION_GRANTED) {
-                    // Permission is granted. Continue the action or workflow
-                    // in your app.
-                    goToLinkMenu();
-                }  else {
-                    // Explain to the user that the feature is unavailable because
-                    // the features requires a permission that the user has denied.
-                    // At the same time, respect the user's decision. Don't link to
-                    // system settings in an effort to convince the user to change
-                    // their decision.
-                    Toast.makeText(MainMenu.this, "Can't use link cable without bluetooth permissions", Toast.LENGTH_SHORT).show();
-                    finish();
-                }
-                return;
-        }
-        // Other 'case' lines to check for other
-        // permissions this app might request.
-    }
-
-    public void goToLinkMenu() {
-        BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (bluetoothAdapter.isEnabled()) {
-            startActivity(new Intent(MainMenu.this, LinkMenu.class));
-            return;
-        }
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle(R.string.link_button);
-        builder.setMessage(R.string.link_dialog_message);
-        builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
-            @SuppressLint("MissingPermission")
-            @Override
-            public void onClick(DialogInterface dialogInterface, int i) {
-                bluetoothAdapter.enable();
-                startActivity(new Intent(MainMenu.this, LinkMenu.class));
-            }
-        });
-        builder.setNegativeButton(android.R.string.cancel, null);
-        builder.show();
     }
     
 }

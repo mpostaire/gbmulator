@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+    <requires lib="gtk" version="4.0"/>
+    <requires lib="libadwaita" version="1.2"/>
+
+    <object class="GtkDialog" id="window">
+        <property name="resizable">false</property>
+        <property name="modal">true</property>
+        <property name="hide-on-close">true</property>
+        <property name="use-header-bar">1</property>
+        <property name="title">Link cable</property>
+
+        <child internal-child="content_area">
+            <object class="GtkBox">
+                <property name="margin-start">20</property>
+                <property name="margin-end">20</property>
+                <property name="margin-top">20</property>
+                <property name="margin-bottom">20</property>
+                <property name="orientation">vertical</property>
+        
+                <child>
+                    <object class="GtkBox" id="listbox_box">
+                        <property name="orientation">vertical</property>
+                        <child>
+                            <object class="GtkListBox" id="listbox">
+                                <property name="visible">true</property>
+                                <property name="selection_mode">none</property>
+                                <style>
+                                    <class name="boxed-list"/>
+                                </style>
+
+                                <child>
+                                    <object class="AdwPreferencesRow">
+                                        <property name="activatable">false</property>
+                                        <property name="focusable">false</property>
+                                        <style>
+                                            <class name="empty"/>
+                                            <class name="expander"/>
+                                        </style>
+                                        <child>
+                                            <object class="GtkBox">
+                                                <property name="orientation">vertical</property>
+                                                <child>
+                                                    <object class="GtkListBox">
+                                                        <property name="selection-mode">none</property>
+                                                        <child>
+                                                            <object class="AdwPreferencesRow">
+                                                                <property name="activatable">false</property>
+                                                                <property name="focusable">false</property>
+                                                                <child>
+                                                                    <object class="GtkBox" id="header">
+                                                                        <property name="valign">center</property>
+                                                                        <property name="hexpand">False</property>
+                                                                        <style>
+                                                                            <class name="header"/>
+                                                                        </style>
+                                                                        <child>
+                                                                            <object class="GtkBox" id="title_box">
+                                                                                <property name="orientation">vertical</property>
+                                                                                <property name="valign">center</property>
+                                                                                <property name="hexpand">True</property>
+                                                                                <style>
+                                                                                    <class name="title"/>
+                                                                                </style>
+                                                                                <child>
+                                                                                    <object class="GtkLabel" id="title">
+                                                                                        <property name="label">Link mode</property>
+                                                                                        <property name="ellipsize">none</property>
+                                                                                        <property name="lines">0</property>
+                                                                                        <property name="wrap">True</property>
+                                                                                        <property name="wrap-mode">word-char</property>
+                                                                                        <property name="xalign">0</property>
+                                                                                        <style>
+                                                                                            <class name="title"/>
+                                                                                        </style>
+                                                                                    </object>
+                                                                                </child>
+
+                                                                                <child>
+                                                                                    <object class="GtkLabel" id="subtitle">
+                                                                                        <property name="label">Start the link as either server or client.</property>
+                                                                                        <property name="ellipsize">none</property>
+                                                                                        <property name="lines">0</property>
+                                                                                        <property name="wrap">True</property>
+                                                                                        <property name="wrap-mode">word-char</property>
+                                                                                        <property name="xalign">0</property>
+                                                                                        <style>
+                                                                                            <class name="subtitle"/>
+                                                                                        </style>
+                                                                                    </object>
+                                                                                </child>
+                                                                            </object>
+                                                                        </child>
+
+                                                                        <child>
+                                                                            <object class="GtkBox">
+                                                                                <property name="orientation">horizontal</property>
+                                                                                <child>
+                                                                                    <object class="GtkToggleButton" id="link_mode_setter_server">
+                                                                                        <property name="label">Server</property>
+                                                                                        <property name="valign">center</property>
+                                                                                        <property name="active">true</property>
+                                                                                        <property name="group">link_mode_setter_client</property>
+                                                                                    </object>
+                                                                                </child>
+
+                                                                                <child>
+                                                                                    <object class="GtkToggleButton" id="link_mode_setter_client">
+                                                                                        <property name="label">Client</property>
+                                                                                        <property name="valign">center</property>
+                                                                                    </object>
+                                                                                </child>
+                                                                                <style>
+                                                                                    <class name="linked"/>
+                                                                                </style>
+                                                                            </object>
+                                                                        </child>
+                                                                    </object>
+                                                                </child>
+                                                            </object>
+                                                        </child>
+                                                    </object>
+                                                </child>
+
+                                                <child>
+                                                    <object class="GtkRevealer" id="link_host_revealer">
+                                                        <property name="transition-type">slide-up</property>
+                                                        <property name="child">
+                                                            <object class="GtkListBox" id="list">
+                                                                <property name="selection-mode">none</property>
+                                                                <child>
+                                                                    <object class="AdwEntryRow" id="link_host">
+                                                                        <property name="title">Host address</property>
+                                                                        <property name="input-purpose">GTK_INPUT_PURPOSE_URL</property>
+                                                                    </object>
+                                                                </child>
+                                                            </object>
+                                                        </property>
+                                                    </object>
+                                                </child>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+
+                                <child>
+                                    <object class="AdwActionRow" id="link_port">
+                                        <property name="title">Port</property>
+                                        <property name="activatable-widget">link_port_setter</property>
+                                        <child>
+                                            <object class="GtkSpinButton" id="link_port_setter">
+                                                <property name="valign">center</property>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+
+                            </object>
+                        </child>
+                    </object>
+                </child>
+            </object>
+        </child>
+
+        <child type="action">
+            <object class="GtkButton" id="cancel_action_dialog">
+                <property name="label">Cancel</property>
+            </object>
+        </child>
+
+        <child type="action">
+            <object class="GtkButton" id="start_action_dialog">
+                <property name="label">Start</property>
+            </object>
+        </child>
+
+        <action-widgets>
+            <action-widget response="cancel">cancel_action_dialog</action-widget>
+            <action-widget response="ok" default="true">start_action_dialog</action-widget>
+        </action-widgets>
+    </object>
+</interface>

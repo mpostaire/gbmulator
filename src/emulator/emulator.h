@@ -22,14 +22,26 @@
  * Runs the emulator for one cpu step.
  * @returns the ammount of cycles the emulator has run for
  */
-int emulator_step(emulator_t *emu);
+void emulator_step(emulator_t *emu);
 
 /**
  * Runs the emulator for the given ammount of cpu cycles.
  * @param cycles_limit the ammount of cycles the emulator will run for
  */
-inline void emulator_run_cycles(emulator_t *emu, int cycles_limit) {
-    for (int cycles_count = 0; cycles_count < cycles_limit; cycles_count += emulator_step(emu));
+static inline void emulator_run_cycles(emulator_t *emu, int cycles_limit) {
+    for (int cycles_count = 0; cycles_count < cycles_limit; cycles_count += 4) // 4 cycles per step
+        emulator_step(emu);
+}
+
+/**
+ * Runs both the emulator and the linked emulator in parallel for the given ammount of cpu cycles.
+ * @param cycles_limit the ammount of cycles the emulator will run for
+ */
+static inline void emulator_linked_run_cycles(emulator_t *emu, emulator_t *linked_emu, int cycles_limit) {
+    for (int cycles_count = 0; cycles_count < cycles_limit; cycles_count += 4) { // 4 cycles per step
+        emulator_step(emu);
+        emulator_step(linked_emu);
+    }
 }
 
 /**
@@ -47,9 +59,11 @@ void emulator_quit(emulator_t *emu);
 
 void emulator_reset(emulator_t *emu, emulator_mode_t mode);
 
-int emulator_start_link(emulator_t *emu, const char *port, int is_ipv6, int mptcp_enabled);
+void emulator_print_status(emulator_t *emu);
 
-int emulator_connect_to_link(emulator_t *emu, const char *address, const char *port, int is_ipv6, int mptcp_enabled);
+void emulator_link_connect(emulator_t *emu, emulator_t *other_emu);
+
+void emulator_link_disconnect(emulator_t *emu);
 
 void emulator_joypad_press(emulator_t *emu, joypad_button_t key);
 
@@ -63,10 +77,20 @@ byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, byte_t compresse
 
 int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length);
 
+byte_t emulator_get_joypad_state(emulator_t *emu);
+
+void emulator_set_joypad_state(emulator_t *emu, byte_t state);
+
+/**
+ * @returns the ROM title (you must not free the returned pointer).
+ */
 char *emulator_get_rom_title(emulator_t *emu);
 
 char *emulator_get_rom_title_from_data(byte_t *rom_data, size_t size);
 
+/**
+ * @returns a pointer to the ROM (you must not free the returned pointer).
+ */
 byte_t *emulator_get_rom(emulator_t *emu, size_t *rom_size);
 
 /**

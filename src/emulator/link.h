@@ -2,12 +2,16 @@
 
 #include "types.h"
 
+void link_set_clock(emulator_t *emu);
+
 void link_init(emulator_t *emu);
 
 void link_quit(emulator_t *emu);
 
-int link_start_server(emulator_t *emu, const char *port, int is_ipv6, int mptcp_enabled);
+void link_step(emulator_t *emu);
 
-int link_connect_to_server(emulator_t *emu, const char *address, const char *port, int is_ipv6, int mptcp_enabled);
+size_t link_serialized_length(emulator_t *emu);
 
-void link_step(emulator_t *emu, int cycles);
+byte_t *link_serialize(emulator_t *emu, size_t *size);
+
+void link_unserialize(emulator_t *emu, byte_t *buf);

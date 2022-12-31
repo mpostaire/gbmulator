@@ -8,13 +8,13 @@
 
 #define PPU_SET_MODE(m) mmu->mem[STAT] = (mmu->mem[STAT] & 0xFC) | (m)
 
-#define SET_PIXEL_DMG(ppu_ptr, x, y, color, palette) { *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)) = ppu_color_palettes[(palette)][(color)][0]; \
-                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1) = ppu_color_palettes[(palette)][(color)][1]; \
-                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2) = ppu_color_palettes[(palette)][(color)][2]; }
+#define SET_PIXEL_DMG(ppu_ptr, x, y, color, palette) { *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = ppu_color_palettes[(palette)][(color)][0]; \
+                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 1) = ppu_color_palettes[(palette)][(color)][1]; \
+                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 2) = ppu_color_palettes[(palette)][(color)][2]; }
 
-#define SET_PIXEL_CGB(ppu_ptr, x, y, r, g, b) { *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)) = (r); \
-                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1) = (g); \
-                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2) = (b); }
+#define SET_PIXEL_CGB(ppu_ptr, x, y, r, g, b) { *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = (r); \
+                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 1) = (g); \
+                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 2) = (b); }
 
 byte_t ppu_color_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
     { // grayscale colors
@@ -541,7 +541,7 @@ static inline void oam_scan(emulator_t *emu) {
  * This does not implement the pixel FIFO but draws each scanline instantly when starting PPU_HBLANK (mode 0).
  * TODO if STAT interrupts are a problem, implement these corner cases: http://gameboy.mongenel.com/dmg/istat98.txt
  */
-void ppu_step(emulator_t *emu, int cycles) {
+void ppu_step(emulator_t *emu) {
     ppu_t *ppu = emu->ppu;
     mmu_t *mmu = emu->mmu;
 
@@ -581,7 +581,7 @@ void ppu_step(emulator_t *emu, int cycles) {
     if (ppu->is_lcd_turning_on)
         ppu_ly_lyc_compare(emu);
 
-    ppu->cycles += cycles;
+    ppu->cycles += 4; // 4 cycles per step
 
     switch (mmu->mem[STAT] & 0x03) { // switch current mode
     case PPU_MODE_OAM:
@@ -596,7 +596,7 @@ void ppu_step(emulator_t *emu, int cycles) {
             ppu->cycles -= 172;
             PPU_SET_MODE(PPU_MODE_HBLANK);
             if (CHECK_BIT(mmu->mem[STAT], 3))
-                cpu_request_interrupt(emu, IRQ_STAT);
+                CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
 
             if (emu->mode == CGB) {
                 draw_bg_win_cgb(emu);
@@ -616,9 +616,9 @@ void ppu_step(emulator_t *emu, int cycles) {
             if (mmu->mem[LY] == GB_SCREEN_HEIGHT) {
                 PPU_SET_MODE(PPU_MODE_VBLANK);
                 if (CHECK_BIT(mmu->mem[STAT], 4))
-                    cpu_request_interrupt(emu, IRQ_STAT);
+                    CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
 
-                cpu_request_interrupt(emu, IRQ_VBLANK);
+                CPU_REQUEST_INTERRUPT(emu, IRQ_VBLANK);
 
                 // skip first screen rendering after the LCD was just turned on
                 if (ppu->is_lcd_turning_on) {
@@ -631,7 +631,7 @@ void ppu_step(emulator_t *emu, int cycles) {
             } else {
                 PPU_SET_MODE(PPU_MODE_OAM);
                 if (CHECK_BIT(mmu->mem[STAT], 5))
-                    cpu_request_interrupt(emu, IRQ_STAT);
+                    CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
             }
         }
         break;
@@ -648,7 +648,7 @@ void ppu_step(emulator_t *emu, int cycles) {
                 ppu->wly = 0;
                 PPU_SET_MODE(PPU_MODE_OAM);
                 if (CHECK_BIT(mmu->mem[STAT], 5))
-                    cpu_request_interrupt(emu, IRQ_STAT);
+                    CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
             }
         }
         break;
@@ -667,4 +667,27 @@ void ppu_quit(emulator_t *emu) {
     free(emu->ppu->scanline_cache_color_data);
     free(emu->ppu->obj_pixel_priority);
     free(emu->ppu);
+}
+
+size_t ppu_serialized_length(UNUSED emulator_t *emu) {
+    return 25;
+}
+
+byte_t *ppu_serialize(emulator_t *emu, size_t *size) {
+    *size = ppu_serialized_length(emu);
+    byte_t *buf = xmalloc(*size);
+    memcpy(buf, &emu->ppu->is_lcd_turning_on, 1);
+    memcpy(&buf[1], &emu->ppu->wly, 1);
+    memcpy(&buf[2], &emu->ppu->cycles, 2);
+    memcpy(&buf[4], &emu->ppu->oam_scan.objs_addresses, sizeof(emu->ppu->oam_scan.objs_addresses));
+    memcpy(&buf[4 + sizeof(emu->ppu->oam_scan.objs_addresses)], &emu->ppu->oam_scan.size, 1);
+    return buf;
+}
+
+void ppu_unserialize(emulator_t *emu, byte_t *buf) {
+    memcpy(&emu->ppu->is_lcd_turning_on, buf, 1);
+    memcpy(&emu->ppu->wly, &buf[1], 1);
+    memcpy(&emu->ppu->cycles, &buf[2], 2);
+    memcpy(&emu->ppu->oam_scan.objs_addresses, &buf[4], sizeof(emu->ppu->oam_scan.objs_addresses));
+    memcpy(&emu->ppu->oam_scan.size, &buf[4 + sizeof(emu->ppu->oam_scan.objs_addresses)], 1);
 }

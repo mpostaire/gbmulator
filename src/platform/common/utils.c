@@ -1,44 +1,47 @@
+#include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
-#ifdef __ANDROID__
-#include <SDL.h>
-#else
-#include <SDL2/SDL.h>
-#endif
 
-#include "emulator/emulator.h"
+#include "../../emulator/emulator.h"
 #include "config.h"
 
-int sdl_key_to_joypad(SDL_Keycode key) {
-    if (key == config.keybindings[JOYPAD_LEFT]) return JOYPAD_LEFT;
-    if (key == config.keybindings[JOYPAD_RIGHT]) return JOYPAD_RIGHT;
-    if (key == config.keybindings[JOYPAD_UP]) return JOYPAD_UP;
-    if (key == config.keybindings[JOYPAD_DOWN]) return JOYPAD_DOWN;
-    if (key == config.keybindings[JOYPAD_A]) return JOYPAD_A;
-    if (key == config.keybindings[JOYPAD_B]) return JOYPAD_B;
-    if (key == config.keybindings[JOYPAD_START]) return JOYPAD_START;
-    if (key == config.keybindings[JOYPAD_SELECT]) return JOYPAD_SELECT;
-    return key;
+static long fsize(FILE *f) {
+    if (fseek(f, 0, SEEK_END) < 0) {
+        errnoprintf("fseek");
+        return -1;
+    }
+    long len = ftell(f);
+    if (len < 0) {
+        errnoprintf("ftell");
+        return -1;
+    }
+    fseek(f, 0, SEEK_SET);
+    return len;
 }
 
-int sdl_controller_to_joypad(SDL_GameControllerButton button) {
-    switch (button) {
-    case SDL_CONTROLLER_BUTTON_DPAD_LEFT: return JOYPAD_LEFT;
-    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return JOYPAD_RIGHT;
-    case SDL_CONTROLLER_BUTTON_DPAD_UP: return JOYPAD_UP;
-    case SDL_CONTROLLER_BUTTON_DPAD_DOWN: return JOYPAD_DOWN;
-    case SDL_CONTROLLER_BUTTON_A: return JOYPAD_A;
-    case SDL_CONTROLLER_BUTTON_B: return JOYPAD_B;
-    case SDL_CONTROLLER_BUTTON_START:
-    case SDL_CONTROLLER_BUTTON_X:
-        return JOYPAD_START;
-    case SDL_CONTROLLER_BUTTON_BACK:
-    case SDL_CONTROLLER_BUTTON_Y:
-        return JOYPAD_SELECT;
-    default:
-        return SDL_CONTROLLER_BUTTON_INVALID;
-    }
+int keycode_to_joypad(config_t *config, unsigned int keycode) {
+    if (keycode == config->keybindings[JOYPAD_RIGHT]) return JOYPAD_RIGHT;
+    if (keycode == config->keybindings[JOYPAD_LEFT]) return JOYPAD_LEFT;
+    if (keycode == config->keybindings[JOYPAD_UP]) return JOYPAD_UP;
+    if (keycode == config->keybindings[JOYPAD_DOWN]) return JOYPAD_DOWN;
+    if (keycode == config->keybindings[JOYPAD_A]) return JOYPAD_A;
+    if (keycode == config->keybindings[JOYPAD_B]) return JOYPAD_B;
+    if (keycode == config->keybindings[JOYPAD_SELECT]) return JOYPAD_SELECT;
+    if (keycode == config->keybindings[JOYPAD_START]) return JOYPAD_START;
+    return -1;
+}
+
+int button_to_joypad(config_t *config, unsigned int button) {
+    if (button == config->gamepad_bindings[JOYPAD_RIGHT]) return JOYPAD_RIGHT;
+    if (button == config->gamepad_bindings[JOYPAD_LEFT]) return JOYPAD_LEFT;
+    if (button == config->gamepad_bindings[JOYPAD_UP]) return JOYPAD_UP;
+    if (button == config->gamepad_bindings[JOYPAD_DOWN]) return JOYPAD_DOWN;
+    if (button == config->gamepad_bindings[JOYPAD_A]) return JOYPAD_A;
+    if (button == config->gamepad_bindings[JOYPAD_B]) return JOYPAD_B;
+    if (button == config->gamepad_bindings[JOYPAD_SELECT]) return JOYPAD_SELECT;
+    if (button == config->gamepad_bindings[JOYPAD_START]) return JOYPAD_START;
+    return -1;
 }
 
 int dir_exists(const char *directory_path) {
@@ -98,25 +101,28 @@ void save_battery_to_file(emulator_t *emu, const char *path) {
 
     make_parent_dirs(path);
 
-    SDL_RWops *f = SDL_RWFromFile(path, "w");
+    FILE *f = fopen(path, "w");
     if (!f) {
         errnoprintf("error opening save file");
         return;
     }
-    SDL_RWwrite(f, save_data, save_length, 1);
-    SDL_RWclose(f);
+    fwrite(save_data, save_length, 1, f);
+    fclose(f);
     free(save_data);
 }
 
 void load_battery_from_file(emulator_t *emu, const char *path) {
-    SDL_RWops *f = SDL_RWFromFile(path, "r");
+    FILE *f = fopen(path, "r");
     if (!f) return;
 
-    size_t save_length = SDL_RWsize(f);
+    long save_length = fsize(f);
+    if (save_length < 0)
+        return;
+
     byte_t *save_data = xmalloc(save_length);
-    SDL_RWread(f, save_data, save_length, 1);
+    fread(save_data, save_length, 1, f);
     emulator_load_save(emu, save_data, save_length);
-    SDL_RWclose(f);
+    fclose(f);
     free(save_data);
 }
 
@@ -126,43 +132,45 @@ int save_state_to_file(emulator_t *emu, const char *path, int compressed) {
     size_t len;
     byte_t *buf = emulator_get_savestate(emu, &len, compressed);
 
-    SDL_RWops *f = SDL_RWFromFile(path, "wb");
+    FILE *f = fopen(path, "wb");
     if (!f) {
         errnoprintf("opening %s", path);
         return 0;
     }
 
-    if (!SDL_RWwrite(f, buf, len, 1)) {
+    if (!fwrite(buf, len, 1, f)) {
         eprintf("writing savestate to %s\n", path);
-        SDL_RWclose(f);
+        fclose(f);
         free(buf);
         return 0;
     }
 
-    SDL_RWclose(f);
+    fclose(f);
     free(buf);
     return 1;
 }
 
 int load_state_from_file(emulator_t *emu, const char *path) {
-    SDL_RWops *f = SDL_RWFromFile(path, "rb");
+    FILE *f = fopen(path, "rb");
     if (!f) {
         errnoprintf("opening %s", path);
         return 0;
     }
 
-    size_t len = SDL_RWsize(f);
+    long len = fsize(f);
+    if (len < 0)
+        return 0;
 
     byte_t *buf = xmalloc(len);
-    if (!SDL_RWread(f, buf, len, 1)) {
+    if (!fread(buf, len, 1, f)) {
         errnoprintf("reading savestate from %s", path);
-        SDL_RWclose(f);
+        fclose(f);
         free(buf);
         return 0;
     }
 
     int ret = emulator_load_savestate(emu, buf, len);
-    SDL_RWclose(f);
+    fclose(f);
     free(buf);
     return ret;
 }

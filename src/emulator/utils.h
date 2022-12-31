@@ -5,6 +5,12 @@
 #include <errno.h>
 #include <time.h>
 
+#ifdef __GNUC__
+#   define UNUSED __attribute__((unused))
+#else
+#   define UNUSED
+#endif
+
 #define CHECK_BIT(var, pos) ((var) & (1 << (pos)))
 #define SET_BIT(var, pos) ((var) |= (1 << (pos)))
 #define RESET_BIT(var, pos) ((var) &= ~(1 << (pos)))
@@ -16,6 +22,9 @@
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 #define CLAMP(x, lo, hi) MAX(MIN((x), (hi)), (lo))
 
+#define XSTRINGIFY(x) #x
+#define STRINGIFY(x) XSTRINGIFY(x)
+
 #define eprintf(format, ...) fprintf(stderr, "ERROR - %s() - "format, __func__, ##__VA_ARGS__)
 #define errnoprintf(format, ...) eprintf(format": %s\n", ##__VA_ARGS__, strerror(errno));
 
@@ -24,6 +33,8 @@ void *xmalloc(size_t size);
 void *xcalloc(size_t nmemb, size_t size);
 
 void *xrealloc(void *ptr, size_t size);
+
+size_t time_to_string_length(void);
 
 char *time_to_string(time_t t, size_t *len);
 

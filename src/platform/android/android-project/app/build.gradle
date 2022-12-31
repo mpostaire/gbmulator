@@ -13,7 +13,7 @@ android {
         if (buildAsApplication) {
             applicationId "io.github.mpostaire.gbmulator"
         }
-        minSdkVersion 19
+        minSdkVersion 21
         targetSdkVersion 33
         versionCode 1
         versionName "1.0"
