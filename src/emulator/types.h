@@ -157,9 +157,14 @@ typedef struct {
     // MBC1/MBC1M: bits 7-5: unused, bits 4-0 (MBC1M: bits 3-0): lower 5 (MBC1M: 4) bits of the ROM_BANKN number
     // (also used as a convenience variable in other MBCs to store the ROM_BANKN number)
     byte_t bank1_reg;
-    byte_t bank2_reg; // bits 7-2: unused, bits 1-0: upper 2 bits (bits 6-5) of the ROM_BANKN number
+    // bits 7-2: unused, bits 1-0: upper 2 bits (bits 6-5) of the ROM_BANKN number
+    // (also used as a convenience variable in other MBCs to store the ERAM_BANK number)
+    byte_t bank2_reg;
     byte_t mode_reg; // bits 7-1: unused, bit 0: BANK2 mode
-    byte_t rtc_mapped;
+    byte_t rtc_mapped; // MBC3
+    byte_t romb0_reg; // MBC5: lower ROM BANK register
+    byte_t romb1_reg; // MBC5: upper ROM BANK register
+    // MBC5: RAMB register is stored in bank2_reg
 
     // pointer to the start of the ROM memory region when accessing the 0x0000-0x3FFF range.
     byte_t *rom_bank0_pointer;

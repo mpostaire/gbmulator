@@ -464,52 +464,36 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
             break;
         }
         break;
-    // case MBC5:
-    //     if (address < 0x2000) {
-    //         mmu->ramg_reg = (data & 0x0F) == 0x0A;
-    //     } else if (address < 0x3000) {
-    //         mmu->current_rom_bank = (mmu->current_rom_bank & 0x100) | data;
-    //         mmu->current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
-    //     } else if (address < 0x4000) {
-    //         mmu->current_rom_bank = ((data & 1) << 8) | mmu->current_rom_bank;
-    //         mmu->current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
-    //     } else if (address < 0x6000) {
-    //         mmu->current_eram_bank = data & 0x0F;
-    //         mmu->current_eram_bank &= mmu->eram_banks - 1; // in this case, equivalent to current_eram_bank %= eram_banks but avoid division by 0
-    //         // TODO On cartridges which feature a rumble motor, bit 3 controls the rumble motor instead of the RAM chip.
-    //     }
-    //     break;
-    default:
+    case MBC5:
+        switch (address & 0xF000) {
+        case 0x0000:
+        case 0x1000:
+            mmu->ramg_reg = data == 0x0A;
+            break;
+        case 0x2000: {
+            mmu->romb0_reg = data;
+            word_t current_rom_bank = (mmu->romb1_reg << 8) | mmu->romb0_reg;
+            current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
+            mmu->rom_bankn_pointer = &mmu->cartridge[(current_rom_bank - 1) * ROM_BANK_SIZE];
+            break;
+        }
+        case 0x3000: {
+            mmu->romb1_reg = data;
+            word_t current_rom_bank = (mmu->romb1_reg << 8) | mmu->romb0_reg;
+            current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
+            mmu->rom_bankn_pointer = &mmu->cartridge[(current_rom_bank - 1) * ROM_BANK_SIZE];
+            break;
+        }
+        case 0x4000:
+        case 0x5000:
+            mmu->bank2_reg = data & 0x0F;
+            mmu->bank2_reg &= mmu->eram_banks - 1; // in this case, equivalent to mmu->bank2_reg %= eram_banks but avoid division by 0
+            mmu->eram_bank_pointer = &mmu->eram[mmu->bank2_reg * ERAM_BANK_SIZE] - ERAM;
+            break;
+        }
         break;
     }
 }
-
-// static void write_mbc_eram(mmu_t *mmu, word_t address, byte_t data) {
-//     switch (mmu->mbc) {
-//     case MBC3:
-//     case MBC30:
-//         if (mmu->has_eram && mmu->ramg_reg && mmu->current_eram_bank >= 0) {
-//             mmu->eram[(address - ERAM) + (mmu->current_eram_bank * 0x2000)] = data;
-//         } else if (mmu->has_rtc && mmu->rtc.enabled) {
-//             switch (mmu->rtc.reg) {
-//             case 0x08: mmu->rtc.s = data; break;
-//             case 0x09: mmu->rtc.m = data; break;
-//             case 0x0A: mmu->rtc.h = data; break;
-//             case 0x0B: mmu->rtc.dl = data; break;
-//             case 0x0C: mmu->rtc.dh = data; break;
-//             default: break;
-//             }
-//         }
-//         break;
-//     case MBC5:
-//         if (mmu->has_eram && mmu->ramg_reg)
-//             mmu->eram[(address - ERAM) + (mmu->current_eram_bank * 0x2000)] = data;
-//         // TODO MBC5 eram is the same as for MBC1, except that RAM sizes are 8 KiB, 32 KiB and 128 KiB.
-//         break;
-//     default:
-//         break;
-//     }
-// }
 
 byte_t mmu_read(emulator_t *emu, word_t address) {
     mmu_t *mmu = emu->mmu;
@@ -521,31 +505,6 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
         return mmu->rom_bank0_pointer[address];
     if (address >= ROM_BANKN && address < VRAM)
         return mmu->rom_bankn_pointer[address];
-
-    // if (mmu->mbc >= MBC1 && mmu->mbc <= MBC5) {
-    //     if (address >= ROM_BANKN && address < VRAM) // ROM_BANKN
-    //         return mmu->cartridge[(address - ROM_BANKN) + (mmu->current_rom_bank * 0x4000)];
-
-    //     if (address >= ERAM && address < WRAM_BANK0) { // ERAM
-    //         if (mmu->has_eram && mmu->current_eram_bank >= 0) {
-    //             if (mmu->mbc == MBC2) {
-    //                 address = ERAM + (address & 0x1FF); // wrap around from 0xA200 to 0xBFFF (eg: address 0xA200 reads as address 0xA000)
-    //                 return mmu->ramg_reg ? mmu->eram[(address - ERAM) + (mmu->current_eram_bank * 0x0200)] | 0xF0 : 0xFF;
-    //             } else {
-    //                 return mmu->ramg_reg ? mmu->eram[(address - ERAM) + (mmu->current_eram_bank * 0x2000)] : 0xFF;
-    //             }
-    //         } else if (mmu->has_rtc && mmu->rtc.enabled) { // implies mbc == MBC3 (or MBC30) because rtc_enabled is set to 0 by default
-    //             switch (mmu->rtc.reg) {
-    //             case 0x08: return mmu->rtc.latched_s;
-    //             case 0x09: return mmu->rtc.latched_m;
-    //             case 0x0A: return mmu->rtc.latched_h;
-    //             case 0x0B: return mmu->rtc.latched_dl;
-    //             case 0x0C: return mmu->rtc.latched_dh;
-    //             default: return 0xFF;
-    //             }
-    //         }
-    //     }
-    // }
 
     // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
     if (address >= OAM && address < UNUSABLE && CHECK_BIT(mmu->mem[LCDC], 7) && ((PPU_IS_MODE(emu, PPU_MODE_OAM) || PPU_IS_MODE(emu, PPU_MODE_DRAWING))))
@@ -1016,7 +975,7 @@ size_t mmu_serialized_length(emulator_t *emu) {
     size_t oam_dma_len = 5;
     size_t hdma_len = 0;
     size_t rtc_len = 13 + (2 * time_to_string_length());
-    size_t mmu_other_len = 13;
+    size_t mmu_other_len = 15;
     if (emu->mode == CGB) {
         wram_extra_len = sizeof(emu->mmu->wram_extra);
         vram_extra_len = sizeof(emu->mmu->vram_extra);
@@ -1077,12 +1036,14 @@ byte_t *mmu_serialize(emulator_t *emu, size_t *size) {
     memcpy(&buf[offset + 6], &emu->mmu->bank2_reg, 1);
     memcpy(&buf[offset + 7], &emu->mmu->mode_reg, 1);
     memcpy(&buf[offset + 8], &emu->mmu->rtc_mapped, 1);
+    memcpy(&buf[offset + 9], &emu->mmu->romb0_reg, 1);
+    memcpy(&buf[offset + 10], &emu->mmu->romb1_reg, 1);
 
-    memcpy(&buf[offset + 9], &emu->mmu->has_eram, 1);
-    memcpy(&buf[offset + 10], &emu->mmu->has_battery, 1);
-    memcpy(&buf[offset + 11], &emu->mmu->has_rumble, 1);
-    memcpy(&buf[offset + 12], &emu->mmu->has_rtc, 1);
-    offset += 13;
+    memcpy(&buf[offset + 11], &emu->mmu->has_eram, 1);
+    memcpy(&buf[offset + 12], &emu->mmu->has_battery, 1);
+    memcpy(&buf[offset + 13], &emu->mmu->has_rumble, 1);
+    memcpy(&buf[offset + 14], &emu->mmu->has_rtc, 1);
+    offset += 15;
 
     memcpy(&buf[offset], &emu->mmu->rtc.latched_s, 1);
     memcpy(&buf[offset + 1], &emu->mmu->rtc.latched_m, 1);
@@ -1166,6 +1127,8 @@ void mmu_unserialize(emulator_t *emu, byte_t *buf) {
     memcpy(&emu->mmu->bank2_reg, &buf[offset + 6], 1);
     memcpy(&emu->mmu->mode_reg, &buf[offset + 7], 1);
     memcpy(&emu->mmu->rtc_mapped, &buf[offset + 8], 1);
+    memcpy(&emu->mmu->romb0_reg, &buf[offset + 9], 1);
+    memcpy(&emu->mmu->romb1_reg, &buf[offset + 10], 1);
 
     // reset bank and eram pointers
     switch (emu->mmu->mbc) {
@@ -1186,11 +1149,11 @@ void mmu_unserialize(emulator_t *emu, byte_t *buf) {
         break;
     }
 
-    memcpy(&emu->mmu->has_eram, &buf[offset + 9], 1);
-    memcpy(&emu->mmu->has_battery, &buf[offset + 10], 1);
-    memcpy(&emu->mmu->has_rumble, &buf[offset + 11], 1);
-    memcpy(&emu->mmu->has_rtc, &buf[offset + 12], 1);
-    offset += 13;
+    memcpy(&emu->mmu->has_eram, &buf[offset + 11], 1);
+    memcpy(&emu->mmu->has_battery, &buf[offset + 12], 1);
+    memcpy(&emu->mmu->has_rumble, &buf[offset + 13], 1);
+    memcpy(&emu->mmu->has_rtc, &buf[offset + 14], 1);
+    offset += 15;
 
     memcpy(&emu->mmu->rtc.latched_s, &buf[offset], 1);
     memcpy(&emu->mmu->rtc.latched_m, &buf[offset + 1], 1);
