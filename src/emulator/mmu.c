@@ -638,7 +638,7 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
         return mmu->mem[NR52] | 0x70;
     if (address > NR52 && address < WAVE_RAM)
         return 0xFF;
-    
+
     if (address == KEY0 || address == KEY1)
         return emu->mode == CGB ? mmu->mem[address] : 0xFF;
 
@@ -715,7 +715,7 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         if (current_wram_bank == 0)
             current_wram_bank = 1;
         mmu->wram_extra[(address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)] = data;
-    } else if (address > ECHO && address <= OAM){
+    } else if (address >= ECHO && address < OAM){
         if (emu->mode == CGB) {
             byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
             if (current_wram_bank == 0)
