@@ -57,10 +57,13 @@ There is also support for gamepad controllers but the buttons aren't configurabl
 
 ## TODO
 
-- fix mbc bugs + implement MBC6, MBC7, HuC1 and multicart MBCs
+- check that MBC3/MBC30 is accurate
+- implement MBC6, MBC7, HuC1 and multicart MBCs
 - better audio/video sync
 - rewrite ppu from scanline rendering to cycle accurate rendering
 - fix buggy link cable (tetris/dr mario are working fine but pokemon red is broken)
+
+- implement test suite
 
 ## Resources used
 - https://gbdev.io/pandocs/
