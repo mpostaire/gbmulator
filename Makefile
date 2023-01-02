@@ -84,6 +84,9 @@ debug_web: web
 docs/index.html: $(SDIR)/platform/web/template.html $(OBJ)
 	$(CC) -o $@ $(OBJ) $(CFLAGS) -sABORTING_MALLOC=0 -sINITIAL_MEMORY=32MB -sWASM=1 -sEXPORTED_RUNTIME_METHODS=[ccall] -sASYNCIFY --shell-file $< -lidbfs.js
 
+test:
+	$(MAKE) -C test
+
 $(BIN): $(OBJ)
 	$(CC) -o $(BIN) $^ $(CFLAGS) $(LDLIBS)
 
@@ -114,6 +117,7 @@ check: $(SDIR)
 
 clean:
 	rm -rf $(ODIR)
+	$(MAKE) -C test clean
 
 cleaner: clean
 	rm -f $(BIN) $(SDIR)/platform/desktop/resources.c
@@ -146,4 +150,4 @@ uninstall:
 
 -include $(foreach d,$(PLATFORM_ODIR_STRUCTURE),$d/*.d)
 
-.PHONY: all clean run install uninstall debug web debug_web android debug_android
+.PHONY: all clean run install uninstall debug web debug_web android debug_android test

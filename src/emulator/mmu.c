@@ -14,6 +14,158 @@
 
 extern inline void rtc_update(rtc_t *rtc);
 
+static void emulate_boot_rom(emulator_t *emu, byte_t checksum, byte_t cgb_dmg_compat) {
+    cpu_t *cpu = emu->cpu;
+    mmu_t *mmu = emu->mmu;
+
+    switch (emu->mode) {
+    case DMG:
+        cpu->registers.af = checksum == 0 ? 0x0180 : 0x01B0;
+        cpu->registers.bc = 0x0013;
+        cpu->registers.de = 0x00D8;
+        cpu->registers.hl = 0x014D;
+        cpu->registers.sp = 0xFFFE;
+        cpu->registers.pc = 0x0100;
+
+        mmu->mem[P1] = 0xCF;
+        mmu->mem[SB] = 0x00;
+        mmu->mem[SC] = 0x7E;
+        mmu->mem[DIV] = 0xAB;
+        mmu->mem[TIMA] = 0x00;
+        mmu->mem[TMA] = 0x00;
+        mmu->mem[TAC] = 0xF8;
+        mmu->mem[IF] = 0xE1;
+        mmu->mem[NR10] = 0x80;
+        mmu->mem[NR11] = 0xBF;
+        mmu->mem[NR12] = 0xF3;
+        mmu->mem[NR14] = 0xBF;
+        mmu->mem[NR21] = 0x3F;
+        mmu->mem[NR22] = 0x00;
+        mmu->mem[NR24] = 0xBF;
+        mmu->mem[NR30] = 0x7F;
+        mmu->mem[NR31] = 0xFF;
+        mmu->mem[NR32] = 0x9F;
+        mmu->mem[NR33] = 0xBF;
+        mmu->mem[NR41] = 0xFF;
+        mmu->mem[NR42] = 0x00;
+        mmu->mem[NR43] = 0x00;
+        mmu->mem[NR30] = 0xBF;
+        mmu->mem[NR50] = 0x77;
+        mmu->mem[NR51] = 0xF3;
+        mmu->mem[NR52] = 0xF1;
+        mmu->mem[LCDC] = 0x91;
+        mmu->mem[STAT] = 0x85;
+        mmu->mem[SCY] = 0x00;
+        mmu->mem[SCX] = 0x00;
+        mmu->mem[LY] = 0x00;
+        mmu->mem[LYC] = 0x00;
+        mmu->mem[DMA] = 0xFF;
+        mmu->mem[BGP] = 0xFC;
+        mmu->mem[OBP0] = 0xFF;
+        mmu->mem[OBP1] = 0xFF;
+        mmu->mem[WY] = 0x00;
+        mmu->mem[WX] = 0x00;
+        mmu->mem[KEY1] = 0xFF;
+        mmu->mem[VBK] = 0xFF;
+        mmu->mem[HDMA1] = 0xFF;
+        mmu->mem[HDMA2] = 0xFF;
+        mmu->mem[HDMA3] = 0xFF;
+        mmu->mem[HDMA4] = 0xFF;
+        mmu->mem[HDMA5] = 0xFF;
+        mmu->mem[RP] = 0xFF;
+        mmu->mem[BGPI] = 0xFF;
+        mmu->mem[BGPD] = 0xFF;
+        mmu->mem[OBPI] = 0xFF;
+        mmu->mem[OBPD] = 0xFF;
+        mmu->mem[SVBK] = 0xFF;
+        mmu->mem[IE] = 0x00;
+        break;
+    case CGB:
+        if (cgb_dmg_compat) {
+            byte_t old_licensee_code = mmu->cartridge[0x014B];
+            word_t new_licensee_code = (mmu->cartridge[0x0144] << 8) | mmu->cartridge[0x0145];
+            if (old_licensee_code == 0x01 || (old_licensee_code == 0x33 && new_licensee_code == 0x3031)) {
+                cpu->registers.b = 0x00;
+                for (int i = 0; i < 16; i++)
+                    cpu->registers.b += mmu->cartridge[0x0134 + i];
+            } else {
+                cpu->registers.b = 0x00;
+            }
+            cpu->registers.c = 0x00;
+
+            if (cpu->registers.b == 0x43 || cpu->registers.b == 0x58)
+                cpu->registers.hl = 0x991A;
+            else
+                cpu->registers.hl = 0x007C;
+        } else {
+            cpu->registers.bc = 0x0000;
+            cpu->registers.hl = 0x000D;
+        }
+
+        cpu->registers.af = 0x1180;
+        cpu->registers.de = 0xFF56;
+        cpu->registers.sp = 0xFFFE;
+        cpu->registers.pc = 0x0100;
+
+        mmu->mem[P1] = 0xC7;
+        mmu->mem[SB] = 0x00;
+        mmu->mem[SC] = 0x7F;
+        mmu->mem[DIV] =	0x00; // can't be known (depend on header and button input)
+        mmu->mem[TIMA] = 0x00;
+        mmu->mem[TMA] = 0x00;
+        mmu->mem[TAC] = 0xF8;
+        mmu->mem[IF] = 0xE1;
+        mmu->mem[NR10] = 0x80;
+        mmu->mem[NR11] = 0xBF;
+        mmu->mem[NR12] = 0xF3;
+        mmu->mem[NR13] = 0xFF;
+        mmu->mem[NR14] = 0xBF;
+        mmu->mem[NR21] = 0x3F;
+        mmu->mem[NR22] = 0x00;
+        mmu->mem[NR23] = 0xFF;
+        mmu->mem[NR24] = 0xBF;
+        mmu->mem[NR30] = 0x7F;
+        mmu->mem[NR31] = 0xFF;
+        mmu->mem[NR32] = 0x9F;
+        mmu->mem[NR33] = 0xFF;
+        mmu->mem[NR34] = 0xBF;
+        mmu->mem[NR41] = 0xFF;
+        mmu->mem[NR42] = 0x00;
+        mmu->mem[NR43] = 0x00;
+        mmu->mem[NR44] = 0xBF;
+        mmu->mem[NR50] = 0x77;
+        mmu->mem[NR51] = 0xF3;
+        mmu->mem[NR52] = 0xF1;
+        mmu->mem[LCDC] = 0x91;
+        mmu->mem[STAT] = 0x00; // can't be known (depend on header and button input)
+        mmu->mem[SCY] = 0x00;
+        mmu->mem[SCX] = 0x00;
+        mmu->mem[LY] = 0x00; // can't be known (depend on header and button input)
+        mmu->mem[LYC] = 0x00;
+        mmu->mem[DMA] = 0x00;
+        mmu->mem[BGP] = 0xFC;
+        mmu->mem[OBP0] = 0xFF;
+        mmu->mem[OBP1] = 0xFF;
+        mmu->mem[WY] = 0x00;
+        mmu->mem[WX] = 0x00;
+        mmu->mem[KEY1] = 0xFF;
+        mmu->mem[VBK] = 0xFF;
+        mmu->mem[HDMA1] = 0xFF;
+        mmu->mem[HDMA2] = 0xFF;
+        mmu->mem[HDMA3] = 0xFF;
+        mmu->mem[HDMA4] = 0xFF;
+        mmu->mem[HDMA5] = 0xFF;
+        mmu->mem[RP] = 0xFF;
+        mmu->mem[BGPI] = 0x00; // TODO not specified by Pandocs but known to be dependent on cgb_dmg_compat
+        mmu->mem[BGPD] = 0x00; // TODO not specified by Pandocs but known to be dependent on cgb_dmg_compat
+        mmu->mem[OBPI] = 0x00; // TODO not specified by Pandocs but known to be dependent on cgb_dmg_compat
+        mmu->mem[OBPD] = 0x00; // TODO not specified by Pandocs but known to be dependent on cgb_dmg_compat
+        mmu->mem[SVBK] = 0xFF;
+        mmu->mem[IE] = 0x00;
+        break;
+    }
+}
+
 static int parse_cartridge(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
@@ -135,10 +287,13 @@ static int parse_cartridge(emulator_t *emu) {
             mmu->mbc = MBC30;
 
     // get rom title
-    memcpy(emu->rom_title, (char *) &mmu->cartridge[0x134], 16);
+    memcpy(emu->rom_title, (char *) &mmu->cartridge[0x0134], 16);
     emu->rom_title[16] = '\0';
-    if (mmu->cartridge[0x0143] == 0xC0 || mmu->cartridge[0x0143] == 0x80)
+    byte_t cgb_flag = mmu->cartridge[0x0143] == 0xC0 || mmu->cartridge[0x0143] == 0x80;
+    if (cgb_flag)
         emu->rom_title[15] = '\0';
+
+    byte_t cgb_dmg_compat = emu->mode == CGB && !cgb_flag;
 
     // 8-bit cartridge header checksum validation
     byte_t checksum = 0;
@@ -152,14 +307,19 @@ static int parse_cartridge(emulator_t *emu) {
     // load cartridge into rom banks (everything before VRAM (0x8000))
     memcpy(mmu->mem, mmu->cartridge, VRAM);
 
-    if (emu->mode == DMG) {
-        // Load bios after cartridge to overwrite first 0x100 bytes.
-        memcpy(mmu->mem, dmg_boot, sizeof(dmg_boot));
+    if (emu->skip_boot) {
+        emulate_boot_rom(emu, checksum, cgb_dmg_compat);
     } else {
-        // Load first part of the bios after cartridge to overwrite first 0x100 bytes.
-        memcpy(mmu->mem, cgb_boot, 0x100);
-        // Load second part of the bios.
-        memcpy(&mmu->mem[0x200], &cgb_boot[0x200], sizeof(cgb_boot) - 0x200);
+        // map BOOT ROM
+        if (emu->mode == DMG) {
+            // Load BOOT ROM after cartridge to overwrite first 0x100 bytes.
+            memcpy(mmu->mem, dmg_boot, sizeof(dmg_boot));
+        } else {
+            // Load first part of the BOOT ROM after cartridge to overwrite first 0x100 bytes.
+            memcpy(mmu->mem, cgb_boot, 0x100);
+            // Load second part of the BOOT ROM.
+            memcpy(&mmu->mem[0x200], &cgb_boot[0x200], sizeof(cgb_boot) - 0x200);
+        }
     }
 
     return 1;

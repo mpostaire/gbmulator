@@ -28,8 +28,8 @@ void emulator_step(emulator_t *emu);
  * Runs the emulator for the given ammount of cpu cycles.
  * @param cycles_limit the ammount of cycles the emulator will run for
  */
-static inline void emulator_run_cycles(emulator_t *emu, int cycles_limit) {
-    for (int cycles_count = 0; cycles_count < cycles_limit; cycles_count += 4) // 4 cycles per step
+static inline void emulator_run_cycles(emulator_t *emu, long cycles_limit) {
+    for (long cycles_count = 0; cycles_count < cycles_limit; cycles_count += 4) // 4 cycles per step
         emulator_step(emu);
 }
 

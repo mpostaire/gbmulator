@@ -2,6 +2,8 @@
 !*.*
 !src
 !src/**
+!test
+test/game-boy-test-roms-v*
 !Makefile
 .vscode
 !font

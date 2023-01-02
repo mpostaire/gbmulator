@@ -277,6 +277,8 @@ typedef void (*on_apu_samples_ready_t)(const void *audio_buffer, int audio_buffe
 
 typedef struct {
     emulator_mode_t mode; // either `DMG` for original game boy emulation or `CGB` for game boy color emulation
+    byte_t skip_boot;
+    byte_t disable_cgb_color_correction;
     color_palette_t palette;
     float apu_speed;
     float apu_sound_level;
@@ -288,6 +290,8 @@ typedef struct {
 
 struct emulator_t {
     emulator_mode_t mode;
+    byte_t skip_boot;
+    byte_t disable_cgb_color_correction;
     float apu_sound_level;
     float apu_speed;
     int apu_sample_count;
