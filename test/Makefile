@@ -11,10 +11,12 @@ EMU_OBJ=$(EMU_SRC:$(EMU_SDIR)/%.c=$(ODIR)/%.o)
 
 TEST_ROMS=game-boy-test-roms-v5.1
 
-all: $(TEST_ROMS) tests.txt $(ODIR) $(BIN)
+all: $(ODIR)
+	$(MAKE) tests.txt
+	$(MAKE) $(BIN)
 	./$(BIN) $(TEST_ROMS)
 
-tests.txt: tests_parser.py
+tests.txt: tests_parser.py $(TEST_ROMS)
 	python3 $< $(TEST_ROMS)
 
 $(TEST_ROMS):

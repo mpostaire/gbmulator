@@ -77,7 +77,9 @@ def generate_tests(tests_root, category, max_depth, output_file,
 
             if reference_image_getter is None:
                 if internal_state_test_generator is not None:
-                    internal_state_test_generator(rom_path)
+                    tests = internal_state_test_generator(rom_path)
+                    for test in tests:
+                        output_file.write(test)
                     continue
                 continue
 
@@ -167,6 +169,24 @@ def mealybug_internal_state_test_generator(rom_path):
     return [f'{{"{rom_path}", NULL, NULL, {mode}, 0, 0x40, NULL}},\n' for mode in ["DMG", "CGB"]]
 
 
+def same_internal_state_test_generator(rom_path):
+    # CPU-CGB-C fail most tests (useless to test them)
+    ret = []
+    if "same-suite/sgb/" in rom_path or "apu/channel_1" in rom_path or "apu/channel_2" in rom_path or "apu/channel_4" in rom_path:
+        return ret
+    if "same-suite/apu" in rom_path:
+        if "apu/div_write_trigger" in rom_path or "apu/div_write_trigger_10" in rom_path:
+            ret.append(f'{{"{rom_path}", NULL, NULL, DMG, 0, 0x40, NULL}},\n')
+        ret.append(f'{{"{rom_path}", NULL, NULL, CGB, 0, 0x40, NULL}},\n')
+    elif "same-suite/dma" in rom_path:
+        ret.append(f'{{"{rom_path}", NULL, NULL, CGB, 0, 0x40, NULL}},\n')
+    else:
+        ret.append(f'{{"{rom_path}", NULL, NULL, DMG, 0, 0x40, NULL}},\n')
+        ret.append(f'{{"{rom_path}", NULL, NULL, CGB, 0, 0x40, NULL}},\n')
+
+    return ret
+
+
 def main():
     if len(sys.argv) != 2:
         print("No test root dir specified")
@@ -174,14 +194,13 @@ def main():
 
     tests_root = sys.argv[1]
 
+    # TODO gambatte (need a different test implementation to work)
     with open(os.path.join(os.path.dirname(__file__), "tests.txt"), "w") as f:
         generate_tests(tests_root, "blargg", 1, f, blargg_reference_image_getter, blargg_screenshot_test_generator)
         generate_tests(tests_root, "age-test-roms", 1, f, age_reference_image_getter, age_screenshot_test_generator, age_internal_state_test_generator)
         generate_tests(tests_root, "mooneye-test-suite", 2, f, blargg_reference_image_getter, mooneye_screenshot_test_generator, mooneye_internal_state_test_generator)
         generate_tests(tests_root, "mealybug-tearoom-tests", 1, f, mealybug_reference_image_getter, mealybug_screenshot_test_generator, mealybug_internal_state_test_generator)
-        # TODO gambatte
-        # TODO mooneye-wilbertpol
-        # TODO same-suite
+        generate_tests(tests_root, "same-suite", 2, f, None, None, same_internal_state_test_generator)
         generate_bully_tests(f)
         generate_acid_tests(f)
         generate_little_things_tests(f)
