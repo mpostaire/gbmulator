@@ -5,12 +5,10 @@ You can compile and run it on your machine or use it in your browser [here](http
 
 ## Screenshots
 
-![super_mario_land](images/super_mario_land.png)
-![kirby_dream_land_palettes](images/kirby_dream_land_palettes.png)
+![kirby_dream_land](images/kirby_dream_land.png)
 ![tetris_color](images/tetris_color.png)
 ![pokemon_gold](images/pokemon_gold.png)
 ![link_awakening](images/link_awakening.png)
-![metal_gear](images/metal_gear.png)
 
 ## Installation
 
