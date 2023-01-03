@@ -9,8 +9,7 @@ test/game-boy-test-roms-v*
 .vscode
 !font
 !images
-!icons
-!icons/**
+!images/icons
 !docs
 src/platform/android/android-project/.*
 src/platform/android/android-project/local.properties

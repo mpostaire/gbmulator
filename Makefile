@@ -30,7 +30,7 @@ HEADERS:=$(HEADERS:$(IDIR)/%=$(PLATFORM_ODIR)/%)
 # PLATFORM_ODIR and its subdirectories' structure to mkdir if they don't exist
 PLATFORM_ODIR_STRUCTURE:=$(sort $(foreach d,$(OBJ) $(HEADERS),$(subst /$(lastword $(subst /, ,$d)),,$d)))
 
-ICONDIR=icons
+ICONDIR=images/icons
 ICONS= \
 	$(ICONDIR)/192x192/$(BIN).png \
 	$(ICONDIR)/144x144/$(BIN).png \
@@ -66,7 +66,7 @@ profile: run
 	gprof ./$(BIN) gmon.out > prof_output
 
 # TODO this should also make a gbmulator.apk file in this project root dir (next do the gbmulator desktop binary) 
-android: $(ICONS)
+android:
 	cd $(SDIR)/platform/android/android-project && ./gradlew assemble
 
 debug_android: android
@@ -76,7 +76,7 @@ debug_android: android
 web: CC:=emcc
 web: LDLIBS:=
 web: CFLAGS+=-sUSE_SDL=2 -sUSE_ZLIB=1
-web: $(PLATFORM_ODIR_STRUCTURE) $(ICONS) docs docs/index.html 
+web: $(PLATFORM_ODIR_STRUCTURE) docs docs/index.html
 
 debug_web: web
 	emrun docs/index.html
@@ -101,13 +101,7 @@ docs:
 
 $(ICONS): $(ICONDIR)/$(BIN).svg
 	mkdir -p $(ICONDIR)/$(patsubst $(ICONDIR)/%/$(BIN).png,%,$@)
-	convert -background none -size $(patsubst $(ICONDIR)/%/$(BIN).png,%,$@) $^ $(ICONDIR)/$(patsubst $(ICONDIR)/%/$(BIN).png,%,$@)/$(BIN).png
-	[ $(patsubst $(ICONDIR)/%/$(BIN).png,%,$@) = 16x16 ] && cp $(ICONDIR)/16x16/$(BIN).png docs/favicon.png || true
-	[ $(patsubst $(ICONDIR)/%/$(BIN).png,%,$@) = 48x48 ] && cp $(ICONDIR)/48x48/$(BIN).png src/platform/android/android-project/app/src/main/res/mipmap-mdpi/ic_launcher.png || true
-	[ $(patsubst $(ICONDIR)/%/$(BIN).png,%,$@) = 72x72 ] && cp $(ICONDIR)/72x72/$(BIN).png src/platform/android/android-project/app/src/main/res/mipmap-hdpi/ic_launcher.png || true
-	[ $(patsubst $(ICONDIR)/%/$(BIN).png,%,$@) = 96x96 ] && cp $(ICONDIR)/96x96/$(BIN).png src/platform/android/android-project/app/src/main/res/mipmap-xhdpi/ic_launcher.png || true
-	[ $(patsubst $(ICONDIR)/%/$(BIN).png,%,$@) = 144x144 ] && cp $(ICONDIR)/144x144/$(BIN).png src/platform/android/android-project/app/src/main/res/mipmap-xxhdpi/ic_launcher.png || true
-	[ $(patsubst $(ICONDIR)/%/$(BIN).png,%,$@) = 192x192 ] && cp $(ICONDIR)/192x192/$(BIN).png src/platform/android/android-project/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png || true
+	convert -background none -density 1200 -resize $(patsubst $(ICONDIR)/%/$(BIN).png,%,$@) $^ $(ICONDIR)/$(patsubst $(ICONDIR)/%/$(BIN).png,%,$@)/$(BIN).png
 
 run: desktop
 	LIBGL_DRI3_DISABLE=1 ./$(BIN) "roms/tetris.gb"
@@ -120,7 +114,7 @@ clean:
 	$(MAKE) -C test clean
 
 cleaner: clean
-	rm -f $(BIN) $(SDIR)/platform/desktop/resources.c
+	rm -rf $(BIN) $(SDIR)/platform/desktop/resources.c $(patsubst %/$(BIN).png,%,$(ICONS))
 	cd $(SDIR)/platform/android/android-project && ./gradlew clean
 
 install:
