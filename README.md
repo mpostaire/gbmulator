@@ -1,7 +1,7 @@
 # GBmulator
-A Game Boy Color emulator with sound and serial data transfer (link cable) support over tcp.
+A Game Boy Color emulator with sound and wireless link cable support.
 
-You can compile and run it on your machine or use it in your browser [here](https://mpostaire.github.io/gbmulator) (the link cable doesn't work in the browser version).
+You can compile and run it on your machine or use it in your browser [here](https://mpostaire.github.io/gbmulator) (Note: the browser version doesn't have link cable support).
 
 ## Screenshots
 
