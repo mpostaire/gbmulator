@@ -5,13 +5,12 @@ You can compile and run it on your machine or use it in your browser [here](http
 
 ## Screenshots
 
-GBmulator running some games:
-
-![games](images/games.png)
-
-GBmulator's menus:
-
-![menus](images/menus.png)
+![super_mario_land](images/super_mario_land.png)
+![kirby_dream_land_palettes](images/kirby_dream_land_palettes.png)
+![tetris_color](images/tetris_color.png)
+![pokemon_gold](images/pokemon_gold.png)
+![link_awakening](images/link_awakening.png)
+![metal_gear](images/metal_gear.png)
 
 ## Installation
 
@@ -39,19 +38,19 @@ gbmulator path/to/rom.gb
 
 The following table show the default keybindings (they can be changed in GBmulator's menus except those marked with a '*').
 
-|Action|Key|
-|---|---|
-|UP|Up arrow|
-|DOWN|Down arrow|
-|LEFT|Left arrow|
-|RIGHT|Right arrow|
-|A|NUMPAD 0|
-|B|NUMPAD period|
-|START|NUMPAD 1|
-|SELECT|NUMPAD 2|
-|*Options menu|ESCAPE or PAUSE|
-|*Load savesate 1->8|F1->F8|
-|*Create savesate 1->8|SHIFT + F1->F8|
+| Action                | Key             |
+| --------------------- | --------------- |
+| UP                    | Up arrow        |
+| DOWN                  | Down arrow      |
+| LEFT                  | Left arrow      |
+| RIGHT                 | Right arrow     |
+| A                     | NUMPAD 0        |
+| B                     | NUMPAD period   |
+| START                 | NUMPAD 1        |
+| SELECT                | NUMPAD 2        |
+| *Options menu         | ESCAPE or PAUSE |
+| *Load savesate 1->8   | F1->F8          |
+| *Create savesate 1->8 | SHIFT + F1->F8  |
 
 There is also support for gamepad controllers but the buttons aren't configurable.
 
