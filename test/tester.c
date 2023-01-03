@@ -275,7 +275,8 @@ static int run_test(test_t *test) {
     if (test->input_sequence)
         exec_input_sequence(emu, test->input_sequence);
 
-    long timeout_cycles = 180 * GB_CPU_FREQ; // maximum run time of 3 minutes (emulated time)
+    // the maximum time a test can take to run is 120 emulated seconds: the timeout is a little higher than this value
+    long timeout_cycles = 128 * GB_CPU_FREQ;
     if (test->exit_opcode) {
         while (emu->cpu->opcode != test->exit_opcode && timeout_cycles > 0) {
             emulator_step(emu);
