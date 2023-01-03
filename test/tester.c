@@ -11,6 +11,7 @@
 
 #include "../emulator/emulator.h"
 
+#define BOLD "\033[1m"
 #define COLOR_OFF "\033[0m"
 #define COLOR_RED "\033[1;31m"
 #define COLOR_GREEN "\033[1;32m"
@@ -291,13 +292,17 @@ static int run_test(test_t *test) {
     // compare_with_expected_image();
     MagickWandTerminus();
 
+    if (!ret && timeout_cycles <= 0)
+        ret = -1;
     return ret;
 }
 
 static void run_tests() {
     fclose(stderr); // close stderr to prevent error messages from the emulator to mess with the tests' output
 
-    printf("---- TESTING ----\n");
+    printf(BOLD "---- TESTING ----\n" COLOR_OFF);
+    mkdir("results", 0744);
+    FILE *f = fopen("results/summary.txt", "w");
 
     size_t num_tests = sizeof(tests) / sizeof(*tests);
     int succeeded = 0;
@@ -310,15 +315,21 @@ static void run_tests() {
         fflush(stdout);
 
         int success = run_test(&test);
-        if (success)
+        if (success == 1) {
+            succeeded++;
             printf(COLOR_GREEN "\r[PASS]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s\n" COLOR_OFF, label, test.rom_path, suffix);
-        else
+            fprintf(f, "%s:%s:%s:success\n", label, test.rom_path, suffix);
+        } else if (success == -1) {
             printf(COLOR_RED "\r[FAIL]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s\n" COLOR_OFF, label, test.rom_path, suffix);
-
-        succeeded += success;
+            fprintf(f, "%s:%s:%s:timeout\n", label, test.rom_path, suffix);
+        } else {
+            printf(COLOR_RED "\r[FAIL]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s\n" COLOR_OFF, label, test.rom_path, suffix);
+            fprintf(f, "%s:%s:%s:failed\n", label, test.rom_path, suffix);
+        }
     }
 
-    printf("---- SUMMARY ----\n");
+    fclose(f);
+    printf(BOLD "---- SUMMARY ----\n" COLOR_OFF);
     printf("Passed %d/%ld tests (%d%%)\n", succeeded, num_tests, (int) ((succeeded / (float) num_tests) * 100.0f));
 }
 

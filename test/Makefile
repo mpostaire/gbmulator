@@ -14,7 +14,9 @@ TEST_ROMS=game-boy-test-roms-v5.1
 all: $(ODIR)
 	$(MAKE) tests.txt
 	$(MAKE) $(BIN)
+	mv -f results/summary.txt results/summary_old.txt || true
 	./$(BIN) $(TEST_ROMS)
+	python3 compare_results.py
 
 tests.txt: tests_generator.py $(TEST_ROMS)
 	python3 $< $(TEST_ROMS)
