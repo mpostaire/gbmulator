@@ -25,6 +25,8 @@ typedef struct __attribute__((packed)) {
 
 emulator_options_t defaults_opts = {
     .mode = DMG,
+    .skip_boot = 0,
+    .disable_cgb_color_correction = 0,
     .palette = PPU_COLOR_PALETTE_ORIG,
     .apu_speed = 1.0f,
     .apu_sound_level = 1.0f,
@@ -62,11 +64,12 @@ emulator_t *emulator_init(const byte_t *rom_data, size_t rom_size, emulator_opti
     emulator_t *emu = xcalloc(1, sizeof(emulator_t));
     emulator_set_options(emu, opts);
 
+    cpu_init(emu); // cpu_init() must be called before mmu_init() to handle the case where opts->skip_boot is true
     if (!mmu_init(emu, rom_data, rom_size)) {
+        cpu_quit(emu);
         free(emu);
         return NULL;
     }
-    cpu_init(emu);
     apu_init(emu);
     ppu_init(emu);
     timer_init(emu);
@@ -110,8 +113,8 @@ void emulator_reset(emulator_t *emu, emulator_mode_t mode) {
     link_quit(emu);
     joypad_quit(emu);
 
+    cpu_init(emu); // cpu_init() must be called before mmu_init() to handle the case where opts->skip_boot is true
     mmu_init(emu, rom_data, rom_size);
-    cpu_init(emu);
     apu_init(emu);
     ppu_init(emu);
     timer_init(emu);
@@ -234,7 +237,11 @@ int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
     return 1;
 }
 
+#ifdef __HAVE_ZLIB__
 byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, byte_t compressed) {
+#else
+byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, UNUSED byte_t compressed) {
+#endif
     // make savestate header
     savestate_header_t *savestate_header = xmalloc(sizeof(savestate_header_t));
     savestate_header->mode = emu->mode;
@@ -441,6 +448,8 @@ void emulator_update_pixels_with_palette(emulator_t *emu, byte_t new_palette) {
 
 void emulator_get_options(emulator_t *emu, emulator_options_t *opts) {
     opts->mode = emu->mode;
+    opts->skip_boot = emu->skip_boot;
+    opts->disable_cgb_color_correction = emu->disable_cgb_color_correction;
     opts->apu_sample_count = emu->apu_sample_count;
     opts->on_apu_samples_ready = emu->on_apu_samples_ready;
     opts->apu_speed = emu->apu_speed;
@@ -454,13 +463,15 @@ void emulator_set_options(emulator_t *emu, emulator_options_t *opts) {
     if (!opts)
         opts = &defaults_opts;
 
-    // allow changes of mode, apu_sample_count and apu_format only once (inside emulator_init())
+    // allow changes of mode, skip_boot, apu_sample_count and apu_format only once (inside emulator_init())
     if (!emu->mode) {
         emu->mode = opts->mode >= DMG && opts->mode <= CGB ? opts->mode : defaults_opts.mode;
+        emu->skip_boot = opts->skip_boot;
         emu->apu_sample_count = opts->apu_sample_count >= 128 ? opts->apu_sample_count : defaults_opts.apu_sample_count;
         emu->apu_format = opts->apu_format >= APU_FORMAT_F32 && opts->apu_format <= APU_FORMAT_U8 ? opts->apu_format : defaults_opts.apu_format;
     }
 
+    emu->disable_cgb_color_correction = opts->disable_cgb_color_correction;
     emu->on_apu_samples_ready = opts->on_apu_samples_ready;
     emu->apu_speed = opts->apu_speed < 1.0f ? defaults_opts.apu_speed : opts->apu_speed;
     emu->apu_sound_level = opts->apu_sound_level > 1.0f ? defaults_opts.apu_sound_level : opts->apu_sound_level;

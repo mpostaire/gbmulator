@@ -19,8 +19,8 @@
 byte_t ppu_color_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
     { // grayscale colors
         { 0xFF, 0xFF, 0xFF },
-        { 0xCC, 0xCC, 0xCC },
-        { 0x77, 0x77, 0x77 },
+        { 0xAA, 0xAA, 0xAA },
+        { 0x55, 0x55, 0x55 },
         { 0x00, 0x00, 0x00 }
     },
     { // green colors (original)
@@ -44,24 +44,26 @@ static inline dmg_color_t get_color_dmg(mmu_t *mmu, byte_t color_id, word_t pale
 /**
  * @returns cgb colors in r, g, b arguments after applying palette.
  */
-static inline void get_color_cgb(word_t color_palette_data, byte_t *r, byte_t *g, byte_t *b) {
+static inline void get_color_cgb(word_t color_palette_data, byte_t *r, byte_t *g, byte_t *b, byte_t disable_color_correction) {
     *r = color_palette_data & 0x1F;
     *g = (color_palette_data & 0x3E0) >> 5;
     *b = (color_palette_data & 0x7C00) >> 10;
 
-    // from 5 bit depth to 8 bit depth (no color correction)
-    // *r = (*r << 3) | (*r >> 2);
-    // *g = (*g << 3) | (*g >> 2);
-    // *b = (*b << 3) | (*b >> 2);
+    if (disable_color_correction) {
+        // from 5 bit depth to 8 bit depth (no color correction)
+        *r = (*r << 3) | (*r >> 2);
+        *g = (*g << 3) | (*g >> 2);
+        *b = (*b << 3) | (*b >> 2);
+    } else {
+        // color correction
+        int R = (26 * *r) + (4 * *g) + (2 * *b);
+        int G = (24 * *g) + (8 * *b);
+        int B = (6 * *r) + (4 * *g) + (22 * *b);
 
-    // color correction
-    int R = (26 * *r) + (4 * *g) + (2 * *b);
-    int G = (24 * *g) + (8 * *b);
-    int B = (6 * *r) + (4 * *g) + (22 * *b);
-
-    *r = MIN(960, R) >> 2;
-    *g = MIN(960, G) >> 2;
-    *b = MIN(960, B) >> 2;
+        *r = MIN(960, R) >> 2;
+        *g = MIN(960, G) >> 2;
+        *b = MIN(960, B) >> 2;
+    }
 }
 
 /**
@@ -269,7 +271,7 @@ static void draw_bg_win_cgb(emulator_t *emu) {
         // if in cgb compatibility mode and background and window disabled, draw white pixel
         if (((mmu->mem[KEY0] >> 2) & 0x03) == 1 && !CHECK_BIT(mmu->mem[LCDC], 0)) {
             byte_t r, g, b;
-            get_color_cgb(0xFFFF, &r, &g, &b);
+            get_color_cgb(0xFFFF, &r, &g, &b, emu->disable_cgb_color_correction);
             SET_PIXEL_CGB(ppu, x, y, r, g, b);
             continue;
         }
@@ -366,7 +368,7 @@ static void draw_bg_win_cgb(emulator_t *emu) {
         word_t color_data = (mmu->cram_bg[color_address + 1] << 8) | mmu->cram_bg[color_address];
 
         byte_t r, g, b;
-        get_color_cgb(color_data, &r, &g, &b);
+        get_color_cgb(color_data, &r, &g, &b, emu->disable_cgb_color_correction);
 
         // set pixel color using BG (for background and window) palette data
         SET_PIXEL_CGB(ppu, x, y, r, g, b);
@@ -501,7 +503,7 @@ static void draw_objects_cgb(emulator_t *emu) {
             word_t color_data = (mmu->cram_obj[color_address + 1] << 8) | mmu->cram_obj[color_address];
 
             byte_t r, g, b;
-            get_color_cgb(color_data, &r, &g, &b);
+            get_color_cgb(color_data, &r, &g, &b, emu->disable_cgb_color_correction);
 
             // set pixel color using BG (for background and window) palette data
             SET_PIXEL_CGB(ppu, pixel_x, y, r, g, b);
@@ -557,7 +559,7 @@ void ppu_step(emulator_t *emu) {
                         SET_PIXEL_DMG(ppu, i, j, DMG_WHITE, emu->ppu_color_palette);
                     } else {
                         byte_t r, g, b;
-                        get_color_cgb(0xFFFF, &r, &g, &b);
+                        get_color_cgb(0xFFFF, &r, &g, &b, emu->disable_cgb_color_correction);
                         SET_PIXEL_CGB(ppu, i, j, r, g, b);
                     }
                 }

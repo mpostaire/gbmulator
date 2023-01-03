@@ -179,6 +179,8 @@ static float channel_dac(emulator_t *emu, channel_t *c) {
 }
 
 void apu_step(emulator_t *emu) {
+    // TODO not sure where I saw it but apu clocking is supposed to be inferred by DIV timer?
+
     if (!IS_APU_ENABLED(emu))
         return;
 
