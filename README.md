@@ -63,8 +63,6 @@ There is also support for gamepad controllers but the buttons aren't configurabl
 - rewrite ppu from scanline rendering to cycle accurate rendering
 - fix buggy link cable (tetris/dr mario are working fine but pokemon red is broken)
 
-- implement test suite
-
 ## Resources used
 - https://gbdev.io/pandocs/
 - http://marc.rawer.de/Gameboy/Docs/GBCPUman.pdf
