@@ -16,7 +16,7 @@ all: $(ODIR)
 	$(MAKE) $(BIN)
 	./$(BIN) $(TEST_ROMS)
 
-tests.txt: tests_parser.py $(TEST_ROMS)
+tests.txt: tests_generator.py $(TEST_ROMS)
 	python3 $< $(TEST_ROMS)
 
 $(TEST_ROMS):
