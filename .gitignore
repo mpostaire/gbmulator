@@ -5,6 +5,7 @@
 !test
 test/game-boy-test-roms-v*
 !Makefile
+*.txt
 .vscode
 !font
 !images

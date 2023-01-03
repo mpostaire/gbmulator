@@ -46,14 +46,14 @@ int button_to_joypad(config_t *config, unsigned int button) {
 
 int dir_exists(const char *directory_path) {
     DIR *dir = opendir(directory_path);
-	if (dir == NULL) {
-		if (errno == ENOENT)
-			return 0;
-		errnoprintf("opendir");
+    if (dir == NULL) {
+        if (errno == ENOENT)
+            return 0;
+        errnoprintf("opendir");
         exit(EXIT_FAILURE);
-	}
-	closedir(dir);
-	return 1;
+    }
+    closedir(dir);
+    return 1;
 }
 
 void mkdirp(const char *directory_path) {

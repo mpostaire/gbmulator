@@ -11,8 +11,11 @@ EMU_OBJ=$(EMU_SRC:$(EMU_SDIR)/%.c=$(ODIR)/%.o)
 
 TEST_ROMS=game-boy-test-roms-v5.1
 
-all: $(TEST_ROMS) $(ODIR) $(BIN)
+all: $(TEST_ROMS) tests.txt $(ODIR) $(BIN)
 	./$(BIN) $(TEST_ROMS)
+
+tests.txt: tests_parser.py
+	python3 $< $(TEST_ROMS)
 
 $(TEST_ROMS):
 	wget https://github.com/c-sp/gameboy-test-roms/releases/download/v5.1/game-boy-test-roms-v5.1.zip
@@ -32,7 +35,7 @@ $(ODIR):
 	mkdir -p $@
 
 clean:
-	rm -rf out
+	rm -rf $(BIN) out tests.txt
 
 -include $(foreach d,$(ODIR),$d/*.d)
 

@@ -5,44 +5,39 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <dirent.h>
 #include <MagickWand/MagickWand.h>
 
 #include "../emulator/emulator.h"
 
 #define COLOR_OFF "\033[0m"
-#define COLOR_RED "\033[0;31m"
-#define COLOR_GREEN "\033[0;32m"
+#define COLOR_RED "\033[1;31m"
+#define COLOR_GREEN "\033[1;32m"
 #define COLOR_YELLOW "\033[0;33m"
-#define COLOR_BLUE "\033[0;34m"
+#define COLOR_BLUE "\033[1;34m"
 
 #define BUF_SIZE 256
+
+char root_path[BUF_SIZE];
 
 typedef struct {
     char *rom_path;                 // relative the the root_path given in the program's argument
     char *reference_image_filename; // relative to the dir of the rom_path
+    char *result_diff_image_suffix;
     emulator_mode_t mode;
     int time;
-} screenshot_test_t;
+    byte_t exit_opcode;
+    char *input_sequence;
+} test_t;
 
-// TODO make emulator options to disable color correction (otherwise CGB tests all fail)
+// TODO adwaita gui does not change DMG color palette unless restart????
+
 // TODO I think the blargg cpu instrs tests for CGB need (STOP?) and double speed to have such low delay
-screenshot_test_t screenshot_tests[] = {
-    {"blargg/cgb_sound/cgb_sound.gb", "cgb_sound-cgb.png", CGB, 37},
-    {"blargg/dmg_sound/dmg_sound.gb", "dmg_sound-dmg.png", DMG, 36},
-    {"blargg/cpu_instrs/cpu_instrs.gb", "cpu_instrs-dmg-cgb.png", DMG, 55},
-    {"blargg/cpu_instrs/cpu_instrs.gb", "cpu_instrs-dmg-cgb.png", CGB, 31},
-    {"blargg/halt_bug.gb", "halt_bug-dmg-cgb.png", DMG, 2},
-    {"blargg/halt_bug.gb", "halt_bug-dmg-cgb.png", CGB, 2},
-    {"blargg/instr_timing/instr_timing.gb", "instr_timing-dmg-cgb.png", DMG, 1},
-    {"blargg/instr_timing/instr_timing.gb", "instr_timing-dmg-cgb.png", CGB, 1},
-    {"blargg/interrupt_time/interrupt_time.gb", "interrupt_time-dmg.png", DMG, 2},
-    {"blargg/interrupt_time/interrupt_time.gb", "interrupt_time-cgb.png", CGB, 2},
-    {"blargg/mem_timing/mem_timing.gb", "mem_timing-dmg-cgb.png", DMG, 3},
-    {"blargg/mem_timing/mem_timing.gb", "mem_timing-dmg-cgb.png", CGB, 3},
-    {"blargg/mem_timing-2/mem_timing.gb", "mem_timing-dmg-cgb.png", DMG, 4},
-    {"blargg/mem_timing-2/mem_timing.gb", "mem_timing-dmg-cgb.png", CGB, 4},
-    {"blargg/oam_bug/oam_bug.gb", "oam_bug-dmg.png", DMG, 21},
-    {"blargg/oam_bug/oam_bug.gb", "oam_bug-cgb.png", CGB, 21} // TODO not sure of this time value
+// TODO the aim is to implement DMG-C and CGG-E
+
+test_t tests[] = {
+    #include "./tests.txt"
 };
 
 static byte_t *get_rom_data(const char *path, size_t *rom_size) {
@@ -75,28 +70,98 @@ static byte_t *get_rom_data(const char *path, size_t *rom_size) {
     return buf;
 }
 
+int dir_exists(const char *directory_path) {
+    DIR *dir = opendir(directory_path);
+	if (dir == NULL) {
+		if (errno == ENOENT)
+			return 0;
+		errnoprintf("opendir");
+        exit(EXIT_FAILURE);
+	}
+	closedir(dir);
+	return 1;
+}
+
+void mkdirp(const char *directory_path) {
+    char buf[256];
+    snprintf(buf, sizeof(buf), "%s", directory_path);
+    size_t len = strlen(buf);
+
+    if (buf[len - 1] == '/')
+        buf[len - 1] = 0;
+
+    for (char *p = buf + 1; *p; p++) {
+        if (*p == '/') {
+            *p = 0;
+            if (mkdir(buf, 0744) && errno != EEXIST) {
+                perror("mkdir");
+                exit(EXIT_FAILURE);
+            }
+            *p = '/';
+        }
+    }
+
+    if (mkdir(buf, 0744) && errno != EEXIST) {
+        perror("mkdir");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void make_parent_dirs(const char *filepath) {
+    char *last_slash = strrchr(filepath, '/');
+    int last_slash_index = last_slash ? (int) (last_slash - filepath) : -1;
+
+    if (last_slash_index != -1) {
+        char directory_path[last_slash_index + 1];
+        snprintf(directory_path, last_slash_index + 1, "%s", filepath);
+
+        if (!dir_exists(directory_path))
+            mkdirp(directory_path);
+    }
+}
+
 static void magick_wand_error(MagickWand *wand) {
     ExceptionType severity;
     char *description = MagickGetException(wand, &severity);
-    (void) printf("%s %s %lu %s\n", GetMagickModule(), description);
+    (void) printf("\n%s %s %lu %s\n", GetMagickModule(), description);
     description = (char *) MagickRelinquishMemory(description);
     exit(EXIT_FAILURE);
 }
 
-static int save_and_check_result(screenshot_test_t *test, byte_t *pixels, char *rom_path) {
+static int save_and_check_result(test_t *test, emulator_t *emu, char *rom_path) {
     // get paths
 
-    char *rom_extension = strrchr(rom_path, '.');
+    char *path_from_category = strchr(rom_path, '/') + 1;
+    char *rom_name = strrchr(rom_path, '/') + 1;
+    int path_until_extension_len = strrchr(rom_path, '.') - path_from_category;
+    int dir_path_len = rom_name - 1 - rom_path;
+    int new_dir_path_len = rom_name - 1 - path_from_category;
+
+    char *reference_old_path = NULL;
+    char *reference_new_path = NULL;
+    char *diff_path = NULL;
 
     char result_path[BUF_SIZE];
-    snprintf(result_path, sizeof(result_path), "%.*s-%s.result.png", (int) (rom_extension - rom_path), rom_path, test->mode == CGB ? "cgb" : "dmg");
+    char *label = test->mode == CGB ? "cgb" : "dmg";
+    char *suffix = test->result_diff_image_suffix ? test->result_diff_image_suffix : "";
+    snprintf(result_path, sizeof(result_path), "results/%.*s-%s%s.result.png", path_until_extension_len, path_from_category, suffix, label);
 
-    char reference_path[BUF_SIZE];
-    char *rom_name = strrchr(rom_path, '/');
-    snprintf(reference_path, sizeof(reference_path), "%.*s/%s", (int) (rom_name - rom_path), rom_path, test->reference_image_filename);
+    if (test->reference_image_filename) {
+        reference_old_path = xmalloc(BUF_SIZE);
+        reference_new_path = xmalloc(BUF_SIZE);
+        diff_path = xmalloc(BUF_SIZE);
 
-    char diff_path[BUF_SIZE];
-    snprintf(diff_path, sizeof(diff_path), "%.*s-%s.diff.png", (int) (rom_extension - rom_path), rom_path, test->mode == CGB ? "cgb" : "dmg");
+        snprintf(reference_old_path, BUF_SIZE, "%.*s/%s", dir_path_len, rom_path, test->reference_image_filename);
+
+        char *reference_extension = strrchr(test->reference_image_filename, '.');
+        int new_path_until_extension_len = reference_extension - test->reference_image_filename;
+        snprintf(reference_new_path, BUF_SIZE, "results/%.*s/%.*s.expected.png", new_dir_path_len, path_from_category, new_path_until_extension_len, test->reference_image_filename);
+
+        snprintf(diff_path, BUF_SIZE, "results/%.*s-%s%s.diff.png", path_until_extension_len, path_from_category, suffix, label);
+    }
+
+    // create dir structure
+    make_parent_dirs(result_path);
 
     // save and check
 
@@ -106,32 +171,90 @@ static int save_and_check_result(screenshot_test_t *test, byte_t *pixels, char *
     if (!MagickNewImage(result_wand, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, pixel_wand))
         magick_wand_error(result_wand);
 
-    if (!MagickImportImagePixels(result_wand, 0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, "RGB", CharPixel, pixels))
+    if (!MagickImportImagePixels(result_wand, 0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, "RGB", CharPixel, emu->ppu->pixels))
         magick_wand_error(result_wand);
 
     if (!MagickWriteImage(result_wand, result_path))
         magick_wand_error(result_wand);
 
-    MagickWand *reference_wand = NewMagickWand();
-    if (!MagickReadImage(reference_wand, reference_path))
-        magick_wand_error(reference_wand);
+    if (test->reference_image_filename) {
 
-    double distortion;
-    MagickWand *diff_wand = MagickCompareImages(result_wand, reference_wand, AbsoluteErrorMetric, &distortion);
+        MagickWand *reference_wand = NewMagickWand();
+        if (!MagickReadImage(reference_wand, reference_old_path))
+            magick_wand_error(reference_wand);
 
-    if (!MagickWriteImage(diff_wand, diff_path))
-        magick_wand_error(diff_wand);
+        if (!MagickWriteImage(reference_wand, reference_new_path))
+            magick_wand_error(reference_wand);
 
-    DestroyMagickWand(result_wand);
-    DestroyMagickWand(reference_wand);
-    DestroyMagickWand(diff_wand);
-    DestroyPixelWand(pixel_wand);
+        double distortion;
+        MagickWand *diff_wand = MagickCompareImages(result_wand, reference_wand, AbsoluteErrorMetric, &distortion);
 
-    return !distortion;
+        if (!MagickWriteImage(diff_wand, diff_path))
+            magick_wand_error(diff_wand);
+
+        DestroyMagickWand(result_wand);
+        DestroyMagickWand(reference_wand);
+        DestroyMagickWand(diff_wand);
+        DestroyPixelWand(pixel_wand);
+
+        if (reference_old_path)
+            free(reference_old_path);
+        if (reference_new_path)
+            free(reference_new_path);
+        if (diff_path)
+            free(diff_path);
+
+        return !distortion;
+    }
+
+    registers_t regs = emu->cpu->registers;
+    return regs.bc == 0x0305 && regs.de == 0x080D && regs.hl == 0x1522;
 }
 
-static int run_screenshot_test(screenshot_test_t *test, char *rom_path) {
+static joypad_button_t str_to_joypad(char *str) {
+    if (!strncmp(str, "right", 7))
+        return JOYPAD_RIGHT;
+    if (!strncmp(str, "left", 7))
+        return JOYPAD_LEFT;
+    if (!strncmp(str, "up", 7))
+        return JOYPAD_UP;
+    if (!strncmp(str, "down", 7))
+        return JOYPAD_DOWN;
+    if (!strncmp(str, "a", 7))
+        return JOYPAD_A;
+    if (!strncmp(str, "b", 7))
+        return JOYPAD_B;
+    if (!strncmp(str, "select", 7))
+        return JOYPAD_SELECT;
+    if (!strncmp(str, "start", 7))
+        return JOYPAD_START;
+    exit(EXIT_FAILURE);
+}
+
+static void exec_input_sequence(emulator_t *emu, char *input_sequence) {
+    char cpy[BUF_SIZE];
+    strncpy(cpy, input_sequence, sizeof(cpy) - 1);
+    char *delay_str = strtok(cpy, ":");
+    char *input_str = strtok(NULL, ",");
+    while (delay_str && input_str) {
+        int delay = atoi(delay_str);
+        joypad_button_t input = str_to_joypad(input_str);
+
+        emulator_run_cycles(emu, delay * GB_CPU_FREQ);
+        emulator_joypad_press(emu, input);
+        emulator_run_cycles(emu, GB_CPU_FREQ / 4);
+        emulator_joypad_release(emu, input);
+
+        delay_str = strtok(NULL, ":");
+        input_str = strtok(NULL, ",");
+    }
+}
+
+static int run_test(test_t *test) {
     MagickWandGenesis();
+
+    char rom_path[BUF_SIZE];
+    snprintf(rom_path, sizeof(rom_path) + 2, "%s/%s", root_path, test->rom_path);
 
     size_t rom_size = 0;
     byte_t *rom_data = get_rom_data(rom_path, &rom_size);
@@ -142,17 +265,27 @@ static int run_screenshot_test(screenshot_test_t *test, char *rom_path) {
         .mode = test->mode,
         .skip_boot = 1,
         .palette = PPU_COLOR_PALETTE_GRAY,
-        .disable_cgb_color_correction = 1
-    };
+        .disable_cgb_color_correction = 1};
     emulator_t *emu = emulator_init(rom_data, rom_size, &opts);
     free(rom_data);
     if (!emu)
         return 0;
 
-    emulator_run_cycles(emu, test->time * GB_CPU_FREQ);
+    if (test->input_sequence)
+        exec_input_sequence(emu, test->input_sequence);
+
+    long timeout_cycles = 180 * GB_CPU_FREQ; // maximum run time of 3 minutes (emulated time)
+    if (test->exit_opcode) {
+        while (emu->cpu->opcode != test->exit_opcode && timeout_cycles > 0) {
+            emulator_step(emu);
+            timeout_cycles -= 4;
+        }
+    }
+    if (timeout_cycles > 0)
+        emulator_run_cycles(emu, test->time * GB_CPU_FREQ);
 
     // take screenshot, save it and compare to the reference
-    int ret = save_and_check_result(test, emu->ppu->pixels, rom_path);
+    int ret = save_and_check_result(test, emu, rom_path);
     emulator_quit(emu);
 
     // compare_with_expected_image();
@@ -161,28 +294,26 @@ static int run_screenshot_test(screenshot_test_t *test, char *rom_path) {
     return ret;
 }
 
-static void run_tests(char *root_path) {
+static void run_tests() {
     fclose(stderr); // close stderr to prevent error messages from the emulator to mess with the tests' output
 
     printf("---- TESTING ----\n");
 
-    char root_path_last_char = root_path[strlen(root_path) - 1];
-    char *path_separator = root_path_last_char == '/' ? "" : "/";
-    char rom_path[BUF_SIZE];
-    size_t num_tests = sizeof(screenshot_tests) / sizeof(*screenshot_tests);
+    size_t num_tests = sizeof(tests) / sizeof(*tests);
     int succeeded = 0;
 
     for (size_t i = 0; i < num_tests; i++) {
-        snprintf(rom_path, sizeof(rom_path), "%s%s%s", root_path, path_separator, screenshot_tests[i].rom_path);
-
-        printf(COLOR_BLUE "[TEST]" COLOR_OFF " (%s) %s", screenshot_tests[i].mode == CGB ? "CGB" : "DMG", rom_path);
+        test_t test = tests[i];
+        char *label = test.mode == CGB ? "CGB" : "DMG";
+        char *suffix = test.result_diff_image_suffix ? test.result_diff_image_suffix : "";
+        printf(COLOR_BLUE "[TEST]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s" COLOR_OFF, label, test.rom_path, suffix);
         fflush(stdout);
 
-        int success = run_screenshot_test(&screenshot_tests[i], rom_path);
+        int success = run_test(&test);
         if (success)
-            printf(COLOR_GREEN "\r[PASS]" COLOR_OFF " (%s) %s\n", screenshot_tests[i].mode == CGB ? "CGB" : "DMG", rom_path);
+            printf(COLOR_GREEN "\r[PASS]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s\n" COLOR_OFF, label, test.rom_path, suffix);
         else
-            printf(COLOR_RED "\r[FAIL]" COLOR_OFF " (%s) %s\n", screenshot_tests[i].mode == CGB ? "CGB" : "DMG", rom_path);
+            printf(COLOR_RED "\r[FAIL]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s\n" COLOR_OFF, label, test.rom_path, suffix);
 
         succeeded += success;
     }
@@ -197,6 +328,11 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    char *root_path = argv[1];
-    run_tests(root_path);
+    size_t root_path_len = strlen(argv[1]);
+    while (argv[1][root_path_len - 1] == '/')
+        root_path_len--;
+
+    snprintf(root_path, sizeof(root_path), "%.*s", (int) root_path_len, argv[1]);
+
+    run_tests();
 }
