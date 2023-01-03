@@ -618,11 +618,14 @@ static void set_speed(GtkRange* self, gpointer user_data) {
 
 static void set_sound(GtkRange* self, gpointer user_data) {
     config.sound = gtk_range_get_value(self);
-    emulator_set_apu_sound_level(emu, config.sound);
+    if (emu)
+        emulator_set_apu_sound_level(emu, config.sound);
 }
 
 static void set_palette(AdwComboRow *self, GParamSpec *pspec, gpointer user_data) {
     config.color_palette = adw_combo_row_get_selected(self);
+    if (emu)
+        emulator_set_palette(emu, config.color_palette);
 }
 
 static void set_keybinding(GtkDialog *self, gint response_id, gpointer user_data) {

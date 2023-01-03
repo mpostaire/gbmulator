@@ -32,8 +32,6 @@ typedef struct {
     char *input_sequence;
 } test_t;
 
-// TODO adwaita gui does not change DMG color palette unless restart????
-
 // TODO I think the blargg cpu instrs tests for CGB need (STOP?) and double speed to have such low delay
 // TODO the aim is to implement DMG-C and CGG-E
 
