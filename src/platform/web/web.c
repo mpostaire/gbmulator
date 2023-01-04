@@ -439,10 +439,10 @@ static void loop(void) {
 
     SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
     SDL_RenderPresent(renderer);
-    handle_input(); // keep this the closest possible before emulator_step() to reduce input inaccuracies
+    handle_input(); // keep this the closest possible before emulator_run_steps() to reduce input inaccuracies
 
-    // run the emulator for the approximate number of cycles it takes for the ppu to render a frame
-    emulator_run_cycles(emu, GB_CPU_CYCLES_PER_FRAME * config.speed);
+    // run the emulator for the approximate number of steps it takes for the ppu to render a frame
+    emulator_run_steps(emu, GB_CPU_STEPS_PER_FRAME * config.speed);
 }
 
 int main(int argc, char **argv) {

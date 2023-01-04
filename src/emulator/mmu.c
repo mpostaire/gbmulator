@@ -644,8 +644,11 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
     if (address > NR52 && address < WAVE_RAM)
         return 0xFF;
 
-    if (address == KEY0 || address == KEY1)
+    if (address == KEY0)
         return emu->mode == CGB ? mmu->mem[address] : 0xFF;
+
+    if (address == KEY1)
+        return emu->mode == CGB ? (mmu->mem[address] | 0x7E) : 0xFF;
 
     if (emu->mode == CGB) {
         if (address == 0xFF75)
@@ -734,6 +737,16 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD enabled
     } else if (address >= UNUSABLE && address < IO) {
         // UNUSABLE memory is unusable
+    } else if (address == P1) {
+        // prevent writes to the lower nibble of the P1 register (joypad)
+        mmu->mem[address] = data & 0xF0;
+    } else if (address == SC) {
+        if (CHECK_BIT(mmu->mem[SC], 1) != CHECK_BIT(data, 1)) {
+            mmu->mem[address] = data & 0x83;
+            link_set_clock(emu);
+        } else {
+            mmu->mem[address] = data & 0x83;
+        }
     } else if (address == DIV_LSB) {
         // writing to DIV resets it to 0
         mmu->mem[address] = 0;
@@ -751,65 +764,6 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         case 1: emu->timer->max_tima_cycles = 16; break;
         case 2: emu->timer->max_tima_cycles = 64; break;
         case 3: emu->timer->max_tima_cycles = 256; break;
-        }
-    } else if (address == LY) {
-        // read only
-    } else if (address == LYC) {
-        // a write to LYC triggers an immediate LY=LYC comparison
-        mmu->mem[address] = data;
-        ppu_ly_lyc_compare(emu);
-    } else if (address == DMA) {
-        // writing to this register starts an OAM DMA transfer
-        mmu->oam_dma.is_active = 1;
-        mmu->oam_dma.progress = 0;
-        mmu->oam_dma.src_address = data * 0x100;
-
-        mmu->mem[address] = data;
-    } else if (address == BANK) {
-        // disable boot rom
-        if (emu->mode == DMG && data == 0x01) {
-            memcpy(mmu->mem, mmu->cartridge, 0x100);
-        } else if (emu->mode == CGB && data == 0x11) {
-            memcpy(mmu->mem, mmu->cartridge, 0x100);
-            memcpy(&mmu->mem[0x200], &mmu->cartridge[0x200], sizeof(cgb_boot) - 0x200);
-        }
-        mmu->mem[address] = data;
-    } else if (address == HDMA5 && emu->mode == CGB) {
-        // writing to this register starts a VRAM DMA transfer
-
-        if (!CHECK_BIT(mmu->mem[HDMA5], 7) && mmu->hdma.type == HDMA && GET_BIT(data, 7))
-            eprintf("TODO cancel HDMA\n"); // TODO cancel HDMA at next HBLANK
-
-        mmu->hdma.type = GET_BIT(data, 7);
-        mmu->hdma.lock_cpu = mmu->hdma.type == GDMA || (mmu->hdma.type == HDMA && PPU_IS_MODE(emu, PPU_MODE_HBLANK));
-
-        // bit 7 of HDMA5 is 0 to show that there is an active HDMA/GDMA, bits 0-6 are the size of the DMA
-        mmu->mem[address] = data & 0x7F;
-
-        mmu->hdma.step = 31;
-        if (mmu->hdma.type == HDMA) {
-            mmu->hdma.hdma_ly = mmu->mem[LY] + 1; // start HDMA at next HBLANK
-            if (mmu->hdma.hdma_ly == GB_SCREEN_HEIGHT)
-                mmu->hdma.hdma_ly = 0;
-        }
-
-        mmu->hdma.src_address = ((mmu->mem[HDMA1] << 8) | mmu->mem[HDMA2]) & 0xFFF0;
-        mmu->hdma.dest_address = ((mmu->mem[HDMA3] << 8) | mmu->mem[HDMA4]) & 0x1FF0;
-
-        // if (mmu->hdma.type) { // HBLANK DMA (HDMA)
-        //     printf("HDMA size=%d, vram bank=%d, src=%x, dest=%x\n", (mmu->mem[address] + 1) * 0x10, mmu->mem[VBK] & 0x01, mmu->hdma.src_address, mmu->hdma.dest_address + VRAM);
-        // } else { // General purpose DMA (GDMA)
-        //     printf("GDMA size=%d, vram bank=%d, src=%x, dest=%x\n", (mmu->mem[address] + 1) * 0x10, mmu->mem[VBK] & 0x01, mmu->hdma.src_address, mmu->hdma.dest_address + VRAM);
-        // }
-    } else if (address == P1) {
-        // prevent writes to the lower nibble of the P1 register (joypad)
-        mmu->mem[address] = data & 0xF0;
-    } else if (address == SC) {
-        if (CHECK_BIT(mmu->mem[SC], 1) != CHECK_BIT(data, 1)) {
-            mmu->mem[address] = data & 0x83;
-            link_set_clock(emu);
-        } else {
-            mmu->mem[address] = data & 0x83;
         }
     } else if (address == NR10) {
         if (!IS_APU_ENABLED(emu))
@@ -928,6 +882,57 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
             mmu->mem[address] = data;
     } else if (address == STAT) {
         mmu->mem[address] = 0x80 | (data & 0x78) | (mmu->mem[address] & 0x07);
+    } else if (address == LY) {
+        // read only
+    } else if (address == LYC) {
+        // a write to LYC triggers an immediate LY=LYC comparison
+        mmu->mem[address] = data;
+        ppu_ly_lyc_compare(emu);
+    } else if (address == DMA) {
+        // writing to this register starts an OAM DMA transfer
+        mmu->oam_dma.is_active = 1;
+        mmu->oam_dma.progress = 0;
+        mmu->oam_dma.src_address = data * 0x100;
+
+        mmu->mem[address] = data;
+    } else if (address == KEY1) {
+        mmu->mem[address] |= data & 0x01;
+    } else if (address == BANK) {
+        // disable boot rom
+        if (emu->mode == DMG && data == 0x01) {
+            memcpy(mmu->mem, mmu->cartridge, 0x100);
+        } else if (emu->mode == CGB && data == 0x11) {
+            memcpy(mmu->mem, mmu->cartridge, 0x100);
+            memcpy(&mmu->mem[0x200], &mmu->cartridge[0x200], sizeof(cgb_boot) - 0x200);
+        }
+        mmu->mem[address] = data;
+    } else if (address == HDMA5 && emu->mode == CGB) {
+        // writing to this register starts a VRAM DMA transfer
+
+        if (!CHECK_BIT(mmu->mem[HDMA5], 7) && mmu->hdma.type == HDMA && GET_BIT(data, 7))
+            eprintf("TODO cancel HDMA\n"); // TODO cancel HDMA at next HBLANK
+
+        mmu->hdma.type = GET_BIT(data, 7);
+        mmu->hdma.lock_cpu = mmu->hdma.type == GDMA || (mmu->hdma.type == HDMA && PPU_IS_MODE(emu, PPU_MODE_HBLANK));
+
+        // bit 7 of HDMA5 is 0 to show that there is an active HDMA/GDMA, bits 0-6 are the size of the DMA
+        mmu->mem[address] = data & 0x7F;
+
+        mmu->hdma.step = 31;
+        if (mmu->hdma.type == HDMA) {
+            mmu->hdma.hdma_ly = mmu->mem[LY] + 1; // start HDMA at next HBLANK
+            if (mmu->hdma.hdma_ly == GB_SCREEN_HEIGHT)
+                mmu->hdma.hdma_ly = 0;
+        }
+
+        mmu->hdma.src_address = ((mmu->mem[HDMA1] << 8) | mmu->mem[HDMA2]) & 0xFFF0;
+        mmu->hdma.dest_address = ((mmu->mem[HDMA3] << 8) | mmu->mem[HDMA4]) & 0x1FF0;
+
+        // if (mmu->hdma.type) { // HBLANK DMA (HDMA)
+        //     printf("HDMA size=%d, vram bank=%d, src=%x, dest=%x\n", (mmu->mem[address] + 1) * 0x10, mmu->mem[VBK] & 0x01, mmu->hdma.src_address, mmu->hdma.dest_address + VRAM);
+        // } else { // General purpose DMA (GDMA)
+        //     printf("GDMA size=%d, vram bank=%d, src=%x, dest=%x\n", (mmu->mem[address] + 1) * 0x10, mmu->mem[VBK] & 0x01, mmu->hdma.src_address, mmu->hdma.dest_address + VRAM);
+        // }
     } else if (address == BGPD && emu->mode == CGB) {
         if (!PPU_IS_MODE(emu, PPU_MODE_DRAWING)) {
             byte_t cram_address = mmu->mem[BGPI] & 0x3F;

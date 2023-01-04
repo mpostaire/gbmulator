@@ -48,15 +48,23 @@ const char *mbc_names[] = {
     STRINGIFY(HuC1)
 };
 
-void emulator_step(emulator_t *emu) {
-    // stop execution of the program while a VBLANK DMA is active
-    if (!emu->mmu->hdma.lock_cpu)
-        cpu_step(emu);
-    mmu_step(emu);
-    timer_step(emu);
-    link_step(emu);
+int emulator_step(emulator_t *emu) {
+    byte_t double_speed = IS_DOUBLE_SPEED(emu);
+    for (int i = double_speed + 1; i; i--) {
+        // stop execution of the program while a VBLANK DMA is active
+        if (!emu->mmu->hdma.lock_cpu)
+            cpu_step(emu);
+        mmu_step(emu); // TODO only OAM DMA is double sped (break down mmu_step into mmu_oam_dma_step and mmu_vram_dma_step)
+        timer_step(emu);
+        link_step(emu);
+    }
+
+    // TODO during the time the cpu is blocked after a STOP opcode triggering a speed switch, the ppu and apu
+    //      behave in a weird way: https://gbdev.io/pandocs/CGB_Registers.html?highlight=key1#ff4d--key1-cgb-mode-only-prepare-speed-switch
     ppu_step(emu);
     apu_step(emu);
+
+    return double_speed ? 8 : 4;
 }
 
 emulator_t *emulator_init(const byte_t *rom_data, size_t rom_size, emulator_options_t *opts) {

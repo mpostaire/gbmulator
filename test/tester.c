@@ -32,9 +32,6 @@ typedef struct {
     char *input_sequence;
 } test_t;
 
-// TODO I think the blargg cpu instrs tests for CGB need (STOP?) and double speed to have such low delay
-// TODO the aim is to implement DMG-C and CGG-E
-
 test_t tests[] = {
     #include "./tests.txt"
 };
@@ -239,9 +236,9 @@ static void exec_input_sequence(emulator_t *emu, char *input_sequence) {
         int delay = atoi(delay_str);
         joypad_button_t input = str_to_joypad(input_str);
 
-        emulator_run_cycles(emu, delay * GB_CPU_FREQ);
+        emulator_run_frames(emu, delay * GB_CPU_FRAMES_PER_SECONDS);
         emulator_joypad_press(emu, input);
-        emulator_run_cycles(emu, GB_CPU_FREQ / 4);
+        emulator_run_steps(emu, GB_CPU_STEPS_PER_FRAME / 4);
         emulator_joypad_release(emu, input);
 
         delay_str = strtok(NULL, ":");
@@ -279,15 +276,15 @@ static int run_test(test_t *test) {
 
     // the maximum time a test can take to run is 120 emulated seconds:
     // the timeout is a little higher than this value to be safe
-    long timeout_cycles = 128 * GB_CPU_FREQ;
+    long timeout_steps = 128 * GB_CPU_FREQ;
     if (test->exit_opcode) {
-        while (emu->cpu->opcode != test->exit_opcode && timeout_cycles > 0) {
-            emulator_step(emu);
-            timeout_cycles -= 4;
+        while (emu->cpu->opcode != test->exit_opcode && timeout_steps > 0) {
+            emulator_step(emu); // don't take returned cycles to ignore double speed
+            timeout_steps -= 4;
         }
     }
-    if (timeout_cycles > 0)
-        emulator_run_cycles(emu, test->time * GB_CPU_FREQ);
+    if (timeout_steps > 0)
+        emulator_run_frames(emu, test->time * GB_CPU_FRAMES_PER_SECONDS);
 
     // take screenshot, save it and compare to the reference
     int ret = save_and_check_result(test, emu, rom_path);
@@ -296,7 +293,7 @@ static int run_test(test_t *test) {
     // compare_with_expected_image();
     MagickWandTerminus();
 
-    if (!ret && timeout_cycles <= 0)
+    if (!ret && timeout_steps <= 0)
         ret = -1;
     return ret;
 }

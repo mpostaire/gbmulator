@@ -184,6 +184,9 @@ def same_internal_state_test_generator(rom_path):
     if "same-suite/sgb/" in rom_path or "apu/channel_1" in rom_path or "apu/channel_2" in rom_path or "apu/channel_4" in rom_path:
         return ret
     if "same-suite/apu" in rom_path:
+        rom_name = os.path.basename(rom_path)
+        if "-cgb0" in rom_name or "-cgbB" in rom_name:
+            return ret
         if "apu/div_write_trigger" in rom_path or "apu/div_write_trigger_10" in rom_path:
             ret.append(f'{{"{rom_path}", NULL, NULL, DMG, 0, 0x40, NULL}},\n')
         ret.append(f'{{"{rom_path}", NULL, NULL, CGB, 0, 0x40, NULL}},\n')
@@ -202,6 +205,9 @@ def main():
         return
 
     tests_root = sys.argv[1]
+
+    # the aim is to implement DMG-CPU-C and CGB-CPU-C (because they have the most test roms compatible)
+    # the generated tests filter out all the test roms that are not made for these models
 
     # TODO gambatte (need a different test implementation to work)
     with open(os.path.join(os.path.dirname(__file__), "tests.txt"), "w") as f:

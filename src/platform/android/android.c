@@ -21,7 +21,6 @@ SDL_bool is_landscape;
 SDL_bool show_link_dialog;
 SDL_bool init_handshake;
 
-float speed;
 int frame_skip;
 
 int screen_width;
@@ -82,6 +81,8 @@ SDL_Texture *start_pressed_texture;
 SDL_Texture *select_pressed_texture;
 SDL_Texture *link_texture;
 SDL_Texture *link_pressed_texture;
+
+int steps_per_frame;
 
 button_t buttons[] = {
     {
@@ -415,11 +416,11 @@ static void start_emulation_loop(void) {
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
     SDL_PauseAudioDevice(audio_device, 0);
 
-    int cycles = 0;
+    int steps = 0;
     int frame_count = 0;
     while (is_running) {
-        if (cycles >= GB_CPU_CYCLES_PER_FRAME * speed) {
-            cycles -= GB_CPU_CYCLES_PER_FRAME * speed;
+        if (steps >= steps_per_frame) {
+            steps -= steps_per_frame;
             if (frame_count >= frame_skip) {
                 SDL_RenderClear(renderer);
                 SDL_RenderCopy(renderer, ppu_texture, NULL, &gb_screen_rect);
@@ -448,7 +449,7 @@ static void start_emulation_loop(void) {
         emulator_step(emu);
         if (linked_emu)
             emulator_step(linked_emu);
-        cycles += 4;
+        steps++;
 
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).
     }
@@ -492,7 +493,7 @@ static void load_cartridge(const byte_t *rom_data, size_t rom_size, int resume, 
         load_battery_from_file(emu, buf);
     }
 
-    speed = emu_speed;
+    steps_per_frame = GB_CPU_STEPS_PER_FRAME * emu_speed;
 }
 
 static void ready(void) {
@@ -746,7 +747,7 @@ int main(int argc, char **argv) {
     // previous values because of android's activities lifecycle
     is_running = SDL_TRUE;
     show_link_dialog = SDL_FALSE;
-    speed = 1.0f;
+    steps_per_frame = GB_CPU_STEPS_PER_FRAME;
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
 

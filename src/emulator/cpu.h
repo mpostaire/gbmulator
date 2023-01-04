@@ -11,6 +11,7 @@ typedef enum {
 } interrupt_t;
 
 #define CPU_REQUEST_INTERRUPT(emu, irq) SET_BIT((emu)->mmu->mem[IF], (irq))
+#define IS_DOUBLE_SPEED(emu) (((emu)->mmu->mem[KEY1] & 0x80) >> 7)
 
 void cpu_step(emulator_t *emu);
 

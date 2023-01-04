@@ -135,7 +135,7 @@ GtkWidget *joypad_name, *restart_dialog, *link_dialog, *status, *link_mode_sette
 guint loop_source;
 
 gboolean is_paused = TRUE, link_is_server = TRUE;
-int cycles_per_frame, sfd;
+int steps_per_frame, sfd;
 emulator_t *emu, *linked_emu;
 byte_t joypad_state = 0xFF;
 
@@ -260,9 +260,9 @@ static gboolean loop(gpointer user_data) {
 
     // run the emulator for the approximate number of cycles it takes for the ppu to render a frame
     if (linked_emu)
-        emulator_linked_run_cycles(emu, linked_emu, GB_CPU_CYCLES_PER_FRAME);
+        emulator_linked_run_frames(emu, linked_emu, 1);
     else
-        emulator_run_cycles(emu, cycles_per_frame);
+        emulator_run_steps(emu, steps_per_frame);
 
     gtk_gl_area_queue_render(GTK_GL_AREA(gl_area));
 
@@ -443,7 +443,7 @@ void link_client_connected(GObject *client, GAsyncResult *res, gpointer user_dat
     // https://docs.gtk.org/gio/index.html
     // https://docs.gtk.org/gio/class.SocketService.html
 
-    // TODO maybe put loop() (emulator_run_cycles() and gtk_gl_area_queue_render()) code in another thread so that the gui is not affected by the frames that may be slow due to a bad connection
+    // TODO maybe put loop() (emulator_run_steps() and gtk_gl_area_queue_render()) code in another thread so that the gui is not affected by the frames that may be slow due to a bad connection
 
     if (connection) {
         printf("Hurray! %d\n", g_socket_get_fd(g_socket_connection_get_socket(connection)));
@@ -587,7 +587,7 @@ static int load_cartridge(char *path) {
     emu = new_emu;
     emulator_print_status(emu);
 
-    cycles_per_frame = GB_CPU_CYCLES_PER_FRAME * config.speed;
+    steps_per_frame = GB_CPU_STEPS_PER_FRAME * config.speed;
 
     const GActionEntry app_entries[] = {
         { "play_pause", toggle_pause, NULL, NULL, NULL },
@@ -611,7 +611,7 @@ static void set_scale(GtkButton* self, gpointer user_data) {
 
 static void set_speed(GtkRange* self, gpointer user_data) {
     config.speed = gtk_range_get_value(self);
-    cycles_per_frame = GB_CPU_CYCLES_PER_FRAME * config.speed;
+    steps_per_frame = GB_CPU_STEPS_PER_FRAME * config.speed;
     if (emu)
         emulator_set_apu_speed(emu, config.speed);
 }

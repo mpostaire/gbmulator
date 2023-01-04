@@ -14,6 +14,10 @@
 #define CHECK_FLAG(cpu, x) ((cpu)->registers.f & (x))
 #define RESET_FLAG(cpu, x) ((cpu)->registers.f &= ~(x))
 
+#define PREPARE_SPEED_SWITCH(emu) ((emu)->mmu->mem[KEY1] & 0x01)
+#define ENABLE_DOUBLE_SPEED(emu) { ((emu)->mmu->mem[KEY1] |= 0x80); ((emu)->mmu->mem[KEY1] &= 0xFE); }
+#define DISABLE_DOUBLE_SPEED(emu) { ((emu)->mmu->mem[KEY1] &= 0x7F); ((emu)->mmu->mem[KEY1] &= 0xFE); }
+
 typedef enum {
     FETCH_OPCODE,
     FETCH_OPCODE_CB,
@@ -1503,8 +1507,20 @@ static void exec_opcode(emulator_t *emu) {
             END_OPCODE;
         );
     case 0x10: // STOP (4 cycles)
-        // TODO Halts until button press. Blargg's cpu_instrs.gb test rom wrongly assumes this is a CGB emulator and will reach this opcode.
-        CLOCK(eprintf("STOP instruction not implemented\n"); END_OPCODE;);
+        // TODO Halts until button press.
+        CLOCK(
+            if (PREPARE_SPEED_SWITCH(emu)) {
+                // TODO this should also stop the cpu for 2050 steps (8200 cycles)
+                // https://gbdev.io/pandocs/CGB_Registers.html?highlight=key1#ff4d--key1-cgb-mode-only-prepare-speed-switch
+                if (IS_DOUBLE_SPEED(emu)) {
+                    DISABLE_DOUBLE_SPEED(emu);
+                } else {
+                    ENABLE_DOUBLE_SPEED(emu);
+                }
+            }
+            eprintf("STOP instruction not fully implemented\n");
+            END_OPCODE;
+        );
     case 0x11: // LD DE, nn (12 cycles)
         GET_OPERAND_16();
         CLOCK(cpu->registers.de = cpu->operand; END_OPCODE;);
