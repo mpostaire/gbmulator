@@ -310,19 +310,19 @@ static void run_tests() {
         test_t test = tests[i];
         char *label = test.mode == CGB ? "CGB" : "DMG";
         char *suffix = test.result_diff_image_suffix ? test.result_diff_image_suffix : "";
-        printf(COLOR_BLUE "[TEST]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s" COLOR_OFF, label, test.rom_path, suffix);
+        printf(COLOR_BLUE "[TEST %ld/%ld]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s" COLOR_OFF, i + 1, num_tests, label, test.rom_path, suffix);
         fflush(stdout);
 
         int success = run_test(&test);
         if (success == 1) {
             succeeded++;
-            printf(COLOR_GREEN "\r[PASS]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s\n" COLOR_OFF, label, test.rom_path, suffix);
+            printf(COLOR_GREEN "\r[PASS]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s%*s\n" COLOR_OFF, label, test.rom_path, suffix, 16, "");
             fprintf(f, "%s:%s:%s:success\n", label, test.rom_path, suffix);
         } else if (success == -1) {
-            printf(COLOR_RED "\r[FAIL]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s\n" COLOR_OFF, label, test.rom_path, suffix);
+            printf(COLOR_RED "\r[FAIL]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s%*s\n" COLOR_OFF, label, test.rom_path, suffix, 16, "");
             fprintf(f, "%s:%s:%s:timeout\n", label, test.rom_path, suffix);
         } else {
-            printf(COLOR_RED "\r[FAIL]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s\n" COLOR_OFF, label, test.rom_path, suffix);
+            printf(COLOR_RED "\r[FAIL]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s%*s\n" COLOR_OFF, label, test.rom_path, suffix, 16, "");
             fprintf(f, "%s:%s:%s:failed\n", label, test.rom_path, suffix);
         }
     }
