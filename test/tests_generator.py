@@ -146,10 +146,19 @@ def mooneye_screenshot_test_generator(mode, rom_path, reference_image_path):
     return f'{{"{rom_path}", "{reference_image_path}", NULL, {mode}, 0, 0x40, NULL}},\n'
 
 def mooneye_internal_state_test_generator(rom_path):
+    ret = []
     if "madness" in rom_path:
-        return []
-    # TODO some tests should be run by cgb
-    return [f'{{"{rom_path}", NULL, NULL, DMG, 0, 0x40, NULL}},\n']
+        return ret
+    rom_name = os.path.basename(rom_path)
+    if re.match(".*(?:-S|-A|-dmg0|-mgb|-sgb|-cgb0)\.gb$", rom_name):
+        return ret
+    if re.match(".*(?:-C|-cgb.*C.*|-cgb)\.gb$", rom_name):
+        ret.append(f'{{"{rom_path}", NULL, NULL, CGB, 0, 0x40, NULL}},\n')
+    if re.match(".*(?:-G|-dmg.*C.*)\.gb$", rom_name):
+        ret.append(f'{{"{rom_path}", NULL, NULL, DMG, 0, 0x40, NULL}},\n')
+    if not ret:
+        return [f'{{"{rom_path}", NULL, NULL, {mode}, 0, 0x40, NULL}},\n' for mode in ["DMG", "CGB"]]
+    return ret
 
 
 def mealybug_reference_image_getter(mode, full_rom_path):

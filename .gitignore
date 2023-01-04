@@ -4,8 +4,11 @@
 !src/**
 !test
 test/game-boy-test-roms-v*
-!Makefile
 *.txt
+*.tmp
+!test/results
+!test/results/summary.txt
+!Makefile
 .vscode
 !font
 !images

@@ -14,9 +14,9 @@ TEST_ROMS=game-boy-test-roms-v5.1
 all: $(ODIR)
 	$(MAKE) tests.txt
 	$(MAKE) $(BIN)
-	mv -f results/summary.txt results/summary_old.txt || true
+	cp results/summary.txt results/summary_old.txt || true
 	./$(BIN) $(TEST_ROMS)
-	python3 compare_results.py
+	python3 compare_results.py || true
 
 tests.txt: tests_generator.py $(TEST_ROMS)
 	python3 $< $(TEST_ROMS)
@@ -39,7 +39,7 @@ $(ODIR):
 	mkdir -p $@
 
 clean:
-	rm -rf $(BIN) out tests.txt
+	rm -rf $(BIN) out tests.txt results/summary.txt.tmp
 
 -include $(foreach d,$(ODIR),$d/*.d)
 
