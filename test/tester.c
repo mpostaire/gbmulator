@@ -262,18 +262,23 @@ static int run_test(test_t *test) {
 
     emulator_options_t opts = {
         .mode = test->mode,
-        .skip_boot = 1,
         .palette = PPU_COLOR_PALETTE_GRAY,
-        .disable_cgb_color_correction = 1};
+        .disable_cgb_color_correction = 1
+    };
     emulator_t *emu = emulator_init(rom_data, rom_size, &opts);
     free(rom_data);
     if (!emu)
         return 0;
 
+    // run until the boot sequence is done
+    while (emu->cpu->registers.pc != 0x100)
+        emulator_step(emu);
+
     if (test->input_sequence)
         exec_input_sequence(emu, test->input_sequence);
 
-    // the maximum time a test can take to run is 120 emulated seconds: the timeout is a little higher than this value
+    // the maximum time a test can take to run is 120 emulated seconds:
+    // the timeout is a little higher than this value to be safe
     long timeout_cycles = 128 * GB_CPU_FREQ;
     if (test->exit_opcode) {
         while (emu->cpu->opcode != test->exit_opcode && timeout_cycles > 0) {
@@ -301,10 +306,9 @@ static void run_tests() {
 
     printf(BOLD "---- TESTING ----\n" COLOR_OFF);
     mkdir("results", 0744);
-    FILE *f = fopen("results/summary.txt", "w");
+    FILE *f = fopen("results/summary.txt.tmp", "w");
 
     size_t num_tests = sizeof(tests) / sizeof(*tests);
-    int succeeded = 0;
 
     for (size_t i = 0; i < num_tests; i++) {
         test_t test = tests[i];
@@ -315,7 +319,6 @@ static void run_tests() {
 
         int success = run_test(&test);
         if (success == 1) {
-            succeeded++;
             printf(COLOR_GREEN "\r[PASS]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s%*s\n" COLOR_OFF, label, test.rom_path, suffix, 8, "");
             fprintf(f, "%s:%s:%s:success\n", label, test.rom_path, suffix);
         } else if (success == -1) {
@@ -328,8 +331,7 @@ static void run_tests() {
     }
 
     fclose(f);
-    printf(BOLD "---- SUMMARY ----\n" COLOR_OFF);
-    printf("Passed %d/%ld tests (%d%%)\n", succeeded, num_tests, (int) ((succeeded / (float) num_tests) * 100.0f));
+    rename("results/summary.txt.tmp", "results/summary.txt");
 }
 
 int main(int argc, char **argv) {

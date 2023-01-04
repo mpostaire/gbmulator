@@ -5,6 +5,7 @@
 !test
 test/game-boy-test-roms-v*
 *.txt
+*.tmp
 !test/results
 !test/results/summary.txt
 !Makefile
