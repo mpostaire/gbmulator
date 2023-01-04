@@ -316,13 +316,13 @@ static void run_tests() {
         int success = run_test(&test);
         if (success == 1) {
             succeeded++;
-            printf(COLOR_GREEN "\r[PASS]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s%*s\n" COLOR_OFF, label, test.rom_path, suffix, 16, "");
+            printf(COLOR_GREEN "\r[PASS]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s%*s\n" COLOR_OFF, label, test.rom_path, suffix, 8, "");
             fprintf(f, "%s:%s:%s:success\n", label, test.rom_path, suffix);
         } else if (success == -1) {
-            printf(COLOR_RED "\r[FAIL]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s%*s\n" COLOR_OFF, label, test.rom_path, suffix, 16, "");
+            printf(COLOR_RED "\r[FAIL]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s%*s\n" COLOR_OFF, label, test.rom_path, suffix, 8, "");
             fprintf(f, "%s:%s:%s:timeout\n", label, test.rom_path, suffix);
         } else {
-            printf(COLOR_RED "\r[FAIL]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s%*s\n" COLOR_OFF, label, test.rom_path, suffix, 16, "");
+            printf(COLOR_RED "\r[FAIL]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s%*s\n" COLOR_OFF, label, test.rom_path, suffix, 8, "");
             fprintf(f, "%s:%s:%s:failed\n", label, test.rom_path, suffix);
         }
     }
