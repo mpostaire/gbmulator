@@ -154,7 +154,7 @@ def mooneye_internal_state_test_generator(rom_path):
         return ret
     if re.match(".*(?:-C|-cgb.*C.*|-cgb)\.gb$", rom_name):
         ret.append(f'{{"{rom_path}", NULL, NULL, CGB, 0, 0x40, NULL}},\n')
-    if re.match(".*(?:-G|-dmg.*C.*)\.gb$", rom_name):
+    if re.match(".*(?:-G.*|-dmg.*C.*)\.gb$", rom_name):
         ret.append(f'{{"{rom_path}", NULL, NULL, DMG, 0, 0x40, NULL}},\n')
     if not ret:
         return [f'{{"{rom_path}", NULL, NULL, {mode}, 0, 0x40, NULL}},\n' for mode in ["DMG", "CGB"]]

@@ -238,7 +238,7 @@ static void exec_input_sequence(emulator_t *emu, char *input_sequence) {
 
         emulator_run_frames(emu, delay * GB_CPU_FRAMES_PER_SECONDS);
         emulator_joypad_press(emu, input);
-        emulator_run_steps(emu, GB_CPU_STEPS_PER_FRAME / 4);
+        emulator_run_frames(emu, 1);
         emulator_joypad_release(emu, input);
 
         delay_str = strtok(NULL, ":");
@@ -267,12 +267,16 @@ static int run_test(test_t *test) {
     if (!emu)
         return 0;
 
+    // TODO GBmulator's boot aren't the same as the original DMG and CGB. This may cause problems in some test toms
+    //      like timer based tests roms
     // run until the boot sequence is done
     while (emu->cpu->registers.pc != 0x100)
         emulator_step(emu);
 
-    if (test->input_sequence)
+    if (test->input_sequence) {
+        emulator_run_frames(emu, 8); // run for some frames to let the test rom some time to setup itself
         exec_input_sequence(emu, test->input_sequence);
+    }
 
     // the maximum time a test can take to run is 120 emulated seconds:
     // the timeout is a little higher than this value to be safe
