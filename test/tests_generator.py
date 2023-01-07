@@ -150,7 +150,7 @@ def mooneye_internal_state_test_generator(rom_path):
     if "madness" in rom_path:
         return ret
     rom_name = os.path.basename(rom_path)
-    if re.match(".*(?:-S|-A|-dmg0|-mgb|-sgb|-cgb0)\.gb$", rom_name):
+    if re.match(".*(?:-S|-A|-dmg0|-mgb|-sgb|-sgb2|-cgb0)\.gb$", rom_name):
         return ret
     if re.match(".*(?:-C|-cgb.*C.*|-cgb)\.gb$", rom_name):
         ret.append(f'{{"{rom_path}", NULL, NULL, CGB, 0, 0x40, NULL}},\n')

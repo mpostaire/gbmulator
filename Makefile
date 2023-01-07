@@ -22,6 +22,8 @@ PLATFORM_ODIR=$(ODIR)/desktop
 OBJ=$(PLATFORM_ODIR)/platform/desktop/resources.o
 endif
 
+EXCLUDES+=$(wildcard $(SDIR)/bootroms/*)
+
 SRC=$(filter-out $(EXCLUDES),$(call rwildcard,$(SDIR),*.c))
 OBJ+=$(SRC:$(SDIR)/%.c=$(PLATFORM_ODIR)/%.o)
 
@@ -66,7 +68,7 @@ profile: run
 	gprof ./$(BIN) gmon.out > prof_output
 
 # TODO this should also make a gbmulator.apk file in this project root dir (next do the gbmulator desktop binary) 
-android:
+android: $(SDIR)/emulator/boot.c
 	cd $(SDIR)/platform/android/android-project && ./gradlew assemble
 
 debug_android: android
@@ -82,7 +84,7 @@ debug_web: web
 	emrun docs/index.html
 
 docs/index.html: $(SDIR)/platform/web/template.html $(OBJ)
-	$(CC) -o $@ $(OBJ) $(CFLAGS) -sABORTING_MALLOC=0 -sINITIAL_MEMORY=32MB -sWASM=1 -sEXPORTED_RUNTIME_METHODS=[ccall] -sASYNCIFY --shell-file $< -lidbfs.js
+	$(CC) -o $@ $(OBJ) $(CFLAGS) -sABORTING_MALLOC=0 -sINITIAL_MEMORY=32MB -sWASM=1 -sEXPORTED_RUNTIME_METHODS=[ccall] -sASYNCIFY --shell-file $<
 
 test:
 	$(MAKE) -C test
@@ -95,6 +97,29 @@ $(PLATFORM_ODIR)/%.o: $(SDIR)/%.c
 
 $(PLATFORM_ODIR_STRUCTURE):
 	mkdir -p $@
+
+# Build boot roms (taken and modified from SameBoy emulator)
+$(SDIR)/emulator/boot.c: $(ODIR)/bootroms/dmg_boot $(ODIR)/bootroms/cgb_boot
+	cd $(ODIR)/bootroms && xxd -i dmg_boot > ../../$(SDIR)/emulator/boot.c && xxd -i cgb_boot >> ../../$(SDIR)/emulator/boot.c
+
+$(ODIR)/bootroms/gbmulator_logo.1bpp: $(SDIR)/bootroms/gbmulator_logo.png
+	-@mkdir -p $(dir $@)
+	rgbgfx -d 1 -Z -o $@ $<
+
+$(ODIR)/bootroms/gbmulator_logo.pb8: $(ODIR)/bootroms/gbmulator_logo.1bpp $(ODIR)/bootroms/pb8
+	$(ODIR)/bootroms/pb8 -l 384 $< $@
+
+# force gcc here to avoid compiling with emcc
+$(ODIR)/bootroms/pb8: $(SDIR)/bootroms/pb8.c
+	gcc $< -o $@
+
+$(ODIR)/bootroms/%: $(SDIR)/bootroms/%.asm $(ODIR)/bootroms/gbmulator_logo.pb8 $(SDIR)/bootroms/hardware.inc
+	-@mkdir -p $(dir $@)
+	rgbasm -i $(ODIR)/bootroms/ -i $(SDIR)/bootroms/ -o $@.tmp $<
+	rgblink -o $@.tmp2 $@.tmp
+	dd if=$@.tmp2 of=$@ count=1 bs=$(if $(findstring dmg,$@),256,2304)
+	@rm $@.tmp $@.tmp2
+#
 
 docs:
 	mkdir -p $@
