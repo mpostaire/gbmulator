@@ -435,7 +435,7 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
         case 0x0000:
             mmu->ramg_reg = (data & 0x0F) == 0x0A;
             if (mmu->has_rtc)
-                mmu->rtc.enabled = (data & 0x0F) == 0x0A;
+                mmu->rtc.enabled = mmu->ramg_reg;
             break;
         case 0x2000:
             mmu->bank1_reg = mmu->mbc == MBC30 ? data : data & 0x7F;

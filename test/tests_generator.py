@@ -110,7 +110,7 @@ def blargg_reference_image_getter(mode, full_rom_path):
     rom_name = os.path.basename(full_rom_path)
     rom_dir = os.path.dirname(full_rom_path)
     full_rom_dir = os.path.dirname(full_rom_path)
-    image_glob = f'{os.path.splitext(rom_name)[0]}*{"dmg" if mode == "DMG" else "cgb"}*.png'
+    image_glob = f'{os.path.splitext(rom_name)[0]}*{mode.lower()}*.png'
     image_glob = os.path.join(rom_dir, image_glob)
     return glob.glob(image_glob)
 
@@ -147,7 +147,7 @@ def mooneye_screenshot_test_generator(mode, rom_path, reference_image_path):
 
 def mooneye_internal_state_test_generator(rom_path):
     ret = []
-    if "madness" in rom_path:
+    if "madness" in rom_path or "utils" in rom_path:
         return ret
     rom_name = os.path.basename(rom_path)
     if re.match(".*(?:-S|-A|-dmg0|-mgb|-sgb|-sgb2|-cgb0)\.gb$", rom_name):
