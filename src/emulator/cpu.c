@@ -1507,6 +1507,9 @@ static void exec_opcode(emulator_t *emu) {
     case 0x10: // STOP (4 cycles)
         // TODO Halts until button press.
         CLOCK(
+            // reset timer to 0
+            emu->mmu->mem[DIV_LSB] = 0x00;
+            emu->mmu->mem[DIV] = 0x00;
             if (PREPARE_SPEED_SWITCH(emu)) {
                 // TODO this should also stop the cpu for 2050 steps (8200 cycles)
                 // https://gbdev.io/pandocs/CGB_Registers.html?highlight=key1#ff4d--key1-cgb-mode-only-prepare-speed-switch

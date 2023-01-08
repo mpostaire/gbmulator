@@ -37,7 +37,7 @@ CGB:age-test-roms/stat-mode/stat-mode-dmgC-cgbBC.gb::failed
 CGB:age-test-roms/stat-mode/stat-mode-ds-cgbBCE.gb::failed
 CGB:age-test-roms/speed-switch/spsw-stop-prefetch-cgbBCE.gb::failed
 CGB:age-test-roms/speed-switch/spsw-tima-cgbBC.gb::failed
-CGB:age-test-roms/speed-switch/spsw-div-cgbBCE.gb::failed
+CGB:age-test-roms/speed-switch/spsw-div-cgbBCE.gb::success
 CGB:age-test-roms/speed-switch/spsw-ch2-lc-delay-cgbBCE.gb::failed
 CGB:age-test-roms/speed-switch/spsw-mode0-cgbBCE.gb::failed
 CGB:age-test-roms/vram/vram-read-ncmBCE.gb::failed
@@ -139,8 +139,8 @@ CGB:mooneye-test-suite/acceptance/pop_timing.gb::success
 DMG:mooneye-test-suite/acceptance/oam_dma_timing.gb::failed
 CGB:mooneye-test-suite/acceptance/oam_dma_timing.gb::failed
 DMG:mooneye-test-suite/acceptance/boot_div-dmgABCmgb.gb::failed
-DMG:mooneye-test-suite/acceptance/reti_intr_timing.gb::failed
-CGB:mooneye-test-suite/acceptance/reti_intr_timing.gb::failed
+DMG:mooneye-test-suite/acceptance/reti_intr_timing.gb::success
+CGB:mooneye-test-suite/acceptance/reti_intr_timing.gb::success
 DMG:mooneye-test-suite/acceptance/halt_ime0_nointr_timing.gb::success
 CGB:mooneye-test-suite/acceptance/halt_ime0_nointr_timing.gb::success
 DMG:mooneye-test-suite/acceptance/rst_timing.gb::failed
@@ -182,8 +182,8 @@ DMG:mooneye-test-suite/acceptance/reti_timing.gb::timeout
 CGB:mooneye-test-suite/acceptance/reti_timing.gb::timeout
 DMG:mooneye-test-suite/acceptance/jp_timing.gb::failed
 CGB:mooneye-test-suite/acceptance/jp_timing.gb::failed
-DMG:mooneye-test-suite/acceptance/ei_sequence.gb::failed
-CGB:mooneye-test-suite/acceptance/ei_sequence.gb::failed
+DMG:mooneye-test-suite/acceptance/ei_sequence.gb::success
+CGB:mooneye-test-suite/acceptance/ei_sequence.gb::success
 DMG:mooneye-test-suite/acceptance/interrupts/ie_push.gb::failed
 CGB:mooneye-test-suite/acceptance/interrupts/ie_push.gb::failed
 DMG:mooneye-test-suite/acceptance/instr/daa.gb::success
@@ -244,10 +244,6 @@ DMG:mooneye-test-suite/acceptance/oam_dma/reg_read.gb::failed
 CGB:mooneye-test-suite/acceptance/oam_dma/reg_read.gb::failed
 DMG:mooneye-test-suite/acceptance/oam_dma/basic.gb::success
 CGB:mooneye-test-suite/acceptance/oam_dma/basic.gb::success
-DMG:mooneye-test-suite/utils/bootrom_dumper.gb::timeout
-CGB:mooneye-test-suite/utils/bootrom_dumper.gb::timeout
-DMG:mooneye-test-suite/utils/dump_boot_hwio.gb::success
-CGB:mooneye-test-suite/utils/dump_boot_hwio.gb::success
 DMG:mealybug-tearoom-tests/mbc/mbc3_rtc.gb::failed
 CGB:mealybug-tearoom-tests/mbc/mbc3_rtc.gb::failed
 CGB:mealybug-tearoom-tests/dma/hdma_timing-C.gb::failed
