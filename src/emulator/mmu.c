@@ -12,6 +12,14 @@
 #include "cpu.h"
 #include "link.h"
 
+typedef enum {
+    OAM_DMA_INACTIVE,
+    OAM_DMA_PENDING_START,
+    OAM_DMA_PENDING_END,
+    OAM_DMA_STARTING,
+    OAM_DMA_ACTIVE
+} oam_dma_state;
+
 extern inline void rtc_update(rtc_t *rtc);
 
 static int parse_cartridge(emulator_t *emu) {
@@ -193,13 +201,7 @@ void mmu_quit(emulator_t *emu) {
     free(emu->mmu);
 }
 
-static inline void start_oam_dma(mmu_t *mmu) {
-    mmu->oam_dma.is_active = 1;
-    mmu->oam_dma.progress = 0;
-    mmu->oam_dma.src_address = mmu->mem[DMA] << 8;
-}
-
-static inline void oam_dma_step(emulator_t *emu, mmu_t *mmu, emulator_mode_t mode) {
+static inline void oam_dma_step(mmu_t *mmu, emulator_mode_t mode) {
     // 4 cycles to transfer 1 byte
 
     if (mmu->oam_dma.src_address >= ROM_BANKN && mmu->oam_dma.src_address < VRAM) {
@@ -240,7 +242,7 @@ static inline void oam_dma_step(emulator_t *emu, mmu_t *mmu, emulator_mode_t mod
 
     mmu->oam_dma.progress++;
     mmu->oam_dma.src_address++;
-    mmu->oam_dma.is_active = mmu->oam_dma.progress != 0xA0;
+    mmu->oam_dma.status = mmu->oam_dma.progress != 0xA0 ? OAM_DMA_ACTIVE : OAM_DMA_INACTIVE;
 }
 
 static inline void hdma_gdma_step(emulator_t *emu, byte_t *src, byte_t *dest) {
@@ -322,8 +324,26 @@ static inline void hdma_gdma_step(emulator_t *emu, byte_t *src, byte_t *dest) {
 void mmu_step(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
-    if (mmu->oam_dma.is_active)
-        oam_dma_step(emu, mmu, emu->mode);
+    switch (mmu->oam_dma.status) {
+    case OAM_DMA_INACTIVE:
+        break;
+    case OAM_DMA_PENDING_START:
+        // cpu just wrote into DIV
+        mmu->oam_dma.status = OAM_DMA_PENDING_END;
+        break;
+    case OAM_DMA_PENDING_END:
+        // don't start OAM DMA transfer yet
+        mmu->oam_dma.status = OAM_DMA_STARTING;
+        break;
+    case OAM_DMA_STARTING:
+        mmu->oam_dma.status = OAM_DMA_ACTIVE;
+        mmu->oam_dma.progress = 0;
+        mmu->oam_dma.src_address = mmu->mem[DMA] << 8;
+        // fall through
+    case OAM_DMA_ACTIVE:
+        oam_dma_step(mmu, emu->mode);
+        break;
+    }
 
     // do GDMA/HDMA if in CGB mode and HDMA5 bit 7 is reset (meaning there is an active HDMA/GDMA) 
     if (emu->mode == CGB && !CHECK_BIT(mmu->mem[HDMA5], 7)) {
@@ -511,7 +531,7 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
 byte_t mmu_read(emulator_t *emu, word_t address) {
     mmu_t *mmu = emu->mmu;
 
-    if (mmu->oam_dma.is_active)
+    if (mmu->oam_dma.status >= OAM_DMA_STARTING)
         return ((address >= HRAM && address < IE) || address == DMA) ? mmu->mem[address] : 0xFF;
 
     if (/*address >= ROM_BANK0 &&*/ address < ROM_BANKN)
@@ -696,10 +716,10 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
 void mmu_write(emulator_t* emu, word_t address, byte_t data) {
     mmu_t *mmu = emu->mmu;
 
-    if (mmu->oam_dma.is_active) {
+    if (mmu->oam_dma.status >= OAM_DMA_STARTING) {
         if (address == DMA) {
             mmu->mem[address] = data;
-            start_oam_dma(mmu);
+            mmu->oam_dma.status = OAM_DMA_PENDING_START;
         } else if (address >= HRAM && address < IE) {
             mmu->mem[address] = data;
         }
@@ -903,7 +923,7 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
     } else if (address == DMA) {
         // writing to this register starts an OAM DMA transfer
         mmu->mem[address] = data;
-        start_oam_dma(mmu);
+        mmu->oam_dma.status = OAM_DMA_PENDING_START;
     } else if (address == KEY1) {
         mmu->mem[address] |= data & 0x01;
     } else if (address == BANK) {
@@ -1042,7 +1062,7 @@ byte_t *mmu_serialize(emulator_t *emu, size_t *size) {
         offset += hdma_len;
     }
 
-    memcpy(&buf[offset], &emu->mmu->oam_dma.is_active, 1);
+    memcpy(&buf[offset], &emu->mmu->oam_dma.status, 1);
     memcpy(&buf[offset + 1], &emu->mmu->oam_dma.progress, 2);
     memcpy(&buf[offset + 3], &emu->mmu->oam_dma.src_address, 2);
     offset += 5;
@@ -1133,7 +1153,7 @@ void mmu_unserialize(emulator_t *emu, byte_t *buf) {
         offset += hdma_len;
     }
 
-    memcpy(&emu->mmu->oam_dma.is_active, &buf[offset], 1);
+    memcpy(&emu->mmu->oam_dma.status, &buf[offset], 1);
     memcpy(&emu->mmu->oam_dma.progress, &buf[offset + 1], 2);
     memcpy(&emu->mmu->oam_dma.src_address, &buf[offset + 3], 2);
     offset += 5;
