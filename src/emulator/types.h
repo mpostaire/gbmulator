@@ -143,7 +143,7 @@ typedef struct {
     } hdma;
 
     struct {
-        byte_t is_active;
+        byte_t status;
         word_t progress;
         word_t src_address;
     } oam_dma;
