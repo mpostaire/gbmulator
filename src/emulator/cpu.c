@@ -18,6 +18,8 @@
 #define ENABLE_DOUBLE_SPEED(emu) { ((emu)->mmu->mem[KEY1] |= 0x80); ((emu)->mmu->mem[KEY1] &= 0xFE); }
 #define DISABLE_DOUBLE_SPEED(emu) { ((emu)->mmu->mem[KEY1] &= 0x7F); ((emu)->mmu->mem[KEY1] &= 0xFE); }
 
+#define IS_INTERRUPT_PENDING(emu) ((emu)->mmu->mem[IE] & (emu)->mmu->mem[IF] & 0x1F)
+
 typedef enum {
     FETCH_OPCODE,
     FETCH_OPCODE_CB,
@@ -28,9 +30,7 @@ typedef enum {
 
 // must be used in the last microcode (CLOCK() call) of an opcode
 #define END_OPCODE cpu->exec_state = FETCH_OPCODE
-
 #define END_PUSH_IRQ { END_OPCODE; cpu->ime = 0; }
-
 #define START_OPCODE_CB cpu->exec_state = FETCH_OPCODE_CB
 
 // https://www.reddit.com/r/EmuDev/comments/a7kr9h/comment/ec3wkfo/?utm_source=share&utm_medium=web2x&context=3
@@ -581,10 +581,10 @@ const opcode_t extended_instructions[256] = {
     }
 
 // takes 12 cycles
-#define PUSH(word, ...)                                                         \
-    {                                                                           \
-        CLOCK(mmu_write(emu, --cpu->registers.sp, (word) >> 8));                \
-        CLOCK(mmu_write(emu, --cpu->registers.sp, (word) &0xFF); __VA_ARGS__;); \
+#define PUSH(word, ...)                                                          \
+    {                                                                            \
+        CLOCK(mmu_write(emu, --cpu->registers.sp, (word) >> 8));                 \
+        CLOCK(mmu_write(emu, --cpu->registers.sp, (word) & 0xFF); __VA_ARGS__;); \
     }
 
 // takes 12 cycles
@@ -1838,7 +1838,7 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(END_OPCODE);
     case 0x76: // HALT (4 cycles)
         CLOCK(
-            if (cpu->ime != 2 && (emu->mmu->mem[IE] & emu->mmu->mem[IF] & 0x1F))
+            if (cpu->ime != 2 && IS_INTERRUPT_PENDING(emu))
                 cpu->halt_bug = 1;
             else
                 cpu->halt = 1;
@@ -2303,22 +2303,29 @@ static void push_interrupt(emulator_t *emu) {
         CLOCK();
         CLOCK();
         CLOCK();
-        PUSH(cpu->registers.pc,
-            if (CHECK_BIT(mmu->mem[IF], IRQ_VBLANK)) {
+        CLOCK(mmu_write(emu, --cpu->registers.sp, (cpu->registers.pc) >> 8));
+        CLOCK(
+            byte_t old_ie = mmu->mem[IE]; // in case the mmu_write below overwrites the IE register
+            mmu_write(emu, --cpu->registers.sp, (cpu->registers.pc) & 0xFF);
+            if (CHECK_BIT(mmu->mem[IF], IRQ_VBLANK) && CHECK_BIT(old_ie, IRQ_VBLANK)) {
                 RESET_BIT(mmu->mem[IF], IRQ_VBLANK);
                 cpu->registers.pc = 0x0040;
-            } else if (CHECK_BIT(mmu->mem[IF], IRQ_STAT)) {
+            } else if (CHECK_BIT(mmu->mem[IF], IRQ_STAT) && CHECK_BIT(old_ie, IRQ_STAT)) {
                 RESET_BIT(mmu->mem[IF], IRQ_STAT);
                 cpu->registers.pc = 0x0048;
-            } else if (CHECK_BIT(mmu->mem[IF], IRQ_TIMER)) {
+            } else if (CHECK_BIT(mmu->mem[IF], IRQ_TIMER) && CHECK_BIT(old_ie, IRQ_TIMER)) {
                 RESET_BIT(mmu->mem[IF], IRQ_TIMER);
                 cpu->registers.pc = 0x0050;
-            } else if (CHECK_BIT(mmu->mem[IF], IRQ_SERIAL)) {
+            } else if (CHECK_BIT(mmu->mem[IF], IRQ_SERIAL) && CHECK_BIT(old_ie, IRQ_SERIAL)) {
                 RESET_BIT(mmu->mem[IF], IRQ_SERIAL);
                 cpu->registers.pc = 0x0058;
-            } else if (CHECK_BIT(mmu->mem[IF], IRQ_JOYPAD)) {
+            } else if (CHECK_BIT(mmu->mem[IF], IRQ_JOYPAD) && CHECK_BIT(old_ie, IRQ_JOYPAD)) {
                 RESET_BIT(mmu->mem[IF], IRQ_JOYPAD);
                 cpu->registers.pc = 0x0060;
+            } else {
+                // an overwrite of the IE register happened during the previous CLOCK() and disabled all interrupts
+                // this has the effect to jump the cpu to address 0x0000
+                cpu->registers.pc = 0x0000;
             }
             END_PUSH_IRQ;
         );
@@ -2331,14 +2338,14 @@ void cpu_step(emulator_t *emu) {
     switch (cpu->exec_state) {
     case FETCH_OPCODE:
         if (cpu->halt) {
-            if (emu->mmu->mem[IE] & emu->mmu->mem[IF] & 0x1F)
+            if (IS_INTERRUPT_PENDING(emu))
                 cpu->halt = 0; // interrupt requested, disabling halt takes 4 cycles
             return;
         }
 
         if (cpu->ime == 1) {
             cpu->ime = 2;
-        } else if (cpu->ime == 2 && (emu->mmu->mem[IE] & emu->mmu->mem[IF] & 0x1F)) {
+        } else if (cpu->ime == 2 && IS_INTERRUPT_PENDING(emu)) {
             cpu->opcode = 0;
             cpu->opcode_state = cpu->opcode;
             cpu->exec_state = EXEC_PUSH_IRQ;

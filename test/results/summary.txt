@@ -68,7 +68,7 @@ CGB:mooneye-test-suite/misc/boot_regs-cgb.gb::success
 CGB:mooneye-test-suite/misc/boot_hwio-C.gb::failed
 CGB:mooneye-test-suite/misc/boot_div-cgbABCDE.gb::failed
 CGB:mooneye-test-suite/misc/bits/unused_hwio-C.gb::failed
-CGB:mooneye-test-suite/misc/ppu/vblank_stat_intr-C.gb::timeout
+CGB:mooneye-test-suite/misc/ppu/vblank_stat_intr-C.gb::failed
 DMG:mooneye-test-suite/emulator-only/mbc5/rom_4Mb.gb::success
 CGB:mooneye-test-suite/emulator-only/mbc5/rom_4Mb.gb::success
 DMG:mooneye-test-suite/emulator-only/mbc5/rom_64Mb.gb::success
@@ -172,8 +172,8 @@ CGB:mooneye-test-suite/acceptance/halt_ime0_ei.gb::success
 DMG:mooneye-test-suite/acceptance/di_timing-GS.gb::failed
 DMG:mooneye-test-suite/acceptance/ret_timing.gb::timeout
 CGB:mooneye-test-suite/acceptance/ret_timing.gb::timeout
-DMG:mooneye-test-suite/acceptance/halt_ime1_timing.gb::timeout
-CGB:mooneye-test-suite/acceptance/halt_ime1_timing.gb::timeout
+DMG:mooneye-test-suite/acceptance/halt_ime1_timing.gb::success
+CGB:mooneye-test-suite/acceptance/halt_ime1_timing.gb::success
 DMG:mooneye-test-suite/acceptance/oam_dma_start.gb::failed
 CGB:mooneye-test-suite/acceptance/oam_dma_start.gb::failed
 DMG:mooneye-test-suite/acceptance/intr_timing.gb::success
@@ -184,8 +184,8 @@ DMG:mooneye-test-suite/acceptance/jp_timing.gb::failed
 CGB:mooneye-test-suite/acceptance/jp_timing.gb::failed
 DMG:mooneye-test-suite/acceptance/ei_sequence.gb::success
 CGB:mooneye-test-suite/acceptance/ei_sequence.gb::success
-DMG:mooneye-test-suite/acceptance/interrupts/ie_push.gb::failed
-CGB:mooneye-test-suite/acceptance/interrupts/ie_push.gb::failed
+DMG:mooneye-test-suite/acceptance/interrupts/ie_push.gb::success
+CGB:mooneye-test-suite/acceptance/interrupts/ie_push.gb::success
 DMG:mooneye-test-suite/acceptance/instr/daa.gb::success
 CGB:mooneye-test-suite/acceptance/instr/daa.gb::success
 DMG:mooneye-test-suite/acceptance/bits/reg_f.gb::success
@@ -224,10 +224,10 @@ DMG:mooneye-test-suite/acceptance/ppu/intr_2_oam_ok_timing.gb::success
 CGB:mooneye-test-suite/acceptance/ppu/intr_2_oam_ok_timing.gb::success
 DMG:mooneye-test-suite/acceptance/ppu/hblank_ly_scx_timing-GS.gb::failed
 DMG:mooneye-test-suite/acceptance/ppu/lcdon_timing-GS.gb::failed
-DMG:mooneye-test-suite/acceptance/ppu/vblank_stat_intr-GS.gb::timeout
+DMG:mooneye-test-suite/acceptance/ppu/vblank_stat_intr-GS.gb::failed
 DMG:mooneye-test-suite/acceptance/ppu/intr_2_mode0_timing.gb::success
 CGB:mooneye-test-suite/acceptance/ppu/intr_2_mode0_timing.gb::success
-DMG:mooneye-test-suite/acceptance/ppu/intr_1_2_timing-GS.gb::timeout
+DMG:mooneye-test-suite/acceptance/ppu/intr_1_2_timing-GS.gb::failed
 DMG:mooneye-test-suite/acceptance/ppu/intr_2_mode3_timing.gb::success
 CGB:mooneye-test-suite/acceptance/ppu/intr_2_mode3_timing.gb::success
 DMG:mooneye-test-suite/acceptance/ppu/stat_irq_blocking.gb::failed
@@ -336,8 +336,8 @@ DMG:bully/bully.gb::failed
 CGB:bully/bully.gb::failed
 CGB:cgb-acid-hell/cgb-acid-hell.gbc::failed
 CGB:cgb-acid2/cgb-acid2.gbc::success
-DMG:dmg-acid2/dmg-acid2.gb::failed
-CGB:dmg-acid2/dmg-acid2.gb::failed
+DMG:dmg-acid2/dmg-acid2.gb::success
+CGB:dmg-acid2/dmg-acid2.gb::success
 DMG:little-things-gb/firstwhite.gb::success
 CGB:little-things-gb/firstwhite.gb::failed
 DMG:little-things-gb/tellinglys.gb::success

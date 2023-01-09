@@ -229,9 +229,11 @@ static inline void oam_dma_step(emulator_t *emu, mmu_t *mmu, emulator_mode_t mod
         } else {
             mmu->mem[OAM + mmu->oam_dma.progress] = mmu->mem[mmu->oam_dma.src_address - offset];
         }
-    } else if (mmu->oam_dma.src_address >= IO && mmu->oam_dma.src_address < 0xFFFF) {
-        // TODO doing nothing here doesn't pass mooneye acceptance/oam_dma/sources-GS test
+    } else if (mmu->oam_dma.src_address >= IO && mmu->oam_dma.src_address < HRAM) {
+        // TODO doesn't pass mooneye acceptance/oam_dma/sources-GS test
         mmu->mem[OAM + mmu->oam_dma.progress] = 0xFF;
+    } else if (mmu->oam_dma.src_address >= HRAM /*&& mmu->oam_dma.src_address <= 0xFFFF*/) {
+        // TODO doesn't pass mooneye acceptance/oam_dma/sources-GS test
     } else {
         mmu->mem[OAM + mmu->oam_dma.progress] = mmu->mem[mmu->oam_dma.src_address];
     }
