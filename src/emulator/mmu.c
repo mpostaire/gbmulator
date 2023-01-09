@@ -193,7 +193,13 @@ void mmu_quit(emulator_t *emu) {
     free(emu->mmu);
 }
 
-static inline void oam_dma_step(mmu_t *mmu, emulator_mode_t mode) {
+static inline void start_oam_dma(mmu_t *mmu) {
+    mmu->oam_dma.is_active = 1;
+    mmu->oam_dma.progress = 0;
+    mmu->oam_dma.src_address = mmu->mem[DMA] << 8;
+}
+
+static inline void oam_dma_step(emulator_t *emu, mmu_t *mmu, emulator_mode_t mode) {
     // 4 cycles to transfer 1 byte
 
     if (mmu->oam_dma.src_address >= ROM_BANKN && mmu->oam_dma.src_address < VRAM) {
@@ -225,7 +231,7 @@ static inline void oam_dma_step(mmu_t *mmu, emulator_mode_t mode) {
         }
     } else if (mmu->oam_dma.src_address >= IO && mmu->oam_dma.src_address < 0xFFFF) {
         // TODO doing nothing here doesn't pass mooneye acceptance/oam_dma/sources-GS test
-        // mmu->mem[OAM + mmu->oam_dma.progress] = 0xFF;
+        mmu->mem[OAM + mmu->oam_dma.progress] = 0xFF;
     } else {
         mmu->mem[OAM + mmu->oam_dma.progress] = mmu->mem[mmu->oam_dma.src_address];
     }
@@ -315,7 +321,7 @@ void mmu_step(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
     if (mmu->oam_dma.is_active)
-        oam_dma_step(mmu, emu->mode);
+        oam_dma_step(emu, mmu, emu->mode);
 
     // do GDMA/HDMA if in CGB mode and HDMA5 bit 7 is reset (meaning there is an active HDMA/GDMA) 
     if (emu->mode == CGB && !CHECK_BIT(mmu->mem[HDMA5], 7)) {
@@ -504,7 +510,7 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
     mmu_t *mmu = emu->mmu;
 
     if (mmu->oam_dma.is_active)
-        return (address >= HRAM && address < IE) ? mmu->mem[address] : 0xFF;
+        return ((address >= HRAM && address < IE) || address == DMA) ? mmu->mem[address] : 0xFF;
 
     if (/*address >= ROM_BANK0 &&*/ address < ROM_BANKN)
         return mmu->rom_bank0_pointer[address];
@@ -689,8 +695,12 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
     mmu_t *mmu = emu->mmu;
 
     if (mmu->oam_dma.is_active) {
-        if (address >= HRAM && address < IE)
+        if (address == DMA) {
             mmu->mem[address] = data;
+            start_oam_dma(mmu);
+        } else if (address >= HRAM && address < IE) {
+            mmu->mem[address] = data;
+        }
         return;
     }
 
@@ -890,11 +900,8 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         ppu_ly_lyc_compare(emu);
     } else if (address == DMA) {
         // writing to this register starts an OAM DMA transfer
-        mmu->oam_dma.is_active = 1;
-        mmu->oam_dma.progress = 0;
-        mmu->oam_dma.src_address = data * 0x100;
-
         mmu->mem[address] = data;
+        start_oam_dma(mmu);
     } else if (address == KEY1) {
         mmu->mem[address] |= data & 0x01;
     } else if (address == BANK) {

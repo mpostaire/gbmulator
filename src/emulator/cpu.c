@@ -2302,6 +2302,7 @@ static void push_interrupt(emulator_t *emu) {
     case 0:
         CLOCK();
         CLOCK();
+        CLOCK();
         PUSH(cpu->registers.pc,
             if (CHECK_BIT(mmu->mem[IF], IRQ_VBLANK)) {
                 RESET_BIT(mmu->mem[IF], IRQ_VBLANK);
@@ -2319,8 +2320,8 @@ static void push_interrupt(emulator_t *emu) {
                 RESET_BIT(mmu->mem[IF], IRQ_JOYPAD);
                 cpu->registers.pc = 0x0060;
             }
+            END_PUSH_IRQ;
         );
-        CLOCK(END_PUSH_IRQ);
     }
 }
 
