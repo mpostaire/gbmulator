@@ -21,6 +21,12 @@
 #define IS_INTERRUPT_PENDING(emu) ((emu)->mmu->mem[IE] & (emu)->mmu->mem[IF] & 0x1F)
 
 typedef enum {
+    IME_DISABLED,
+    IME_PENDING,
+    IME_ENABLED
+} ime_state;
+
+typedef enum {
     FETCH_OPCODE,
     FETCH_OPCODE_CB,
     EXEC_OPCODE,
@@ -30,7 +36,7 @@ typedef enum {
 
 // must be used in the last microcode (CLOCK() call) of an opcode
 #define END_OPCODE cpu->exec_state = FETCH_OPCODE
-#define END_PUSH_IRQ { END_OPCODE; cpu->ime = 0; }
+#define END_PUSH_IRQ { END_OPCODE; cpu->ime = IME_DISABLED; }
 #define START_OPCODE_CB cpu->exec_state = FETCH_OPCODE_CB
 
 // https://www.reddit.com/r/EmuDev/comments/a7kr9h/comment/ec3wkfo/?utm_source=share&utm_medium=web2x&context=3
@@ -1838,7 +1844,7 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(END_OPCODE);
     case 0x76: // HALT (4 cycles)
         CLOCK(
-            if (cpu->ime != 2 && IS_INTERRUPT_PENDING(emu))
+            if (cpu->ime != IME_ENABLED && IS_INTERRUPT_PENDING(emu))
                 cpu->halt_bug = 1;
             else
                 cpu->halt = 1;
@@ -2136,7 +2142,7 @@ static void exec_opcode(emulator_t *emu) {
     case 0xD9: // RETI (16 cycles)
         CLOCK();
         POP(&cpu->registers.pc);
-        CLOCK(cpu->ime = 2; END_OPCODE;);
+        CLOCK(cpu->ime = IME_ENABLED; END_OPCODE;);
     case 0xDA: // JP C, nn (12 or 16 cycles)
         GET_OPERAND_16();
         CLOCK(
@@ -2220,7 +2226,7 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(cpu->opcode_compute_storage = mmu_read(emu, IO + cpu->registers.c););
         CLOCK(cpu->registers.a = cpu->opcode_compute_storage; END_OPCODE;);
     case 0xF3: // DI (4 cycles)
-        CLOCK(cpu->ime = 0; END_OPCODE;);
+        CLOCK(cpu->ime = IME_DISABLED; END_OPCODE;);
     case 0xF5: // PUSH AF (16 cycles)
         CLOCK();
         CLOCK();
@@ -2253,10 +2259,11 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(cpu->registers.a = cpu->opcode_compute_storage; END_OPCODE;);
     case 0xFB: // EI (4 cycles)
         CLOCK(
-            // If cpu->ime is not 0, either interrupts are in the process of being enabled, or they are already enabled.
-            // In this case, don't do anything and let cpu->ime to either increase from 1 to 2 (enabling interrupts) or let it set to 2.
-            if (cpu->ime == 0)
-                cpu->ime = 1;
+            // If cpu->ime is not IME_DISABLED, either interrupts are in the process of being enabled, or they are already enabled.
+            // In this case, don't do anything and let cpu->ime to either increase from IME_PENDING to IME_ENABLED (enabling interrupts)
+            // or let it set to IME_ENABLED.
+            if (cpu->ime == IME_DISABLED)
+                cpu->ime = IME_PENDING;
             END_OPCODE;
         );
     case 0xFE: // CP n (8 cycles)
@@ -2343,9 +2350,9 @@ void cpu_step(emulator_t *emu) {
             return;
         }
 
-        if (cpu->ime == 1) {
-            cpu->ime = 2;
-        } else if (cpu->ime == 2 && IS_INTERRUPT_PENDING(emu)) {
+        if (cpu->ime == IME_PENDING) {
+            cpu->ime = IME_ENABLED;
+        } else if (cpu->ime == IME_ENABLED && IS_INTERRUPT_PENDING(emu)) {
             cpu->opcode = 0;
             cpu->opcode_state = cpu->opcode;
             cpu->exec_state = EXEC_PUSH_IRQ;
