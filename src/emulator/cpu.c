@@ -2038,8 +2038,8 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(END_OPCODE);
     case 0xC5: // PUSH BC (16 cycles)
         CLOCK();
-        CLOCK();
-        PUSH(cpu->registers.bc, END_OPCODE);
+        PUSH(cpu->registers.bc);
+        CLOCK(END_OPCODE);
     case 0xC6: // ADD A, n (8 cycles)
         GET_OPERAND_8();
         CLOCK(add8(cpu, cpu->operand); END_OPCODE;);
@@ -2081,8 +2081,8 @@ static void exec_opcode(emulator_t *emu) {
         );
     case 0xCD: // CALL nn (24 cycles)
         GET_OPERAND_16();
-        PUSH(cpu->registers.pc);
         CLOCK();
+        PUSH(cpu->registers.pc);
         CLOCK(cpu->registers.pc = cpu->operand; END_OPCODE;);
     case 0xCE: // ADC A, n (8 cycles)
         GET_OPERAND_8();
@@ -2122,8 +2122,8 @@ static void exec_opcode(emulator_t *emu) {
         );
     case 0xD5: // PUSH DE (16 cycles)
         CLOCK();
-        CLOCK();
-        PUSH(cpu->registers.de, END_OPCODE);
+        PUSH(cpu->registers.de);
+        CLOCK(END_OPCODE);
     case 0xD6: // SUB A, n (8 cycles)
         GET_OPERAND_8();
         CLOCK(sub8(cpu, cpu->operand); END_OPCODE;);
@@ -2180,8 +2180,8 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(END_OPCODE);
     case 0xE5: // PUSH HL (16 cycles)
         CLOCK();
-        CLOCK();
-        PUSH(cpu->registers.hl, END_OPCODE);
+        PUSH(cpu->registers.hl);
+        CLOCK(END_OPCODE);
     case 0xE6: // AND n (8 cycles)
         GET_OPERAND_8();
         CLOCK(and(cpu, cpu->operand); END_OPCODE;);
@@ -2229,8 +2229,8 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(cpu->ime = IME_DISABLED; END_OPCODE;);
     case 0xF5: // PUSH AF (16 cycles)
         CLOCK();
-        CLOCK();
-        PUSH(cpu->registers.af, END_OPCODE);
+        PUSH(cpu->registers.af);
+        CLOCK(END_OPCODE);
     case 0xF6: // OR n (8 cycles)
         GET_OPERAND_8();
         CLOCK(or(cpu, cpu->operand); END_OPCODE;);
