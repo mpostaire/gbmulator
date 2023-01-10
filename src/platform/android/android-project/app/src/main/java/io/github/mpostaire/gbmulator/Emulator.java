@@ -221,8 +221,7 @@ public class Emulator extends SDLActivity {
         connectingDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
         connectingDialog.setCancelable(false);
         connectingDialog.setCanceledOnTouchOutside(false);
-        connectingDialog.setButton(DialogInterface.BUTTON_NEGATIVE, getText(android.R.string.cancel), (dialogInterface, i) -> dialogInterface.cancel());
-        connectingDialog.setOnCancelListener(dialogInterface -> {
+        connectingDialog.setButton(DialogInterface.BUTTON_NEGATIVE, getText(android.R.string.cancel), (dialogInterface, i) -> {
             errorToast("Connection cancelled");
             synchronized (messageboxSelection) {
                 messageboxSelection.notify();
@@ -235,6 +234,10 @@ public class Emulator extends SDLActivity {
                 GBmulatorApp app = (GBmulatorApp) getApplication();
                 app.tcpSocket = ParcelFileDescriptor.fromSocket(getSocket()).getFd();
                 Toast.makeText(Emulator.this, "Connected to client", Toast.LENGTH_SHORT).show();
+                synchronized (messageboxSelection) {
+                    tcpLinkReady(app.tcpSocket);
+                    messageboxSelection.notify();
+                }
                 connectingDialog.dismiss();
             }
         });
@@ -256,12 +259,6 @@ public class Emulator extends SDLActivity {
                             dialogInterface.dismiss();
                             connectingDialog.setTitle("WiFi server");
                             connectingDialog.setMessage("Waiting for a client connection...");
-                            connectingDialog.setOnDismissListener(dialogInterface1 -> {
-                                synchronized (messageboxSelection) {
-                                    messageboxSelection.notify();
-                                    tcpLinkReady(((GBmulatorApp) getApplication()).tcpSocket);
-                                }
-                            });
                             connectingDialog.show();
 
                             preferencesEditor.putString(UserSettings.LAST_PORT, Integer.toString(port[0]));
@@ -289,6 +286,10 @@ public class Emulator extends SDLActivity {
                 GBmulatorApp app = (GBmulatorApp) getApplication();
                 app.tcpSocket = ParcelFileDescriptor.fromSocket(getSocket()).getFd();
                 Toast.makeText(Emulator.this, "Connected to server", Toast.LENGTH_SHORT).show();
+                synchronized (messageboxSelection) {
+                    tcpLinkReady(app.tcpSocket);
+                    messageboxSelection.notify();
+                }
                 connectingDialog.dismiss();
             }
         });
@@ -317,12 +318,6 @@ public class Emulator extends SDLActivity {
                         } else {
                             connectingDialog.setTitle("WiFi client");
                             connectingDialog.setMessage("Connecting to the server...");
-                            connectingDialog.setOnDismissListener(dialogInterface1 -> {
-                                synchronized (messageboxSelection) {
-                                    messageboxSelection.notify();
-                                    tcpLinkReady(((GBmulatorApp) getApplication()).tcpSocket);
-                                }
-                            });
                             connectingDialog.show();
 
                             clientConnectionThread.port = port[0];
