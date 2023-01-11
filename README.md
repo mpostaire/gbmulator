@@ -1,7 +1,7 @@
 # GBmulator
 A Game Boy Color emulator with sound and wireless link cable support.
 
-You can compile and run it on your machine or use it in your browser [here](https://mpostaire.github.io/gbmulator) (Note: the browser version doesn't have link cable support).
+You can compile and run it on your linux machine or use it in your browser [here](https://mpostaire.github.io/gbmulator) (Note: the browser version doesn't have link cable support).
 
 ## Screenshots
 
@@ -26,8 +26,8 @@ sudo make uninstall
 ```
 
 ## Usage
-
-To launch the emulator you must call it from the command line with the (optional) path of a rom as the first argument.
+After installation, GBmulator should be available from the app launcher of your desktop environment.
+You can also call it from the command line with the (optional) path of a rom as the first argument.
 ```sh
 gbmulator path/to/rom.gb
 ```
@@ -52,13 +52,24 @@ The following table show the default keybindings (they can be changed in GBmulat
 
 There is also support for gamepad controllers but the buttons aren't configurable.
 
+## Features
+
+- GameBoy and GameBoy Color emulator
+- Scanline ppu rendering
+- Audio
+- Wireless link cable
+- Support for MBC1, MBC1M, MBC2, MBC3, MBC30 and MBC5 cartridges
+- Battery saves and savestates
+
 ## TODO
 
 - check that MBC3/MBC30 is accurate
 - implement MBC6, MBC7, HuC1 and multicart MBCs
 - better audio/video sync
 - rewrite ppu from scanline rendering to cycle accurate rendering
-- fix buggy link cable (tetris/dr mario are working fine but pokemon red is broken)
+
+- libadwaita link cable + android bluetooth link cable
+- Maybe: web link cable using Emscripten WebSockets API (https://emscripten.org/docs/porting/networking.html and https://github.com/emscripten-core/emscripten/blob/main/system/include/emscripten/websocket.h. Example gist: https://gist.github.com/nus/564e9e57e4c107faa1a45b8332c265b9)
 
 - rewrite Makefile (it's a mess)
 
@@ -69,3 +80,4 @@ There is also support for gamepad controllers but the buttons aren't configurabl
 - https://izik1.github.io/gbops/
 - https://gbdev.gg8.se/wiki/
 - https://www.youtube.com/watch?v=HyzD8pNlpwI
+- https://github.com/AntonioND/giibiiadvance/blob/master/docs/TCAGBD.pdf
