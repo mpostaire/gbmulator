@@ -5,15 +5,11 @@
 #include "mmu.h"
 
 void link_set_clock(emulator_t *emu) {
-    if (emu->mode == CGB) {
-        // TODO handle double speed
-        if (CHECK_BIT(emu->mmu->mem[SC], 1))
-            emu->link->max_clock_cycles = GB_CPU_FREQ / 262144;
-        else
-            emu->link->max_clock_cycles = GB_CPU_FREQ / 8192;
-    } else {
+    // double speed is handled by the emulator_step() function
+    if (emu->mode == CGB && CHECK_BIT(emu->mmu->mem[SC], 1))
+        emu->link->max_clock_cycles = GB_CPU_FREQ / 262144;
+    else
         emu->link->max_clock_cycles = GB_CPU_FREQ / 8192;
-    }
 }
 
 void link_init(emulator_t *emu) {
