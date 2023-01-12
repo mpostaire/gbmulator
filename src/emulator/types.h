@@ -9,7 +9,6 @@ typedef signed short s_word_t;
 
 typedef struct emulator_t emulator_t;
 
-// TODO? LCD off special bright white color
 typedef enum {
     DMG_WHITE,
     DMG_LIGHT_GRAY,
@@ -248,6 +247,7 @@ typedef struct {
 typedef struct {
     word_t max_tima_cycles;
     word_t tima_counter;
+    s_word_t old_tma; // holds the value of the old tma for one cpu step if it has been overwritten, -1 otherwise
 } gbtimer_t;
 
 typedef struct {

@@ -282,7 +282,7 @@ static inline void hdma_gdma_step(emulator_t *emu, byte_t *src, byte_t *dest) {
                 mmu->hdma.lock_cpu = 0;
         }
     } else if (CHECK_BIT(mmu->mem[LCDC], 7) && PPU_IS_MODE(emu, PPU_MODE_HBLANK) && mmu->hdma.hdma_ly == mmu->mem[LY]) {
-        // TODO hdma still not perfect? pokemon crystal/zelda link's awakening dx have some visual glitches when displaying menus/text windows
+        // TODO hdma still not perfect? pokemon crystal has some visual glitches when displaying menus/text windows
         // TODO vram viewer like bgb to see what's happening in vram for these glitches to happen
         mmu->hdma.lock_cpu = 1;
         // 32 cycles to transfer 0x10 bytes
@@ -789,6 +789,9 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         mmu->mem[address] = 0;
         mmu->mem[DIV_LSB] = 0;
         mmu->mem[TIMA] = mmu->mem[TMA];
+    } else if (address == TMA) {
+        emu->timer->old_tma = mmu->mem[address];
+        mmu->mem[address] = data;
     } else if (address == TAC) {
         mmu->mem[address] = data;
         switch (data & 0x03) {
@@ -1108,12 +1111,6 @@ byte_t *mmu_serialize(emulator_t *emu, size_t *size) {
     memcpy(&buf[offset], str, len);
     offset += len;
     free(str);
-
-    // TODO remove this check
-    if (offset != *size) {
-        eprintf("offset != size (%zu != %zu)\n", offset, *size);
-        exit(42);
-    }
 
     return buf;
 }
