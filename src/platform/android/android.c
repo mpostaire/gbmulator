@@ -128,6 +128,59 @@ button_t buttons[] = {
     }
 };
 
+// --- send and recv functions for an android bluetooth connection
+// TODO edit ../common/link.h to support custom send/recv functions (need to do this because it isn't possible to
+// get the bluetooth socket's file descriptor
+
+// TODO optimize by storing method_id as global variable
+// static inline ssize_t send_bt(int fd, const void *buf, size_t n, int flags) {
+//     JNIEnv *env = (JNIEnv *) SDL_AndroidGetJNIEnv();
+//     jobject activity = (jobject) SDL_AndroidGetActivity();
+//     jclass clazz = (*env)->GetObjectClass(env, activity);
+//     jmethodID method_id = (*env)->GetMethodID(env, clazz, "linkSendData", "([B)I");
+
+//     //log("SEND_PKT BEFORE");
+
+//     jbyteArray array = (*env)->NewByteArray(env, n);
+//     (*env)->SetByteArrayRegion(env, array, 0, n, (jbyte *) buf);
+//     ssize_t ret = (*env)->CallIntMethod(env, activity, method_id, array);
+
+//     //log("SEND_PKT AFTER");
+
+//     (*env)->DeleteLocalRef(env, array);
+//     (*env)->DeleteLocalRef(env, activity);
+//     (*env)->DeleteLocalRef(env, clazz);
+//     return ret;
+// }
+
+// TODO optimize by storing method_id as global variable
+// static inline ssize_t recv_bt(int fd, void *buf, size_t n, int flags) {
+//     JNIEnv *env = (JNIEnv *) SDL_AndroidGetJNIEnv();
+//     jobject activity = (jobject) SDL_AndroidGetActivity();
+//     jclass clazz = (*env)->GetObjectClass(env, activity);
+//     jmethodID method_id = (*env)->GetMethodID(env, clazz, "linkReceiveData", "(I)[B");
+
+//     //log("RECV_PKT BEFORE");
+
+//     jbyteArray array = (*env)->CallObjectMethod(env, activity, method_id, n);
+//     if (!array) return -1;
+//     ssize_t len = (*env)->GetArrayLength(env, array);
+//     if (len > n) return -1;
+
+//     //log("RECV_PKT AFTER");
+
+//     (*env)->GetByteArrayRegion(env, array, 0, len, (jbyte *) buf);
+
+//     //log("RECV_PKT AFTER AFTER");
+
+//     (*env)->DeleteLocalRef(env, array);
+//     (*env)->DeleteLocalRef(env, activity);
+//     (*env)->DeleteLocalRef(env, clazz);
+//     return len;
+// }
+
+// ---
+
 static inline s_byte_t is_finger_over_button(float x, float y) {
     if (is_landscape) {
         x *= screen_height;
