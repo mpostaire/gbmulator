@@ -71,7 +71,7 @@ There is also support for gamepad controllers but the buttons aren't configurabl
 - libadwaita link cable + android bluetooth link cable
 - Maybe: web link cable using Emscripten WebSockets API (https://emscripten.org/docs/porting/networking.html and https://github.com/emscripten-core/emscripten/blob/main/system/include/emscripten/websocket.h. Example gist: https://gist.github.com/nus/564e9e57e4c107faa1a45b8332c265b9)
 
-- rewrite Makefile (it's a mess)
+- rewrite Makefile (it's a mess) maybe use CMake instead
 
 ## Resources used
 - https://gbdev.io/pandocs/
