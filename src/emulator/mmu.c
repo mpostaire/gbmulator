@@ -789,16 +789,23 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         mmu->mem[address] = 0;
         mmu->mem[DIV_LSB] = 0;
         mmu->mem[TIMA] = mmu->mem[TMA];
+    } else if (address == TIMA) {
+        if (emu->timer->tima_loading_value == -1)
+            mmu->mem[address] = mmu->mem[TMA];
+        else
+            mmu->mem[address] = data;
     } else if (address == TMA) {
+        if (emu->timer->tima_loading_value == -1)
+            mmu->mem[TIMA] = data;
         emu->timer->old_tma = mmu->mem[address];
         mmu->mem[address] = data;
     } else if (address == TAC) {
         mmu->mem[address] = data;
         switch (data & 0x03) {
-        case 0: emu->timer->max_tima_cycles = 1024; break;
-        case 1: emu->timer->max_tima_cycles = 16; break;
-        case 2: emu->timer->max_tima_cycles = 64; break;
-        case 3: emu->timer->max_tima_cycles = 256; break;
+        case 0x00: emu->timer->tima_increase_div_bit = 9; break;
+        case 0x01: emu->timer->tima_increase_div_bit = 3; break;
+        case 0x02: emu->timer->tima_increase_div_bit = 5; break;
+        case 0x03: emu->timer->tima_increase_div_bit = 7; break;
         }
     } else if (address == NR10) {
         if (!IS_APU_ENABLED(emu))

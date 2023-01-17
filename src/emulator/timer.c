@@ -5,11 +5,31 @@
 #include "mmu.h"
 #include "cpu.h"
 
-// TODO timer actual behavior is more subtle: https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html
+// timer behavior is subtle: https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html
+
+// TODO some mooneye acceptance timer tests still don't pass
+// https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/timer/tma_write_reloading.s
+// https://gbdev.io/pandocs/Timer_and_Divider_Registers.html
+// https://www.reddit.com/r/EmuDev/comments/acsu62/question_regarding_rapid_togglegb_test_rom_game/
+
+static inline byte_t falling_edge_detector(gbtimer_t *timer, byte_t tima_signal) {
+    byte_t out = !tima_signal && timer->falling_edge_detector_delay;
+    timer->falling_edge_detector_delay = tima_signal;
+    return out;
+}
 
 void timer_step(emulator_t *emu) {
     gbtimer_t *timer = emu->timer;
     mmu_t *mmu = emu->mmu;
+
+    if (timer->tima_loading_value == -1) {
+        timer->tima_loading_value = -2;
+    } else if (timer->tima_loading_value >= 0) {
+        // finish TIMA loading if TIMA was being loaded
+        mmu->mem[TIMA] = timer->tima_loading_value;
+        timer->tima_loading_value = -1;
+        CPU_REQUEST_INTERRUPT(emu, IRQ_TIMER);
+    }
 
     // DIV register incremented at 16384 Hz (every 256 cycles)
     word_t div = (mmu->mem[DIV] << 8) | mmu->mem[DIV_LSB];
@@ -17,22 +37,20 @@ void timer_step(emulator_t *emu) {
     mmu->mem[DIV_LSB] = div & 0x00FF;
     mmu->mem[DIV] = div >> 8;
 
-    // if timer is enabled
-    if (CHECK_BIT(mmu->mem[TAC], 2)) {
-        timer->tima_counter += 4;
-        if (timer->tima_counter >= timer->max_tima_cycles) {
-            timer->tima_counter -= timer->max_tima_cycles;
-            if (mmu->mem[TIMA] == 0xFF) { // about to overflow
-                // If a TMA write is executed on the same step as the content of TMA
-                // is transferred to TIMA due to a timer overflow, the old value of TMA is transferred to TIMA.
+    byte_t tima_signal = CHECK_BIT(div, timer->tima_increase_div_bit) && CHECK_BIT(mmu->mem[TAC], 2);
 
-                // TODO TIMA should have a value of 0x00 for 4 cycles
-                // https://github.com/Gekkio/mooneye-test-suite/blob/main/acceptance/timer/tima_reload.s
-                mmu->mem[TIMA] = timer->old_tma >= 0 ? timer->old_tma : mmu->mem[TMA];
-                CPU_REQUEST_INTERRUPT(emu, IRQ_TIMER);
-            } else {
-                mmu->mem[TIMA]++;
-            }
+    if (falling_edge_detector(timer, tima_signal)) {
+        // increase TIMA (and handle its overflow)
+        if (mmu->mem[TIMA] == 0xFF) { // TIMA is about to overflow
+            // If a TMA write is executed on the same step as the content of TMA
+            // is transferred to TIMA due to a timer overflow, the old value of TMA is transferred to TIMA.
+            timer->tima_loading_value = timer->old_tma >= 0 ? timer->old_tma : mmu->mem[TMA];
+
+            // TIMA has a value of 0x00 for 4 cycles. Delay TIMA loading until next timer_step() call.
+            // Timer interrupt is also delayed for 4 cycles.
+            mmu->mem[TIMA] = 0x00;
+        } else {
+            mmu->mem[TIMA]++;
         }
     }
 
@@ -41,6 +59,7 @@ void timer_step(emulator_t *emu) {
 
 void timer_init(emulator_t *emu) {
     emu->timer = xcalloc(1, sizeof(gbtimer_t));
+    emu->timer->tima_loading_value = -2;
     emu->timer->old_tma = -1;
 }
 
@@ -55,14 +74,16 @@ size_t timer_serialized_length(UNUSED emulator_t *emu) {
 byte_t *timer_serialize(emulator_t *emu, size_t *size) {
     *size = timer_serialized_length(emu);
     byte_t *buf = xmalloc(*size);
-    memcpy(buf, &emu->timer->max_tima_cycles, 2);
-    memcpy(&buf[2], &emu->timer->tima_counter, 2);
+    memcpy(buf, &emu->timer->tima_increase_div_bit, 1);
+    memcpy(&buf[1], &emu->timer->falling_edge_detector_delay, 1);
+    memcpy(&buf[2], &emu->timer->tima_loading_value, 2);
     memcpy(&buf[4], &emu->timer->old_tma, 2);
     return buf;
 }
 
 void timer_unserialize(emulator_t *emu, byte_t *buf) {
-    memcpy(&emu->timer->max_tima_cycles, buf, 2);
-    memcpy(&emu->timer->tima_counter, &buf[2], 2);
+    memcpy(&emu->timer->tima_increase_div_bit, buf, 1);
+    memcpy(&emu->timer->falling_edge_detector_delay, &buf[1], 1);
+    memcpy(&emu->timer->tima_loading_value, &buf[2], 2);
     memcpy(&emu->timer->old_tma, &buf[4], 2);
 }
