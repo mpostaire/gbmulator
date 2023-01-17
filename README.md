@@ -12,6 +12,24 @@ You can compile and run it on your linux machine or use it in your browser [here
 
 ## Installation
 
+Various dependencies are needed to build the desktop app:
+
+- libadwaita
+- libmanette
+- opengl
+- glew
+- openal
+- libx11
+
+In addition to these dependencies, the following tools are needed to build the desktop app:
+
+- make
+- gcc
+- rgbds
+- imagemagick
+
+### Installation process
+
 ```sh
 # 1. Clone this repository
 git clone https://github.com/mpostaire/gbmulator.git
@@ -21,7 +39,7 @@ cd gbmulator
 make
 # 4. Install gbmulator
 sudo make install
-# Optional: Uninstall gbmulator
+# To uninstall gbmulator, run the following command
 sudo make uninstall
 ```
 
@@ -36,19 +54,18 @@ gbmulator path/to/rom.gb
 
 The following table show the default keybindings (they can be changed in GBmulator's menus except those marked with a '*').
 
-| Action                | Key             |
-| --------------------- | --------------- |
-| UP                    | Up arrow        |
-| DOWN                  | Down arrow      |
-| LEFT                  | Left arrow      |
-| RIGHT                 | Right arrow     |
-| A                     | NUMPAD 0        |
-| B                     | NUMPAD period   |
-| START                 | NUMPAD 1        |
-| SELECT                | NUMPAD 2        |
-| *Options menu         | ESCAPE or PAUSE |
-| *Load savesate 1->8   | F1->F8          |
-| *Create savesate 1->8 | SHIFT + F1->F8  |
+| Action                | Key                                               |
+| --------------------- | ------------------------------------------------- |
+| UP                    | <kbd>Up</kbd>                                     |
+| DOWN                  | <kbd>Down</kbd>                                   |
+| LEFT                  | <kbd>Left</kbd>                                   |
+| RIGHT                 | <kbd>Right</kbd>                                  |
+| A                     | <kbd>Numpad 0</kbd>                               |
+| B                     | <kbd>Numpad period</kbd>                          |
+| START                 | <kbd>Numpad 1</kbd>                               |
+| SELECT                | <kbd>Numpad 2</kbd>                               |
+| *Load savesate 1->8   | <kbd>F1</kbd> -> <kbd>F8</kbd>                    |
+| *Create savesate 1->8 | <kbd>Shift</kbd> + <kbd>F1</kbd> -> <kbd>F8</kbd> |
 
 There is also support for gamepad controllers but the buttons aren't configurable.
 
@@ -60,8 +77,9 @@ There is also support for gamepad controllers but the buttons aren't configurabl
 - Wireless link cable
 - Support for MBC1, MBC1M, MBC2, MBC3, MBC30 and MBC5 cartridges
 - Battery saves and savestates
+- Supports keyboard and gamepad controllers
 
-## TODO
+### TODO
 
 - check that MBC3/MBC30 is accurate
 - implement MBC6, MBC7, HuC1 and multicart MBCs
