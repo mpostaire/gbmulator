@@ -20,7 +20,7 @@ typedef enum {
     OAM_DMA_ACTIVE
 } oam_dma_state;
 
-extern inline void rtc_update(rtc_t *rtc);
+#define IS_RTC_HALTED(rtc) ((rtc)->dh & 0x40)
 
 static int parse_cartridge(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
@@ -199,6 +199,62 @@ int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size) {
 
 void mmu_quit(emulator_t *emu) {
     free(emu->mmu);
+}
+
+void mmu_rtc_step(emulator_t *emu) {
+    rtc_t *rtc = &emu->mmu->rtc;
+
+    if (IS_RTC_HALTED(rtc))
+        return;
+
+    // rtc internal clock should increase at 32768 Hz but just updating it once per emulated second
+    // passes all of the tests of the rtc3test rom.
+    // This may be because no time register changes that fast (as the smallest unit is the second).
+    rtc->rtc_cycles += 4;
+    if (rtc->rtc_cycles < GB_CPU_FREQ)
+        return;
+    rtc->rtc_cycles = 0;
+
+    rtc->s++;
+    if (rtc->s > 0x3F) {
+        rtc->s = 0;
+        return;
+    }
+    if (rtc->s != 60)
+        return;
+    rtc->s = 0;
+
+    rtc->m++;
+    if (rtc->m > 0x3F) {
+        rtc->m = 0;
+        return;
+    }
+    if (rtc->m != 60)
+        return;
+    rtc->m = 0;
+
+    rtc->h++;
+    if (rtc->h > 0x1F) {
+        rtc->h = 0;
+        return;
+    }
+    if (rtc->h != 24)
+        return;
+    rtc->h = 0;
+
+    word_t d = ((rtc->dh & 0x01) << 8) | rtc->dl;
+    d++;
+    rtc->dl = d & 0x00FF;
+    if (CHECK_BIT(d, 8))
+        SET_BIT(rtc->dh, 0);
+    else
+        RESET_BIT(rtc->dh, 0);
+    if (d < 512)
+        return;
+
+    rtc->dl = 0;
+    RESET_BIT(rtc->dh, 0);
+    SET_BIT(rtc->dh, 7); // set overflow bit
 }
 
 static inline void oam_dma_step(mmu_t *mmu, emulator_mode_t mode) {
@@ -485,8 +541,7 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
             }
             break;
         case 0x6000:
-            if (mmu->rtc.latch == 0x00 && data == 0x01 && !CHECK_BIT(mmu->rtc.dh, 6)) {
-                rtc_update(&mmu->rtc);
+            if (mmu->rtc.latch == 0x00 && data == 0x01) {
                 mmu->rtc.latched_s = mmu->rtc.s;
                 mmu->rtc.latched_m = mmu->rtc.m;
                 mmu->rtc.latched_h = mmu->rtc.h;
@@ -564,11 +619,11 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
             }
         } else if (mmu->rtc.enabled) {
             switch (mmu->rtc.reg) {
-            case 0x08: return mmu->rtc.latched_s;
-            case 0x09: return mmu->rtc.latched_m;
-            case 0x0A: return mmu->rtc.latched_h;
+            case 0x08: return mmu->rtc.latched_s & 0x3F;
+            case 0x09: return mmu->rtc.latched_m & 0x3F;
+            case 0x0A: return mmu->rtc.latched_h & 0x1F;
             case 0x0B: return mmu->rtc.latched_dl;
-            case 0x0C: return mmu->rtc.latched_dh;
+            case 0x0C: return mmu->rtc.latched_dh & 0xC1;
             default: return 0xFF;
             }
         } else {
@@ -742,11 +797,14 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
             mmu->eram_bank_pointer[address] = data;
         } else if (mmu->rtc.enabled) {
             switch (mmu->rtc.reg) {
-            case 0x08: mmu->rtc.s = data; break;
-            case 0x09: mmu->rtc.m = data; break;
-            case 0x0A: mmu->rtc.h = data; break;
+            case 0x08:
+                mmu->rtc.s = data & 0x3F;
+                mmu->rtc.rtc_cycles = 0; // writing to the seconds register apparently resets the rtc's internal counter (from rtc3test rom)
+                break;
+            case 0x09: mmu->rtc.m = data & 0x3F; break;
+            case 0x0A: mmu->rtc.h = data & 0x1F; break;
             case 0x0B: mmu->rtc.dl = data; break;
-            case 0x0C: mmu->rtc.dh = data; break;
+            case 0x0C: mmu->rtc.dh = data& 0xC1; break;
             default: break;
             }
         }
@@ -1023,7 +1081,7 @@ size_t mmu_serialized_length(emulator_t *emu) {
     size_t cram_len = 0;
     size_t oam_dma_len = 5;
     size_t hdma_len = 0;
-    size_t rtc_len = 13 + (2 * time_to_string_length());
+    size_t rtc_len = 17 + time_to_string_length();
     size_t mmu_other_len = 15;
     if (emu->mode == CGB) {
         wram_extra_len = sizeof(emu->mmu->wram_extra);
@@ -1107,17 +1165,7 @@ byte_t *mmu_serialize(emulator_t *emu, size_t *size) {
     memcpy(&buf[offset + 10], &emu->mmu->rtc.enabled, 1);
     memcpy(&buf[offset + 11], &emu->mmu->rtc.reg, 1);
     memcpy(&buf[offset + 12], &emu->mmu->rtc.latch, 1);
-    offset += 13;
-
-    size_t len;
-    char *str = time_to_string(emu->mmu->rtc.value_in_seconds, &len);
-    memcpy(&buf[offset], str, len);
-    offset += len;
-    free(str);
-    str = time_to_string(emu->mmu->rtc.timestamp, &len);
-    memcpy(&buf[offset], str, len);
-    offset += len;
-    free(str);
+    memcpy(&buf[offset + 13], &emu->mmu->rtc.rtc_cycles, 4);
 
     return buf;
 }
@@ -1211,8 +1259,5 @@ void mmu_unserialize(emulator_t *emu, byte_t *buf) {
     memcpy(&emu->mmu->rtc.enabled, &buf[offset + 10], 1);
     memcpy(&emu->mmu->rtc.reg, &buf[offset + 11], 1);
     memcpy(&emu->mmu->rtc.latch, &buf[offset + 12], 1);
-    offset += 13;
-
-    emu->mmu->rtc.value_in_seconds = string_to_time((char *) &buf[offset]);
-    emu->mmu->rtc.timestamp = string_to_time((char *) &buf[offset + time_to_string_length()]);
+    memcpy(&emu->mmu->rtc.rtc_cycles, &buf[offset + 13], 4);
 }

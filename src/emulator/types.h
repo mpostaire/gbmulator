@@ -1,6 +1,7 @@
 #pragma once
 
-#include <time.h>
+#include <stdint.h>
+#include <stddef.h>
 
 typedef unsigned char byte_t;
 typedef signed char s_byte_t;
@@ -116,9 +117,7 @@ typedef struct {
     byte_t enabled;
     byte_t reg; // rtc register
     byte_t latch;
-
-    time_t value_in_seconds; // current rtc time in seconds
-    time_t timestamp; // real unix time at the moment the rtc was clocked
+    uint32_t rtc_cycles;
 } rtc_t;
 
 typedef struct {
