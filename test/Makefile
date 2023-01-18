@@ -1,4 +1,4 @@
-ODIR=out
+ODIR=../out/test/emulator
 EMU_SDIR=../src/emulator
 CC=gcc
 CFLAGS=-std=gnu11 -Wall -Wextra -O3 -I$(EMU_SDIR)

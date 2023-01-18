@@ -81,7 +81,7 @@ ui_t *ui;
 char *rom_path;
 char *forced_save_path;
 
-int cycles_per_frame = GB_CPU_CYCLES_PER_FRAME;
+int steps_per_frame = GB_CPU_STEPS_PER_FRAME;
 
 int sfd;
 
@@ -283,7 +283,7 @@ static void choose_scale(menu_entry_t *entry) {
 
 static void choose_speed(menu_entry_t *entry) {
     config.speed = (entry->choices.position * 0.5f) + 1;
-    cycles_per_frame = GB_CPU_CYCLES_PER_FRAME * config.speed;
+    steps_per_frame = GB_CPU_STEPS_PER_FRAME * config.speed;
     if (emu)
         emulator_set_apu_speed(emu, config.speed);
 }
@@ -554,7 +554,7 @@ int main(int argc, char **argv) {
     // must be called before emulator_init() and ui_init()
     config_load_from_file(&config, config_path);
     emu = NULL;
-    cycles_per_frame = GB_CPU_CYCLES_PER_FRAME * config.speed;
+    steps_per_frame = GB_CPU_STEPS_PER_FRAME * config.speed;
 
 
 
@@ -639,7 +639,7 @@ int main(int argc, char **argv) {
     SDL_PauseAudioDevice(audio_device, 0);
 
     // main gbmulator loop
-    int cycles = 0;
+    int steps = 0;
     while (is_running) {
         // emulation paused
         if (is_paused) {
@@ -683,8 +683,8 @@ int main(int argc, char **argv) {
         }
 
         // handle_input is a slow function: don't call it every step
-        if (cycles >= cycles_per_frame) {
-            cycles -= cycles_per_frame;
+        if (steps >= steps_per_frame) {
+            steps -= steps_per_frame;
             SDL_RenderClear(renderer);
             SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
             // this SDL_Delay() isn't needed as the audio sync adds it's own delay
@@ -701,7 +701,7 @@ int main(int argc, char **argv) {
         emulator_step(emu);
         if (linked_emu)
             emulator_step(linked_emu);
-        cycles += 4;
+        steps++;
 
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).
     }

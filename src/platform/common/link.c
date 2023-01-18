@@ -6,22 +6,13 @@
 #include <arpa/inet.h>
 
 #include "../../emulator/emulator.h"
-#ifdef __ANDROID__
-#include "../android/socket.h"
-#include <android/log.h>
-#define log(...) __android_log_print(ANDROID_LOG_WARN, "GBmulator", __VA_ARGS__)
-#else
-#include "../desktop/socket.h" // TODO this works by coincidence because of the similarity between desktop and destop_sdl platforms: fix this
-#endif
 
 typedef enum {
-    INFO,
-    ROM,
-    STATE,
-    JOYPAD
+    PKT_INFO,
+    PKT_ROM,
+    PKT_STATE,
+    PKT_JOYPAD
 } pkt_type_t;
-
-int is_server = 0;
 
 static void print_connected_to(struct sockaddr *addr) {
     char buf[INET6_ADDRSTRLEN];
@@ -37,13 +28,10 @@ static void print_connected_to(struct sockaddr *addr) {
 }
 
 int link_start_server(const char *port) {
-    // if (server_sfd != -1 || is_server)
-    //     return 0;
-
     struct addrinfo hints = { 0 };
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags = AI_PASSIVE; // use my IP
+	hints.ai_flags = AI_PASSIVE;
     struct addrinfo *res;
     int ret;
     if ((ret = getaddrinfo(NULL, port, &hints, &res)) != 0) {
@@ -83,8 +71,6 @@ int link_start_server(const char *port) {
         return -1;
     }
 
-    is_server = 1;
-
     printf("Link server waiting for client on port %s...\n", port);
 
     // wait for a client connection
@@ -102,9 +88,6 @@ int link_start_server(const char *port) {
 }
 
 int link_connect_to_server(const char *address, const char *port) {
-    // if (server_sfd != -1 || is_server)
-    //     return 0;
-
     struct addrinfo hints = {
         .ai_family = AF_UNSPEC,
         .ai_socktype = SOCK_STREAM,
@@ -133,8 +116,6 @@ int link_connect_to_server(const char *address, const char *port) {
         return -1;
     }
 
-    is_server = 0;
-
     print_connected_to(res->ai_addr);
     freeaddrinfo(res);
     return server_sfd;
@@ -143,7 +124,7 @@ int link_connect_to_server(const char *address, const char *port) {
 static inline int receive(int fd, void *buf, size_t n, int flags) {
     ssize_t total_ret = 0;
     while (total_ret != (ssize_t) n) {
-        ssize_t ret = recv_pkt(fd, &((char *) buf)[total_ret], n - total_ret, flags);
+        ssize_t ret = recv(fd, &((char *) buf)[total_ret], n - total_ret, flags);
         if (ret <= 0)
             return 0;
         total_ret += ret;
@@ -152,28 +133,28 @@ static inline int receive(int fd, void *buf, size_t n, int flags) {
 }
 
 static int exchange_info(int sfd, emulator_t *emu, emulator_mode_t *mode, int *can_compress) {
-    // --- SEND INFO ---
+    // --- SEND PKT_INFO ---
 
     word_t checksum = 0;
     for (unsigned int i = 0; i < sizeof(emu->mmu->cartridge); i += 2)
         checksum = checksum - (emu->mmu->cartridge[i] + emu->mmu->cartridge[i + 1]) - 1;
 
     byte_t pkt[4] = { 0 };
-    pkt[0] = INFO;
+    pkt[0] = PKT_INFO;
     pkt[1] = emu->mode;
     #ifdef __HAVE_ZLIB__
     // SET_BIT(pkt[1], 7); // TODO fix compression
     #endif
     memcpy(&pkt[2], &checksum, 2);
 
-    send_pkt(sfd, pkt, 4, 0);
+    send(sfd, pkt, 4, 0);
 
-    // --- RECEIVE INFO ---
+    // --- RECEIVE PKT_INFO ---
 
     receive(sfd, pkt, 4, 0);
 
-    if (pkt[0] != INFO) {
-        eprintf("received packet type %d but expected %d (ignored)\n", pkt[0], INFO);
+    if (pkt[0] != PKT_INFO) {
+        eprintf("received packet type %d but expected %d (ignored)\n", pkt[0], PKT_INFO);
         return -1;
     }
 
@@ -193,27 +174,27 @@ static int exchange_info(int sfd, emulator_t *emu, emulator_mode_t *mode, int *c
 }
 
 static int exchange_rom(int sfd, emulator_t *emu, byte_t **rom_data, size_t *rom_len) {
-    // --- SEND ROM ---
+    // --- SEND PKT_ROM ---
 
     // TODO compression
     byte_t *rom = emulator_get_rom(emu, rom_len);
 
     byte_t *pkt = xcalloc(1, *rom_len + 9);
-    pkt[0] = ROM;
+    pkt[0] = PKT_ROM;
     memcpy(&pkt[1], rom_len, sizeof(size_t));
     memcpy(&pkt[9], &rom, *rom_len);
 
-    send_pkt(sfd, pkt, *rom_len + 9, 0);
+    send(sfd, pkt, *rom_len + 9, 0);
     free(pkt);
 
-    // --- RECEIVE ROM ---
+    // --- RECEIVE PKT_ROM ---
 
     // TODO compression
     byte_t pkt_header[9] = { 0 };
     receive(sfd, pkt_header, 9, 0);
 
-    if (pkt_header[0] != ROM) {
-        eprintf("received packet type %d but expected %d (ignored)\n", pkt_header[0], ROM);
+    if (pkt_header[0] != PKT_ROM) {
+        eprintf("received packet type %d but expected %d (ignored)\n", pkt_header[0], PKT_ROM);
         return 0;
     }
 
@@ -226,26 +207,26 @@ static int exchange_rom(int sfd, emulator_t *emu, byte_t **rom_data, size_t *rom
 }
 
 static int exchange_savestate(int sfd, emulator_t *emu, int can_compress, byte_t **savestate_data, size_t *savestate_len) {
-    // --- SEND SAVESTATE ---
+    // --- SEND PKT_STATE ---
 
     byte_t *local_savestate_data = emulator_get_savestate(emu, savestate_len, can_compress);
 
     byte_t *pkt = xcalloc(1, *savestate_len + 9);
-    pkt[0] = STATE;
+    pkt[0] = PKT_STATE;
     memcpy(&pkt[1], savestate_len, sizeof(size_t));
     memcpy(&pkt[9], local_savestate_data, *savestate_len);
 
-    send_pkt(sfd, pkt, *savestate_len + 9, 0);
+    send(sfd, pkt, *savestate_len + 9, 0);
     free(pkt);
     free(local_savestate_data);
 
-    // --- RECEIVE SAVESTATE ---
+    // --- RECEIVE PKT_STATE ---
 
     byte_t pkt_header[9] = { 0 };
     receive(sfd, pkt_header, 9, 0);
 
-    if (pkt_header[0] != STATE) {
-        eprintf("received packet type %d but expected %d (ignored)\n", pkt_header[0], STATE);
+    if (pkt_header[0] != PKT_STATE) {
+        eprintf("received packet type %d but expected %d (ignored)\n", pkt_header[0], PKT_STATE);
         return 0;
     }
 
@@ -281,7 +262,7 @@ int link_init_transfer(int sfd, emulator_t *emu, emulator_t **linked_emu) {
     if (rom_data) {
         *linked_emu = emulator_init(rom_data, rom_len, &opts);
         if (!*linked_emu) {
-            eprintf("received invalid or corrupted ROM\n");
+            eprintf("received invalid or corrupted PKT_ROM\n");
             free(rom_data);
             return 0;
         }
@@ -305,9 +286,9 @@ int link_init_transfer(int sfd, emulator_t *emu, emulator_t **linked_emu) {
 
 int link_exchange_joypad(int sfd, emulator_t *emu, emulator_t *linked_emu) {
     char buf[2];
-    buf[0] = JOYPAD;
+    buf[0] = PKT_JOYPAD;
     buf[1] = emulator_get_joypad_state(emu);
-    send_pkt(sfd, buf, 2, 0);
+    send(sfd, buf, 2, 0);
 
     do {
         if (!receive(sfd, buf, 2, 0)) {
@@ -317,9 +298,9 @@ int link_exchange_joypad(int sfd, emulator_t *emu, emulator_t *linked_emu) {
             close(sfd);
             return 0;
         }
-        if (buf[0] != JOYPAD)
-            eprintf("received packet type %d but expected %d (ignored)\n", buf[0], JOYPAD);
-    } while (buf[0] != JOYPAD);
+        if (buf[0] != PKT_JOYPAD)
+            eprintf("received packet type %d but expected %d (ignored)\n", buf[0], PKT_JOYPAD);
+    } while (buf[0] != PKT_JOYPAD);
 
     emulator_set_joypad_state(linked_emu, buf[1]);
     return 1;

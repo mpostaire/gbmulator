@@ -21,7 +21,6 @@ SDL_bool is_landscape;
 SDL_bool show_link_dialog;
 SDL_bool init_handshake;
 
-float speed;
 int frame_skip;
 
 int screen_width;
@@ -83,6 +82,8 @@ SDL_Texture *select_pressed_texture;
 SDL_Texture *link_texture;
 SDL_Texture *link_pressed_texture;
 
+int steps_per_frame;
+
 button_t buttons[] = {
     {
         .shape = {
@@ -126,6 +127,59 @@ button_t buttons[] = {
         .button = JOYPAD_START + 5
     }
 };
+
+// --- send and recv functions for an android bluetooth connection
+// TODO edit ../common/link.h to support custom send/recv functions (need to do this because it isn't possible to
+// get the bluetooth socket's file descriptor
+
+// TODO optimize by storing method_id as global variable
+// static inline ssize_t send_bt(int fd, const void *buf, size_t n, int flags) {
+//     JNIEnv *env = (JNIEnv *) SDL_AndroidGetJNIEnv();
+//     jobject activity = (jobject) SDL_AndroidGetActivity();
+//     jclass clazz = (*env)->GetObjectClass(env, activity);
+//     jmethodID method_id = (*env)->GetMethodID(env, clazz, "linkSendData", "([B)I");
+
+//     //log("SEND_PKT BEFORE");
+
+//     jbyteArray array = (*env)->NewByteArray(env, n);
+//     (*env)->SetByteArrayRegion(env, array, 0, n, (jbyte *) buf);
+//     ssize_t ret = (*env)->CallIntMethod(env, activity, method_id, array);
+
+//     //log("SEND_PKT AFTER");
+
+//     (*env)->DeleteLocalRef(env, array);
+//     (*env)->DeleteLocalRef(env, activity);
+//     (*env)->DeleteLocalRef(env, clazz);
+//     return ret;
+// }
+
+// TODO optimize by storing method_id as global variable
+// static inline ssize_t recv_bt(int fd, void *buf, size_t n, int flags) {
+//     JNIEnv *env = (JNIEnv *) SDL_AndroidGetJNIEnv();
+//     jobject activity = (jobject) SDL_AndroidGetActivity();
+//     jclass clazz = (*env)->GetObjectClass(env, activity);
+//     jmethodID method_id = (*env)->GetMethodID(env, clazz, "linkReceiveData", "(I)[B");
+
+//     //log("RECV_PKT BEFORE");
+
+//     jbyteArray array = (*env)->CallObjectMethod(env, activity, method_id, n);
+//     if (!array) return -1;
+//     ssize_t len = (*env)->GetArrayLength(env, array);
+//     if (len > n) return -1;
+
+//     //log("RECV_PKT AFTER");
+
+//     (*env)->GetByteArrayRegion(env, array, 0, len, (jbyte *) buf);
+
+//     //log("RECV_PKT AFTER AFTER");
+
+//     (*env)->DeleteLocalRef(env, array);
+//     (*env)->DeleteLocalRef(env, activity);
+//     (*env)->DeleteLocalRef(env, clazz);
+//     return len;
+// }
+
+// ---
 
 static inline s_byte_t is_finger_over_button(float x, float y) {
     if (is_landscape) {
@@ -415,11 +469,11 @@ static void start_emulation_loop(void) {
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
     SDL_PauseAudioDevice(audio_device, 0);
 
-    int cycles = 0;
+    int steps = 0;
     int frame_count = 0;
     while (is_running) {
-        if (cycles >= GB_CPU_CYCLES_PER_FRAME * speed) {
-            cycles -= GB_CPU_CYCLES_PER_FRAME * speed;
+        if (steps >= steps_per_frame) {
+            steps -= steps_per_frame;
             if (frame_count >= frame_skip) {
                 SDL_RenderClear(renderer);
                 SDL_RenderCopy(renderer, ppu_texture, NULL, &gb_screen_rect);
@@ -448,7 +502,7 @@ static void start_emulation_loop(void) {
         emulator_step(emu);
         if (linked_emu)
             emulator_step(linked_emu);
-        cycles += 4;
+        steps++;
 
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).
     }
@@ -492,7 +546,7 @@ static void load_cartridge(const byte_t *rom_data, size_t rom_size, int resume, 
         load_battery_from_file(emu, buf);
     }
 
-    speed = emu_speed;
+    steps_per_frame = GB_CPU_STEPS_PER_FRAME * emu_speed;
 }
 
 static void ready(void) {
@@ -746,7 +800,7 @@ int main(int argc, char **argv) {
     // previous values because of android's activities lifecycle
     is_running = SDL_TRUE;
     show_link_dialog = SDL_FALSE;
-    speed = 1.0f;
+    steps_per_frame = GB_CPU_STEPS_PER_FRAME;
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
 

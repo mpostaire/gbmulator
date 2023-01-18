@@ -1,7 +1,5 @@
 #pragma once
 
-#include <time.h>
-
 #include "types.h"
 
 #define ROM_BANK_SIZE 0x4000
@@ -111,6 +109,8 @@ void mmu_quit(emulator_t *emu);
 
 void mmu_step(emulator_t *emu);
 
+void mmu_rtc_step(emulator_t *emu);
+
 /**
  * only used in cpu instructions (opcode execution)
  */
@@ -120,38 +120,6 @@ byte_t mmu_read(emulator_t *emu, word_t address);
  * only used in cpu instructions (opcode execution)
  */
 void mmu_write(emulator_t *emu, word_t address, byte_t data);
-
-inline void rtc_update(rtc_t *rtc) {
-    time_t now = time(NULL);
-    time_t elapsed = now - rtc->timestamp;
-    rtc->timestamp = now;
-    rtc->value_in_seconds += elapsed;
-    time_t value_in_seconds = rtc->value_in_seconds;
-
-    word_t d = value_in_seconds / 86400;
-    value_in_seconds %= 86400;
-
-    // day overflow
-    if (d >= 0x0200) {
-        SET_BIT(rtc->dh, 7);
-        d %= 0x0200;
-    }
-
-    rtc->dh |= (d & 0x100) >> 8;
-    rtc->dl = d & 0xFF;
-
-    rtc->h = value_in_seconds / 3600;
-    value_in_seconds %= 3600;
-
-    rtc->m = value_in_seconds / 60;
-    value_in_seconds %= 60;
-
-    rtc->s = value_in_seconds;
-
-    // if there was a day overflow, emulate the overflow on rtc->value_in_seconds
-    if (CHECK_BIT(rtc->dh, 7))
-        rtc->value_in_seconds = rtc->s + rtc->m * 60 + rtc->h * 3600 + d * 86400;
-}
 
 size_t mmu_serialized_length(emulator_t *emu);
 

@@ -20,11 +20,11 @@ byte_t joypad_get_input(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
     if (!CHECK_BIT(mmu->mem[P1], 4))
-        return (mmu->mem[P1] & 0xF0) | joypad->direction;
+        return 0xC0 | (mmu->mem[P1] & 0xF0) | joypad->direction;
     else if (!CHECK_BIT(mmu->mem[P1], 5))
-        return (mmu->mem[P1] & 0xF0) | joypad->action;
+        return 0xC0 | (mmu->mem[P1] & 0xF0) | joypad->action;
     else if (!CHECK_BIT(mmu->mem[P1], 4) && (!CHECK_BIT(mmu->mem[P1], 5)))
-        return (mmu->mem[P1] & 0xF0) | joypad->direction | joypad->action;
+        return 0xC0 | (mmu->mem[P1] & 0xF0) | joypad->direction | joypad->action;
     else
         return 0xFF;
 }

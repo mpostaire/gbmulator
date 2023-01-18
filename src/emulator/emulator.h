@@ -9,39 +9,66 @@
 #define GB_SCREEN_HEIGHT 144
 
 #define GB_CPU_FREQ 4194304
+#define GB_CPU_FRAMES_PER_SECONDS 60
 // 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame (the Game Boy runs at approximatively 60 fps)
-#define GB_CPU_CYCLES_PER_FRAME (GB_CPU_FREQ / 60)
+#define GB_CPU_CYCLES_PER_FRAME (GB_CPU_FREQ / GB_CPU_FRAMES_PER_SECONDS)
+#define GB_CPU_STEPS_PER_FRAME (GB_CPU_FREQ / 4 / GB_CPU_FRAMES_PER_SECONDS)
 
 #define GB_APU_CHANNELS 2
 #define GB_APU_SAMPLE_RATE 44100
 // this is the number of samples needed per frame at a 44100Hz sample rate (735)
-#define GB_APU_SAMPLES_PER_FRAME (GB_APU_SAMPLE_RATE / 60)
+#define GB_APU_SAMPLES_PER_FRAME (GB_APU_SAMPLE_RATE / GB_CPU_FRAMES_PER_SECONDS)
 #define GB_APU_DEFAULT_SAMPLE_COUNT 512
 
 /**
  * Runs the emulator for one cpu step.
- * @returns the ammount of cycles the emulator has run for
+ * @returns the amount of cycles the emulator has run for
  */
-void emulator_step(emulator_t *emu);
+int emulator_step(emulator_t *emu);
 
 /**
- * Runs the emulator for the given ammount of cpu cycles.
- * @param cycles_limit the ammount of cycles the emulator will run for
+ * Runs the emulator for the given amount of cpu steps.
+ * @param steps_limit the amount of steps the emulator will run for
  */
-static inline void emulator_run_cycles(emulator_t *emu, long cycles_limit) {
-    for (long cycles_count = 0; cycles_count < cycles_limit; cycles_count += 4) // 4 cycles per step
+static inline void emulator_run_steps(emulator_t *emu, long steps_limit) {
+    for (long steps_count = 0; steps_count < steps_limit; steps_count++)
         emulator_step(emu);
 }
 
 /**
- * Runs both the emulator and the linked emulator in parallel for the given ammount of cpu cycles.
- * @param cycles_limit the ammount of cycles the emulator will run for
+ * Runs the emulator for the given amount of frames.
+ * @param frames_limit the amount of frames the emulator will run for
  */
-static inline void emulator_linked_run_cycles(emulator_t *emu, emulator_t *linked_emu, int cycles_limit) {
-    for (int cycles_count = 0; cycles_count < cycles_limit; cycles_count += 4) { // 4 cycles per step
+static inline void emulator_run_frames(emulator_t *emu, long frames_limit) {
+    emulator_run_steps(emu, frames_limit * GB_CPU_STEPS_PER_FRAME);
+}
+
+/**
+ * Runs the emulator for the given amount of cpu cycles.
+ * @param cycles_limit the amount of cycles the emulator will run for
+ */
+static inline void emulator_run_cycles(emulator_t *emu, long cycles_limit) {
+    for (long cycles_count = 0; cycles_count < cycles_limit; cycles_count += emulator_step(emu));
+}
+
+/**
+ * Runs both the emulator and the linked emulator in parallel for the given amount of cpu steps.
+ * @param steps_limit the amount of steps both emulators will run for
+ */
+static inline void emulator_linked_run_steps(emulator_t *emu, emulator_t *linked_emu, long steps_limit) {
+    // TODO investigate link cable behaviour when double speed is on
+    for (long steps_count = 0; steps_count < steps_limit; steps_count++) {
         emulator_step(emu);
         emulator_step(linked_emu);
     }
+}
+
+/**
+ * Runs both the emulator and the linked emulator in parallel for the given amount of frames.
+ * @param frames_limit the amount of frames both emulators will run for
+ */
+static inline void emulator_linked_run_frames(emulator_t *emu, emulator_t *linked_emu, long frames_limit) {
+    emulator_linked_run_steps(emu, linked_emu, frames_limit * GB_CPU_STEPS_PER_FRAME);
 }
 
 /**

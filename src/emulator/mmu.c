@@ -12,7 +12,15 @@
 #include "cpu.h"
 #include "link.h"
 
-extern inline void rtc_update(rtc_t *rtc);
+typedef enum {
+    OAM_DMA_INACTIVE,
+    OAM_DMA_PENDING_START,
+    OAM_DMA_PENDING_END,
+    OAM_DMA_STARTING,
+    OAM_DMA_ACTIVE
+} oam_dma_state;
+
+#define IS_RTC_HALTED(rtc) ((rtc)->dh & 0x40)
 
 static int parse_cartridge(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
@@ -193,6 +201,62 @@ void mmu_quit(emulator_t *emu) {
     free(emu->mmu);
 }
 
+void mmu_rtc_step(emulator_t *emu) {
+    rtc_t *rtc = &emu->mmu->rtc;
+
+    if (IS_RTC_HALTED(rtc))
+        return;
+
+    // rtc internal clock should increase at 32768 Hz but just updating it once per emulated second
+    // passes all of the tests of the rtc3test rom.
+    // This may be because no time register changes that fast (as the smallest unit is the second).
+    rtc->rtc_cycles += 4;
+    if (rtc->rtc_cycles < GB_CPU_FREQ)
+        return;
+    rtc->rtc_cycles = 0;
+
+    rtc->s++;
+    if (rtc->s > 0x3F) {
+        rtc->s = 0;
+        return;
+    }
+    if (rtc->s != 60)
+        return;
+    rtc->s = 0;
+
+    rtc->m++;
+    if (rtc->m > 0x3F) {
+        rtc->m = 0;
+        return;
+    }
+    if (rtc->m != 60)
+        return;
+    rtc->m = 0;
+
+    rtc->h++;
+    if (rtc->h > 0x1F) {
+        rtc->h = 0;
+        return;
+    }
+    if (rtc->h != 24)
+        return;
+    rtc->h = 0;
+
+    word_t d = ((rtc->dh & 0x01) << 8) | rtc->dl;
+    d++;
+    rtc->dl = d & 0x00FF;
+    if (CHECK_BIT(d, 8))
+        SET_BIT(rtc->dh, 0);
+    else
+        RESET_BIT(rtc->dh, 0);
+    if (d < 512)
+        return;
+
+    rtc->dl = 0;
+    RESET_BIT(rtc->dh, 0);
+    SET_BIT(rtc->dh, 7); // set overflow bit
+}
+
 static inline void oam_dma_step(mmu_t *mmu, emulator_mode_t mode) {
     // 4 cycles to transfer 1 byte
 
@@ -223,16 +287,18 @@ static inline void oam_dma_step(mmu_t *mmu, emulator_mode_t mode) {
         } else {
             mmu->mem[OAM + mmu->oam_dma.progress] = mmu->mem[mmu->oam_dma.src_address - offset];
         }
-    } else if (mmu->oam_dma.src_address >= IO && mmu->oam_dma.src_address < 0xFFFF) {
-        // TODO doing nothing here doesn't pass mooneye acceptance/oam_dma/sources-GS test
-        // mmu->mem[OAM + mmu->oam_dma.progress] = 0xFF;
+    } else if (mmu->oam_dma.src_address >= IO && mmu->oam_dma.src_address < HRAM) {
+        // TODO doesn't pass mooneye acceptance/oam_dma/sources-GS test
+        mmu->mem[OAM + mmu->oam_dma.progress] = 0xFF;
+    } else if (mmu->oam_dma.src_address >= HRAM /*&& mmu->oam_dma.src_address <= 0xFFFF*/) {
+        // TODO doesn't pass mooneye acceptance/oam_dma/sources-GS test
     } else {
         mmu->mem[OAM + mmu->oam_dma.progress] = mmu->mem[mmu->oam_dma.src_address];
     }
 
     mmu->oam_dma.progress++;
     mmu->oam_dma.src_address++;
-    mmu->oam_dma.is_active = mmu->oam_dma.progress != 0xA0;
+    mmu->oam_dma.status = mmu->oam_dma.progress != 0xA0 ? OAM_DMA_ACTIVE : OAM_DMA_INACTIVE;
 }
 
 static inline void hdma_gdma_step(emulator_t *emu, byte_t *src, byte_t *dest) {
@@ -272,7 +338,7 @@ static inline void hdma_gdma_step(emulator_t *emu, byte_t *src, byte_t *dest) {
                 mmu->hdma.lock_cpu = 0;
         }
     } else if (CHECK_BIT(mmu->mem[LCDC], 7) && PPU_IS_MODE(emu, PPU_MODE_HBLANK) && mmu->hdma.hdma_ly == mmu->mem[LY]) {
-        // TODO hdma still not perfect? pokemon crystal/zelda link's awakening dx have some visual glitches when displaying menus/text windows
+        // TODO hdma still not perfect? pokemon crystal has some visual glitches when displaying menus/text windows
         // TODO vram viewer like bgb to see what's happening in vram for these glitches to happen
         mmu->hdma.lock_cpu = 1;
         // 32 cycles to transfer 0x10 bytes
@@ -314,8 +380,26 @@ static inline void hdma_gdma_step(emulator_t *emu, byte_t *src, byte_t *dest) {
 void mmu_step(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
-    if (mmu->oam_dma.is_active)
+    switch (mmu->oam_dma.status) {
+    case OAM_DMA_INACTIVE:
+        break;
+    case OAM_DMA_PENDING_START:
+        // cpu just wrote into DIV
+        mmu->oam_dma.status = OAM_DMA_PENDING_END;
+        break;
+    case OAM_DMA_PENDING_END:
+        // don't start OAM DMA transfer yet
+        mmu->oam_dma.status = OAM_DMA_STARTING;
+        break;
+    case OAM_DMA_STARTING:
+        mmu->oam_dma.status = OAM_DMA_ACTIVE;
+        mmu->oam_dma.progress = 0;
+        mmu->oam_dma.src_address = mmu->mem[DMA] << 8;
+        // fall through
+    case OAM_DMA_ACTIVE:
         oam_dma_step(mmu, emu->mode);
+        break;
+    }
 
     // do GDMA/HDMA if in CGB mode and HDMA5 bit 7 is reset (meaning there is an active HDMA/GDMA) 
     if (emu->mode == CGB && !CHECK_BIT(mmu->mem[HDMA5], 7)) {
@@ -435,7 +519,7 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
         case 0x0000:
             mmu->ramg_reg = (data & 0x0F) == 0x0A;
             if (mmu->has_rtc)
-                mmu->rtc.enabled = (data & 0x0F) == 0x0A;
+                mmu->rtc.enabled = mmu->ramg_reg;
             break;
         case 0x2000:
             mmu->bank1_reg = mmu->mbc == MBC30 ? data : data & 0x7F;
@@ -457,8 +541,7 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
             }
             break;
         case 0x6000:
-            if (mmu->rtc.latch == 0x00 && data == 0x01 && !CHECK_BIT(mmu->rtc.dh, 6)) {
-                rtc_update(&mmu->rtc);
+            if (mmu->rtc.latch == 0x00 && data == 0x01) {
                 mmu->rtc.latched_s = mmu->rtc.s;
                 mmu->rtc.latched_m = mmu->rtc.m;
                 mmu->rtc.latched_h = mmu->rtc.h;
@@ -503,8 +586,8 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
 byte_t mmu_read(emulator_t *emu, word_t address) {
     mmu_t *mmu = emu->mmu;
 
-    if (mmu->oam_dma.is_active)
-        return (address >= HRAM && address < IE) ? mmu->mem[address] : 0xFF;
+    if (mmu->oam_dma.status >= OAM_DMA_STARTING)
+        return ((address >= HRAM && address < IE) || address == DMA) ? mmu->mem[address] : 0xFF;
 
     if (/*address >= ROM_BANK0 &&*/ address < ROM_BANKN)
         return mmu->rom_bank0_pointer[address];
@@ -536,11 +619,11 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
             }
         } else if (mmu->rtc.enabled) {
             switch (mmu->rtc.reg) {
-            case 0x08: return mmu->rtc.latched_s;
-            case 0x09: return mmu->rtc.latched_m;
-            case 0x0A: return mmu->rtc.latched_h;
+            case 0x08: return mmu->rtc.latched_s & 0x3F;
+            case 0x09: return mmu->rtc.latched_m & 0x3F;
+            case 0x0A: return mmu->rtc.latched_h & 0x1F;
             case 0x0B: return mmu->rtc.latched_dl;
-            case 0x0C: return mmu->rtc.latched_dh;
+            case 0x0C: return mmu->rtc.latched_dh & 0xC1;
             default: return 0xFF;
             }
         } else {
@@ -644,8 +727,11 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
     if (address > NR52 && address < WAVE_RAM)
         return 0xFF;
 
-    if (address == KEY0 || address == KEY1)
+    if (address == KEY0)
         return emu->mode == CGB ? mmu->mem[address] : 0xFF;
+
+    if (address == KEY1)
+        return emu->mode == CGB ? (mmu->mem[address] | 0x7E) : 0xFF;
 
     if (emu->mode == CGB) {
         if (address == 0xFF75)
@@ -685,9 +771,13 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
 void mmu_write(emulator_t* emu, word_t address, byte_t data) {
     mmu_t *mmu = emu->mmu;
 
-    if (mmu->oam_dma.is_active) {
-        if (address >= HRAM && address < IE)
+    if (mmu->oam_dma.status >= OAM_DMA_STARTING) {
+        if (address == DMA) {
             mmu->mem[address] = data;
+            mmu->oam_dma.status = OAM_DMA_PENDING_START;
+        } else if (address >= HRAM && address < IE) {
+            mmu->mem[address] = data;
+        }
         return;
     }
 
@@ -707,11 +797,14 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
             mmu->eram_bank_pointer[address] = data;
         } else if (mmu->rtc.enabled) {
             switch (mmu->rtc.reg) {
-            case 0x08: mmu->rtc.s = data; break;
-            case 0x09: mmu->rtc.m = data; break;
-            case 0x0A: mmu->rtc.h = data; break;
+            case 0x08:
+                mmu->rtc.s = data & 0x3F;
+                mmu->rtc.rtc_cycles = 0; // writing to the seconds register apparently resets the rtc's internal counter (from rtc3test rom)
+                break;
+            case 0x09: mmu->rtc.m = data & 0x3F; break;
+            case 0x0A: mmu->rtc.h = data & 0x1F; break;
             case 0x0B: mmu->rtc.dl = data; break;
-            case 0x0C: mmu->rtc.dh = data; break;
+            case 0x0C: mmu->rtc.dh = data& 0xC1; break;
             default: break;
             }
         }
@@ -734,6 +827,16 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD enabled
     } else if (address >= UNUSABLE && address < IO) {
         // UNUSABLE memory is unusable
+    } else if (address == P1) {
+        // prevent writes to the lower nibble of the P1 register (joypad)
+        mmu->mem[address] = data & 0xF0;
+    } else if (address == SC) {
+        if (CHECK_BIT(mmu->mem[SC], 1) != CHECK_BIT(data, 1)) {
+            mmu->mem[address] = data & 0x83;
+            link_set_clock(emu);
+        } else {
+            mmu->mem[address] = data & 0x83;
+        }
     } else if (address == DIV_LSB) {
         // writing to DIV resets it to 0
         mmu->mem[address] = 0;
@@ -744,72 +847,23 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         mmu->mem[address] = 0;
         mmu->mem[DIV_LSB] = 0;
         mmu->mem[TIMA] = mmu->mem[TMA];
+    } else if (address == TIMA) {
+        if (emu->timer->tima_loading_value == -1)
+            mmu->mem[address] = mmu->mem[TMA];
+        else
+            mmu->mem[address] = data;
+    } else if (address == TMA) {
+        if (emu->timer->tima_loading_value == -1)
+            mmu->mem[TIMA] = data;
+        emu->timer->old_tma = mmu->mem[address];
+        mmu->mem[address] = data;
     } else if (address == TAC) {
         mmu->mem[address] = data;
         switch (data & 0x03) {
-        case 0: emu->timer->max_tima_cycles = 1024; break;
-        case 1: emu->timer->max_tima_cycles = 16; break;
-        case 2: emu->timer->max_tima_cycles = 64; break;
-        case 3: emu->timer->max_tima_cycles = 256; break;
-        }
-    } else if (address == LY) {
-        // read only
-    } else if (address == LYC) {
-        // a write to LYC triggers an immediate LY=LYC comparison
-        mmu->mem[address] = data;
-        ppu_ly_lyc_compare(emu);
-    } else if (address == DMA) {
-        // writing to this register starts an OAM DMA transfer
-        mmu->oam_dma.is_active = 1;
-        mmu->oam_dma.progress = 0;
-        mmu->oam_dma.src_address = data * 0x100;
-
-        mmu->mem[address] = data;
-    } else if (address == BANK) {
-        // disable boot rom
-        if (emu->mode == DMG && data == 0x01) {
-            memcpy(mmu->mem, mmu->cartridge, 0x100);
-        } else if (emu->mode == CGB && data == 0x11) {
-            memcpy(mmu->mem, mmu->cartridge, 0x100);
-            memcpy(&mmu->mem[0x200], &mmu->cartridge[0x200], sizeof(cgb_boot) - 0x200);
-        }
-        mmu->mem[address] = data;
-    } else if (address == HDMA5 && emu->mode == CGB) {
-        // writing to this register starts a VRAM DMA transfer
-
-        if (!CHECK_BIT(mmu->mem[HDMA5], 7) && mmu->hdma.type == HDMA && GET_BIT(data, 7))
-            eprintf("TODO cancel HDMA\n"); // TODO cancel HDMA at next HBLANK
-
-        mmu->hdma.type = GET_BIT(data, 7);
-        mmu->hdma.lock_cpu = mmu->hdma.type == GDMA || (mmu->hdma.type == HDMA && PPU_IS_MODE(emu, PPU_MODE_HBLANK));
-
-        // bit 7 of HDMA5 is 0 to show that there is an active HDMA/GDMA, bits 0-6 are the size of the DMA
-        mmu->mem[address] = data & 0x7F;
-
-        mmu->hdma.step = 31;
-        if (mmu->hdma.type == HDMA) {
-            mmu->hdma.hdma_ly = mmu->mem[LY] + 1; // start HDMA at next HBLANK
-            if (mmu->hdma.hdma_ly == GB_SCREEN_HEIGHT)
-                mmu->hdma.hdma_ly = 0;
-        }
-
-        mmu->hdma.src_address = ((mmu->mem[HDMA1] << 8) | mmu->mem[HDMA2]) & 0xFFF0;
-        mmu->hdma.dest_address = ((mmu->mem[HDMA3] << 8) | mmu->mem[HDMA4]) & 0x1FF0;
-
-        // if (mmu->hdma.type) { // HBLANK DMA (HDMA)
-        //     printf("HDMA size=%d, vram bank=%d, src=%x, dest=%x\n", (mmu->mem[address] + 1) * 0x10, mmu->mem[VBK] & 0x01, mmu->hdma.src_address, mmu->hdma.dest_address + VRAM);
-        // } else { // General purpose DMA (GDMA)
-        //     printf("GDMA size=%d, vram bank=%d, src=%x, dest=%x\n", (mmu->mem[address] + 1) * 0x10, mmu->mem[VBK] & 0x01, mmu->hdma.src_address, mmu->hdma.dest_address + VRAM);
-        // }
-    } else if (address == P1) {
-        // prevent writes to the lower nibble of the P1 register (joypad)
-        mmu->mem[address] = data & 0xF0;
-    } else if (address == SC) {
-        if (CHECK_BIT(mmu->mem[SC], 1) != CHECK_BIT(data, 1)) {
-            mmu->mem[address] = data & 0x83;
-            link_set_clock(emu);
-        } else {
-            mmu->mem[address] = data & 0x83;
+        case 0x00: emu->timer->tima_increase_div_bit = 9; break;
+        case 0x01: emu->timer->tima_increase_div_bit = 3; break;
+        case 0x02: emu->timer->tima_increase_div_bit = 5; break;
+        case 0x03: emu->timer->tima_increase_div_bit = 7; break;
         }
     } else if (address == NR10) {
         if (!IS_APU_ENABLED(emu))
@@ -928,6 +982,54 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
             mmu->mem[address] = data;
     } else if (address == STAT) {
         mmu->mem[address] = 0x80 | (data & 0x78) | (mmu->mem[address] & 0x07);
+    } else if (address == LY) {
+        // read only
+    } else if (address == LYC) {
+        // a write to LYC triggers an immediate LY=LYC comparison
+        mmu->mem[address] = data;
+        ppu_ly_lyc_compare(emu);
+    } else if (address == DMA) {
+        // writing to this register starts an OAM DMA transfer
+        mmu->mem[address] = data;
+        mmu->oam_dma.status = OAM_DMA_PENDING_START;
+    } else if (address == KEY1) {
+        mmu->mem[address] |= data & 0x01;
+    } else if (address == BANK) {
+        // disable boot rom
+        if (emu->mode == DMG && data == 0x01) {
+            memcpy(mmu->mem, mmu->cartridge, 0x100);
+        } else if (emu->mode == CGB && data == 0x11) {
+            memcpy(mmu->mem, mmu->cartridge, 0x100);
+            memcpy(&mmu->mem[0x200], &mmu->cartridge[0x200], sizeof(cgb_boot) - 0x200);
+        }
+        mmu->mem[address] = data;
+    } else if (address == HDMA5 && emu->mode == CGB) {
+        // writing to this register starts a VRAM DMA transfer
+
+        if (!CHECK_BIT(mmu->mem[HDMA5], 7) && mmu->hdma.type == HDMA && GET_BIT(data, 7))
+            eprintf("TODO cancel HDMA\n"); // TODO cancel HDMA at next HBLANK
+
+        mmu->hdma.type = GET_BIT(data, 7);
+        mmu->hdma.lock_cpu = mmu->hdma.type == GDMA || (mmu->hdma.type == HDMA && PPU_IS_MODE(emu, PPU_MODE_HBLANK));
+
+        // bit 7 of HDMA5 is 0 to show that there is an active HDMA/GDMA, bits 0-6 are the size of the DMA
+        mmu->mem[address] = data & 0x7F;
+
+        mmu->hdma.step = 31;
+        if (mmu->hdma.type == HDMA) {
+            mmu->hdma.hdma_ly = mmu->mem[LY] + 1; // start HDMA at next HBLANK
+            if (mmu->hdma.hdma_ly == GB_SCREEN_HEIGHT)
+                mmu->hdma.hdma_ly = 0;
+        }
+
+        mmu->hdma.src_address = ((mmu->mem[HDMA1] << 8) | mmu->mem[HDMA2]) & 0xFFF0;
+        mmu->hdma.dest_address = ((mmu->mem[HDMA3] << 8) | mmu->mem[HDMA4]) & 0x1FF0;
+
+        // if (mmu->hdma.type) { // HBLANK DMA (HDMA)
+        //     printf("HDMA size=%d, vram bank=%d, src=%x, dest=%x\n", (mmu->mem[address] + 1) * 0x10, mmu->mem[VBK] & 0x01, mmu->hdma.src_address, mmu->hdma.dest_address + VRAM);
+        // } else { // General purpose DMA (GDMA)
+        //     printf("GDMA size=%d, vram bank=%d, src=%x, dest=%x\n", (mmu->mem[address] + 1) * 0x10, mmu->mem[VBK] & 0x01, mmu->hdma.src_address, mmu->hdma.dest_address + VRAM);
+        // }
     } else if (address == BGPD && emu->mode == CGB) {
         if (!PPU_IS_MODE(emu, PPU_MODE_DRAWING)) {
             byte_t cram_address = mmu->mem[BGPI] & 0x3F;
@@ -979,7 +1081,7 @@ size_t mmu_serialized_length(emulator_t *emu) {
     size_t cram_len = 0;
     size_t oam_dma_len = 5;
     size_t hdma_len = 0;
-    size_t rtc_len = 13 + (2 * time_to_string_length());
+    size_t rtc_len = 17 + time_to_string_length();
     size_t mmu_other_len = 15;
     if (emu->mode == CGB) {
         wram_extra_len = sizeof(emu->mmu->wram_extra);
@@ -1028,7 +1130,7 @@ byte_t *mmu_serialize(emulator_t *emu, size_t *size) {
         offset += hdma_len;
     }
 
-    memcpy(&buf[offset], &emu->mmu->oam_dma.is_active, 1);
+    memcpy(&buf[offset], &emu->mmu->oam_dma.status, 1);
     memcpy(&buf[offset + 1], &emu->mmu->oam_dma.progress, 2);
     memcpy(&buf[offset + 3], &emu->mmu->oam_dma.src_address, 2);
     offset += 5;
@@ -1063,23 +1165,7 @@ byte_t *mmu_serialize(emulator_t *emu, size_t *size) {
     memcpy(&buf[offset + 10], &emu->mmu->rtc.enabled, 1);
     memcpy(&buf[offset + 11], &emu->mmu->rtc.reg, 1);
     memcpy(&buf[offset + 12], &emu->mmu->rtc.latch, 1);
-    offset += 13;
-
-    size_t len;
-    char *str = time_to_string(emu->mmu->rtc.value_in_seconds, &len);
-    memcpy(&buf[offset], str, len);
-    offset += len;
-    free(str);
-    str = time_to_string(emu->mmu->rtc.timestamp, &len);
-    memcpy(&buf[offset], str, len);
-    offset += len;
-    free(str);
-
-    // TODO remove this check
-    if (offset != *size) {
-        eprintf("offset != size (%zu != %zu)\n", offset, *size);
-        exit(42);
-    }
+    memcpy(&buf[offset + 13], &emu->mmu->rtc.rtc_cycles, 4);
 
     return buf;
 }
@@ -1119,7 +1205,7 @@ void mmu_unserialize(emulator_t *emu, byte_t *buf) {
         offset += hdma_len;
     }
 
-    memcpy(&emu->mmu->oam_dma.is_active, &buf[offset], 1);
+    memcpy(&emu->mmu->oam_dma.status, &buf[offset], 1);
     memcpy(&emu->mmu->oam_dma.progress, &buf[offset + 1], 2);
     memcpy(&emu->mmu->oam_dma.src_address, &buf[offset + 3], 2);
     offset += 5;
@@ -1173,8 +1259,5 @@ void mmu_unserialize(emulator_t *emu, byte_t *buf) {
     memcpy(&emu->mmu->rtc.enabled, &buf[offset + 10], 1);
     memcpy(&emu->mmu->rtc.reg, &buf[offset + 11], 1);
     memcpy(&emu->mmu->rtc.latch, &buf[offset + 12], 1);
-    offset += 13;
-
-    emu->mmu->rtc.value_in_seconds = string_to_time((char *) &buf[offset]);
-    emu->mmu->rtc.timestamp = string_to_time((char *) &buf[offset + time_to_string_length()]);
+    memcpy(&emu->mmu->rtc.rtc_cycles, &buf[offset + 13], 4);
 }

@@ -1,6 +1,7 @@
 #pragma once
 
-#include <time.h>
+#include <stdint.h>
+#include <stddef.h>
 
 typedef unsigned char byte_t;
 typedef signed char s_byte_t;
@@ -9,7 +10,6 @@ typedef signed short s_word_t;
 
 typedef struct emulator_t emulator_t;
 
-// TODO? LCD off special bright white color
 typedef enum {
     DMG_WHITE,
     DMG_LIGHT_GRAY,
@@ -117,9 +117,7 @@ typedef struct {
     byte_t enabled;
     byte_t reg; // rtc register
     byte_t latch;
-
-    time_t value_in_seconds; // current rtc time in seconds
-    time_t timestamp; // real unix time at the moment the rtc was clocked
+    uint32_t rtc_cycles;
 } rtc_t;
 
 typedef struct {
@@ -143,7 +141,7 @@ typedef struct {
     } hdma;
 
     struct {
-        byte_t is_active;
+        byte_t status;
         word_t progress;
         word_t src_address;
     } oam_dma;
@@ -246,8 +244,10 @@ typedef struct {
 } apu_t;
 
 typedef struct {
-    word_t max_tima_cycles;
-    word_t tima_counter;
+    byte_t tima_increase_div_bit; // bit of DIV that causes an increase of TIMA when set to 1 and TAC timer is enabled
+    byte_t falling_edge_detector_delay;
+    s_word_t tima_loading_value;
+    s_word_t old_tma; // holds the value of the old tma for one cpu step if it has been overwritten, -1 otherwise
 } gbtimer_t;
 
 typedef struct {

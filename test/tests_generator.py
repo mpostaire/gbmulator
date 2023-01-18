@@ -110,7 +110,7 @@ def blargg_reference_image_getter(mode, full_rom_path):
     rom_name = os.path.basename(full_rom_path)
     rom_dir = os.path.dirname(full_rom_path)
     full_rom_dir = os.path.dirname(full_rom_path)
-    image_glob = f'{os.path.splitext(rom_name)[0]}*{"dmg" if mode == "DMG" else "cgb"}*.png'
+    image_glob = f'{os.path.splitext(rom_name)[0]}*{mode.lower()}*.png'
     image_glob = os.path.join(rom_dir, image_glob)
     return glob.glob(image_glob)
 
@@ -147,14 +147,14 @@ def mooneye_screenshot_test_generator(mode, rom_path, reference_image_path):
 
 def mooneye_internal_state_test_generator(rom_path):
     ret = []
-    if "madness" in rom_path:
+    if "madness" in rom_path or "utils" in rom_path:
         return ret
     rom_name = os.path.basename(rom_path)
-    if re.match(".*(?:-S|-A|-dmg0|-mgb|-sgb|-cgb0)\.gb$", rom_name):
+    if re.match(".*(?:-S|-A|-dmg0|-mgb|-sgb|-sgb2|-cgb0)\.gb$", rom_name):
         return ret
     if re.match(".*(?:-C|-cgb.*C.*|-cgb)\.gb$", rom_name):
         ret.append(f'{{"{rom_path}", NULL, NULL, CGB, 0, 0x40, NULL}},\n')
-    if re.match(".*(?:-G|-dmg.*C.*)\.gb$", rom_name):
+    if re.match(".*(?:-G.*|-dmg.*C.*)\.gb$", rom_name):
         ret.append(f'{{"{rom_path}", NULL, NULL, DMG, 0, 0x40, NULL}},\n')
     if not ret:
         return [f'{{"{rom_path}", NULL, NULL, {mode}, 0, 0x40, NULL}},\n' for mode in ["DMG", "CGB"]]
@@ -184,6 +184,9 @@ def same_internal_state_test_generator(rom_path):
     if "same-suite/sgb/" in rom_path or "apu/channel_1" in rom_path or "apu/channel_2" in rom_path or "apu/channel_4" in rom_path:
         return ret
     if "same-suite/apu" in rom_path:
+        rom_name = os.path.basename(rom_path)
+        if "-cgb0" in rom_name or "-cgbB" in rom_name:
+            return ret
         if "apu/div_write_trigger" in rom_path or "apu/div_write_trigger_10" in rom_path:
             ret.append(f'{{"{rom_path}", NULL, NULL, DMG, 0, 0x40, NULL}},\n')
         ret.append(f'{{"{rom_path}", NULL, NULL, CGB, 0, 0x40, NULL}},\n')
@@ -202,6 +205,9 @@ def main():
         return
 
     tests_root = sys.argv[1]
+
+    # the aim is to implement DMG-CPU-C and CGB-CPU-C (because they have the most test roms compatible)
+    # the generated tests filter out all the test roms that are not made for these models
 
     # TODO gambatte (need a different test implementation to work)
     with open(os.path.join(os.path.dirname(__file__), "tests.txt"), "w") as f:

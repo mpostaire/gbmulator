@@ -48,15 +48,26 @@ const char *mbc_names[] = {
     STRINGIFY(HuC1)
 };
 
-void emulator_step(emulator_t *emu) {
-    // stop execution of the program while a VBLANK DMA is active
-    if (!emu->mmu->hdma.lock_cpu)
-        cpu_step(emu);
-    mmu_step(emu);
-    timer_step(emu);
-    link_step(emu);
+int emulator_step(emulator_t *emu) {
+    byte_t double_speed = IS_DOUBLE_SPEED(emu);
+    for (int i = double_speed + 1; i; i--) {
+        // stop execution of the program while a VBLANK DMA is active
+        if (!emu->mmu->hdma.lock_cpu)
+            cpu_step(emu);
+        mmu_step(emu); // TODO only OAM DMA is double sped (break down mmu_step into mmu_oam_dma_step and mmu_vram_dma_step)
+        timer_step(emu);
+        link_step(emu);
+    }
+
+    if (emu->mmu->has_rtc)
+        mmu_rtc_step(emu);
+
+    // TODO during the time the cpu is blocked after a STOP opcode triggering a speed switch, the ppu and apu
+    //      behave in a weird way: https://gbdev.io/pandocs/CGB_Registers.html?highlight=key1#ff4d--key1-cgb-mode-only-prepare-speed-switch
     ppu_step(emu);
     apu_step(emu);
+
+    return double_speed ? 8 : 4;
 }
 
 emulator_t *emulator_init(const byte_t *rom_data, size_t rom_size, emulator_options_t *opts) {
@@ -87,7 +98,6 @@ void emulator_quit(emulator_t *emu) {
     joypad_quit(emu);
     free(emu);
 }
-
 
 void emulator_reset(emulator_t *emu, emulator_mode_t mode) {
     size_t rom_size = emu->mmu->cartridge_size;
@@ -171,17 +181,16 @@ byte_t *emulator_get_save(emulator_t *emu, size_t *save_length) {
         return NULL;
     }
 
-    size_t rtc_value_len = 0;
     size_t rtc_timestamp_len = 0;
-    char *rtc_value_str = NULL;
-    char *rtc_timestamp_str = NULL;
+    size_t rtc_len = 0;
+    char *rtc_timestamp = NULL;
     if (emu->mmu->has_rtc) {
-        rtc_value_str = time_to_string(emu->mmu->rtc.value_in_seconds, &rtc_value_len);
-        rtc_timestamp_str = time_to_string(emu->mmu->rtc.timestamp, &rtc_timestamp_len);
+        rtc_timestamp = time_to_string(time(NULL), &rtc_timestamp_len);
+        rtc_len = 40 + rtc_timestamp_len;
     }
 
     size_t eram_len = emu->mmu->has_battery ? 0x2000 * emu->mmu->eram_banks : 0;
-    size_t total_len = eram_len + rtc_value_len + rtc_timestamp_len;
+    size_t total_len = eram_len + rtc_len;
     if (save_length)
         *save_length = total_len;
 
@@ -193,15 +202,21 @@ byte_t *emulator_get_save(emulator_t *emu, size_t *save_length) {
     if (eram_len > 0)
         memcpy(save_data, emu->mmu->eram, eram_len);
 
-    if (rtc_value_len + rtc_timestamp_len > 0) {
-        memcpy(&save_data[eram_len], rtc_value_str, rtc_value_len);
-        memcpy(&save_data[eram_len + rtc_value_len], rtc_timestamp_str, rtc_timestamp_len);
-    }
+    if (rtc_timestamp) {
+        memcpy(&save_data[eram_len], &emu->mmu->rtc.s, 4);
+        memcpy(&save_data[eram_len + 4], &emu->mmu->rtc.m, 4);
+        memcpy(&save_data[eram_len + 8], &emu->mmu->rtc.h, 4);
+        memcpy(&save_data[eram_len + 12], &emu->mmu->rtc.dl, 4);
+        memcpy(&save_data[eram_len + 16], &emu->mmu->rtc.dh, 4);
+        memcpy(&save_data[eram_len + 20], &emu->mmu->rtc.latched_s, 4);
+        memcpy(&save_data[eram_len + 24], &emu->mmu->rtc.latched_m, 4);
+        memcpy(&save_data[eram_len + 28], &emu->mmu->rtc.latched_h, 4);
+        memcpy(&save_data[eram_len + 32], &emu->mmu->rtc.latched_dl, 4);
+        memcpy(&save_data[eram_len + 36], &emu->mmu->rtc.latched_dh, 4);
 
-    if (rtc_value_str)
-        free(rtc_value_str);
-    if (rtc_timestamp_str)
-        free(rtc_timestamp_str);
+        memcpy(&save_data[eram_len + 40], rtc_timestamp, rtc_timestamp_len);
+        free(rtc_timestamp);
+    }
 
     return save_data;
 }
@@ -213,23 +228,59 @@ int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
 
     size_t eram_len = 0x2000 * emu->mmu->eram_banks;
 
-    size_t rtc_value_len = 0;
     size_t rtc_timestamp_len = 0;
+    size_t rtc_len = 0;
     if (emu->mmu->has_rtc) {
-        rtc_value_len = strlen((char *) &save_data[eram_len]) + 1;
-        rtc_timestamp_len = strlen((char *) &save_data[eram_len + rtc_value_len]) + 1;
+        rtc_timestamp_len = strlen((char *) &save_data[eram_len + 40]) + 1;
+        rtc_len = 40 + rtc_timestamp_len;
     }
 
-    size_t total_len = eram_len + rtc_value_len + rtc_timestamp_len;
+    size_t total_len = eram_len + rtc_len;
     if (total_len != save_length || total_len == 0)
         return 0;
 
     if (eram_len > 0)
         memcpy(emu->mmu->eram, save_data, eram_len);
 
-    if (rtc_value_len + rtc_timestamp_len > 0) {
-        emu->mmu->rtc.value_in_seconds = string_to_time((char *) &save_data[eram_len]);
-        emu->mmu->rtc.timestamp = string_to_time((char *) &save_data[eram_len + rtc_value_len]);
+    if (rtc_len > 0) {
+        // get saved rtc registers and timestamp
+        byte_t s = save_data[eram_len];
+        byte_t m = save_data[eram_len + 4];
+        byte_t h = save_data[eram_len + 8];
+        byte_t dl = save_data[eram_len + 12];
+        byte_t dh = save_data[eram_len + 16];
+        emu->mmu->rtc.latched_s = save_data[eram_len + 20];
+        emu->mmu->rtc.latched_m = save_data[eram_len + 24];
+        emu->mmu->rtc.latched_h = save_data[eram_len + 28];
+        emu->mmu->rtc.latched_dl = save_data[eram_len + 32];
+        emu->mmu->rtc.latched_dh = save_data[eram_len + 36];
+
+        time_t rtc_timestamp = string_to_time((char *) &save_data[eram_len + 40]);
+
+        // add elapsed time
+        time_t rtc_registers_time = s + m * 60 + h * 3600 + ((dh << 8) | dl) * 86400;
+        rtc_registers_time += time(NULL) - rtc_timestamp;
+
+        // convert elapsed time back into rtc registers
+        word_t d = rtc_registers_time / 86400;
+        rtc_registers_time %= 86400;
+
+        // day overflow
+        if (d >= 0x0200) {
+            SET_BIT(emu->mmu->rtc.dh, 7);
+            d %= 0x0200;
+        }
+
+        emu->mmu->rtc.dh |= (d & 0x100) >> 8;
+        emu->mmu->rtc.dl = d & 0xFF;
+
+        emu->mmu->rtc.h = rtc_registers_time / 3600;
+        rtc_registers_time %= 3600;
+
+        emu->mmu->rtc.m = rtc_registers_time / 60;
+        rtc_registers_time %= 60;
+
+        emu->mmu->rtc.s = rtc_registers_time;
     }
 
     return 1;

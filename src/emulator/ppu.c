@@ -82,11 +82,6 @@ static void draw_bg_win(emulator_t *emu) {
     byte_t win_in_scanline = 0;
 
     for (int x = 0; x < GB_SCREEN_WIDTH; x++) {
-        // TODO this condition below may be not the cause but dmg-acid2 test fails at the exclamation marks
-        //      it's displayed only for one frame and after the bg/win enable bit (LCDC.0) is 0 and it doesn't show anymore
-        //      it's as if the LCDC.0 reset happens 8 scanlines too soon (1 tile height) as it should be 1 at scanline 0 and 0 at scanline 8
-        //      see https://i.imgur.com/x2R66WQ.png for an image showing the lines at which the LYC=LY STAT interrupt should fire
-        //      the problem doesn't come from sprite limit over 10 because this limit is correctly implemented
         // background and window disabled, draw white pixel
         if (!CHECK_BIT(mmu->mem[LCDC], 0)) {
             SET_PIXEL_DMG(ppu, x, y, get_color_dmg(mmu, DMG_WHITE, BGP), emu->ppu_color_palette);
@@ -263,11 +258,6 @@ static void draw_bg_win_cgb(emulator_t *emu) {
     byte_t win_in_scanline = 0;
 
     for (int x = 0; x < GB_SCREEN_WIDTH; x++) {
-        // TODO this condition below may be not the cause but dmg-acid2 test fails at the exclamation marks
-        //      it's displayed only for one frame and after the bg/win enable bit (LCDC.0) is 0 and it doesn't show anymore
-        //      it's as if the LCDC.0 reset happens 8 scanlines too soon (1 tile height) as it should be 1 at scanline 0 and 0 at scanline 8
-        //      see https://i.imgur.com/x2R66WQ.png for an image showing the lines at which the LYC=LY STAT interrupt should fire
-        //      the problem doesn't come from sprite limit over 10 because this limit is correctly implemented
         // if in cgb compatibility mode and background and window disabled, draw white pixel
         if (((mmu->mem[KEY0] >> 2) & 0x03) == 1 && !CHECK_BIT(mmu->mem[LCDC], 0)) {
             byte_t r, g, b;
@@ -541,7 +531,7 @@ static inline void oam_scan(emulator_t *emu) {
 
 /**
  * This does not implement the pixel FIFO but draws each scanline instantly when starting PPU_HBLANK (mode 0).
- * TODO if STAT interrupts are a problem, implement these corner cases: http://gameboy.mongenel.com/dmg/istat98.txt
+ * -- TODO if STAT interrupts are a problem, implement these corner cases: http://gameboy.mongenel.com/dmg/istat98.txt
  */
 void ppu_step(emulator_t *emu) {
     ppu_t *ppu = emu->ppu;
@@ -549,7 +539,6 @@ void ppu_step(emulator_t *emu) {
 
     if (!CHECK_BIT(mmu->mem[LCDC], 7)) { // is LCD disabled?
         // TODO not sure of the handling of LCD disabled
-        // TODO LCD disabled in DMG mode should fill screen with a color brighter than DMG_WHITE
 
         if (!ppu->is_lcd_turning_on) {
             // blank screen
