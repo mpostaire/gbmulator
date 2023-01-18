@@ -54,18 +54,18 @@ gbmulator path/to/rom.gb
 
 The following table show the default keybindings (they can be changed in GBmulator's menus except those marked with a '*').
 
-| Action                | Key                                               |
-| --------------------- | ------------------------------------------------- |
-| UP                    | <kbd>Up</kbd>                                     |
-| DOWN                  | <kbd>Down</kbd>                                   |
-| LEFT                  | <kbd>Left</kbd>                                   |
-| RIGHT                 | <kbd>Right</kbd>                                  |
-| A                     | <kbd>Numpad 0</kbd>                               |
-| B                     | <kbd>Numpad period</kbd>                          |
-| START                 | <kbd>Numpad 1</kbd>                               |
-| SELECT                | <kbd>Numpad 2</kbd>                               |
-| *Load savesate 1->8   | <kbd>F1</kbd> -> <kbd>F8</kbd>                    |
-| *Create savesate 1->8 | <kbd>Shift</kbd> + <kbd>F1</kbd> -> <kbd>F8</kbd> |
+| Action                 | Key                                              |
+| ---------------------- | ------------------------------------------------ |
+| UP                     | <kbd>Up</kbd>                                    |
+| DOWN                   | <kbd>Down</kbd>                                  |
+| LEFT                   | <kbd>Left</kbd>                                  |
+| RIGHT                  | <kbd>Right</kbd>                                 |
+| A                      | <kbd>Numpad 0</kbd>                              |
+| B                      | <kbd>Numpad period</kbd>                         |
+| START                  | <kbd>Numpad 1</kbd>                              |
+| SELECT                 | <kbd>Numpad 2</kbd>                              |
+| *Load savesate 1 → 8   | <kbd>F1</kbd> → <kbd>F8</kbd>                    |
+| *Create savesate 1 → 8 | <kbd>Shift</kbd> + <kbd>F1</kbd> → <kbd>F8</kbd> |
 
 There is also support for gamepad controllers but the buttons aren't configurable.
 
