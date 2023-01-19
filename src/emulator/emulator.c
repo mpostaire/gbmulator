@@ -186,7 +186,7 @@ byte_t *emulator_get_save(emulator_t *emu, size_t *save_length) {
     char *rtc_timestamp = NULL;
     if (emu->mmu->has_rtc) {
         rtc_timestamp = time_to_string(time(NULL), &rtc_timestamp_len);
-        rtc_len = 40 + rtc_timestamp_len;
+        rtc_len = 10 + rtc_timestamp_len;
     }
 
     size_t eram_len = emu->mmu->has_battery ? 0x2000 * emu->mmu->eram_banks : 0;
@@ -203,18 +203,18 @@ byte_t *emulator_get_save(emulator_t *emu, size_t *save_length) {
         memcpy(save_data, emu->mmu->eram, eram_len);
 
     if (rtc_timestamp) {
-        memcpy(&save_data[eram_len], &emu->mmu->rtc.s, 4);
-        memcpy(&save_data[eram_len + 4], &emu->mmu->rtc.m, 4);
-        memcpy(&save_data[eram_len + 8], &emu->mmu->rtc.h, 4);
-        memcpy(&save_data[eram_len + 12], &emu->mmu->rtc.dl, 4);
-        memcpy(&save_data[eram_len + 16], &emu->mmu->rtc.dh, 4);
-        memcpy(&save_data[eram_len + 20], &emu->mmu->rtc.latched_s, 4);
-        memcpy(&save_data[eram_len + 24], &emu->mmu->rtc.latched_m, 4);
-        memcpy(&save_data[eram_len + 28], &emu->mmu->rtc.latched_h, 4);
-        memcpy(&save_data[eram_len + 32], &emu->mmu->rtc.latched_dl, 4);
-        memcpy(&save_data[eram_len + 36], &emu->mmu->rtc.latched_dh, 4);
+        memcpy(&save_data[eram_len], &emu->mmu->rtc.s, 1);
+        memcpy(&save_data[eram_len + 1], &emu->mmu->rtc.m, 1);
+        memcpy(&save_data[eram_len + 2], &emu->mmu->rtc.h, 1);
+        memcpy(&save_data[eram_len + 3], &emu->mmu->rtc.dl, 1);
+        memcpy(&save_data[eram_len + 4], &emu->mmu->rtc.dh, 1);
+        memcpy(&save_data[eram_len + 5], &emu->mmu->rtc.latched_s, 1);
+        memcpy(&save_data[eram_len + 6], &emu->mmu->rtc.latched_m, 1);
+        memcpy(&save_data[eram_len + 7], &emu->mmu->rtc.latched_h, 1);
+        memcpy(&save_data[eram_len + 8], &emu->mmu->rtc.latched_dl, 1);
+        memcpy(&save_data[eram_len + 9], &emu->mmu->rtc.latched_dh, 1);
 
-        memcpy(&save_data[eram_len + 40], rtc_timestamp, rtc_timestamp_len);
+        memcpy(&save_data[eram_len + 10], rtc_timestamp, rtc_timestamp_len);
         free(rtc_timestamp);
     }
 
@@ -231,8 +231,8 @@ int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
     size_t rtc_timestamp_len = 0;
     size_t rtc_len = 0;
     if (emu->mmu->has_rtc) {
-        rtc_timestamp_len = strlen((char *) &save_data[eram_len + 40]) + 1;
-        rtc_len = 40 + rtc_timestamp_len;
+        rtc_timestamp_len = strlen((char *) &save_data[eram_len + 10]) + 1;
+        rtc_len = 10 + rtc_timestamp_len;
     }
 
     size_t total_len = eram_len + rtc_len;
@@ -245,17 +245,17 @@ int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
     if (rtc_len > 0) {
         // get saved rtc registers and timestamp
         byte_t s = save_data[eram_len];
-        byte_t m = save_data[eram_len + 4];
-        byte_t h = save_data[eram_len + 8];
-        byte_t dl = save_data[eram_len + 12];
-        byte_t dh = save_data[eram_len + 16];
-        emu->mmu->rtc.latched_s = save_data[eram_len + 20];
-        emu->mmu->rtc.latched_m = save_data[eram_len + 24];
-        emu->mmu->rtc.latched_h = save_data[eram_len + 28];
-        emu->mmu->rtc.latched_dl = save_data[eram_len + 32];
-        emu->mmu->rtc.latched_dh = save_data[eram_len + 36];
+        byte_t m = save_data[eram_len + 1];
+        byte_t h = save_data[eram_len + 2];
+        byte_t dl = save_data[eram_len + 3];
+        byte_t dh = save_data[eram_len + 4];
+        emu->mmu->rtc.latched_s = save_data[eram_len + 5];
+        emu->mmu->rtc.latched_m = save_data[eram_len + 6];
+        emu->mmu->rtc.latched_h = save_data[eram_len + 7];
+        emu->mmu->rtc.latched_dl = save_data[eram_len + 8];
+        emu->mmu->rtc.latched_dh = save_data[eram_len + 9];
 
-        time_t rtc_timestamp = string_to_time((char *) &save_data[eram_len + 40]);
+        time_t rtc_timestamp = string_to_time((char *) &save_data[eram_len + 10]);
 
         // add elapsed time
         time_t rtc_registers_time = s + m * 60 + h * 3600 + ((dh << 8) | dl) * 86400;
