@@ -74,7 +74,7 @@ There is also support for gamepad controllers but the buttons aren't configurabl
 - GameBoy and GameBoy Color emulator
 - Scanline ppu rendering
 - Audio
-- Wireless link cable
+- Wireless link cable (currently only for android and desktop_sdl builds)
 - Support for MBC1, MBC1M, MBC2, MBC3, MBC30 and MBC5 cartridges
 - Battery saves and savestates
 - Supports keyboard and gamepad controllers
