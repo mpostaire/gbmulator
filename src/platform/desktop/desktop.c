@@ -132,6 +132,7 @@ int gamepad_state = GAMEPAD_DISABLED;
 AdwApplication *app;
 GtkWidget *main_window, *preferences_window, *window_title, *toast_overlay, *gl_area, *keybind_dialog, *bind_value, *mode_setter;
 GtkWidget *joypad_name, *restart_dialog, *link_dialog, *status, *link_mode_setter_server, *link_host, *link_host_revealer;
+GtkFileDialog *file_dialog;
 guint loop_source;
 
 gboolean is_paused = TRUE, link_is_server = TRUE;
@@ -749,37 +750,43 @@ static void show_about(GSimpleAction *action, GVariant *parameter, gpointer app)
                           NULL);
 }
 
-static void on_open_response(GtkDialog *dialog, int response) {
-    if (response == GTK_RESPONSE_ACCEPT) {
-        GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
-        g_autoptr(GFile) file = gtk_file_chooser_get_file(chooser);
-        if (load_cartridge(g_file_get_path(file))) {
-            gtk_widget_set_visible(status, FALSE);
-            gtk_widget_set_visible(gl_area, TRUE);
-            gtk_widget_grab_focus(gl_area);
-        } else {
-            show_toast("Invalid ROM");
-        }
+void file_dialog_callback(GObject *dialog, GAsyncResult *res, gpointer user_data) {
+    g_autoptr(GFile) file = gtk_file_dialog_open_finish(GTK_FILE_DIALOG(dialog), res, NULL);
+    if (!file)
+        return;
+
+    char *file_path = g_file_get_path(file);
+    if (load_cartridge(file_path)) {
+        gtk_widget_set_visible(status, FALSE);
+        gtk_widget_set_visible(gl_area, TRUE);
+        gtk_widget_grab_focus(gl_area);
+    } else {
+        show_toast("Invalid ROM");
     }
 
-    gtk_window_destroy(GTK_WINDOW(dialog));
+    free(file_path);
 }
 
 static void open_btn_clicked(AdwActionRow *self, gpointer user_data) {
-    GtkWidget *dialog = gtk_file_chooser_dialog_new("Open File",
-                                                    GTK_WINDOW(main_window),
-                                                    GTK_FILE_CHOOSER_ACTION_OPEN,
-                                                    "Cancel",
-                                                    GTK_RESPONSE_CANCEL,
-                                                    "Open",
-                                                    GTK_RESPONSE_ACCEPT,
-                                                    NULL);
+    if (!file_dialog) {
+        file_dialog = gtk_file_dialog_new();
+        gtk_file_dialog_set_title(file_dialog, "Pick a ROM file");
 
-    gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
-    gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(main_window));
-    gtk_widget_show(dialog);
+        g_autoptr(GtkFileFilter) filter = gtk_file_filter_new();
+        // add basic extension pattern in case the mime type is not available
+        gtk_file_filter_add_pattern(filter, "*.gb");
+        gtk_file_filter_add_pattern(filter, "*.gbc");
+        gtk_file_filter_add_mime_type(filter, "application/x-gameboy-rom");
+        gtk_file_filter_add_mime_type(filter, "application/x-gameboy-color-rom");
+        gtk_file_filter_set_name(filter, "GameBoy Color ROM");
 
-    g_signal_connect(dialog, "response", G_CALLBACK(on_open_response), NULL);
+        g_autoptr(GListStore) list = g_list_store_new(GTK_TYPE_FILE_FILTER);
+        g_list_store_append(list, filter);
+
+        gtk_file_dialog_set_filters(file_dialog, G_LIST_MODEL(list));
+    }
+
+    gtk_file_dialog_open(file_dialog, GTK_WINDOW(main_window), NULL, file_dialog_callback, NULL);
 }
 
 static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guint keycode, GdkModifierType state, gpointer user_data) {
