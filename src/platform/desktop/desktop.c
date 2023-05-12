@@ -240,6 +240,7 @@ static void toggle_loop(void) {
         stop_loop();
 }
 
+// TODO compiled under Xorg and ran under wayland ==> crash
 static void set_window_size(int width, int height) {
     GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(main_window));
     GdkDisplay *display = gtk_widget_get_display(main_window);
