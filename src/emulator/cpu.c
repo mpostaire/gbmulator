@@ -49,8 +49,7 @@ typedef enum {
     }
 
 // takes 4 cycles
-#define CLOCK(...) \
-    _CLOCK((0x0400 + __COUNTER__), __VA_ARGS__)
+#define CLOCK(...) _CLOCK((0x0400 + __COUNTER__), __VA_ARGS__)
 
 typedef struct {
     char *name;
@@ -598,6 +597,15 @@ const opcode_t extended_instructions[256] = {
     {                                                                               \
         CLOCK(*(reg_ptr) = mmu_read(emu, cpu->registers.sp++));                     \
         CLOCK(*(reg_ptr) |= mmu_read(emu, cpu->registers.sp++) << 8; __VA_ARGS__;); \
+    }
+
+// takes 12 or 24 cycles
+#define CALL_CC(condition)                                    \
+    {                                                         \
+        GET_OPERAND_16();                                     \
+        CLOCK(if ((condition)) END_OPCODE;);                  \
+        PUSH(cpu->registers.pc);                              \
+        CLOCK(cpu->registers.pc = cpu->operand; END_OPCODE;); \
     }
 
 // takes 8 or 20 cycles
@@ -2035,13 +2043,7 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(cpu->registers.pc = cpu->operand);
         CLOCK(END_OPCODE);
     case 0xC4: // CALL NZ, nn (12 or 24 cycles)
-        GET_OPERAND_16();
-        CLOCK(
-            if (CHECK_FLAG(cpu, FLAG_Z))
-                END_OPCODE;
-        );
-        PUSH(cpu->registers.pc, cpu->registers.pc = cpu->operand);
-        CLOCK(END_OPCODE);
+        CALL_CC(CHECK_FLAG(cpu, FLAG_Z));
     case 0xC5: // PUSH BC (16 cycles)
         CLOCK();
         PUSH(cpu->registers.bc);
@@ -2069,16 +2071,7 @@ static void exec_opcode(emulator_t *emu) {
     case 0xCB: // CB nn (prefix instruction) (4 cycles)
         GET_OPERAND_8(START_OPCODE_CB);
     case 0xCC: // CALL Z, nn (12 or 24 cycles)
-        GET_OPERAND_16();
-        CLOCK(
-            if (!CHECK_FLAG(cpu, FLAG_Z))
-                END_OPCODE;
-        );
-        PUSH(cpu->registers.pc);
-        CLOCK(
-            cpu->registers.pc = cpu->operand;
-            END_OPCODE;
-        );
+        CALL_CC(!CHECK_FLAG(cpu, FLAG_Z));
     case 0xCD: // CALL nn (24 cycles)
         GET_OPERAND_16();
         CLOCK();
@@ -2104,16 +2097,7 @@ static void exec_opcode(emulator_t *emu) {
         );
         CLOCK(cpu->registers.pc = cpu->operand; END_OPCODE;);
     case 0xD4: // CALL NC, nn (12 or 24 cycles)
-        GET_OPERAND_16();
-        CLOCK(
-            if (CHECK_FLAG(cpu, FLAG_C))
-                END_OPCODE;
-        );
-        PUSH(cpu->registers.pc);
-        CLOCK(
-            cpu->registers.pc = cpu->operand;
-            END_OPCODE;
-        );
+        CALL_CC(CHECK_FLAG(cpu, FLAG_C));
     case 0xD5: // PUSH DE (16 cycles)
         CLOCK();
         PUSH(cpu->registers.de);
@@ -2139,16 +2123,7 @@ static void exec_opcode(emulator_t *emu) {
         );
         CLOCK(cpu->registers.pc = cpu->operand; END_OPCODE;);
     case 0xDC: // CALL C, nn (12 or 24 cycles)
-        GET_OPERAND_16();
-        CLOCK(
-            if (!CHECK_FLAG(cpu, FLAG_C))
-                END_OPCODE;
-        );
-        PUSH(cpu->registers.pc);
-        CLOCK(
-            cpu->registers.pc = cpu->operand;
-            END_OPCODE;
-        );
+        CALL_CC(!CHECK_FLAG(cpu, FLAG_C));
     case 0xDE: // SBC A, n (8 cycles)
         GET_OPERAND_8();
         CLOCK(sbc(cpu, cpu->operand); END_OPCODE;);
