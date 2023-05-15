@@ -141,8 +141,9 @@ typedef struct {
     } hdma;
 
     struct {
-        byte_t status;
-        word_t progress;
+        byte_t starting_statuses[2]; // array of statuses of the initialization of the oam dma (this is an array to allow multiple initializations at the same time; the last will eventually overwrite the previous oam dma)
+        byte_t starting_count; // holds the number of oam dma initializations
+        s_word_t progress; // < 0 if oam dma not running, else [0, 159)
         word_t src_address;
     } oam_dma;
 
