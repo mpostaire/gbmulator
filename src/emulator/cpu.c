@@ -600,6 +600,18 @@ const opcode_t extended_instructions[256] = {
         CLOCK(*(reg_ptr) |= mmu_read(emu, cpu->registers.sp++) << 8; __VA_ARGS__;); \
     }
 
+// takes 8 or 20 cycles
+#define RET_CC(condition)                                                    \
+    { /* can't use the POP macro here as the timings are a little tricky */  \
+        CLOCK();                                                             \
+        CLOCK(                                                               \
+            if ((condition)) END_OPCODE;                                     \
+            else cpu->registers.pc = mmu_read(emu, cpu->registers.sp++););   \
+        CLOCK(cpu->registers.pc |= mmu_read(emu, cpu->registers.sp++) << 8); \
+        CLOCK();                                                             \
+        CLOCK(END_OPCODE);                                                   \
+    }
+
 static inline void and(cpu_t *cpu, byte_t reg) {
     cpu->registers.a &= reg;
     cpu->registers.a ? RESET_FLAG(cpu, FLAG_Z) : SET_FLAG(cpu, FLAG_Z);
@@ -2007,13 +2019,7 @@ static void exec_opcode(emulator_t *emu) {
     case 0xBF: // CP A (4 cycles)
         CLOCK(cp(cpu, cpu->registers.a); END_OPCODE;);
     case 0xC0: // RET NZ (8 or 20 cycles)
-        CLOCK();
-        CLOCK(
-            if (CHECK_FLAG(cpu, FLAG_Z))
-                END_OPCODE;
-        );
-        POP(&cpu->registers.pc);
-        CLOCK(END_OPCODE);
+        RET_CC(CHECK_FLAG(cpu, FLAG_Z));
     case 0xC1: // POP BC (12 cycles)
         POP(&cpu->registers.bc);
         CLOCK(END_OPCODE);
@@ -2048,13 +2054,7 @@ static void exec_opcode(emulator_t *emu) {
         PUSH(cpu->registers.pc);
         CLOCK(cpu->registers.pc = 0x0000; END_OPCODE;);
     case 0xC8: // RET Z (8 or 20 cycles)
-        CLOCK();
-        CLOCK(
-            if (!CHECK_FLAG(cpu, FLAG_Z))
-                END_OPCODE;
-        );
-        POP(&cpu->registers.pc);
-        CLOCK(END_OPCODE);
+        RET_CC(!CHECK_FLAG(cpu, FLAG_Z))
     case 0xC9: // RET (16 cycles)
         POP(&cpu->registers.pc);
         CLOCK();
@@ -2092,13 +2092,7 @@ static void exec_opcode(emulator_t *emu) {
         PUSH(cpu->registers.pc);
         CLOCK(cpu->registers.pc = 0x0008; END_OPCODE;);
     case 0xD0: // RET NC (8 or 20 cycles)
-        CLOCK();
-        CLOCK(
-            if (CHECK_FLAG(cpu, FLAG_C))
-                END_OPCODE;
-        );
-        POP(&cpu->registers.pc);
-        CLOCK(END_OPCODE);
+        RET_CC(CHECK_FLAG(cpu, FLAG_C))
     case 0xD1: // POP DE (12 cycles)
         POP(&cpu->registers.de);
         CLOCK(END_OPCODE);
@@ -2132,17 +2126,11 @@ static void exec_opcode(emulator_t *emu) {
         PUSH(cpu->registers.pc);
         CLOCK(cpu->registers.pc = 0x0010; END_OPCODE;);
     case 0xD8: // RET C (8 or 20 cycles)
-        CLOCK();
-        CLOCK(
-            if (!CHECK_FLAG(cpu, FLAG_C))
-                END_OPCODE;
-        );
-        POP(&cpu->registers.pc);
-        CLOCK(END_OPCODE);
+        RET_CC(!CHECK_FLAG(cpu, FLAG_C));
     case 0xD9: // RETI (16 cycles)
-        CLOCK();
         POP(&cpu->registers.pc);
-        CLOCK(cpu->ime = IME_ENABLED; END_OPCODE;);
+        CLOCK(cpu->ime = IME_ENABLED);
+        CLOCK(END_OPCODE);
     case 0xDA: // JP C, nn (12 or 16 cycles)
         GET_OPERAND_16();
         CLOCK(
