@@ -49,8 +49,7 @@ typedef enum {
     }
 
 // takes 4 cycles
-#define CLOCK(...) \
-    _CLOCK((0x0400 + __COUNTER__), __VA_ARGS__)
+#define CLOCK(...) _CLOCK((0x0400 + __COUNTER__), __VA_ARGS__)
 
 typedef struct {
     char *name;
@@ -598,6 +597,27 @@ const opcode_t extended_instructions[256] = {
     {                                                                               \
         CLOCK(*(reg_ptr) = mmu_read(emu, cpu->registers.sp++));                     \
         CLOCK(*(reg_ptr) |= mmu_read(emu, cpu->registers.sp++) << 8; __VA_ARGS__;); \
+    }
+
+// takes 12 or 24 cycles
+#define CALL_CC(condition)                                    \
+    {                                                         \
+        GET_OPERAND_16();                                     \
+        CLOCK(if ((condition)) END_OPCODE;);                  \
+        PUSH(cpu->registers.pc);                              \
+        CLOCK(cpu->registers.pc = cpu->operand; END_OPCODE;); \
+    }
+
+// takes 8 or 20 cycles
+#define RET_CC(condition)                                                    \
+    { /* can't use the POP macro here as the timings are a little tricky */  \
+        CLOCK();                                                             \
+        CLOCK(                                                               \
+            if ((condition)) END_OPCODE;                                     \
+            else cpu->registers.pc = mmu_read(emu, cpu->registers.sp++););   \
+        CLOCK(cpu->registers.pc |= mmu_read(emu, cpu->registers.sp++) << 8); \
+        CLOCK();                                                             \
+        CLOCK(END_OPCODE);                                                   \
     }
 
 static inline void and(cpu_t *cpu, byte_t reg) {
@@ -2007,13 +2027,7 @@ static void exec_opcode(emulator_t *emu) {
     case 0xBF: // CP A (4 cycles)
         CLOCK(cp(cpu, cpu->registers.a); END_OPCODE;);
     case 0xC0: // RET NZ (8 or 20 cycles)
-        CLOCK();
-        CLOCK(
-            if (CHECK_FLAG(cpu, FLAG_Z))
-                END_OPCODE;
-        );
-        POP(&cpu->registers.pc);
-        CLOCK(END_OPCODE);
+        RET_CC(CHECK_FLAG(cpu, FLAG_Z));
     case 0xC1: // POP BC (12 cycles)
         POP(&cpu->registers.bc);
         CLOCK(END_OPCODE);
@@ -2029,13 +2043,7 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(cpu->registers.pc = cpu->operand);
         CLOCK(END_OPCODE);
     case 0xC4: // CALL NZ, nn (12 or 24 cycles)
-        GET_OPERAND_16();
-        CLOCK(
-            if (CHECK_FLAG(cpu, FLAG_Z))
-                END_OPCODE;
-        );
-        PUSH(cpu->registers.pc, cpu->registers.pc = cpu->operand);
-        CLOCK(END_OPCODE);
+        CALL_CC(CHECK_FLAG(cpu, FLAG_Z));
     case 0xC5: // PUSH BC (16 cycles)
         CLOCK();
         PUSH(cpu->registers.bc);
@@ -2048,13 +2056,7 @@ static void exec_opcode(emulator_t *emu) {
         PUSH(cpu->registers.pc);
         CLOCK(cpu->registers.pc = 0x0000; END_OPCODE;);
     case 0xC8: // RET Z (8 or 20 cycles)
-        CLOCK();
-        CLOCK(
-            if (!CHECK_FLAG(cpu, FLAG_Z))
-                END_OPCODE;
-        );
-        POP(&cpu->registers.pc);
-        CLOCK(END_OPCODE);
+        RET_CC(!CHECK_FLAG(cpu, FLAG_Z))
     case 0xC9: // RET (16 cycles)
         POP(&cpu->registers.pc);
         CLOCK();
@@ -2069,16 +2071,7 @@ static void exec_opcode(emulator_t *emu) {
     case 0xCB: // CB nn (prefix instruction) (4 cycles)
         GET_OPERAND_8(START_OPCODE_CB);
     case 0xCC: // CALL Z, nn (12 or 24 cycles)
-        GET_OPERAND_16();
-        CLOCK(
-            if (!CHECK_FLAG(cpu, FLAG_Z))
-                END_OPCODE;
-        );
-        PUSH(cpu->registers.pc);
-        CLOCK(
-            cpu->registers.pc = cpu->operand;
-            END_OPCODE;
-        );
+        CALL_CC(!CHECK_FLAG(cpu, FLAG_Z));
     case 0xCD: // CALL nn (24 cycles)
         GET_OPERAND_16();
         CLOCK();
@@ -2092,13 +2085,7 @@ static void exec_opcode(emulator_t *emu) {
         PUSH(cpu->registers.pc);
         CLOCK(cpu->registers.pc = 0x0008; END_OPCODE;);
     case 0xD0: // RET NC (8 or 20 cycles)
-        CLOCK();
-        CLOCK(
-            if (CHECK_FLAG(cpu, FLAG_C))
-                END_OPCODE;
-        );
-        POP(&cpu->registers.pc);
-        CLOCK(END_OPCODE);
+        RET_CC(CHECK_FLAG(cpu, FLAG_C))
     case 0xD1: // POP DE (12 cycles)
         POP(&cpu->registers.de);
         CLOCK(END_OPCODE);
@@ -2110,16 +2097,7 @@ static void exec_opcode(emulator_t *emu) {
         );
         CLOCK(cpu->registers.pc = cpu->operand; END_OPCODE;);
     case 0xD4: // CALL NC, nn (12 or 24 cycles)
-        GET_OPERAND_16();
-        CLOCK(
-            if (CHECK_FLAG(cpu, FLAG_C))
-                END_OPCODE;
-        );
-        PUSH(cpu->registers.pc);
-        CLOCK(
-            cpu->registers.pc = cpu->operand;
-            END_OPCODE;
-        );
+        CALL_CC(CHECK_FLAG(cpu, FLAG_C));
     case 0xD5: // PUSH DE (16 cycles)
         CLOCK();
         PUSH(cpu->registers.de);
@@ -2132,17 +2110,11 @@ static void exec_opcode(emulator_t *emu) {
         PUSH(cpu->registers.pc);
         CLOCK(cpu->registers.pc = 0x0010; END_OPCODE;);
     case 0xD8: // RET C (8 or 20 cycles)
-        CLOCK();
-        CLOCK(
-            if (!CHECK_FLAG(cpu, FLAG_C))
-                END_OPCODE;
-        );
-        POP(&cpu->registers.pc);
-        CLOCK(END_OPCODE);
+        RET_CC(!CHECK_FLAG(cpu, FLAG_C));
     case 0xD9: // RETI (16 cycles)
-        CLOCK();
         POP(&cpu->registers.pc);
-        CLOCK(cpu->ime = IME_ENABLED; END_OPCODE;);
+        CLOCK(cpu->ime = IME_ENABLED);
+        CLOCK(END_OPCODE);
     case 0xDA: // JP C, nn (12 or 16 cycles)
         GET_OPERAND_16();
         CLOCK(
@@ -2151,16 +2123,7 @@ static void exec_opcode(emulator_t *emu) {
         );
         CLOCK(cpu->registers.pc = cpu->operand; END_OPCODE;);
     case 0xDC: // CALL C, nn (12 or 24 cycles)
-        GET_OPERAND_16();
-        CLOCK(
-            if (!CHECK_FLAG(cpu, FLAG_C))
-                END_OPCODE;
-        );
-        PUSH(cpu->registers.pc);
-        CLOCK(
-            cpu->registers.pc = cpu->operand;
-            END_OPCODE;
-        );
+        CALL_CC(!CHECK_FLAG(cpu, FLAG_C));
     case 0xDE: // SBC A, n (8 cycles)
         GET_OPERAND_8();
         CLOCK(sbc(cpu, cpu->operand); END_OPCODE;);
@@ -2288,15 +2251,15 @@ static void print_trace(emulator_t *emu) {
     byte_t operand_size = instructions[mmu_read(emu, cpu->registers.pc)].operand_size;
 
     if (operand_size == 0) {
-        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x        %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, mmu->mem[cpu->registers.pc], instructions[opcode].name);
+        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x        %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, instructions[opcode].name);
     } else if (operand_size == 1) {
         char buf[32];
         snprintf(buf, sizeof(buf), instructions[opcode].name, mmu->mem[cpu->registers.pc + 1]);
-        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x     %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, mmu->mem[cpu->registers.pc], mmu->mem[cpu->registers.pc + 1], buf);
+        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x     %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, mmu->mem[cpu->registers.pc + 1], buf);
     } else {
         char buf[32];
         snprintf(buf, sizeof(buf), instructions[opcode].name, mmu->mem[cpu->registers.pc + 1] | mmu->mem[cpu->registers.pc + 2] << 8);
-        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x %02x  %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, mmu->mem[cpu->registers.pc], mmu->mem[cpu->registers.pc + 1], mmu->mem[cpu->registers.pc + 2], buf);
+        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x %02x  %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, mmu->mem[cpu->registers.pc + 1], mmu->mem[cpu->registers.pc + 2], buf);
     }
 }
 #endif

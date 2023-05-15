@@ -13,13 +13,13 @@
 #include "link.h"
 
 typedef enum {
-    OAM_DMA_INACTIVE,
-    OAM_DMA_PENDING_START,
-    OAM_DMA_PENDING_END,
-    OAM_DMA_STARTING,
-    OAM_DMA_ACTIVE
-} oam_dma_state;
+    OAM_DMA_NO_INIT,
+    OAM_DMA_INIT_BEGIN,
+    OAM_DMA_INIT_PENDING,
+    OAM_DMA_STARTING
+} oam_dma_starting_state;
 
+#define IS_OAM_DMA_RUNNING(mmu) ((mmu)->oam_dma.progress >= 0 && (mmu)->oam_dma.progress < 0xA0)
 #define IS_RTC_HALTED(rtc) ((rtc)->dh & 0x40)
 
 static int parse_cartridge(emulator_t *emu) {
@@ -298,7 +298,6 @@ static inline void oam_dma_step(mmu_t *mmu, emulator_mode_t mode) {
 
     mmu->oam_dma.progress++;
     mmu->oam_dma.src_address++;
-    mmu->oam_dma.status = mmu->oam_dma.progress != 0xA0 ? OAM_DMA_ACTIVE : OAM_DMA_INACTIVE;
 }
 
 static inline void hdma_gdma_step(emulator_t *emu, byte_t *src, byte_t *dest) {
@@ -380,26 +379,28 @@ static inline void hdma_gdma_step(emulator_t *emu, byte_t *src, byte_t *dest) {
 void mmu_step(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
-    switch (mmu->oam_dma.status) {
-    case OAM_DMA_INACTIVE:
-        break;
-    case OAM_DMA_PENDING_START:
-        // cpu just wrote into DIV
-        mmu->oam_dma.status = OAM_DMA_PENDING_END;
-        break;
-    case OAM_DMA_PENDING_END:
-        // don't start OAM DMA transfer yet
-        mmu->oam_dma.status = OAM_DMA_STARTING;
-        break;
-    case OAM_DMA_STARTING:
-        mmu->oam_dma.status = OAM_DMA_ACTIVE;
-        mmu->oam_dma.progress = 0;
-        mmu->oam_dma.src_address = mmu->mem[DMA] << 8;
-        // fall through
-    case OAM_DMA_ACTIVE:
-        oam_dma_step(mmu, emu->mode);
-        break;
+    // run oam dma initializations procedure if there are any starting oam dma
+    for (unsigned int i = 0; mmu->oam_dma.starting_count > 0 && i < sizeof(mmu->oam_dma.starting_statuses); i++) {
+        switch (mmu->oam_dma.starting_statuses[i]) {
+        case OAM_DMA_NO_INIT:
+            break;
+        case OAM_DMA_INIT_BEGIN:
+            mmu->oam_dma.starting_statuses[i] = OAM_DMA_INIT_PENDING;
+            break;
+        case OAM_DMA_INIT_PENDING:
+            mmu->oam_dma.starting_statuses[i] = OAM_DMA_STARTING;
+            break;
+        case OAM_DMA_STARTING:
+            mmu->oam_dma.starting_statuses[i] = OAM_DMA_NO_INIT;
+            mmu->oam_dma.progress = 0;
+            mmu->oam_dma.src_address = mmu->mem[DMA] << 8;
+            mmu->oam_dma.starting_count--;
+            break;
+        }
     }
+
+    if (IS_OAM_DMA_RUNNING(mmu))
+        oam_dma_step(mmu, emu->mode);
 
     // do GDMA/HDMA if in CGB mode and HDMA5 bit 7 is reset (meaning there is an active HDMA/GDMA) 
     if (emu->mode == CGB && !CHECK_BIT(mmu->mem[HDMA5], 7)) {
@@ -586,8 +587,12 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
 byte_t mmu_read(emulator_t *emu, word_t address) {
     mmu_t *mmu = emu->mmu;
 
-    if (mmu->oam_dma.status >= OAM_DMA_STARTING)
-        return ((address >= HRAM && address < IE) || address == DMA) ? mmu->mem[address] : 0xFF;
+    // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
+    // but it has some quirks for the other memory regions (check links below):
+    // https://www.reddit.com/r/EmuDev/comments/5hahss/comment/daz9cbi/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
+    // https://github.com/Gekkio/mooneye-gb/issues/39#issuecomment-265953981
+    if (IS_OAM_DMA_RUNNING(mmu) && address >= OAM && address < UNUSABLE)
+        return 0xFF;
 
     if (/*address >= ROM_BANK0 &&*/ address < ROM_BANKN)
         return mmu->rom_bank0_pointer[address];
@@ -771,15 +776,12 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
 void mmu_write(emulator_t* emu, word_t address, byte_t data) {
     mmu_t *mmu = emu->mmu;
 
-    if (mmu->oam_dma.status >= OAM_DMA_STARTING) {
-        if (address == DMA) {
-            mmu->mem[address] = data;
-            mmu->oam_dma.status = OAM_DMA_PENDING_START;
-        } else if (address >= HRAM && address < IE) {
-            mmu->mem[address] = data;
-        }
+    // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
+    // but it has some quirks for the other memory regions (check links below):
+    // https://www.reddit.com/r/EmuDev/comments/5hahss/comment/daz9cbi/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
+    // https://github.com/Gekkio/mooneye-gb/issues/39#issuecomment-265953981
+    if (IS_OAM_DMA_RUNNING(mmu) && address >= OAM && address < UNUSABLE)
         return;
-    }
 
     if (address < VRAM) {
         write_mbc_registers(mmu, address, data);
@@ -813,7 +815,7 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         if (current_wram_bank == 0)
             current_wram_bank = 1;
         mmu->wram_extra[(address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)] = data;
-    } else if (address >= ECHO && address < OAM){
+    } else if (address >= ECHO && address < OAM) {
         if (emu->mode == CGB) {
             byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
             if (current_wram_bank == 0)
@@ -991,7 +993,13 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
     } else if (address == DMA) {
         // writing to this register starts an OAM DMA transfer
         mmu->mem[address] = data;
-        mmu->oam_dma.status = OAM_DMA_PENDING_START;
+        for (unsigned int i = 0; i < sizeof(mmu->oam_dma.starting_statuses); i++) {
+            if (mmu->oam_dma.starting_statuses[i] == OAM_DMA_NO_INIT) {
+                mmu->oam_dma.starting_statuses[i] = OAM_DMA_INIT_BEGIN;
+                mmu->oam_dma.starting_count++;
+                break;
+            }
+        }
     } else if (address == KEY1) {
         mmu->mem[address] |= data & 0x01;
     } else if (address == BANK) {
@@ -1130,10 +1138,12 @@ byte_t *mmu_serialize(emulator_t *emu, size_t *size) {
         offset += hdma_len;
     }
 
-    memcpy(&buf[offset], &emu->mmu->oam_dma.status, 1);
-    memcpy(&buf[offset + 1], &emu->mmu->oam_dma.progress, 2);
-    memcpy(&buf[offset + 3], &emu->mmu->oam_dma.src_address, 2);
-    offset += 5;
+    size_t starting_status_size = sizeof(emu->mmu->oam_dma.starting_statuses);
+    memcpy(&buf[offset], &emu->mmu->oam_dma.starting_statuses, starting_status_size);
+    memcpy(&buf[offset], &emu->mmu->oam_dma.starting_count, 1);
+    memcpy(&buf[offset + starting_status_size + 1], &emu->mmu->oam_dma.progress, 2);
+    memcpy(&buf[offset + starting_status_size + 3], &emu->mmu->oam_dma.src_address, 2);
+    offset += starting_status_size + 5;
 
     memcpy(&buf[offset], &emu->mmu->mbc, 1);
     memcpy(&buf[offset + 1], &emu->mmu->rom_banks, 2);
@@ -1205,10 +1215,12 @@ void mmu_unserialize(emulator_t *emu, byte_t *buf) {
         offset += hdma_len;
     }
 
-    memcpy(&emu->mmu->oam_dma.status, &buf[offset], 1);
-    memcpy(&emu->mmu->oam_dma.progress, &buf[offset + 1], 2);
-    memcpy(&emu->mmu->oam_dma.src_address, &buf[offset + 3], 2);
-    offset += 5;
+    size_t starting_status_size = sizeof(emu->mmu->oam_dma.starting_statuses);
+    memcpy(&emu->mmu->oam_dma.starting_statuses, &buf[offset], starting_status_size);
+    memcpy(&emu->mmu->oam_dma.starting_count, &buf[offset + starting_status_size], 1);
+    memcpy(&emu->mmu->oam_dma.progress, &buf[offset + starting_status_size + 1], 2);
+    memcpy(&emu->mmu->oam_dma.src_address, &buf[offset + starting_status_size + 3], 2);
+    offset += starting_status_size + 5;
 
     memcpy(&emu->mmu->mbc, &buf[offset], 1);
     memcpy(&emu->mmu->rom_banks, &buf[offset + 1], 2);
