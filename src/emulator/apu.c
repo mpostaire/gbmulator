@@ -233,6 +233,9 @@ void apu_step(emulator_t *emu) {
         channel_step(&apu->channel3);
         channel_step(&apu->channel4);
 
+        if (emu->apu_speed > 2.0f) // don't collect samples when emulation speed increases too much
+            return;
+
         apu->take_sample_cycles_count++;
         if (apu->take_sample_cycles_count >= (GB_CPU_FREQ / GB_APU_SAMPLE_RATE) * emu->apu_speed) { // 44100 Hz (if speed == 1.0f)
             apu->take_sample_cycles_count = 0;
