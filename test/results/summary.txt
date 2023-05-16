@@ -239,7 +239,7 @@ CGB:mooneye-test-suite/acceptance/ppu/intr_2_mode0_timing_sprites.gb::failed
 DMG:mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb::failed
 CGB:mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb::failed
 DMG:mooneye-test-suite/acceptance/ppu/lcdon_write_timing-GS.gb::failed
-DMG:mooneye-test-suite/acceptance/oam_dma/sources-GS.gb::failed
+DMG:mooneye-test-suite/acceptance/oam_dma/sources-GS.gb::success
 DMG:mooneye-test-suite/acceptance/oam_dma/reg_read.gb::success
 CGB:mooneye-test-suite/acceptance/oam_dma/reg_read.gb::success
 DMG:mooneye-test-suite/acceptance/oam_dma/basic.gb::success

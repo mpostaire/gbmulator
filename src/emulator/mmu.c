@@ -21,6 +21,7 @@ typedef enum {
 
 #define IS_OAM_DMA_RUNNING(mmu) ((mmu)->oam_dma.progress >= 0 && (mmu)->oam_dma.progress < 0xA0)
 #define IS_RTC_HALTED(rtc) ((rtc)->dh & 0x40)
+#define GBC_CURRENT_WRAM_BANK(mmu) (((mmu)->mem[SVBK] & 0x07) == 0 ? 1 : ((mmu)->mem[SVBK] & 0x07))
 
 static int parse_cartridge(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
@@ -267,31 +268,19 @@ static inline void oam_dma_step(mmu_t *mmu, emulator_mode_t mode) {
     } else if (mmu->oam_dma.src_address >= ERAM && mmu->oam_dma.src_address < WRAM_BANK0) {
         mmu->mem[OAM + mmu->oam_dma.progress] = mmu->ramg_reg ? mmu->eram_bank_pointer[mmu->oam_dma.src_address] : 0xFF;
     } else if (mode == CGB && mmu->oam_dma.src_address >= WRAM_BANKN && mmu->oam_dma.src_address < ECHO) {
-        byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
-        if (current_wram_bank == 0)
-            current_wram_bank = 1;
-        mmu->mem[OAM + mmu->oam_dma.progress] = mmu->wram_extra[(mmu->oam_dma.src_address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)];
-    } else if (mmu->oam_dma.src_address >= ECHO && mmu->oam_dma.src_address < UNUSABLE) {
-        word_t offset;
-        if (mmu->oam_dma.src_address < OAM)
-            offset = ECHO - WRAM_BANK0;
-        else
-            offset = OAM - WRAM_BANK0;
-
+        mmu->mem[OAM + mmu->oam_dma.progress] = mmu->wram_extra[(mmu->oam_dma.src_address - WRAM_BANKN) + ((GBC_CURRENT_WRAM_BANK(mmu) - 1) * 0x1000)];
+    } else if (mmu->oam_dma.src_address >= ECHO /*&& mmu->oam_dma.src_address <= 0xFFFF*/) {
+        // From CasualPokePlayer (https://github.com/skylersaleh/SkyEmu/blob/52a08105c06f1a4f1e9215b2f9ab83fe04ee6236/src/gb.h#L1267):
+        // in most cases echo ram is only E000-FDFF. 
+        // oam dma is one of the exceptions here which have the entire E000-FFFF
+        // region as echo ram for dma source
+        word_t offset = ECHO - WRAM_BANK0;
         if (mode == CGB) {
-            byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
-            if (current_wram_bank == 0)
-                current_wram_bank = 1;
             word_t address = mmu->oam_dma.src_address - offset;
-            mmu->mem[OAM + mmu->oam_dma.progress] = mmu->wram_extra[(address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)];
+            mmu->mem[OAM + mmu->oam_dma.progress] = mmu->wram_extra[(address - WRAM_BANKN) + ((GBC_CURRENT_WRAM_BANK(mmu) - 1) * 0x1000)];
         } else {
             mmu->mem[OAM + mmu->oam_dma.progress] = mmu->mem[mmu->oam_dma.src_address - offset];
         }
-    } else if (mmu->oam_dma.src_address >= IO && mmu->oam_dma.src_address < HRAM) {
-        // TODO doesn't pass mooneye acceptance/oam_dma/sources-GS test
-        mmu->mem[OAM + mmu->oam_dma.progress] = 0xFF;
-    } else if (mmu->oam_dma.src_address >= HRAM /*&& mmu->oam_dma.src_address <= 0xFFFF*/) {
-        // TODO doesn't pass mooneye acceptance/oam_dma/sources-GS test
     } else {
         mmu->mem[OAM + mmu->oam_dma.progress] = mmu->mem[mmu->oam_dma.src_address];
     }
@@ -416,10 +405,7 @@ void mmu_step(emulator_t *emu) {
             // TODO check if this is accurate
             src = &mmu->eram_bank_pointer[mmu->oam_dma.src_address];
         } else if (mmu->hdma.src_address >= WRAM_BANKN && mmu->hdma.src_address < ECHO) {
-            byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
-            if (current_wram_bank == 0)
-                current_wram_bank = 1;
-            src = &mmu->wram_extra[(mmu->hdma.src_address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)];
+            src = &mmu->wram_extra[(mmu->hdma.src_address - WRAM_BANKN) + ((GBC_CURRENT_WRAM_BANK(mmu) - 1) * 0x1000)];
         } else {
             src = &mmu->mem[mmu->hdma.src_address];
         }
@@ -638,19 +624,13 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
 
     // If in CGB mode, access to extra wram banks
     if (emu->mode == CGB && address >= WRAM_BANKN && address < ECHO) {
-        byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
-        if (current_wram_bank == 0)
-            current_wram_bank = 1;
-        return mmu->wram_extra[(address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)];
+        return mmu->wram_extra[(address - WRAM_BANKN) + ((GBC_CURRENT_WRAM_BANK(mmu) - 1) * 0x1000)];
     }
 
     if (address >= ECHO && address < OAM) {
         if (emu->mode == CGB) {
-            byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
-            if (current_wram_bank == 0)
-                current_wram_bank = 1;
             address -= ECHO - WRAM_BANK0;
-            return mmu->wram_extra[(address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)];
+            return mmu->wram_extra[(address - WRAM_BANKN) + ((GBC_CURRENT_WRAM_BANK(mmu) - 1) * 0x1000)];
         } else {
             return mmu->mem[address - (ECHO - WRAM_BANK0)];
         }
@@ -811,17 +791,11 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
             }
         }
     } else if (emu->mode == CGB && address >= WRAM_BANKN && address < ECHO) {
-        byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
-        if (current_wram_bank == 0)
-            current_wram_bank = 1;
-        mmu->wram_extra[(address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)] = data;
+        mmu->wram_extra[(address - WRAM_BANKN) + ((GBC_CURRENT_WRAM_BANK(mmu) - 1) * 0x1000)] = data;
     } else if (address >= ECHO && address < OAM) {
         if (emu->mode == CGB) {
-            byte_t current_wram_bank = mmu->mem[SVBK] & 0x07;
-            if (current_wram_bank == 0)
-                current_wram_bank = 1;
             address -= ECHO - WRAM_BANK0;
-            mmu->wram_extra[(address - WRAM_BANKN) + ((current_wram_bank - 1) * 0x1000)] = data;
+            mmu->wram_extra[(address - WRAM_BANKN) + ((GBC_CURRENT_WRAM_BANK(mmu) - 1) * 0x1000)] = data;
         } else {
             mmu->mem[address - (ECHO - WRAM_BANK0)] = data;
         }
