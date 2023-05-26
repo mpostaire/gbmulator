@@ -269,7 +269,7 @@ static inline void hblank_step(emulator_t *emu) {
 
             CPU_REQUEST_INTERRUPT(emu, IRQ_VBLANK);
             if (emu->on_new_frame)
-                emu->on_new_frame(ppu.pixels);
+                emu->on_new_frame(emu->ppu->pixels);
         } else {
             PPU_SET_MODE(PPU_MODE_OAM);
             if (CHECK_BIT(mmu->mem[STAT], 5))
