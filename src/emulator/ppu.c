@@ -6,6 +6,10 @@
 #include "mmu.h"
 #include "cpu.h"
 
+// Useful resources
+// https://github.com/gbdev/pandocs/blob/bae52a72501a4ae872cf06ee0b26b3a83b274fca/src/Rendering_Internals.md
+// https://github.com/trekawek/coffee-gb/tree/master/src/main/java/eu/rekawek/coffeegb/gpu
+
 #define PPU_SET_MODE(m) mmu->mem[STAT] = (mmu->mem[STAT] & 0xFC) | (m)
 
 #define SET_PIXEL_DMG(ppu_ptr, x, y, color, palette) { *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = ppu_color_palettes[(palette)][(color)][0]; \
@@ -33,616 +37,327 @@ byte_t ppu_color_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
 
 extern inline void ppu_ly_lyc_compare(emulator_t *emu);
 
+typedef struct {
+    byte_t y;
+    byte_t x;
+    byte_t tile_index;
+    byte_t attributes;
+    // the order of the struct members is important!
+} obj_t;
+
+struct oam_scan_t {
+    obj_t objs[10];
+    byte_t size;
+    byte_t index; // used in oam mode to iterate over the oam memory, in drawing mode to iterate over the scanned objs array
+    byte_t step;
+} oam_scan;
+
+typedef struct {
+    byte_t color;
+    byte_t palette;
+    byte_t priority;
+} pixel_t;
+
+typedef struct {
+    pixel_t pixels[8];
+    byte_t size;
+    byte_t head;
+} pixel_fifo_t;
+
+typedef enum {
+    GET_TILE_ID,
+    GET_TILE_SLICE_LOW = 3,
+    GET_TILE_SLICE_HIGH = 5,
+    PUSH = 7
+} pixel_fetcher_step_t;
+
+typedef struct {
+    pixel_t pixels[8];
+    pixel_fetcher_step_t step;
+
+    word_t tilemap_address;
+    word_t tiledata_address;
+    byte_t current_tile_id;
+} pixel_fetcher_t;
+
+pixel_fifo_t bg_fifo;
+pixel_fifo_t obj_fifo;
+pixel_fetcher_t pixel_fetcher;
+
+ppu_t ppu;
+
 /**
- * @returns dmg color after applying palette.
+ * @returns color after applying palette.
  */
-static inline dmg_color_t get_color_dmg(mmu_t *mmu, byte_t color_id, word_t palette_address) {
+static byte_t get_color(mmu_t *mmu, byte_t color_data, word_t palette_address) {
+    // get relevant bits of the color palette the color_data maps to
+    byte_t filter = 0; // initialize to 0 to shut gcc warnings
+    switch (color_data) {
+        case 0: filter = 0x03; break;
+        case 1: filter = 0x0C; break;
+        case 2: filter = 0x30; break;
+        case 3: filter = 0xC0; break;
+    }
+
     // return the color using the palette
-    return (mmu->mem[palette_address] >> (color_id << 1)) & 0x03;
+    return (mmu->mem[palette_address] & filter) >> (color_data * 2);
 }
 
-/**
- * @returns cgb colors in r, g, b arguments after applying palette.
- */
-static inline void get_color_cgb(word_t color_palette_data, byte_t *r, byte_t *g, byte_t *b, byte_t disable_color_correction) {
-    *r = color_palette_data & 0x1F;
-    *g = (color_palette_data & 0x3E0) >> 5;
-    *b = (color_palette_data & 0x7C00) >> 10;
+static pixel_t *pixel_fifo_pop(pixel_fifo_t *fifo) {
+    if (fifo->size == 0)
+        return NULL;
+    fifo->size--;
+    return &fifo->pixels[fifo->head++];
+}
 
-    if (disable_color_correction) {
-        // from 5 bit depth to 8 bit depth (no color correction)
-        *r = (*r << 3) | (*r >> 2);
-        *g = (*g << 3) | (*g >> 2);
-        *b = (*b << 3) | (*b >> 2);
+static void pixel_fifo_push(pixel_fifo_t *fifo, pixel_t *pixels, byte_t flip_x) {
+    if (fifo->size > 0)
+        return;
+
+    if (flip_x) {
+        while (fifo->size < 8) {
+            fifo->pixels[fifo->size] = pixels[7 - fifo->size];
+            fifo->size++;
+        }
     } else {
-        // color correction
-        int R = (26 * *r) + (4 * *g) + (2 * *b);
-        int G = (24 * *g) + (8 * *b);
-        int B = (6 * *r) + (4 * *g) + (22 * *b);
-
-        *r = MIN(960, R) >> 2;
-        *g = MIN(960, G) >> 2;
-        *b = MIN(960, B) >> 2;
+        while (fifo->size < 8) {
+            fifo->pixels[fifo->size] = pixels[fifo->size];
+            fifo->size++;
+        }
     }
+    fifo->head = 0;
 }
 
-/**
- * Draws background and window pixels of line LY
- */
-static void draw_bg_win(emulator_t *emu) {
-    ppu_t *ppu = emu->ppu;
+byte_t lx = 0;
+byte_t dropped_pixels = 0;
+static inline void drawing_step(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
-    byte_t y = mmu->mem[LY];
-    byte_t window_y = mmu->mem[WY];
-    s_word_t window_x = mmu->mem[WX] - 7;
-    byte_t scroll_x = mmu->mem[SCX];
-    byte_t scroll_y = mmu->mem[SCY];
+    // pixel fetcher step
+    byte_t tile_slice;
+    byte_t is_window = CHECK_BIT(mmu->mem[LCDC], 5) && mmu->mem[LY] >= mmu->mem[WY] && lx == mmu->mem[WX] - 7;
+    // if (is_window)
+    //     pixel_fetcher.step = GET_TILE_ID;
 
-    byte_t win_in_scanline = 0;
+    switch (pixel_fetcher.step) { // TODO make steps an enum
+    case GET_TILE_ID:
+        // TODO check if in bg or win mode (for now only bg mode is implemented)
+        if (is_window)
+            pixel_fetcher.tilemap_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 6) << 10) | ((mmu->mem[WY] / 8) << 5) | (lx / 8);
+        else
+            pixel_fetcher.tilemap_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 3) << 10) | (((mmu->mem[LY] + mmu->mem[SCY]) / 8) << 5) | ((lx + mmu->mem[SCX]) / 8);
 
-    for (int x = 0; x < GB_SCREEN_WIDTH; x++) {
-        // background and window disabled, draw white pixel
-        if (!CHECK_BIT(mmu->mem[LCDC], 0)) {
-            SET_PIXEL_DMG(ppu, x, y, get_color_dmg(mmu, DMG_WHITE, BGP), emu->ppu_color_palette);
-            continue;
-        }
-
-        // 1. FIND TILE DATA
-
-        // wich line on the background or window we are currently on
-        byte_t pos_y;
-        // wich row on the background or window we are currently on
-        byte_t pos_x;
-
-        word_t tilemap_address;
-
-        // draw window if window enabled and current pixel inside window region
-        if (CHECK_BIT(mmu->mem[LCDC], 5) && window_y <= y && x >= window_x) {
-            win_in_scanline = 1;
-            tilemap_address = CHECK_BIT(mmu->mem[LCDC], 6) ? 0x9C00 : 0x9800;
-            pos_y = ppu->wly;
-            pos_x = x - window_x;
-        } else {
-            tilemap_address = CHECK_BIT(mmu->mem[LCDC], 3) ? 0x9C00 : 0x9800;
-            pos_y = scroll_y + y;
-            pos_x = scroll_x + x;
-        }
-
-        // find tile_id x,y coordinates in the memory "2D array" holding the tile_ids.
-        // True y pos is SCY + LY. Then divide by 8 because tiles are 8x8 and multiply by 32 because this is a 32x32 "2D array" in a 1D array.
-        word_t tile_id_y = (pos_y / 8) * 32;
-        // True x pos is SCX + x. Then divide by 8 because tiles are 8x8.
-        byte_t tile_id_x = pos_x / 8;
-        word_t tile_id_address = tilemap_address + tile_id_x + tile_id_y;
-
+        // TODO if the ppu vram access is blocked, the tile id read is 0xFF
+        // TODO 9th bit computed as (LCDC & $10) && !(ID & $80)???
+        pixel_fetcher.current_tile_id = mmu->mem[pixel_fetcher.tilemap_address];
+        break;
+    case GET_TILE_SLICE_LOW:
         // get tiledata memory address
-        word_t tiledata_address;
-        s_word_t tile_id;
         if (CHECK_BIT(mmu->mem[LCDC], 4)) {
-            tile_id = mmu->mem[tile_id_address];
-            tiledata_address = VRAM + tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
+            pixel_fetcher.tiledata_address = 0x8000 + pixel_fetcher.current_tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
         } else {
-            tile_id = (s_byte_t) mmu->mem[tile_id_address] + 128;
-            tiledata_address = 0x8800 + tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
+            s_word_t tile_id = (s_byte_t) pixel_fetcher.current_tile_id + 128;
+            pixel_fetcher.tiledata_address = 0x8800 + tile_id * 16; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
         }
+        // add the vertical line of the tile we are on (% 8 because tiles are 8 pixels tall, * 2 because each line takes 2 bytes of memory)
+        pixel_fetcher.tiledata_address += ((mmu->mem[SCY] + mmu->mem[LY]) % 8) * 2;
 
-        // find the vertical line of the tile we are on (% 8 because tiles are 8 pixels tall, * 2 because each line takes 2 bytes of memory)
-        byte_t tiledata_line = (pos_y % 8) * 2;
+        // if bg/win is enabled, get color data, else get 0
+        if (CHECK_BIT(mmu->mem[LCDC], 0))
+            tile_slice = mmu->mem[pixel_fetcher.tiledata_address];
+        else
+            tile_slice = 0;
 
-        // 2. DRAW PIXEL
+        for (byte_t i = 0; i < 8; i++)
+            pixel_fetcher.pixels[i].color = GET_BIT(tile_slice, 7 - i);
+        break;
+    case GET_TILE_SLICE_HIGH:
+        // if bg/win is enabled, get color data, else get 0
+        if (CHECK_BIT(mmu->mem[LCDC], 0))
+            tile_slice = mmu->mem[pixel_fetcher.tiledata_address + 1];
+        else
+            tile_slice = 0;
 
-        // pixel color data takes 2 bytes in memory
-        byte_t pixel_data_1 = mmu->mem[tiledata_address + tiledata_line];
-        byte_t pixel_data_2 = mmu->mem[tiledata_address + tiledata_line + 1];
-
-        // bit 7 of 1st byte == low bit of pixel 0, bit 7 of 2nd byte == high bit of pixel 0
-        // bit 6 of 1st byte == low bit of pixel 1, bit 6 of 2nd byte == high bit of pixel 1
-        // etc.
-        byte_t relevant_bit = ((pos_x % 8) - 7) * -1;
-
-        // construct color data
-        byte_t color_id = (GET_BIT(pixel_data_2, relevant_bit) << 1) | GET_BIT(pixel_data_1, relevant_bit);
-        // cache color_id to be used for objects rendering
-        ppu->scanline_cache_color_data[x] = color_id;
-        // set pixel color using BG (for background and window) palette data
-        SET_PIXEL_DMG(ppu, x, y, get_color_dmg(mmu, color_id, BGP), emu->ppu_color_palette);
+        for (byte_t i = 0; i < 8; i++)
+            pixel_fetcher.pixels[i].color |= GET_BIT(tile_slice, 7 - i) << 1;
+        break;
+    case PUSH:
+        pixel_fifo_push(&bg_fifo, pixel_fetcher.pixels, 0);
+        break;
     }
+    pixel_fetcher.step = (pixel_fetcher.step + 1) % 8;
+    lx++;
 
-    // increment ppu->wly if the window is present in this scanline
-    if (win_in_scanline)
-        ppu->wly++;
+    // OBJ fetcher is just check for both conditions, then replace bg_push by push_obj on the first obj that is in the lx + 8 range ?
+    // as oam objs are sorted, the first one that matches is either the head of the list or none
+
+    // bg fifo step
+    pixel_t *bg_pixel = pixel_fifo_pop(&bg_fifo);
+
+    // obj fifo step
+
+    // merge and draw pixel
+    if (bg_pixel)
+        SET_PIXEL_DMG(emu->ppu, lx - 8, mmu->mem[LY], get_color(mmu, bg_pixel->color, BGP), emu->ppu_color_palette);
+
+    // TODO >= or > ?
+    if (lx >= GB_SCREEN_WIDTH + 8) {
+        lx = 0;
+        dropped_pixels = 0;
+
+        pixel_fetcher = (pixel_fetcher_t) { 0 };
+        bg_fifo = (pixel_fifo_t) { 0 };
+        obj_fifo = (pixel_fifo_t) { 0 };
+
+        oam_scan.index = 0;
+
+        PPU_SET_MODE(PPU_MODE_HBLANK);
+        if (CHECK_BIT(mmu->mem[STAT], 3))
+            CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
+    }
 }
 
-/**
- * Draws sprites of line LY
- */
-static void draw_objects(emulator_t *emu) {
-    ppu_t *ppu = emu->ppu;
-    mmu_t *mmu = emu->mmu;
-
-    // objects disabled
-    if (!CHECK_BIT(mmu->mem[LCDC], 1))
+static inline void oam_scan_step(mmu_t *mmu) {
+    // it takes 2 cycles to scan one OBJ so we skip every other step
+    if (!oam_scan.step) {
+        oam_scan.step = 1;
         return;
+    }
 
-    // are objects 8x8 or 8x16?
+    obj_t *obj = (obj_t *) &mmu->mem[OAM + (oam_scan.index * 4)];
     byte_t obj_height = CHECK_BIT(mmu->mem[LCDC], 2) ? 16 : 8;
+    // NOTE: obj->x != 0 condition should not be checked even if ultimate gameboy talk says it should
+    if (oam_scan.size < 10 && (mmu->mem[LY] + 16 >= obj->y) && (mmu->mem[LY] + 16 < obj->y + obj_height)) {
+        oam_scan.objs[oam_scan.size++] = (obj_t) {
+            .y = obj->y,
+            .x = obj->x,
+            .tile_index = obj->tile_index,
+            .attributes = obj->attributes
+        };
+    }
 
-    // store the x position of each pixel drawn by the highest priority object
-    byte_t obj_pixel_priority[GB_SCREEN_WIDTH];
-    // default at 255 because no object will have that much of x coordinate (and if so, will not be visible anyway)
-    memset(obj_pixel_priority, 255, sizeof(obj_pixel_priority));
+    oam_scan.step = 0;
+    oam_scan.index++;
 
-    byte_t y = mmu->mem[LY];
+    // if OAM scan has ended, switch to DRAWING mode
+    if (oam_scan.index == 40) {
+        oam_scan.step = 0;
+        oam_scan.index = 0;
 
-    // iterate over all objects to render
-    for (short i = ppu->oam_scan.size - 1; i >= 0; i--) {
-        word_t obj_address = ppu->oam_scan.objs_addresses[i];
-        // obj y + 16 position is in byte 0
-        s_word_t pos_y = mmu->mem[obj_address] - 16;
-        // obj x + 8 position is in byte 1 (signed word important here!)
-        s_word_t pos_x = mmu->mem[obj_address + 1] - 8;
-        // obj position in the tile memory array
-        byte_t tile_index = mmu->mem[obj_address + 2];
-        if (obj_height > 8)
-            tile_index &= 0xFE;
-        // attributes flags
-        byte_t flags = mmu->mem[obj_address + 3];
-
-        // palette address
-        word_t palette = CHECK_BIT(flags, 4) ? OBP1 : OBP0;
-
-        // find line of the object we are currently on
-        byte_t obj_line = y - pos_y;
-        if (CHECK_BIT(flags, 6)) // flip y
-            obj_line = (obj_line - (obj_height - 1)) * -1;
-        obj_line *= 2; // each line takes 2 bytes in memory
-
-        // find object tile data in memory
-        word_t objdata_address = VRAM + tile_index * 16;
-
-        // 3. DRAW OBJECT
-
-        // pixel color data takes 2 bytes in memory
-        byte_t pixel_data_1 = mmu->mem[objdata_address + obj_line];
-        byte_t pixel_data_2 = mmu->mem[objdata_address + obj_line + 1];
-
-        // bit 7 of 1st byte == low bit of pixel 0, bit 7 of 2nd byte == high bit of pixel 0
-        // bit 6 of 1st byte == low bit of pixel 1, bit 6 of 2nd byte == high bit of pixel 1
-        // etc.
-        for (byte_t x = 0; x <= 7; x++) {
-            s_word_t pixel_x = pos_x + x;
-            // don't draw pixel if it's outside the screen
-            if (pixel_x < 0 || pixel_x > 159)
-                continue;
-
-            byte_t relevant_bit = x; // flip x
-            if (!CHECK_BIT(flags, 5)) // don't flip x
-                relevant_bit = (relevant_bit - 7) * -1;
-
-            // construct color data
-            byte_t color_id = (GET_BIT(pixel_data_2, relevant_bit) << 1) | GET_BIT(pixel_data_1, relevant_bit);
-            if (color_id == DMG_WHITE) // DMG_WHITE is the transparent color for objects, don't draw it (this needs to be done BEFORE palette conversion).
-                continue;
-
-            // if an object with lower x coordinate has already drawn this pixel, it has higher priority so we abort
-            if (obj_pixel_priority[pixel_x] < pos_x)
-                continue;
-
-            // store current object x coordinate in priority array
-            obj_pixel_priority[pixel_x] = pos_x;
-
-            // if object is below background, object can only be drawn if the current background/window color (before applying palette) is 0
-            if (CHECK_BIT(flags, 7) && ppu->scanline_cache_color_data[pixel_x])
-                continue;
-
-            // set pixel color using palette
-            SET_PIXEL_DMG(ppu, pixel_x, y, get_color_dmg(mmu, color_id, palette), emu->ppu_color_palette);
-        }
+        PPU_SET_MODE(PPU_MODE_DRAWING);
     }
 }
 
-/**
- * Draws background and window pixels of line LY
- */
-static void draw_bg_win_cgb(emulator_t *emu) {
-    ppu_t *ppu = emu->ppu;
+byte_t hblank_duration = 0;
+word_t vblank_duration = 0;
+word_t vblank_line_duration = 0;
+// TODO hblank duration should be adaptive following what time it took for DRAWING mode
+static inline void hblank_step(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
-    byte_t y = mmu->mem[LY];
-    byte_t window_y = mmu->mem[WY];
-    s_word_t window_x = mmu->mem[WX] - 7;
-    byte_t scroll_x = mmu->mem[SCX];
-    byte_t scroll_y = mmu->mem[SCY];
+    if (!hblank_duration) {
+        mmu->mem[LY]++;
 
-    byte_t win_in_scanline = 0;
+        ppu_ly_lyc_compare(emu);
 
-    for (int x = 0; x < GB_SCREEN_WIDTH; x++) {
-        // if in cgb compatibility mode and background and window disabled, draw white pixel
-        if (((mmu->mem[KEY0] >> 2) & 0x03) == 1 && !CHECK_BIT(mmu->mem[LCDC], 0)) {
-            byte_t r, g, b;
-            get_color_cgb(0xFFFF, &r, &g, &b, emu->disable_cgb_color_correction);
-            SET_PIXEL_CGB(ppu, x, y, r, g, b);
-            continue;
-        }
+        if (mmu->mem[LY] == GB_SCREEN_HEIGHT) {
+            PPU_SET_MODE(PPU_MODE_VBLANK);
+            vblank_duration = 4560;
+            vblank_line_duration = 456;
+            if (CHECK_BIT(mmu->mem[STAT], 4))
+                CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
 
-        // 1. FIND TILE DATA
-
-        // wich line on the background or window we are currently on
-        byte_t pos_y;
-        // wich row on the background or window we are currently on
-        byte_t pos_x;
-
-        word_t tilemap_address;
-
-        // draw window if window enabled and current pixel inside window region
-        if (CHECK_BIT(mmu->mem[LCDC], 5) && window_y <= y && x >= window_x) {
-            win_in_scanline = 1;
-            tilemap_address = CHECK_BIT(mmu->mem[LCDC], 6) ? 0x9C00 : 0x9800;
-            pos_y = ppu->wly;
-            pos_x = x - window_x;
+            CPU_REQUEST_INTERRUPT(emu, IRQ_VBLANK);
+            if (emu->on_new_frame)
+                emu->on_new_frame(ppu.pixels);
         } else {
-            tilemap_address = CHECK_BIT(mmu->mem[LCDC], 3) ? 0x9C00 : 0x9800;
-            pos_y = scroll_y + y;
-            pos_x = scroll_x + x;
+            PPU_SET_MODE(PPU_MODE_OAM);
+            if (CHECK_BIT(mmu->mem[STAT], 5))
+                CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
         }
-
-        // find tile_id x,y coordinates in the memory "2D array" holding the tile_ids.
-        // True y pos is SCY + LY. Then divide by 8 because tiles are 8x8 and multiply by 32 because this is a 32x32 "2D array" in a 1D array.
-        word_t tile_id_y = (pos_y / 8) * 32;
-        // True x pos is SCX + x. Then divide by 8 because tiles are 8x8.
-        byte_t tile_id_x = pos_x / 8;
-        word_t tile_id_address = tilemap_address + tile_id_x + tile_id_y;
-
-        byte_t tile_attributes = mmu->vram_extra[tile_id_address - VRAM];
-
-        // find the vertical line of the tile we are on (% 8 because tiles are 8 pixels tall, * 2 because each line takes 2 bytes of memory)
-        byte_t tiledata_line;
-        if (CHECK_BIT(tile_attributes, 6)) // flip y
-            tiledata_line = (((pos_y % 8) - 7) * -1) * 2;
-        else
-            tiledata_line = (pos_y % 8) * 2;
-
-        // get tiledata memory address
-        word_t tiledata_address;
-        s_word_t tile_id;
-        if (CHECK_BIT(mmu->mem[LCDC], 4)) {
-            tile_id = mmu->mem[tile_id_address];
-            tiledata_address = (tile_id * 16) + tiledata_line; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
-        } else {
-            tile_id = (s_byte_t) mmu->mem[tile_id_address] + 128;
-            tiledata_address = 0x0800 + (tile_id * 16) + tiledata_line; // each tile takes 16 bytes in memory (8x8 pixels, 2 byte per pixels)
-        }
-
-        // 2. DRAW PIXEL
-
-        // pixel color data takes 2 bytes in memory
-        byte_t pixel_data_1;
-        byte_t pixel_data_2;
-        if (CHECK_BIT(tile_attributes, 3)) { // if tile is in VRAM bank 1
-            pixel_data_1 = mmu->vram_extra[tiledata_address];
-            pixel_data_2 = mmu->vram_extra[tiledata_address + 1];
-        } else { // or in VRAM bank 0
-            pixel_data_1 = mmu->mem[tiledata_address + VRAM];
-            pixel_data_2 = mmu->mem[tiledata_address + VRAM + 1];
-        }
-
-        // bit 7 of 1st byte == low bit of pixel 0, bit 7 of 2nd byte == high bit of pixel 0
-        // bit 6 of 1st byte == low bit of pixel 1, bit 6 of 2nd byte == high bit of pixel 1
-        // etc.
-        byte_t relevant_bit;
-        if (CHECK_BIT(tile_attributes, 5)) // flip x
-            relevant_bit = pos_x % 8;        
-        else
-            relevant_bit = ((pos_x % 8) - 7) * -1;
-
-        // construct color data
-        byte_t color_id = (GET_BIT(pixel_data_2, relevant_bit) << 1) | GET_BIT(pixel_data_1, relevant_bit);
-        // cache color_id to be used for objects rendering
-        ppu->scanline_cache_color_data[x] = color_id;
-        // if tile attributes bg-over-oam bit is set, also set it in the cache for use in draw_objects_cgb() later
-        if (CHECK_BIT(tile_attributes, 7))
-            SET_BIT(ppu->scanline_cache_color_data[x], 7);
-
-        byte_t color_palette_id;
-        if (((mmu->mem[KEY0] >> 2) & 0x03) == 1) {
-            // in CGB compatibility mode: bg/win palette ram id is always 0 and use BGP to get the color_id in the cgb palette ram
-            color_palette_id = 0;
-            color_id = get_color_dmg(mmu, color_id, BGP);
-        } else {
-            // in CGB mode
-            color_palette_id = tile_attributes & 0x07;
-        }
-
-        byte_t color_address = color_palette_id * 8 + color_id * 2;
-        word_t color_data = (mmu->cram_bg[color_address + 1] << 8) | mmu->cram_bg[color_address];
-
-        byte_t r, g, b;
-        get_color_cgb(color_data, &r, &g, &b, emu->disable_cgb_color_correction);
-
-        // set pixel color using BG (for background and window) palette data
-        SET_PIXEL_CGB(ppu, x, y, r, g, b);
     }
-
-    // increment ppu->wly if the window is present in this scanline
-    if (win_in_scanline)
-        ppu->wly++;
+    hblank_duration--;
 }
 
-/**
- * Draws sprites of line LY
- */
-static void draw_objects_cgb(emulator_t *emu) {
-    ppu_t *ppu = emu->ppu;
+static inline void vblank_step(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
-    // objects disabled
-    if (!CHECK_BIT(mmu->mem[LCDC], 1))
-        return;
+    if (!vblank_line_duration) {
+        mmu->mem[LY]++; // increase at each new line
+        vblank_line_duration = 456;
 
-    // are objects 8x8 or 8x16?
-    byte_t obj_height = 8;
-    if (CHECK_BIT(mmu->mem[LCDC], 2))
-        obj_height = 16;
-
-    byte_t is_using_x_priority = CHECK_BIT(mmu->mem[OPRI], 0);
-    if (is_using_x_priority) {
-        // default at 255 because no object will have that much of x coordinate (and if so, will not be visible anyway)
-        memset(ppu->obj_pixel_priority, 255, GB_SCREEN_WIDTH);
+        // line 153 can trigger the LY=LYC interrupt
+        if (mmu->mem[LY] == 153)
+            ppu_ly_lyc_compare(emu);
     }
 
-    byte_t y = mmu->mem[LY];
+    if (!vblank_duration) {
+        // mmu->mem[LY] == 154 here
+        mmu->mem[LY] = 0;
+        ppu_ly_lyc_compare(emu);
 
-    // iterate over all objects to render
-    for (short i = ppu->oam_scan.size - 1; i >= 0; i--) {
-        word_t obj_address = ppu->oam_scan.objs_addresses[i];
-        // obj y + 16 position is in byte 0
-        s_word_t pos_y = mmu->mem[obj_address] - 16;
-        // obj x + 8 position is in byte 1 (signed word important here!)
-        s_word_t pos_x = mmu->mem[obj_address + 1] - 8;
-        // obj position in the tile memory array
-        byte_t tile_index = mmu->mem[obj_address + 2];
-        if (obj_height > 8)
-            tile_index &= 0xFE;
-
-        // attributes flags
-        byte_t flags = mmu->mem[obj_address + 3];
-
-        // palette id
-        word_t color_palette_id = flags & 0x07;
-
-        // find line of the object we are currently on
-        byte_t obj_line = y - pos_y;
-        if (CHECK_BIT(flags, 6)) // flip y
-            obj_line = (obj_line - (obj_height - 1)) * -1;
-        obj_line *= 2; // each line takes 2 bytes in memory
-
-        // find object tile data in memory
-        word_t objdata_address;
-        // pixel color data takes 2 bytes in memory
-        byte_t pixel_data_1;
-        byte_t pixel_data_2;
-        if (CHECK_BIT(flags, 3)) { // if tile is in VRAM bank 1
-            objdata_address = tile_index * 16;
-            // pixel color data takes 2 bytes in memory
-            pixel_data_1 = mmu->vram_extra[objdata_address + obj_line];
-            pixel_data_2 = mmu->vram_extra[objdata_address + obj_line + 1];
-        } else {
-            objdata_address = VRAM + tile_index * 16;
-            // pixel color data takes 2 bytes in memory
-            pixel_data_1 = mmu->mem[objdata_address + obj_line];
-            pixel_data_2 = mmu->mem[objdata_address + obj_line + 1];
-        }
-
-        // 3. DRAW OBJECT
-
-        // bit 7 of 1st byte == low bit of pixel 0, bit 7 of 2nd byte == high bit of pixel 0
-        // bit 6 of 1st byte == low bit of pixel 1, bit 6 of 2nd byte == high bit of pixel 1
-        // etc.
-        for (byte_t x = 0; x <= 7; x++) {
-            s_word_t pixel_x = pos_x + x;
-            // don't draw pixel if it's outside the screen
-            if (pixel_x < 0 || pixel_x > 159)
-                continue;
-
-            byte_t relevant_bit = x; // flip x
-            if (!CHECK_BIT(flags, 5)) // don't flip x
-                relevant_bit = (relevant_bit - 7) * -1;
-
-            // construct color data
-            byte_t color_id = (GET_BIT(pixel_data_2, relevant_bit) << 1) | GET_BIT(pixel_data_1, relevant_bit);
-            if (color_id == DMG_WHITE) // DMG_WHITE is the transparent color for objects, don't draw it (this needs to be done BEFORE palette conversion).
-                continue;
-
-            byte_t is_cgb_compat = ((mmu->mem[KEY0] >> 2) & 0x03) == 1;
-
-            // if in cgb compatibility mode, color palette id is 0 (OPB0) or 1 (OPB1) following bit 4 of attributes and color id is in OBP0/OBP1
-            if (is_cgb_compat) {
-                if (CHECK_BIT(flags, 4)) {
-                    color_palette_id = 1;
-                    color_id = get_color_dmg(mmu, color_id, OBP1);
-                } else {
-                    color_palette_id = 0;
-                    color_id = get_color_dmg(mmu, color_id, OBP0);
-                }
-            }
-
-            // if object priority bit is in dmg mode, priority is based on lower x coordinate
-            if (is_using_x_priority) {
-                // if an object with lower x coordinate has already drawn this pixel, it has higher priority so we abort
-                if (ppu->obj_pixel_priority[pixel_x] < pos_x)
-                    continue;
-
-                // store current object x coordinate in priority array
-                ppu->obj_pixel_priority[pixel_x] = pos_x;
-            }
-
-            // if color data of bg/win tile at this position is 0...
-            if (ppu->scanline_cache_color_data[pixel_x] & 0x03) {
-                // ...and this object is below the background, don't draw this pixel (only the color 0 of the object can be drawn)
-                if (CHECK_BIT(flags, 7))
-                    continue;
-
-                // in CGB mode (not compatibility mode) and if lcdc bit 0 is 1 (no master priority override) and if bg/win tile at this position has bg-to-oam
-                // bit set, don't draw this pixel (only the color 0 of the object will be over the bg/win)
-                if (!is_cgb_compat && CHECK_BIT(mmu->mem[LCDC], 0) && CHECK_BIT(ppu->scanline_cache_color_data[pixel_x], 7))
-                    continue;
-            }
-
-            byte_t color_address = color_palette_id * 8 + color_id * 2;
-            word_t color_data = (mmu->cram_obj[color_address + 1] << 8) | mmu->cram_obj[color_address];
-
-            byte_t r, g, b;
-            get_color_cgb(color_data, &r, &g, &b, emu->disable_cgb_color_correction);
-
-            // set pixel color using BG (for background and window) palette data
-            SET_PIXEL_CGB(ppu, pixel_x, y, r, g, b);
-        }
+        PPU_SET_MODE(PPU_MODE_OAM);
+        if (CHECK_BIT(mmu->mem[STAT], 5))
+            CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
     }
+
+    vblank_line_duration--;
+    vblank_duration--;
 }
 
-static inline void oam_scan(emulator_t *emu) {
-    ppu_t *ppu = emu->ppu;
-    mmu_t *mmu = emu->mmu;
-
-    // clear previous oam_scan
-    ppu->oam_scan.size = 0;
-
-    byte_t y = mmu->mem[LY];
-    byte_t obj_height = 8;
-    if (CHECK_BIT(mmu->mem[LCDC], 2))
-        obj_height = 16;
-
-    // iterate over all possible object in OAM memory
-    for (byte_t obj_id = 0; obj_id < 40 && ppu->oam_scan.size < 10; obj_id++) {
-        // each object takes 4 bytes in the OAM
-        word_t obj_address = OAM + (obj_id * 4);
-
-        // obj y + 16 position is in byte 0
-        s_word_t pos_y = mmu->mem[obj_address] - 16;
-
-        // don't render this object if it doesn't intercept the current scanline
-        if (y < pos_y || y >= pos_y + obj_height)
-            continue;
-
-        ppu->oam_scan.objs_addresses[ppu->oam_scan.size++] = obj_address;
-    }
-}
-
-/**
- * This does not implement the pixel FIFO but draws each scanline instantly when starting PPU_HBLANK (mode 0).
- * -- TODO if STAT interrupts are a problem, implement these corner cases: http://gameboy.mongenel.com/dmg/istat98.txt
- */
 void ppu_step(emulator_t *emu) {
     ppu_t *ppu = emu->ppu;
     mmu_t *mmu = emu->mmu;
 
     if (!CHECK_BIT(mmu->mem[LCDC], 7)) { // is LCD disabled?
         // TODO not sure of the handling of LCD disabled
+        // TODO LCD disabled should fill screen with a color brighter than WHITE
 
         if (!ppu->is_lcd_turning_on) {
             // blank screen
-            for (int i = 0; i < GB_SCREEN_WIDTH; i++) {
-                for (int j = 0; j < GB_SCREEN_HEIGHT; j++) {
-                    if (emu->mode == DMG) {
-                        SET_PIXEL_DMG(ppu, i, j, DMG_WHITE, emu->ppu_color_palette);
-                    } else {
-                        byte_t r, g, b;
-                        get_color_cgb(0xFFFF, &r, &g, &b, emu->disable_cgb_color_correction);
-                        SET_PIXEL_CGB(ppu, i, j, r, g, b);
-                    }
-                }
-
-            }
+            for (int i = 0; i < GB_SCREEN_WIDTH; i++)
+                for (int j = 0; j < GB_SCREEN_HEIGHT; j++)
+                    SET_PIXEL_DMG(ppu, i, j, DMG_WHITE, emu->ppu_color_palette);
 
             if (emu->on_new_frame)
                 emu->on_new_frame(ppu->pixels);
             ppu->is_lcd_turning_on = 1;
         }
-
         PPU_SET_MODE(PPU_MODE_HBLANK);
-        RESET_BIT(mmu->mem[STAT], 2); // set LYC=LY to 0?
-        ppu->cycles = 0;
+        hblank_duration = 87; // set hblank duration to its minimum possible value
         mmu->mem[LY] = 0;
-        ppu->wly = 0;
         return;
     }
 
-    // if lcd was just turned on, check for LYC=LY
+    // if lcd was just enabled, check for LYC=LY
     if (ppu->is_lcd_turning_on)
         ppu_ly_lyc_compare(emu);
+    ppu->is_lcd_turning_on = 0;
 
-    ppu->cycles += 4; // 4 cycles per step
+    RESET_BIT(mmu->mem[STAT], 2); // reset LYC=LY flag
 
-    switch (mmu->mem[STAT] & 0x03) { // switch current mode
-    case PPU_MODE_OAM:
-        if (ppu->cycles >= 80) {
-            ppu->cycles -= 80;
-            oam_scan(emu);
-            PPU_SET_MODE(PPU_MODE_DRAWING);
+    int cycles = 4;
+    while (cycles--) {
+        switch (mmu->mem[STAT] & 0x03) {
+        case PPU_MODE_OAM:
+            // Scanning OAM for (X, Y) coordinates of sprites that overlap this line
+            // there is up to 40 OBJs in OAM memory and this mode takes 80 cycles: 2 cycles per OBJ to check if it should be displayed
+            // put them into an array of max size 10.
+            oam_scan_step(mmu);
+            break;
+        case PPU_MODE_DRAWING:
+            // Reading OAM and VRAM to generate the picture
+            drawing_step(emu);
+            break;
+        case PPU_MODE_HBLANK:
+            // Horizontal blanking
+            hblank_step(emu);
+            break;
+        case PPU_MODE_VBLANK:
+            // Vertical blanking
+            vblank_step(emu);
+            break;
         }
-        break;
-    case PPU_MODE_DRAWING:
-        if (ppu->cycles >= 172) {
-            ppu->cycles -= 172;
-            PPU_SET_MODE(PPU_MODE_HBLANK);
-            if (CHECK_BIT(mmu->mem[STAT], 3))
-                CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
-
-            if (emu->mode == CGB) {
-                draw_bg_win_cgb(emu);
-                draw_objects_cgb(emu);
-            } else {
-                draw_bg_win(emu);
-                draw_objects(emu);
-            }
-        }
-        break;
-    case PPU_MODE_HBLANK:
-        if (ppu->cycles >= 204) {
-            ppu->cycles -= 204;
-            mmu->mem[LY]++;
-            ppu_ly_lyc_compare(emu);
-
-            if (mmu->mem[LY] == GB_SCREEN_HEIGHT) {
-                PPU_SET_MODE(PPU_MODE_VBLANK);
-                if (CHECK_BIT(mmu->mem[STAT], 4))
-                    CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
-
-                CPU_REQUEST_INTERRUPT(emu, IRQ_VBLANK);
-
-                // skip first screen rendering after the LCD was just turned on
-                if (ppu->is_lcd_turning_on) {
-                    ppu->is_lcd_turning_on = 0;
-                    break;
-                }
-
-                if (emu->on_new_frame)
-                    emu->on_new_frame(ppu->pixels);
-            } else {
-                PPU_SET_MODE(PPU_MODE_OAM);
-                if (CHECK_BIT(mmu->mem[STAT], 5))
-                    CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
-            }
-        }
-        break;
-    case PPU_MODE_VBLANK:
-        if (ppu->cycles >= 456) {
-            ppu->cycles -= 456;
-            mmu->mem[LY]++;
-            if (mmu->mem[LY] == 153)
-                ppu_ly_lyc_compare(emu);
-
-            if (mmu->mem[LY] == 154) {
-                mmu->mem[LY] = 0;
-                ppu_ly_lyc_compare(emu);
-                ppu->wly = 0;
-                PPU_SET_MODE(PPU_MODE_OAM);
-                if (CHECK_BIT(mmu->mem[STAT], 5))
-                    CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
-            }
-        }
-        break;
     }
 }
 
