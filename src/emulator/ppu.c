@@ -7,6 +7,7 @@
 #include "cpu.h"
 
 // Useful resources
+// https://pixelbits.16-b.it/GBEDG/ppu/
 // https://github.com/gbdev/pandocs/blob/bae52a72501a4ae872cf06ee0b26b3a83b274fca/src/Rendering_Internals.md
 // https://github.com/trekawek/coffee-gb/tree/master/src/main/java/eu/rekawek/coffeegb/gpu
 
@@ -55,7 +56,8 @@ struct oam_scan_t {
 typedef struct {
     byte_t color;
     byte_t palette;
-    byte_t priority;
+    byte_t obj_priority; // only on CGB mode
+    byte_t bg_priority;
 } pixel_t;
 
 typedef struct {
@@ -66,9 +68,9 @@ typedef struct {
 
 typedef enum {
     GET_TILE_ID,
-    GET_TILE_SLICE_LOW = 3,
-    GET_TILE_SLICE_HIGH = 5,
-    PUSH = 7
+    GET_TILE_SLICE_LOW = 2,
+    GET_TILE_SLICE_HIGH = 4,
+    PUSH = 6
 } pixel_fetcher_step_t;
 
 typedef struct {
@@ -83,8 +85,6 @@ typedef struct {
 pixel_fifo_t bg_fifo;
 pixel_fifo_t obj_fifo;
 pixel_fetcher_t pixel_fetcher;
-
-ppu_t ppu;
 
 /**
  * @returns color after applying palette.
@@ -110,46 +110,51 @@ static pixel_t *pixel_fifo_pop(pixel_fifo_t *fifo) {
     return &fifo->pixels[fifo->head++];
 }
 
-static void pixel_fifo_push(pixel_fifo_t *fifo, pixel_t *pixels, byte_t flip_x) {
-    if (fifo->size > 0)
-        return;
+static inline byte_t pixel_fifo_push(pixel_fifo_t *fifo, pixel_t *pixels, byte_t flip_x) {
+    byte_t pixel_idx = flip_x ? 7 - fifo->size : fifo->size;
+    fifo->pixels[fifo->size] = pixels[pixel_idx];
+    fifo->size++;
 
-    if (flip_x) {
-        while (fifo->size < 8) {
-            fifo->pixels[fifo->size] = pixels[7 - fifo->size];
-            fifo->size++;
-        }
-    } else {
-        while (fifo->size < 8) {
-            fifo->pixels[fifo->size] = pixels[fifo->size];
-            fifo->size++;
-        }
+    if (fifo->size == 8) {
+        fifo->head = 0;
+        return 1;
     }
-    fifo->head = 0;
+
+    return 0;
 }
 
-byte_t lx = 0;
+byte_t tile_lx = 0; // x position on the scanline of the pisel fetcher divided by 8: because the pixel etcher fetches 8 pixels (1 tile row) at a time
+byte_t lcd_lx = 0; // x position on the scanline available for drawing a pixel
 byte_t dropped_pixels = 0;
 static inline void drawing_step(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
     // pixel fetcher step
     byte_t tile_slice;
-    byte_t is_window = CHECK_BIT(mmu->mem[LCDC], 5) && mmu->mem[LY] >= mmu->mem[WY] && lx == mmu->mem[WX] - 7;
+    // byte_t is_window = CHECK_BIT(mmu->mem[LCDC], 5) && mmu->mem[LY] >= mmu->mem[WY] && tile_lx == mmu->mem[WX] - 7;
+    byte_t is_window = 0;
     // if (is_window)
     //     pixel_fetcher.step = GET_TILE_ID;
 
     switch (pixel_fetcher.step) { // TODO make steps an enum
     case GET_TILE_ID:
         // TODO check if in bg or win mode (for now only bg mode is implemented)
-        if (is_window)
-            pixel_fetcher.tilemap_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 6) << 10) | ((mmu->mem[WY] / 8) << 5) | (lx / 8);
-        else
-            pixel_fetcher.tilemap_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 3) << 10) | (((mmu->mem[LY] + mmu->mem[SCY]) / 8) << 5) | ((lx + mmu->mem[SCX]) / 8);
+        if (is_window) {
+            pixel_fetcher.tilemap_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 6) << 10) | ((mmu->mem[WY] / 8) << 5) | tile_lx;
+        } else {
+            byte_t ly_scy = mmu->mem[LY] + mmu->mem[SCY]; // addition carried out in 8 bits (== result % 256)
+            byte_t tile_lx_scx = tile_lx + mmu->mem[SCX]; // addition carried out in 8 bits (== result % 256)
+            pixel_fetcher.tilemap_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 3) << 10) | ((ly_scy / 8) << 5) | tile_lx_scx;
+        }
 
         // TODO if the ppu vram access is blocked, the tile id read is 0xFF
         // TODO 9th bit computed as (LCDC & $10) && !(ID & $80)???
         pixel_fetcher.current_tile_id = mmu->mem[pixel_fetcher.tilemap_address];
+
+        pixel_fetcher.step++;
+        break;
+    case GET_TILE_ID + 1:
+        pixel_fetcher.step++;
         break;
     case GET_TILE_SLICE_LOW:
         // get tiledata memory address
@@ -170,6 +175,11 @@ static inline void drawing_step(emulator_t *emu) {
 
         for (byte_t i = 0; i < 8; i++)
             pixel_fetcher.pixels[i].color = GET_BIT(tile_slice, 7 - i);
+
+        pixel_fetcher.step++;
+        break;
+    case GET_TILE_SLICE_LOW + 1:
+        pixel_fetcher.step++;
         break;
     case GET_TILE_SLICE_HIGH:
         // if bg/win is enabled, get color data, else get 0
@@ -180,29 +190,50 @@ static inline void drawing_step(emulator_t *emu) {
 
         for (byte_t i = 0; i < 8; i++)
             pixel_fetcher.pixels[i].color |= GET_BIT(tile_slice, 7 - i) << 1;
+
+        pixel_fetcher.step++;
         break;
-    case PUSH:
-        pixel_fifo_push(&bg_fifo, pixel_fetcher.pixels, 0);
+    case GET_TILE_SLICE_HIGH + 1:
+        pixel_fetcher.step++;
+        break;
+    case PUSH: // PENDING_PUSH
+        if (bg_fifo.size > 0)
+            break;
+
+        pixel_fetcher.step++;
+        // fall through
+    case PUSH + 1: // PUSH
+        if (pixel_fifo_push(&bg_fifo, pixel_fetcher.pixels, 0)) {
+            pixel_fetcher.step = GET_TILE_ID;
+            tile_lx++;
+        } else {
+            return;
+        }
         break;
     }
-    pixel_fetcher.step = (pixel_fetcher.step + 1) % 8;
-    lx++;
 
-    // OBJ fetcher is just check for both conditions, then replace bg_push by push_obj on the first obj that is in the lx + 8 range ?
+    // OBJ fetcher is just check for both conditions, then replace bg_push by push_obj on the first obj that is in the tile_lx + 8 range ?
     // as oam objs are sorted, the first one that matches is either the head of the list or none
 
     // bg fifo step
     pixel_t *bg_pixel = pixel_fifo_pop(&bg_fifo);
+    // if there isn't any bg_pixel in the bg_fifo, don't draw anything
+    if (!bg_pixel)
+        return;
 
     // obj fifo step
+    pixel_t *obj_pixel = pixel_fifo_pop(&obj_fifo);
 
     // merge and draw pixel
-    if (bg_pixel)
-        SET_PIXEL_DMG(emu->ppu, lx - 8, mmu->mem[LY], get_color(mmu, bg_pixel->color, BGP), emu->ppu_color_palette);
+    SET_PIXEL_DMG(emu->ppu, lcd_lx, mmu->mem[LY], get_color(mmu, bg_pixel->color, BGP), emu->ppu_color_palette);
+    lcd_lx++;
 
-    // TODO >= or > ?
-    if (lx >= GB_SCREEN_WIDTH + 8) {
-        lx = 0;
+    // if (obj_pixel)
+    //     SET_PIXEL_DMG(emu->ppu, tile_lx - 8, mmu->mem[LY], get_color(mmu, obj_pixel->color, obj_pixel->palette), emu->ppu_color_palette);
+
+    if (tile_lx * 8 > GB_SCREEN_WIDTH) {
+        tile_lx = 0;
+        lcd_lx = 0;
         dropped_pixels = 0;
 
         pixel_fetcher = (pixel_fetcher_t) { 0 };
