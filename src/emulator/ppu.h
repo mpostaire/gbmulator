@@ -4,7 +4,15 @@
 #include "mmu.h"
 #include "cpu.h"
 
-#define PPU_IS_MODE(emu_ptr, m) (((emu_ptr)->mmu->mem[STAT] & 0x03) == (m))
+#define PPU_GET_MODE(emu_ptr) ((emu_ptr)->mmu->mem[STAT] & 0x03)
+#define PPU_IS_MODE(emu_ptr, mode) (PPU_GET_MODE(emu_ptr) == (mode))
+
+#define IS_LCD_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->mem[LCDC], 7))
+
+#define IS_LY_LYC_IRQ_STAT_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->mem[STAT], 6))
+#define IS_OAM_IRQ_STAT_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->mem[STAT], 5))
+#define IS_VBLANK_IRQ_STAT_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->mem[STAT], 4))
+#define IS_HBLANK_IRQ_STAT_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->mem[STAT], 3))
 
 typedef enum {
     PPU_MODE_HBLANK,
@@ -20,7 +28,7 @@ inline void ppu_ly_lyc_compare(emulator_t *emu) {
 
     if (mmu->mem[LY] == mmu->mem[LYC]) {
         SET_BIT(mmu->mem[STAT], 2);
-        if (CHECK_BIT(mmu->mem[STAT], 6))
+        if (IS_LY_LYC_IRQ_STAT_ENABLED(emu))
             CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
     } else {
         RESET_BIT(mmu->mem[STAT], 2);
