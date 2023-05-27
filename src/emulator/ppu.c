@@ -80,6 +80,7 @@ typedef struct {
     word_t tilemap_address;
     word_t tiledata_address;
     byte_t current_tile_id;
+    byte_t x; // x position of the fetcher on the scanline
 } pixel_fetcher_t;
 
 pixel_fifo_t bg_fifo;
@@ -119,15 +120,14 @@ static inline void pixel_fifo_push(pixel_fifo_t *fifo, pixel_t *pixels, byte_t f
     fifo->head = 0;
 }
 
-byte_t tile_lx = 0; // x position on the scanline of the pisel fetcher divided by 8: because the pixel etcher fetches 8 pixels (1 tile row) at a time
 byte_t lcd_x = 0;
-byte_t dropped_pixels = 0;
+byte_t discard_pixels = 0; // amount of pixels to discard at the start of a scanline due to SCX scrolling
 static inline void drawing_step(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
     // pixel fetcher step
     byte_t tile_slice;
-    // byte_t is_window = CHECK_BIT(mmu->mem[LCDC], 5) && mmu->mem[LY] >= mmu->mem[WY] && tile_lx == mmu->mem[WX] - 7; // TODO tile_lx here??? it should be pixel perfect...
+    // byte_t is_window = CHECK_BIT(mmu->mem[LCDC], 5) && mmu->mem[LY] >= mmu->mem[WY] && pixel_fetcher.x == mmu->mem[WX] - 7; // TODO pixel_fetcher.x here??? it should be pixel perfect...
     byte_t is_window = 0;
     // if (is_window)
     //     pixel_fetcher.step = GET_TILE_ID;
@@ -136,12 +136,11 @@ static inline void drawing_step(emulator_t *emu) {
     case GET_TILE_ID:
         // TODO check if in bg or win mode (for now only bg mode is implemented)
         if (is_window) {
-            pixel_fetcher.tilemap_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 6) << 10) | ((mmu->mem[WY] / 8) << 5) | (tile_lx & 0x1F);
+            pixel_fetcher.tilemap_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 6) << 10) | ((mmu->mem[WY] / 8) << 5) | ((pixel_fetcher.x / 8) & 0x1F);
         } else {
             byte_t ly_scy = mmu->mem[LY] + mmu->mem[SCY]; // addition carried out in 8 bits (== result % 256)
-            // TODO scy seems broken???
-            byte_t tile_lx_scx = tile_lx + mmu->mem[SCX]; // addition carried out in 8 bits (== result % 256)
-            pixel_fetcher.tilemap_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 3) << 10) | ((ly_scy / 8) << 5) | (tile_lx_scx & 0x1F);
+            byte_t fetcher_x_scx = pixel_fetcher.x + mmu->mem[SCX]; // addition carried out in 8 bits (== result % 256)
+            pixel_fetcher.tilemap_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 3) << 10) | ((ly_scy / 8) << 5) | ((fetcher_x_scx / 8) & 0x1F);
         }
 
         // TODO if the ppu vram access is blocked, the tile id read is 0xFF
@@ -197,14 +196,14 @@ static inline void drawing_step(emulator_t *emu) {
         if (bg_fifo.size > 0)
             break;
         pixel_fifo_push(&bg_fifo, &pixel_fetcher.pixels, 0);
-        tile_lx++;
+        pixel_fetcher.x += 8;
         pixel_fetcher.step = GET_TILE_ID;
         break;
     case PUSH + 1:
         break;
     }
 
-    // OBJ fetcher is just check for both conditions, then replace bg_push by push_obj on the first obj that is in the tile_lx + 8 range ?
+    // OBJ fetcher is just check for both conditions, then replace bg_push by push_obj on the first obj that is in the pixel_fetcher.x + 8 range ?
     // as oam objs are sorted, the first one that matches is either the head of the list or none
 
     // bg fifo step
@@ -212,6 +211,11 @@ static inline void drawing_step(emulator_t *emu) {
     // if there isn't any bg_pixel in the bg_fifo, don't draw anything
     if (!bg_pixel)
         return;
+
+    if (discard_pixels) {
+        discard_pixels--;
+        return;
+    }
 
     // // obj fifo step
     // pixel_t *obj_pixel = pixel_fifo_pop(&obj_fifo);
@@ -221,12 +225,11 @@ static inline void drawing_step(emulator_t *emu) {
     lcd_x++;
 
     // if (obj_pixel)
-    //     SET_PIXEL_DMG(emu->ppu, tile_lx - 8, mmu->mem[LY], get_color(mmu, obj_pixel->color, obj_pixel->palette), emu->ppu_color_palette);
+    //     SET_PIXEL_DMG(emu->ppu, pixel_fetcher.x - 8, mmu->mem[LY], get_color(mmu, obj_pixel->color, obj_pixel->palette), emu->ppu_color_palette);
 
-    if (tile_lx > GB_SCREEN_WIDTH / 8) {
-        tile_lx = 0;
+    if (lcd_x >= GB_SCREEN_WIDTH) {
         lcd_x = 0;
-        dropped_pixels = 0;
+        pixel_fetcher.x = 0;
 
         pixel_fetcher = (pixel_fetcher_t) { 0 };
         bg_fifo = (pixel_fifo_t) { 0 };
@@ -267,6 +270,7 @@ static inline void oam_scan_step(mmu_t *mmu) {
         oam_scan.step = 0;
         oam_scan.index = 0;
 
+        discard_pixels = mmu->mem[SCX] % 8;
         PPU_SET_MODE(PPU_MODE_DRAWING);
     }
 }
