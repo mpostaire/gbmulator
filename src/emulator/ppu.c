@@ -68,7 +68,7 @@ typedef struct {
     byte_t is_obj;
 } pixel_t;
 
-#define FIFO_SIZE 16
+#define FIFO_SIZE 8
 typedef struct {
     pixel_t pixels[FIFO_SIZE];
     byte_t size;
@@ -108,10 +108,16 @@ typedef struct {
 
 // TODO get coffee.gb source, run it and debug using intellij to understand the fetcher and fifo
 
-pixel_fifo_t fifo;
+pixel_fifo_t bg_win_fifo;
+pixel_fifo_t obj_fifo;
 pixel_fetcher_t pixel_fetcher;
 
 word_t scanline_duration = 0;
+
+// FIXME window and sprite don't render correctly if they are positioned before the scanline (they should be cropped
+//       the outside screen not shown and the inside screen shown)
+
+// FIXME pokemon red: when pokemon slides to the left, a bit of the hand slides a little bit with it.
 
 /**
  * @returns color after applying palette.
@@ -139,12 +145,18 @@ static inline pixel_t *pixel_fifo_pop(pixel_fifo_t *fifo) {
     return &fifo->pixels[old_head];
 }
 
-static inline void pixel_fifo_push(pixel_fifo_t *fifo, pixel_t *pixel, byte_t flip_x) {
+static inline void pixel_fifo_push(pixel_fifo_t *fifo, pixel_t *pixel) {
     if (fifo->size == FIFO_SIZE)
         return;
     fifo->size++;
     fifo->pixels[fifo->tail] = *pixel;
     fifo->tail = (fifo->tail + 1) % FIFO_SIZE;
+}
+
+static inline void pixel_fifo_clear(pixel_fifo_t *fifo) {
+    fifo->size = 0;
+    fifo->head = 0;
+    fifo->tail = 0;
 }
 
 byte_t lcd_x = 0;
@@ -175,12 +187,10 @@ static inline void drawing_step(emulator_t *emu) {
         pixel_fetcher.step = GET_TILE_ID;
         pixel_fetcher.x = 0;
         emu->ppu->wly++;
-        fifo = (pixel_fifo_t) { 0 };
+        pixel_fifo_clear(&bg_win_fifo);
     }
 
-    // we also check that fifo.size >= 8 because at the beginning of a scanline or after a window clears the fifo,
-    // we don't want to switch to FETCH_OBJ mode before it has refilled at least 8 pixels, because otherwise, it can cause objs to be overwritten
-    if (fifo.size >= 8 && pixel_fetcher.mode != FETCH_OBJ && oam_scan.index < oam_scan.size && oam_scan.objs[oam_scan.index]->x <= lcd_x + 8) {
+    if (pixel_fetcher.mode != FETCH_OBJ && oam_scan.index < oam_scan.size && oam_scan.objs[oam_scan.index]->x <= lcd_x + 8) {
         if (IS_PPU_OBJ_ENABLED(mmu)) {
             // there is an obj at the new position
             pixel_fetcher.mode = FETCH_OBJ;
@@ -226,13 +236,13 @@ static inline void drawing_step(emulator_t *emu) {
         case FETCH_BG:
             bit_12 = !((mmu->mem[LCDC] & 0x10) || (pixel_fetcher.current_tile_id & 0x80));
             byte_t ly_scy = mmu->mem[LY] + mmu->mem[SCY]; // addition carried out in 8 bits (== result % 256)
-            pixel_fetcher.tiledata_address = 0x8000 | (bit_12 << 12) | (pixel_fetcher.current_tile_id << 4) | ((ly_scy % 8) << 1) | 0; // TODO '| 0' useless?
+            pixel_fetcher.tiledata_address = 0x8000 | (bit_12 << 12) | (pixel_fetcher.current_tile_id << 4) | ((ly_scy % 8) << 1);
             // if bg/win is enabled, get color data, else get 0
             tile_slice = IS_PPU_BG_WIN_ENABLED(mmu) ? mmu->mem[pixel_fetcher.tiledata_address] : 0;
             break;
         case FETCH_WIN:
             bit_12 = !((mmu->mem[LCDC] & 0x10) || (pixel_fetcher.current_tile_id & 0x80));
-            pixel_fetcher.tiledata_address = 0x8000 | (bit_12 << 12) | (pixel_fetcher.current_tile_id << 4) | ((emu->ppu->wly % 8) << 1) | 0; // TODO '| 0' useless?
+            pixel_fetcher.tiledata_address = 0x8000 | (bit_12 << 12) | (pixel_fetcher.current_tile_id << 4) | ((emu->ppu->wly % 8) << 1);
             // if bg/win is enabled, get color data, else get 0
             tile_slice = IS_PPU_BG_WIN_ENABLED(mmu) ? mmu->mem[pixel_fetcher.tiledata_address] : 0;
             break;
@@ -241,7 +251,6 @@ static inline void drawing_step(emulator_t *emu) {
             byte_t actual_tile_id = oam_scan.objs[pixel_fetcher.curr_oam_index]->tile_id;
 
             if (IS_PPU_OBJ_TALL(mmu)) {
-                // TODO replace abs by my own
                 byte_t is_top_tile = abs(mmu->mem[LY] - oam_scan.objs[pixel_fetcher.curr_oam_index]->y) > 8;
                 CHANGE_BIT(actual_tile_id, 0, flip_y ? is_top_tile : !is_top_tile);
             }
@@ -251,7 +260,7 @@ static inline void drawing_step(emulator_t *emu) {
                 bits_3_1 = ~bits_3_1;
             bits_3_1 &= 0x07;
 
-            pixel_fetcher.tiledata_address = 0x8000 | (actual_tile_id << 4) | (bits_3_1 << 1) | 0; // TODO '| 0' useless?
+            pixel_fetcher.tiledata_address = 0x8000 | (actual_tile_id << 4) | (bits_3_1 << 1);
 
             byte_t flip_x = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index]->attributes, 5);
             tile_slice = flip_x ? reverse_bits_order(mmu->mem[pixel_fetcher.tiledata_address]) : mmu->mem[pixel_fetcher.tiledata_address];
@@ -301,25 +310,25 @@ static inline void drawing_step(emulator_t *emu) {
         switch (pixel_fetcher.mode) {
         case FETCH_BG:
         case FETCH_WIN:
-            if (fifo.size <= 8) {
+            if (bg_win_fifo.size == 0) {
                 for (byte_t i = 0; i < 8; i++)
-                    pixel_fifo_push(&fifo, &pixel_fetcher.pixels[i], 0);
+                    pixel_fifo_push(&bg_win_fifo, &pixel_fetcher.pixels[i]);
                 pixel_fetcher.x += 8;
             } else {
                 goto shift_pixels; // TODO this is ugly...
             }
             break;
         case FETCH_OBJ:
-            // TODO merge this sprite line with the current one
+            // overwrite old transparent obj pixels, then fill rest of fifo with the last pixels of this obj to not overwrite any old pixels
+            byte_t old_size = obj_fifo.size;
+            for (byte_t i = 0; i < FIFO_SIZE; i++) {
+                byte_t fifo_index = (i + obj_fifo.head) % FIFO_SIZE;
 
-            for (byte_t i = 0; i < 8; i++) {
-                pixel_t *obj_pixel = &pixel_fetcher.pixels[i];
-                pixel_t *fifo_pixel = &fifo.pixels[(fifo.head + i) % FIFO_SIZE];
-                byte_t bg_over_obj = obj_pixel->bg_priority && !fifo_pixel->is_obj && fifo_pixel->color != DMG_WHITE;
-                if (obj_pixel->color != DMG_WHITE && !fifo_pixel->is_obj && !bg_over_obj) { // ignore transparent obj pixel and don't draw over another sprite (thus, respecting x priority)
-                    fifo_pixel->color = obj_pixel->color;
-                    fifo_pixel->palette = obj_pixel->palette;
-                    fifo_pixel->is_obj = 1;
+                if (i < old_size) {
+                    if (obj_fifo.pixels[fifo_index].color == DMG_WHITE)
+                        obj_fifo.pixels[fifo_index] = pixel_fetcher.pixels[i];
+                } else {
+                    pixel_fifo_push(&obj_fifo, &pixel_fetcher.pixels[i]);
                 }
             }
             pixel_fetcher.mode = old_mode;
@@ -336,18 +345,32 @@ static inline void drawing_step(emulator_t *emu) {
 
     // 2. SHIFTING PIXELS OUT TO THE LCD
 
-    if (fifo.size <= 8 || pixel_fetcher.mode == FETCH_OBJ)
+    if (pixel_fetcher.mode == FETCH_OBJ)
         return;
 
-    pixel_t *pixel = pixel_fifo_pop(&fifo);
+    pixel_t *bg_win_pixel = pixel_fifo_pop(&bg_win_fifo);
+    if (!bg_win_pixel)
+        return;
 
     if (discard_pixels) {
         discard_pixels--;
         return;
     }
 
-    byte_t color = get_color(mmu, pixel->color, pixel->palette);
-    SET_PIXEL_DMG(emu->ppu, lcd_x, mmu->mem[LY], color, emu->ppu_color_palette);
+    byte_t color = bg_win_pixel->color;
+    word_t palette = bg_win_pixel->palette;
+
+    // merge pixels
+    pixel_t *obj_pixel = pixel_fifo_pop(&obj_fifo);
+    if (obj_pixel) {
+        byte_t bg_over_obj = obj_pixel->bg_priority && bg_win_pixel->color != DMG_WHITE;
+        if (obj_pixel->color != DMG_WHITE && !bg_over_obj) { // ignore transparent obj pixel and don't draw over another sprite (thus, respecting x priority)
+            color = obj_pixel->color;
+            palette = obj_pixel->palette;
+        }
+    }
+
+    SET_PIXEL_DMG(emu->ppu, lcd_x, mmu->mem[LY], get_color(mmu, color, palette), emu->ppu_color_palette);
     lcd_x++;
 
     if (lcd_x >= GB_SCREEN_WIDTH) {
@@ -359,7 +382,8 @@ static inline void drawing_step(emulator_t *emu) {
         // printf("%d\n", scanline_duration - 80);
 
         pixel_fetcher = (pixel_fetcher_t) { 0 };
-        fifo = (pixel_fifo_t) { 0 };
+        pixel_fifo_clear(&bg_win_fifo);
+        pixel_fifo_clear(&obj_fifo);
 
         oam_scan.index = 0;
 
