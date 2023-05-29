@@ -184,7 +184,7 @@ typedef struct {
 
 typedef struct {
     byte_t is_lcd_turning_on;
-    byte_t wly; // window "LY" internal counter
+    s_word_t wly; // window "LY" internal counter
     word_t cycles;
 
     struct {

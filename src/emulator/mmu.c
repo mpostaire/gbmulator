@@ -950,7 +950,7 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
             return;
         mmu->mem[address] = data;
     } else if (address == NR52) {
-        CHANGE_BIT(mmu->mem[NR52], data >> 7, 7);
+        CHANGE_BIT(mmu->mem[NR52], 7, data >> 7);
         if (!IS_APU_ENABLED(emu))
             memset(&mmu->mem[NR10], 0x00, 32 * sizeof(byte_t)); // clear all registers
     } else if (address >= WAVE_RAM && address < LCDC) {
