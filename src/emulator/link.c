@@ -47,12 +47,12 @@ void link_step(emulator_t *emu) {
 
                     // transfer this emu bit to other_emu
                     link->other_emu->mmu->mem[SB] <<= 1;
-                    CHANGE_BIT(link->other_emu->mmu->mem[SB], this_bit, 0);
+                    CHANGE_BIT(link->other_emu->mmu->mem[SB], 0, this_bit);
                 }
 
                 // transfer other_emu bit to this emu
                 mmu->mem[SB] <<= 1;
-                CHANGE_BIT(mmu->mem[SB], other_bit, 0);
+                CHANGE_BIT(mmu->mem[SB], 0, other_bit);
             } else { // transfer is done (all bits were shifted)
                 link->bit_counter = 0;
 
