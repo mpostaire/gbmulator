@@ -93,11 +93,10 @@ typedef enum {
     FETCH_OBJ
 } pixel_fetcher_mode_t;
 
-pixel_fetcher_mode_t old_mode; // TODO mode that the FETCH_OBJ has replaced
-
 typedef struct {
     pixel_t pixels[8];
     pixel_fetcher_mode_t mode;
+    pixel_fetcher_mode_t old_mode; // mode that the FETCH_OBJ has replaced
     pixel_fetcher_step_t step;
     byte_t curr_oam_index; // only relevant when step is FETCH_OBJ, holds the index of the obj to fetch in the oam_scan.objs array
 
@@ -113,9 +112,6 @@ pixel_fifo_t obj_fifo;
 pixel_fetcher_t pixel_fetcher;
 
 word_t scanline_duration = 0;
-
-// FIXME window and sprite don't render correctly if they are positioned before the scanline (they should be cropped
-//       the outside screen not shown and the inside screen shown)
 
 // FIXME pokemon red: when pokemon slides to the left, a bit of the hand slides a little bit with it.
 
@@ -160,7 +156,7 @@ static inline void pixel_fifo_clear(pixel_fifo_t *fifo) {
 }
 
 byte_t lcd_x = 0;
-byte_t discard_pixels = 0; // amount of pixels to discard at the start of a scanline due to SCX scrolling
+byte_t discard_pixels = 0; // amount of pixels to discard at the start of a scanline due to either SCX scrolling or WX < 7
 
 /**
  * taken from https://stackoverflow.com/a/2602885
@@ -183,10 +179,12 @@ static inline void drawing_step(emulator_t *emu) {
     if (IS_PPU_WIN_ENABLED(mmu) && mmu->mem[WY] <= mmu->mem[LY] && mmu->mem[WX] - 7 <= lcd_x && pixel_fetcher.mode == FETCH_BG) {
         // the fetcher must switch to window mode for the remaining of the scanline (except when an object needs to be drawn)
         pixel_fetcher.mode = FETCH_WIN;
-        old_mode = FETCH_WIN;
+        pixel_fetcher.old_mode = FETCH_WIN;
         pixel_fetcher.step = GET_TILE_ID;
         pixel_fetcher.x = 0;
         emu->ppu->wly++;
+        if (mmu->mem[WX] < 7)
+            discard_pixels = 7 - mmu->mem[WX];
         pixel_fifo_clear(&bg_win_fifo);
     }
 
@@ -319,21 +317,28 @@ static inline void drawing_step(emulator_t *emu) {
             }
             break;
         case FETCH_OBJ:
-            // overwrite old transparent obj pixels, then fill rest of fifo with the last pixels of this obj to not overwrite any old pixels
+            // if the obj starts before the beginning of the scanline, only push the visible pixels by using an offset
             byte_t old_size = obj_fifo.size;
-            for (byte_t i = 0; i < FIFO_SIZE; i++) {
-                byte_t fifo_index = (i + obj_fifo.head) % FIFO_SIZE;
+            byte_t offset = 0;
+            if (oam_scan.objs[pixel_fetcher.curr_oam_index]->x < 8)
+                offset = 8 - oam_scan.objs[pixel_fetcher.curr_oam_index]->x;
 
-                if (i < old_size) {
+            // overwrite old transparent obj pixels, then fill rest of fifo with the last pixels of this obj to not overwrite any old pixels
+            for (byte_t fetcher_index = offset; fetcher_index < FIFO_SIZE; fetcher_index++) {
+                byte_t fifo_index = ((fetcher_index - offset) + obj_fifo.head) % FIFO_SIZE;
+
+                if (fetcher_index < old_size) {
                     if (obj_fifo.pixels[fifo_index].color == DMG_WHITE)
-                        obj_fifo.pixels[fifo_index] = pixel_fetcher.pixels[i];
+                        obj_fifo.pixels[fifo_index] = pixel_fetcher.pixels[fetcher_index];
                 } else {
-                    pixel_fifo_push(&obj_fifo, &pixel_fetcher.pixels[i]);
+                    pixel_fifo_push(&obj_fifo, &pixel_fetcher.pixels[fetcher_index]);
                 }
             }
-            pixel_fetcher.mode = old_mode;
+
+            pixel_fetcher.mode = pixel_fetcher.old_mode;
             break;
         }
+
         pixel_fetcher.step = PUSH_SLEEP;
         break;
     case PUSH_SLEEP:
@@ -421,7 +426,6 @@ static inline void oam_scan_step(mmu_t *mmu) {
         oam_scan.index = 0;
 
         discard_pixels = mmu->mem[SCX] % 8;
-        old_mode = FETCH_BG;
         PPU_SET_MODE(mmu, PPU_MODE_DRAWING);
     }
 }
