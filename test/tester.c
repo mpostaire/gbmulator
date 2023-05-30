@@ -273,6 +273,8 @@ static int run_test(test_t *test) {
     if (!emu)
         return 0;
 
+    emu->exit_on_invalid_opcode = 0;
+
     // TODO GBmulator's boot roms aren't the same as the original DMG and CGB. This may cause problems in some test roms
     //      like timer based test roms
     // run until the boot sequence is done

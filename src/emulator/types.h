@@ -291,6 +291,7 @@ typedef struct {
 struct emulator_t {
     emulator_mode_t mode;
     byte_t disable_cgb_color_correction;
+    byte_t exit_on_invalid_opcode;
     float apu_sound_level;
     float apu_speed;
     int apu_sample_count;

@@ -72,6 +72,7 @@ int emulator_step(emulator_t *emu) {
 
 emulator_t *emulator_init(const byte_t *rom_data, size_t rom_size, emulator_options_t *opts) {
     emulator_t *emu = xcalloc(1, sizeof(emulator_t));
+    emu->exit_on_invalid_opcode = 1;
     emulator_set_options(emu, opts);
 
     if (!mmu_init(emu, rom_data, rom_size)) {
