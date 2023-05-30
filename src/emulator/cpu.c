@@ -805,7 +805,10 @@ static void handle_missing_opcode(emulator_t *emu, byte_t is_cb) {
 
     if (cpu->opcode >= (is_cb ? sizeof(extended_instructions) : sizeof(instructions))) {
         eprintf("(invalid) opcode%s%02X\n", is_cb ? " CB " : " ", cpu->opcode);
-        exit(EXIT_FAILURE);
+        if (emu->exit_on_invalid_opcode)
+            exit(EXIT_FAILURE);
+        else
+            emu->cpu->halt = 1;
     }
 
     cpu->operand = 0; // initialize to 0 to shut gcc warnings
@@ -822,7 +825,10 @@ static void handle_missing_opcode(emulator_t *emu, byte_t is_cb) {
     snprintf(buf, sizeof(buf), is_cb ? extended_instructions[cpu->opcode].name : instructions[cpu->opcode].name, cpu->operand);
 
     eprintf("(not implemented) opcode%s%02X: %s\n", is_cb ? " CB " : " ", cpu->opcode, buf);
-    exit(EXIT_FAILURE);
+    if (emu->exit_on_invalid_opcode)
+        exit(EXIT_FAILURE);
+    else
+        emu->cpu->halt = 1;
 }
 
 static void exec_extended_opcode(emulator_t *emu) {
