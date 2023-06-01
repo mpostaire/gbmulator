@@ -103,14 +103,9 @@ typedef struct {
     byte_t x; // x position of the fetcher on the scanline
 } pixel_fetcher_t;
 
-// TODO get coffee.gb source, run it and debug using intellij to understand the fetcher and fifo
-
 pixel_fifo_t bg_win_fifo;
 pixel_fifo_t obj_fifo;
 pixel_fetcher_t pixel_fetcher;
-
-// FIXME pokemon red: when pokemon slides to the left, a bit of the hand slides a little bit with it.
-//      --> maybe because the oam scan stores pointers ant the oam data is overwritten?? seems unlikely.
 
 /**
  * @returns color after applying palette.
