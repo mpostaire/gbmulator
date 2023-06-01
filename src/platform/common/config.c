@@ -207,7 +207,6 @@ char *config_save_to_string(config_t *config) {
         snprintf(&buf[len], 512 - len, "gamepad_select=%s\n", config->gamepad_button_parser(config->gamepad_bindings[JOYPAD_SELECT]));
         len = strlen(buf);
         snprintf(&buf[len], 512 - len, "gamepad_start=%s\n", config->gamepad_button_parser(config->gamepad_bindings[JOYPAD_START]));
-        len = strlen(buf);
     }
 
     return buf;

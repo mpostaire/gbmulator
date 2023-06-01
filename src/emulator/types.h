@@ -183,19 +183,72 @@ typedef struct {
 } mmu_t;
 
 typedef struct {
+    byte_t color;
+    word_t palette;
+    byte_t obj_priority; // only on CGB mode
+    byte_t bg_priority;
+} pixel_t;
+
+#define PIXEL_FIFO_SIZE 8
+typedef struct {
+    pixel_t pixels[PIXEL_FIFO_SIZE];
+    byte_t size;
+    byte_t head;
+    byte_t tail;
+} pixel_fifo_t;
+
+typedef enum {
+    GET_TILE_ID = 1,
+    GET_TILE_SLICE_LOW = 3,
+    GET_TILE_SLICE_HIGH = 5,
+    PUSH
+} pixel_fetcher_step_t;
+
+typedef enum {
+    FETCH_BG,
+    FETCH_WIN,
+    FETCH_OBJ
+} pixel_fetcher_mode_t;
+
+typedef struct {
+    byte_t y;
+    byte_t x;
+    byte_t tile_id;
+    byte_t attributes;
+    // the order of the struct members is important!
+} obj_t;
+
+typedef struct {
     byte_t is_lcd_turning_on;
-    s_word_t wly; // window "LY" internal counter
     word_t cycles;
+    byte_t discarded_pixels; // dicarded pixel counter at the start of a scanline due to either SCX scrolling or WX < 7
+    byte_t lcd_x; // x coordinate of the lcd pixel shifter
+    s_word_t wly; // window "LY" internal counter
+    byte_t is_last_vblank_line;
 
     struct {
-        word_t objs_addresses[10];
+        obj_t objs[10]; // this is ordered on the x coord of the obj_t, popping an element is just increasing the index
         byte_t size;
+        byte_t index; // used in oam mode to iterate over the oam memory, in drawing mode this is the first element of the objs array
+        byte_t step;
     } oam_scan;
 
+    pixel_fifo_t bg_win_fifo;
+    pixel_fifo_t obj_fifo;
+
+    struct {
+        pixel_t pixels[8];
+        pixel_fetcher_mode_t mode;
+        pixel_fetcher_mode_t old_mode; // mode that the FETCH_OBJ has replaced
+        pixel_fetcher_step_t step;
+        byte_t curr_oam_index; // only relevant when step is FETCH_OBJ, holds the index of the obj to fetch in the oam_scan.objs array
+        byte_t init_delay_done; // the fetcher has a dummy fetch of 6 cycles when starting a scanline
+
+        byte_t current_tile_id;
+        byte_t x; // x position of the fetcher on the scanline
+    } pixel_fetcher;
+
     byte_t *pixels;
-    byte_t *scanline_cache_color_data;
-    // stores the x position of each pixel drawn by the highest priority object
-    byte_t *obj_pixel_priority;
 } ppu_t;
 
 typedef enum {
