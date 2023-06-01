@@ -56,7 +56,7 @@ typedef struct {
 } obj_t;
 
 struct oam_scan_t {
-    obj_t *objs[10]; // this is ordered on the x coord of the obj_t, popping an element is just increasing the index
+    obj_t objs[10]; // this is ordered on the x coord of the obj_t, popping an element is just increasing the index
     byte_t size;
     byte_t index; // used in oam mode to iterate over the oam memory, in drawing mode this is the first element of the objs array
     byte_t step;
@@ -190,7 +190,7 @@ static inline void fetch_tile_id(emulator_t *emu) {
         break;
     }
     case FETCH_OBJ:
-        pixel_fetcher.current_tile_id = oam_scan.objs[pixel_fetcher.curr_oam_index]->tile_id;
+        pixel_fetcher.current_tile_id = oam_scan.objs[pixel_fetcher.curr_oam_index].tile_id;
         break;
     }
 }
@@ -216,22 +216,22 @@ static inline void fetch_tileslice_low(emulator_t *emu) {
         break;
     }
     case FETCH_OBJ:
-        byte_t flip_y = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index]->attributes, 6);
-        byte_t actual_tile_id = oam_scan.objs[pixel_fetcher.curr_oam_index]->tile_id;
+        byte_t flip_y = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index].attributes, 6);
+        byte_t actual_tile_id = oam_scan.objs[pixel_fetcher.curr_oam_index].tile_id;
 
         if (IS_PPU_OBJ_TALL(mmu)) {
-            byte_t is_top_tile = abs(mmu->mem[LY] - oam_scan.objs[pixel_fetcher.curr_oam_index]->y) > 8;
+            byte_t is_top_tile = abs(mmu->mem[LY] - oam_scan.objs[pixel_fetcher.curr_oam_index].y) > 8;
             CHANGE_BIT(actual_tile_id, 0, flip_y ? is_top_tile : !is_top_tile);
         }
 
-        byte_t bits_3_1 = (mmu->mem[LY] - oam_scan.objs[pixel_fetcher.curr_oam_index]->y) % 8;
+        byte_t bits_3_1 = (mmu->mem[LY] - oam_scan.objs[pixel_fetcher.curr_oam_index].y) % 8;
         if (flip_y)
             bits_3_1 = ~bits_3_1;
         bits_3_1 &= 0x07;
 
         pixel_fetcher.tiledata_address = 0x8000 | (actual_tile_id << 4) | (bits_3_1 << 1);
 
-        byte_t flip_x = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index]->attributes, 5);
+        byte_t flip_x = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index].attributes, 5);
         tileslice = flip_x ? reverse_bits_order(mmu->mem[pixel_fetcher.tiledata_address]) : mmu->mem[pixel_fetcher.tiledata_address];
         tileslice = flip_x ? reverse_bits_order(mmu->mem[pixel_fetcher.tiledata_address]) : mmu->mem[pixel_fetcher.tiledata_address];
         break;
@@ -257,13 +257,13 @@ static inline void fetch_tileslice_high(emulator_t *emu) {
         }
         break;
     case FETCH_OBJ:
-        byte_t flip_x = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index]->attributes, 5);
+        byte_t flip_x = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index].attributes, 5);
         tileslice = flip_x ? reverse_bits_order(mmu->mem[pixel_fetcher.tiledata_address + 1]) : mmu->mem[pixel_fetcher.tiledata_address + 1];
 
         for (byte_t i = 0; i < 8; i++) {
             pixel_fetcher.pixels[i].color |= GET_BIT(tileslice, 7 - i) << 1;
-            pixel_fetcher.pixels[i].palette = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index]->attributes, 4) ? OBP1 : OBP0;
-            pixel_fetcher.pixels[i].bg_priority = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index]->attributes, 7);
+            pixel_fetcher.pixels[i].palette = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index].attributes, 4) ? OBP1 : OBP0;
+            pixel_fetcher.pixels[i].bg_priority = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index].attributes, 7);
         }
         break;
     }
@@ -284,8 +284,8 @@ static inline byte_t push(emulator_t *emu) {
         // if the obj starts before the beginning of the scanline, only push the visible pixels by using an offset
         byte_t old_size = obj_fifo.size;
         byte_t offset = 0;
-        if (oam_scan.objs[pixel_fetcher.curr_oam_index]->x < 8)
-            offset = 8 - oam_scan.objs[pixel_fetcher.curr_oam_index]->x;
+        if (oam_scan.objs[pixel_fetcher.curr_oam_index].x < 8)
+            offset = 8 - oam_scan.objs[pixel_fetcher.curr_oam_index].x;
 
         // overwrite old transparent obj pixels, then fill rest of fifo with the last pixels of this obj to not overwrite any old pixels
         for (byte_t fetcher_index = offset; fetcher_index < FIFO_SIZE; fetcher_index++) {
@@ -343,7 +343,7 @@ static inline void drawing_step(emulator_t *emu) {
         pixel_fifo_clear(&bg_win_fifo);
     }
 
-    if (bg_win_fifo.size > 0 && pixel_fetcher.mode != FETCH_OBJ && oam_scan.index < oam_scan.size && oam_scan.objs[oam_scan.index]->x <= lcd_x + 8) {
+    if (bg_win_fifo.size > 0 && pixel_fetcher.mode != FETCH_OBJ && oam_scan.index < oam_scan.size && oam_scan.objs[oam_scan.index].x <= lcd_x + 8) {
         if (IS_PPU_OBJ_ENABLED(mmu)) {
             // there is an obj at the new position
             pixel_fetcher.mode = FETCH_OBJ;
@@ -419,9 +419,9 @@ static inline void oam_scan_step(mmu_t *mmu) {
     if (oam_scan.size < 10 && (obj->y <= mmu->mem[LY] + 16) && (obj->y + obj_height > mmu->mem[LY] + 16)) {
         s_byte_t i;
         // if equal x: insert after so that the drawing doesn't overwrite the existing sprite (equal x -> first scanned obj priority)
-        for (i = oam_scan.size - 1; i >= 0 && oam_scan.objs[i]->x > obj->x; i--)
+        for (i = oam_scan.size - 1; i >= 0 && oam_scan.objs[i].x > obj->x; i--)
             oam_scan.objs[i + 1] = oam_scan.objs[i];
-        oam_scan.objs[i + 1] = obj;
+        oam_scan.objs[i + 1] = *obj;
         oam_scan.size++;
     }
 
