@@ -230,7 +230,7 @@ def main():
         generate_tests(tests_root, "blargg", 1, f, blargg_reference_image_getter, blargg_screenshot_test_generator)
         generate_tests(tests_root, "age-test-roms", 1, f, age_reference_image_getter, age_screenshot_test_generator, age_internal_state_test_generator)
         generate_tests(tests_root, "mooneye-test-suite", 2, f, blargg_reference_image_getter, mooneye_screenshot_test_generator, mooneye_internal_state_test_generator)
-        generate_tests(tests_root, "mooneye-test-suite-wilbertpol", 2, f, blargg_reference_image_getter, mooneye_screenshot_test_generator, mooneye_wilbertpol_internal_state_test_generator)
+        generate_tests(tests_root, "mooneye-test-suite-wilbertpol", 2, f, None, None, mooneye_wilbertpol_internal_state_test_generator)
         generate_tests(tests_root, "mealybug-tearoom-tests", 1, f, mealybug_reference_image_getter, mealybug_screenshot_test_generator, mealybug_internal_state_test_generator)
         generate_tests(tests_root, "same-suite", 2, f, None, None, same_internal_state_test_generator)
         generate_bully_tests(f)

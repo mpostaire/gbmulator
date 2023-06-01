@@ -712,6 +712,9 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
     if (address > NR52 && address < WAVE_RAM)
         return 0xFF;
 
+    if (address == STAT)
+        return mmu->mem[address] | 0x80;
+
     if (address == KEY0)
         return emu->mode == CGB ? mmu->mem[address] : 0xFF;
 
