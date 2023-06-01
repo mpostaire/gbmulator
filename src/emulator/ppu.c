@@ -11,6 +11,8 @@
 // https://github.com/gbdev/pandocs/blob/bae52a72501a4ae872cf06ee0b26b3a83b274fca/src/Rendering_Internals.md
 // https://github.com/trekawek/coffee-gb/tree/master/src/main/java/eu/rekawek/coffeegb/gpu
 
+// TODO read this: http://gameboy.mongenel.com/dmg/istat98.txt
+
 #define PPU_SET_MODE(mmu_ptr, mode) (mmu_ptr)->mem[STAT] = ((mmu_ptr)->mem[STAT] & 0xFC) | (mode)
 
 #define IS_PPU_WIN_ENABLED(mmu_ptr) (CHECK_BIT((mmu_ptr)->mem[LCDC], 5))
@@ -65,7 +67,6 @@ typedef struct {
     word_t palette;
     byte_t obj_priority; // only on CGB mode
     byte_t bg_priority;
-    byte_t is_obj;
 } pixel_t;
 
 #define FIFO_SIZE 8
@@ -77,14 +78,10 @@ typedef struct {
 } pixel_fifo_t;
 
 typedef enum {
-    GET_TILE_ID,
-    GET_TILE_ID_SLEEP,
-    GET_TILE_SLICE_LOW,
-    GET_TILE_SLICE_LOW_SLEEP,
-    GET_TILE_SLICE_HIGH,
-    GET_TILE_SLICE_HIGH_SLEEP,
-    PUSH,
-    PUSH_SLEEP
+    GET_TILE_ID = 1,
+    GET_TILE_SLICE_LOW = 3,
+    GET_TILE_SLICE_HIGH = 5,
+    PUSH
 } pixel_fetcher_step_t;
 
 typedef enum {
@@ -99,6 +96,7 @@ typedef struct {
     pixel_fetcher_mode_t old_mode; // mode that the FETCH_OBJ has replaced
     pixel_fetcher_step_t step;
     byte_t curr_oam_index; // only relevant when step is FETCH_OBJ, holds the index of the obj to fetch in the oam_scan.objs array
+    byte_t init_delay_done;
 
     word_t tiledata_address;
     byte_t current_tile_id;
@@ -111,9 +109,8 @@ pixel_fifo_t bg_win_fifo;
 pixel_fifo_t obj_fifo;
 pixel_fetcher_t pixel_fetcher;
 
-word_t scanline_duration = 0;
-
 // FIXME pokemon red: when pokemon slides to the left, a bit of the hand slides a little bit with it.
+//      --> maybe because the oam scan stores pointers ant the oam data is overwritten?? seems unlikely.
 
 /**
  * @returns color after applying palette.
@@ -155,8 +152,16 @@ static inline void pixel_fifo_clear(pixel_fifo_t *fifo) {
     fifo->tail = 0;
 }
 
+static inline void pixel_fetcher_reset(pixel_fetcher_t *fetcher) {
+    fetcher->x = 0;
+    fetcher->step = 0;
+    fetcher->mode = FETCH_BG;
+    fetcher->init_delay_done = 0;
+    fetcher->old_mode = FETCH_BG;
+}
+
 byte_t lcd_x = 0;
-byte_t discard_pixels = 0; // amount of pixels to discard at the start of a scanline due to either SCX scrolling or WX < 7
+byte_t discarded_pixels = 0; // dicarded pixel counter at the start of a scanline due to either SCX scrolling or WX < 7
 
 /**
  * taken from https://stackoverflow.com/a/2602885
@@ -168,185 +173,188 @@ static inline byte_t reverse_bits_order(byte_t b) {
     return b;
 }
 
-// TODO remove nested switch case
+static inline void fetch_tile_id(emulator_t *emu) {
+    mmu_t *mmu = emu->mmu;
+
+    switch (pixel_fetcher.mode) {
+    case FETCH_BG: {
+        byte_t ly_scy = mmu->mem[LY] + mmu->mem[SCY]; // addition carried out in 8 bits (== result % 256)
+        byte_t fetcher_x_scx = pixel_fetcher.x + mmu->mem[SCX]; // addition carried out in 8 bits (== result % 256)
+        word_t tilemap_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 3) << 10) | ((ly_scy / 8) << 5) | ((fetcher_x_scx / 8) & 0x1F);
+        pixel_fetcher.current_tile_id = mmu->mem[tilemap_address];
+        break;
+    }
+    case FETCH_WIN: {
+        word_t tilemap_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 6) << 10) | (((emu->ppu->wly / 8) & 0x1F) << 5) | ((pixel_fetcher.x / 8) & 0x1F);
+        pixel_fetcher.current_tile_id = mmu->mem[tilemap_address];
+        break;
+    }
+    case FETCH_OBJ:
+        pixel_fetcher.current_tile_id = oam_scan.objs[pixel_fetcher.curr_oam_index]->tile_id;
+        break;
+    }
+}
+
+static inline void fetch_tileslice_low(emulator_t *emu) {
+    mmu_t *mmu = emu->mmu;
+
+    byte_t tileslice = 0;
+    switch (pixel_fetcher.mode) {
+    case FETCH_BG: {
+        byte_t bit_12 = !((mmu->mem[LCDC] & 0x10) || (pixel_fetcher.current_tile_id & 0x80));
+        byte_t ly_scy = mmu->mem[LY] + mmu->mem[SCY]; // addition carried out in 8 bits (== result % 256)
+        pixel_fetcher.tiledata_address = 0x8000 | (bit_12 << 12) | (pixel_fetcher.current_tile_id << 4) | ((ly_scy % 8) << 1);
+        // if bg/win is enabled, get color data, else get 0
+        tileslice = IS_PPU_BG_WIN_ENABLED(mmu) ? mmu->mem[pixel_fetcher.tiledata_address] : 0;
+        break;
+    }
+    case FETCH_WIN: {
+        byte_t bit_12 = !((mmu->mem[LCDC] & 0x10) || (pixel_fetcher.current_tile_id & 0x80));
+        pixel_fetcher.tiledata_address = 0x8000 | (bit_12 << 12) | (pixel_fetcher.current_tile_id << 4) | ((emu->ppu->wly % 8) << 1);
+        // if bg/win is enabled, get color data, else get 0
+        tileslice = IS_PPU_BG_WIN_ENABLED(mmu) ? mmu->mem[pixel_fetcher.tiledata_address] : 0;
+        break;
+    }
+    case FETCH_OBJ:
+        byte_t flip_y = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index]->attributes, 6);
+        byte_t actual_tile_id = oam_scan.objs[pixel_fetcher.curr_oam_index]->tile_id;
+
+        if (IS_PPU_OBJ_TALL(mmu)) {
+            byte_t is_top_tile = abs(mmu->mem[LY] - oam_scan.objs[pixel_fetcher.curr_oam_index]->y) > 8;
+            CHANGE_BIT(actual_tile_id, 0, flip_y ? is_top_tile : !is_top_tile);
+        }
+
+        byte_t bits_3_1 = (mmu->mem[LY] - oam_scan.objs[pixel_fetcher.curr_oam_index]->y) % 8;
+        if (flip_y)
+            bits_3_1 = ~bits_3_1;
+        bits_3_1 &= 0x07;
+
+        pixel_fetcher.tiledata_address = 0x8000 | (actual_tile_id << 4) | (bits_3_1 << 1);
+
+        byte_t flip_x = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index]->attributes, 5);
+        tileslice = flip_x ? reverse_bits_order(mmu->mem[pixel_fetcher.tiledata_address]) : mmu->mem[pixel_fetcher.tiledata_address];
+        tileslice = flip_x ? reverse_bits_order(mmu->mem[pixel_fetcher.tiledata_address]) : mmu->mem[pixel_fetcher.tiledata_address];
+        break;
+    }
+
+    for (byte_t i = 0; i < 8; i++)
+        pixel_fetcher.pixels[i].color = GET_BIT(tileslice, 7 - i);
+}
+
+static inline void fetch_tileslice_high(emulator_t *emu) {
+    mmu_t *mmu = emu->mmu;
+
+    byte_t tileslice = 0;
+    switch (pixel_fetcher.mode) {
+        // TODO this should also recalculate the tiledata address because the ppu doesn't cache this info between steps leading to potential bitplane desync
+    case FETCH_BG:
+    case FETCH_WIN:
+        // if bg/win is enabled, get color data, else get 0
+        tileslice = IS_PPU_BG_WIN_ENABLED(mmu) ? mmu->mem[pixel_fetcher.tiledata_address + 1] : 0;
+        for (byte_t i = 0; i < 8; i++) {
+            pixel_fetcher.pixels[i].color |= GET_BIT(tileslice, 7 - i) << 1;
+            pixel_fetcher.pixels[i].palette = BGP;
+        }
+        break;
+    case FETCH_OBJ:
+        byte_t flip_x = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index]->attributes, 5);
+        tileslice = flip_x ? reverse_bits_order(mmu->mem[pixel_fetcher.tiledata_address + 1]) : mmu->mem[pixel_fetcher.tiledata_address + 1];
+
+        for (byte_t i = 0; i < 8; i++) {
+            pixel_fetcher.pixels[i].color |= GET_BIT(tileslice, 7 - i) << 1;
+            pixel_fetcher.pixels[i].palette = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index]->attributes, 4) ? OBP1 : OBP0;
+            pixel_fetcher.pixels[i].bg_priority = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index]->attributes, 7);
+        }
+        break;
+    }
+}
+
+static inline byte_t push(emulator_t *emu) {
+    switch (pixel_fetcher.mode) {
+    case FETCH_BG:
+    case FETCH_WIN:
+        if (bg_win_fifo.size > 0)
+            return 0;
+
+        for (byte_t i = 0; i < 8; i++)
+            pixel_fifo_push(&bg_win_fifo, &pixel_fetcher.pixels[i]);
+        pixel_fetcher.x += 8;
+        break;
+    case FETCH_OBJ:
+        // if the obj starts before the beginning of the scanline, only push the visible pixels by using an offset
+        byte_t old_size = obj_fifo.size;
+        byte_t offset = 0;
+        if (oam_scan.objs[pixel_fetcher.curr_oam_index]->x < 8)
+            offset = 8 - oam_scan.objs[pixel_fetcher.curr_oam_index]->x;
+
+        // overwrite old transparent obj pixels, then fill rest of fifo with the last pixels of this obj to not overwrite any old pixels
+        for (byte_t fetcher_index = offset; fetcher_index < FIFO_SIZE; fetcher_index++) {
+            byte_t fifo_index = ((fetcher_index - offset) + obj_fifo.head) % FIFO_SIZE;
+
+            if (fetcher_index < old_size) {
+                if (obj_fifo.pixels[fifo_index].color == DMG_WHITE)
+                    obj_fifo.pixels[fifo_index] = pixel_fetcher.pixels[fetcher_index];
+            } else {
+                pixel_fifo_push(&obj_fifo, &pixel_fetcher.pixels[fetcher_index]);
+            }
+        }
+
+        pixel_fetcher.mode = pixel_fetcher.old_mode;
+        break;
+    }
+
+    return 1;
+}
+
 // TODO if the ppu vram access is blocked, the tile id, tile map, etc. reads are 0xFF
 static inline void drawing_step(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
+    ppu_t *ppu = emu->ppu;
 
-    // TODO drawing step takes longer time that it should?????
-    // TODO can the fifo be full (size == 16) and the fetcher still attempts to push? If so, this is a bug
+    // 1. FETCHING PIXELS
+
+    switch (pixel_fetcher.step++) {
+    case GET_TILE_ID:
+        fetch_tile_id(emu);
+        break;
+    case GET_TILE_SLICE_LOW:
+        fetch_tileslice_low(emu);
+        break;
+    case GET_TILE_SLICE_HIGH:
+        fetch_tileslice_high(emu);
+        if (!pixel_fetcher.init_delay_done) {
+            pixel_fetcher.init_delay_done = 1;
+            pixel_fetcher.step = 0;
+        }
+        break;
+    case PUSH:
+        pixel_fetcher.step = push(emu) ? 0 : PUSH;
+        break;
+    }
 
     if (IS_PPU_WIN_ENABLED(mmu) && mmu->mem[WY] <= mmu->mem[LY] && mmu->mem[WX] - 7 <= lcd_x && pixel_fetcher.mode == FETCH_BG) {
         // the fetcher must switch to window mode for the remaining of the scanline (except when an object needs to be drawn)
         pixel_fetcher.mode = FETCH_WIN;
         pixel_fetcher.old_mode = FETCH_WIN;
-        pixel_fetcher.step = GET_TILE_ID;
+        pixel_fetcher.step = 0;
         pixel_fetcher.x = 0;
-        emu->ppu->wly++;
-        if (mmu->mem[WX] < 7)
-            discard_pixels = 7 - mmu->mem[WX];
+        ppu->wly++;
+        discarded_pixels = 0;
         pixel_fifo_clear(&bg_win_fifo);
     }
 
-    if (pixel_fetcher.mode != FETCH_OBJ && oam_scan.index < oam_scan.size && oam_scan.objs[oam_scan.index]->x <= lcd_x + 8) {
+    if (bg_win_fifo.size > 0 && pixel_fetcher.mode != FETCH_OBJ && oam_scan.index < oam_scan.size && oam_scan.objs[oam_scan.index]->x <= lcd_x + 8) {
         if (IS_PPU_OBJ_ENABLED(mmu)) {
             // there is an obj at the new position
             pixel_fetcher.mode = FETCH_OBJ;
-            pixel_fetcher.step = GET_TILE_ID;
+            pixel_fetcher.step = 0;
             pixel_fetcher.curr_oam_index = oam_scan.index;
         } else {
             // TODO unsure of what to do in this case...
-            //      should we allow a check for window??
+            //      should we allow a check for window?
         }
         oam_scan.index++;
     }
-
-    // 1. FETCHING PIXELS
-
-    byte_t tile_slice = 0;
-    word_t tilemap_address = 0;
-    switch (pixel_fetcher.step) {
-    case GET_TILE_ID:
-        switch (pixel_fetcher.mode) {
-        case FETCH_BG:
-            byte_t ly_scy = mmu->mem[LY] + mmu->mem[SCY]; // addition carried out in 8 bits (== result % 256)
-            byte_t fetcher_x_scx = pixel_fetcher.x + mmu->mem[SCX]; // addition carried out in 8 bits (== result % 256)
-            tilemap_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 3) << 10) | ((ly_scy / 8) << 5) | ((fetcher_x_scx / 8) & 0x1F);
-            pixel_fetcher.current_tile_id = mmu->mem[tilemap_address];
-            break;
-        case FETCH_WIN:
-            tilemap_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 6) << 10) | (((emu->ppu->wly / 8) & 0x1F) << 5) | ((pixel_fetcher.x / 8) & 0x1F);
-            pixel_fetcher.current_tile_id = mmu->mem[tilemap_address];
-            break;
-        case FETCH_OBJ:
-            pixel_fetcher.current_tile_id = oam_scan.objs[pixel_fetcher.curr_oam_index]->tile_id;
-            break;
-        }
-
-        pixel_fetcher.step = GET_TILE_ID_SLEEP;
-        break;
-    case GET_TILE_ID_SLEEP:
-        pixel_fetcher.step = GET_TILE_SLICE_LOW;
-        break;
-    case GET_TILE_SLICE_LOW:
-        byte_t bit_12 = 0;
-        switch (pixel_fetcher.mode) {
-        case FETCH_BG:
-            bit_12 = !((mmu->mem[LCDC] & 0x10) || (pixel_fetcher.current_tile_id & 0x80));
-            byte_t ly_scy = mmu->mem[LY] + mmu->mem[SCY]; // addition carried out in 8 bits (== result % 256)
-            pixel_fetcher.tiledata_address = 0x8000 | (bit_12 << 12) | (pixel_fetcher.current_tile_id << 4) | ((ly_scy % 8) << 1);
-            // if bg/win is enabled, get color data, else get 0
-            tile_slice = IS_PPU_BG_WIN_ENABLED(mmu) ? mmu->mem[pixel_fetcher.tiledata_address] : 0;
-            break;
-        case FETCH_WIN:
-            bit_12 = !((mmu->mem[LCDC] & 0x10) || (pixel_fetcher.current_tile_id & 0x80));
-            pixel_fetcher.tiledata_address = 0x8000 | (bit_12 << 12) | (pixel_fetcher.current_tile_id << 4) | ((emu->ppu->wly % 8) << 1);
-            // if bg/win is enabled, get color data, else get 0
-            tile_slice = IS_PPU_BG_WIN_ENABLED(mmu) ? mmu->mem[pixel_fetcher.tiledata_address] : 0;
-            break;
-        case FETCH_OBJ:
-            byte_t flip_y = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index]->attributes, 6);
-            byte_t actual_tile_id = oam_scan.objs[pixel_fetcher.curr_oam_index]->tile_id;
-
-            if (IS_PPU_OBJ_TALL(mmu)) {
-                byte_t is_top_tile = abs(mmu->mem[LY] - oam_scan.objs[pixel_fetcher.curr_oam_index]->y) > 8;
-                CHANGE_BIT(actual_tile_id, 0, flip_y ? is_top_tile : !is_top_tile);
-            }
-
-            byte_t bits_3_1 = (mmu->mem[LY] - oam_scan.objs[pixel_fetcher.curr_oam_index]->y) % 8;
-            if (flip_y)
-                bits_3_1 = ~bits_3_1;
-            bits_3_1 &= 0x07;
-
-            pixel_fetcher.tiledata_address = 0x8000 | (actual_tile_id << 4) | (bits_3_1 << 1);
-
-            byte_t flip_x = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index]->attributes, 5);
-            tile_slice = flip_x ? reverse_bits_order(mmu->mem[pixel_fetcher.tiledata_address]) : mmu->mem[pixel_fetcher.tiledata_address];
-            tile_slice = flip_x ? reverse_bits_order(mmu->mem[pixel_fetcher.tiledata_address]) : mmu->mem[pixel_fetcher.tiledata_address];
-            break;
-        }
-
-        for (byte_t i = 0; i < 8; i++)
-            pixel_fetcher.pixels[i].color = GET_BIT(tile_slice, 7 - i);
-
-        pixel_fetcher.step = GET_TILE_SLICE_LOW_SLEEP;
-        break;
-    case GET_TILE_SLICE_LOW_SLEEP:
-        pixel_fetcher.step = GET_TILE_SLICE_HIGH;
-        break;
-    case GET_TILE_SLICE_HIGH:
-        switch (pixel_fetcher.mode) {
-        case FETCH_BG:
-        case FETCH_WIN:
-            // if bg/win is enabled, get color data, else get 0
-            tile_slice = IS_PPU_BG_WIN_ENABLED(mmu) ? mmu->mem[pixel_fetcher.tiledata_address + 1] : 0;
-            for (byte_t i = 0; i < 8; i++) {
-                pixel_fetcher.pixels[i].color |= GET_BIT(tile_slice, 7 - i) << 1;
-                pixel_fetcher.pixels[i].palette = BGP;
-                pixel_fetcher.pixels[i].is_obj = 0;
-            }
-            break;
-        case FETCH_OBJ:
-            byte_t flip_x = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index]->attributes, 5);
-            tile_slice = flip_x ? reverse_bits_order(mmu->mem[pixel_fetcher.tiledata_address + 1]) : mmu->mem[pixel_fetcher.tiledata_address + 1];
-
-            for (byte_t i = 0; i < 8; i++) {
-                pixel_fetcher.pixels[i].color |= GET_BIT(tile_slice, 7 - i) << 1;
-                pixel_fetcher.pixels[i].palette = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index]->attributes, 4) ? OBP1 : OBP0;
-                pixel_fetcher.pixels[i].is_obj = 1;
-                pixel_fetcher.pixels[i].bg_priority = CHECK_BIT(oam_scan.objs[pixel_fetcher.curr_oam_index]->attributes, 7);
-            }
-            break;
-        }
-
-        pixel_fetcher.step = GET_TILE_SLICE_HIGH_SLEEP;
-        break;
-    case GET_TILE_SLICE_HIGH_SLEEP:
-        pixel_fetcher.step = PUSH;
-        break;
-    case PUSH:
-        switch (pixel_fetcher.mode) {
-        case FETCH_BG:
-        case FETCH_WIN:
-            if (bg_win_fifo.size == 0) {
-                for (byte_t i = 0; i < 8; i++)
-                    pixel_fifo_push(&bg_win_fifo, &pixel_fetcher.pixels[i]);
-                pixel_fetcher.x += 8;
-            } else {
-                goto shift_pixels; // TODO this is ugly...
-            }
-            break;
-        case FETCH_OBJ:
-            // if the obj starts before the beginning of the scanline, only push the visible pixels by using an offset
-            byte_t old_size = obj_fifo.size;
-            byte_t offset = 0;
-            if (oam_scan.objs[pixel_fetcher.curr_oam_index]->x < 8)
-                offset = 8 - oam_scan.objs[pixel_fetcher.curr_oam_index]->x;
-
-            // overwrite old transparent obj pixels, then fill rest of fifo with the last pixels of this obj to not overwrite any old pixels
-            for (byte_t fetcher_index = offset; fetcher_index < FIFO_SIZE; fetcher_index++) {
-                byte_t fifo_index = ((fetcher_index - offset) + obj_fifo.head) % FIFO_SIZE;
-
-                if (fetcher_index < old_size) {
-                    if (obj_fifo.pixels[fifo_index].color == DMG_WHITE)
-                        obj_fifo.pixels[fifo_index] = pixel_fetcher.pixels[fetcher_index];
-                } else {
-                    pixel_fifo_push(&obj_fifo, &pixel_fetcher.pixels[fetcher_index]);
-                }
-            }
-
-            pixel_fetcher.mode = pixel_fetcher.old_mode;
-            break;
-        }
-
-        pixel_fetcher.step = PUSH_SLEEP;
-        break;
-    case PUSH_SLEEP:
-        pixel_fetcher.step = GET_TILE_ID;
-        break;
-    }
-
-    shift_pixels:
 
     // 2. SHIFTING PIXELS OUT TO THE LCD
 
@@ -357,8 +365,8 @@ static inline void drawing_step(emulator_t *emu) {
     if (!bg_win_pixel)
         return;
 
-    if (discard_pixels) {
-        discard_pixels--;
+    if ((pixel_fetcher.mode == FETCH_WIN && discarded_pixels < 7 - mmu->mem[WX]) || discarded_pixels < mmu->mem[SCX] % 8) {
+        discarded_pixels++;
         return;
     }
 
@@ -375,18 +383,18 @@ static inline void drawing_step(emulator_t *emu) {
         }
     }
 
-    SET_PIXEL_DMG(emu->ppu, lcd_x, mmu->mem[LY], get_color(mmu, color, palette), emu->ppu_color_palette);
+    SET_PIXEL_DMG(ppu, lcd_x, mmu->mem[LY], get_color(mmu, color, palette), emu->ppu_color_palette);
     lcd_x++;
 
     if (lcd_x >= GB_SCREEN_WIDTH) {
+        // if (mmu->mem[LY] == 0) {
+        //     printf("%d in [172, 289]?\n", ppu->cycles - 80);
+        // }
         // the new position is outside the screen, this scanline is done: go into HBLANK mode
         lcd_x = 0;
-        pixel_fetcher.x = 0;
 
-        // TODO
-        // printf("%d\n", scanline_duration - 80);
+        pixel_fetcher_reset(&pixel_fetcher);
 
-        pixel_fetcher = (pixel_fetcher_t) { 0 };
         pixel_fifo_clear(&bg_win_fifo);
         pixel_fifo_clear(&obj_fifo);
 
@@ -425,32 +433,38 @@ static inline void oam_scan_step(mmu_t *mmu) {
         oam_scan.step = 0;
         oam_scan.index = 0;
 
-        discard_pixels = mmu->mem[SCX] % 8;
+        discarded_pixels = 0;
         PPU_SET_MODE(mmu, PPU_MODE_DRAWING);
     }
 }
 
 static inline void hblank_step(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
+    ppu_t *ppu = emu->ppu;
 
-    if (scanline_duration == 456) {
+    if (ppu->cycles == 456) {
         mmu->mem[LY]++;
 
-        ppu_ly_lyc_compare(emu);
-
-        if (mmu->mem[LY] == GB_SCREEN_HEIGHT) {
-            scanline_duration = 0;
-            emu->ppu->wly = -1;
+        if (mmu->mem[LY] >= GB_SCREEN_HEIGHT) {
+            ppu->cycles = 0;
+            ppu->wly = -1;
             PPU_SET_MODE(mmu, PPU_MODE_VBLANK);
             if (IS_VBLANK_IRQ_STAT_ENABLED(emu))
                 CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
 
             CPU_REQUEST_INTERRUPT(emu, IRQ_VBLANK);
+
+            // skip first screen rendering after the LCD was just turned on
+            if (ppu->is_lcd_turning_on) {
+                ppu->is_lcd_turning_on = 0;
+                return;
+            }
+
             if (emu->on_new_frame)
-                emu->on_new_frame(emu->ppu->pixels);
+                emu->on_new_frame(ppu->pixels);
         } else {
             oam_scan.size = 0;
-            scanline_duration = 0;
+            ppu->cycles = 0;
             PPU_SET_MODE(mmu, PPU_MODE_OAM);
             if (IS_OAM_IRQ_STAT_ENABLED(emu))
                 CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
@@ -458,22 +472,28 @@ static inline void hblank_step(emulator_t *emu) {
     }
 }
 
+byte_t is_last_vblank_line = 0;
 static inline void vblank_step(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
+    ppu_t *ppu = emu->ppu;
 
-    if (scanline_duration == 456) {
-        mmu->mem[LY]++; // increase at each new line
-        scanline_duration = 0;
-
+    if (ppu->cycles == 4) {
         if (mmu->mem[LY] == 153) {
-            // line 153 can trigger the LY=LYC interrupt
-            ppu_ly_lyc_compare(emu);
-        } else if (mmu->mem[LY] == 154) {
             mmu->mem[LY] = 0;
+            is_last_vblank_line = 1;
+        }
+    } else if (ppu->cycles == 12) {
+        if (is_last_vblank_line)
             ppu_ly_lyc_compare(emu);
+    } else if (ppu->cycles == 456) {
+        if (!is_last_vblank_line)
+            mmu->mem[LY]++; // increase on each new line
+        ppu->cycles = 0;
+
+        if (is_last_vblank_line) { // we actually are on line 153 but LY reads 0
+            is_last_vblank_line = 0;
 
             oam_scan.size = 0;
-            scanline_duration = 0;
             PPU_SET_MODE(mmu, PPU_MODE_OAM);
             if (IS_OAM_IRQ_STAT_ENABLED(emu))
                 CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
@@ -498,19 +518,25 @@ void ppu_step(emulator_t *emu) {
             if (emu->on_new_frame)
                 emu->on_new_frame(ppu->pixels);
             ppu->is_lcd_turning_on = 1;
+
+            PPU_SET_MODE(mmu, PPU_MODE_HBLANK);
+            RESET_BIT(mmu->mem[STAT], 2); // set LYC=LY to 0?
+            ppu->wly = -1;
+            pixel_fetcher_reset(&pixel_fetcher);
+            pixel_fifo_clear(&bg_win_fifo);
+            pixel_fifo_clear(&obj_fifo);
+            ppu->cycles = 0; //369; // (== 456 - 87) set hblank duration to its minimum possible value
+            mmu->mem[LY] = 0;
         }
-        PPU_SET_MODE(mmu, PPU_MODE_HBLANK);
-        scanline_duration = 369; // (== 456 - 87) set hblank duration to its minimum possible value
-        mmu->mem[LY] = 0;
         return;
     }
 
     // if lcd was just enabled, check for LYC=LY
     if (ppu->is_lcd_turning_on)
         ppu_ly_lyc_compare(emu);
-    ppu->is_lcd_turning_on = 0;
 
-    RESET_BIT(mmu->mem[STAT], 2); // reset LYC=LY flag
+    if (ppu->cycles == 4)
+        ppu_ly_lyc_compare(emu);
 
     int cycles = 4;
     while (cycles--) {
@@ -535,13 +561,14 @@ void ppu_step(emulator_t *emu) {
             break;
         }
 
-        scanline_duration++;
+        ppu->cycles++;
     }
 }
 
 void ppu_init(emulator_t *emu) {
     emu->ppu = xcalloc(1, sizeof(ppu_t));
     emu->ppu->wly = -1;
+    // PPU_SET_MODE(emu->mmu, PPU_MODE_OAM); // TODO start in OAM mode?
     emu->ppu->pixels = xmalloc(GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 4);
     emu->ppu->scanline_cache_color_data = xmalloc(GB_SCREEN_WIDTH);
     emu->ppu->obj_pixel_priority = xmalloc(GB_SCREEN_WIDTH);
