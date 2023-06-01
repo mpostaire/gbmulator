@@ -113,7 +113,7 @@ static int parse_cartridge(emulator_t *emu) {
 
     // detect MBC1M
     if (mmu->mbc == MBC1 && mmu->cartridge_size == 0x100000) {
-        unsigned int addrs[] = { 0x00104, 0x40104, 0x80104, 0xC0104 };
+        const unsigned int addrs[] = { 0x00104, 0x40104, 0x80104, 0xC0104 };
         byte_t logo[] = {
             0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0C, 0x00, 0x0D,
             0x00, 0x08, 0x11, 0x1F, 0x88, 0x89, 0x00, 0x0E, 0xDC, 0xCC, 0x6E, 0xE6, 0xDD, 0xDD, 0xD9, 0x99,
@@ -399,7 +399,7 @@ void mmu_step(emulator_t *emu) {
         byte_t *src;
         if (/*mmu->hdma.src_address >= ROM_BANK0 &&*/ mmu->hdma.src_address < ROM_BANKN) {
             src = &mmu->rom_bank0_pointer[mmu->hdma.src_address];
-        } else if (mmu->hdma.src_address >= ROM_BANKN && mmu->hdma.src_address < VRAM) {
+        } else if (/*mmu->hdma.src_address >= ROM_BANKN &&*/ mmu->hdma.src_address < VRAM) {
             src = &mmu->rom_bankn_pointer[mmu->hdma.src_address];
         } else if (mmu->ramg_reg && mmu->oam_dma.src_address >= ERAM && mmu->oam_dma.src_address < WRAM_BANK0) {
             // TODO check if this is accurate
@@ -582,7 +582,7 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
 
     if (/*address >= ROM_BANK0 &&*/ address < ROM_BANKN)
         return mmu->rom_bank0_pointer[address];
-    if (address >= ROM_BANKN && address < VRAM)
+    if (/*address >= ROM_BANKN &&*/ address < VRAM)
         return mmu->rom_bankn_pointer[address];
 
     // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)

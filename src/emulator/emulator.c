@@ -190,7 +190,7 @@ byte_t *emulator_get_save(emulator_t *emu, size_t *save_length) {
         rtc_len = 10 + rtc_timestamp_len;
     }
 
-    size_t eram_len = emu->mmu->has_battery ? 0x2000 * emu->mmu->eram_banks : 0;
+    size_t eram_len = 0x2000 * emu->mmu->eram_banks;
     size_t total_len = eram_len + rtc_len;
     if (save_length)
         *save_length = total_len;
@@ -229,10 +229,9 @@ int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
 
     size_t eram_len = 0x2000 * emu->mmu->eram_banks;
 
-    size_t rtc_timestamp_len = 0;
     size_t rtc_len = 0;
     if (emu->mmu->has_rtc) {
-        rtc_timestamp_len = strlen((char *) &save_data[eram_len + 10]) + 1;
+        size_t rtc_timestamp_len = strlen((char *) &save_data[eram_len + 10]) + 1;
         rtc_len = 10 + rtc_timestamp_len;
     }
 

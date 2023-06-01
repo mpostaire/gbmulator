@@ -371,11 +371,11 @@ static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
 static char *get_config_path(void) {
     char *xdg_config = get_xdg_path("XDG_CONFIG_HOME", ".config");
 
-    char *config_path = xmalloc(strlen(xdg_config) + 27);
-    snprintf(config_path, strlen(xdg_config) + 26, "%s%s", xdg_config, "/gbmulator/gbmulator.conf");
+    char *path = xmalloc(strlen(xdg_config) + 27);
+    snprintf(path, strlen(xdg_config) + 26, "%s%s", xdg_config, "/gbmulator/gbmulator.conf");
 
     free(xdg_config);
-    return config_path;
+    return path;
 }
 
 static char *get_save_path(const char *rom_filepath) {
