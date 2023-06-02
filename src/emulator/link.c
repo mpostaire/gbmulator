@@ -3,6 +3,7 @@
 #include "emulator.h"
 #include "cpu.h"
 #include "mmu.h"
+#include "serialize.h"
 
 void link_set_clock(emulator_t *emu) {
     // double speed is handled by the emulator_step() function
@@ -27,10 +28,10 @@ void link_step(emulator_t *emu) {
     link_t *link = emu->link;
     mmu_t *mmu = emu->mmu;
 
-    link->cycles_counter += 4; // 4 cycles per step
+    link->cycles += 4; // 4 cycles per step
 
-    if (link->cycles_counter >= link->max_clock_cycles) {
-        link->cycles_counter -= link->max_clock_cycles; // keep leftover cycles (if any)
+    if (link->cycles >= link->max_clock_cycles) {
+        link->cycles -= link->max_clock_cycles; // keep leftover cycles (if any)
 
         // transfer requested / in progress with internal clock (this emu is the master of the connection)
         // --> the master emulator also does the work for the slave so we don't have to handle the case
@@ -68,21 +69,25 @@ void link_step(emulator_t *emu) {
     }
 }
 
-size_t link_serialized_length(UNUSED emulator_t *emu) {
-    return 5;
-}
+#define SERIALIZED_MEMBERS \
+    X(cycles)              \
+    X(max_clock_cycles)    \
+    X(bit_counter)
 
-byte_t *link_serialize(emulator_t *emu, size_t *size) {
-    *size = link_serialized_length(emu);
-    byte_t *buf = xmalloc(*size);
-    memcpy(buf, &emu->link->cycles_counter, 2);
-    memcpy(&buf[2], &emu->link->max_clock_cycles, 2);
-    memcpy(&buf[4], &emu->link->bit_counter, 1);
-    return buf;
-}
+#define X(value) SERIALIZED_LENGTH(value);
+SERIALIZED_SIZE_FUNCTION(link_t, link,
+    SERIALIZED_MEMBERS
+)
+#undef X
 
-void link_unserialize(emulator_t *emu, byte_t *buf) {
-    memcpy(&emu->link->cycles_counter, buf, 2);
-    memcpy(&emu->link->max_clock_cycles, &buf[2], 2);
-    memcpy(&emu->link->bit_counter, &buf[4], 1);
-}
+#define X(value) SERIALIZE(value);
+SERIALIZER_FUNCTION(link_t, link,
+    SERIALIZED_MEMBERS
+)
+#undef X
+
+#define X(value) UNSERIALIZE(value);
+UNSERIALIZER_FUNCTION(link_t, link,
+    SERIALIZED_MEMBERS
+)
+#undef X

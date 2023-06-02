@@ -310,7 +310,7 @@ typedef struct {
 } joypad_t;
 
 typedef struct {
-    word_t cycles_counter;
+    word_t cycles;
     word_t max_clock_cycles;
     byte_t bit_counter;
     emulator_t *other_emu;

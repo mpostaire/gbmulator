@@ -2369,47 +2369,36 @@ void cpu_quit(emulator_t *emu) {
     free(emu->cpu);
 }
 
-size_t cpu_serialized_length(UNUSED emulator_t *emu) {
-    return 23;
-}
+#define SERIALIZED_MEMBERS \
+    X(registers.af)        \
+    X(registers.bc)        \
+    X(registers.de)        \
+    X(registers.hl)        \
+    X(registers.sp)        \
+    X(registers.pc)        \
+    X(ime)                 \
+    X(halt)                \
+    X(halt_bug)            \
+    X(exec_state)          \
+    X(opcode)              \
+    X(opcode_state)        \
+    X(operand)             \
+    X(opcode_cache_variable)
 
-byte_t *cpu_serialize(emulator_t *emu, size_t *size) {
-    *size = cpu_serialized_length(emu);
-    byte_t *buf = xmalloc(*size);
+#define X(value) SERIALIZED_LENGTH(value);
+SERIALIZED_SIZE_FUNCTION(cpu_t, cpu,
+    SERIALIZED_MEMBERS
+)
+#undef X
 
-    memcpy(buf, &emu->cpu->registers.af, 2);
-    memcpy(&buf[2], &emu->cpu->registers.bc, 2);
-    memcpy(&buf[4], &emu->cpu->registers.de, 2);
-    memcpy(&buf[6], &emu->cpu->registers.hl, 2);
-    memcpy(&buf[8], &emu->cpu->registers.sp, 2);
-    memcpy(&buf[10], &emu->cpu->registers.pc, 2);
+#define X(value) SERIALIZE(value);
+SERIALIZER_FUNCTION(cpu_t, cpu,
+    SERIALIZED_MEMBERS
+)
+#undef X
 
-    memcpy(&buf[12], &emu->cpu->ime, 1);
-    memcpy(&buf[13], &emu->cpu->halt, 1);
-    memcpy(&buf[14], &emu->cpu->halt_bug, 1);
-    memcpy(&buf[15], &emu->cpu->exec_state, 1);
-    memcpy(&buf[16], &emu->cpu->opcode, 1);
-    memcpy(&buf[17], &emu->cpu->opcode_state, 2);
-    memcpy(&buf[19], &emu->cpu->operand, 2);
-    memcpy(&buf[21], &emu->cpu->opcode_cache_variable, 2);
-
-    return buf;
-}
-
-void cpu_unserialize(emulator_t *emu, byte_t *buf) {
-    memcpy(&emu->cpu->registers.af, buf, 2);
-    memcpy(&emu->cpu->registers.bc, &buf[2], 2);
-    memcpy(&emu->cpu->registers.de, &buf[4], 2);
-    memcpy(&emu->cpu->registers.hl, &buf[6], 2);
-    memcpy(&emu->cpu->registers.sp, &buf[8], 2);
-    memcpy(&emu->cpu->registers.pc, &buf[10], 2);
-
-    memcpy(&emu->cpu->ime, &buf[12], 1);
-    memcpy(&emu->cpu->halt, &buf[13], 1);
-    memcpy(&emu->cpu->halt_bug, &buf[14], 1);
-    memcpy(&emu->cpu->exec_state, &buf[15], 1);
-    memcpy(&emu->cpu->opcode, &buf[16], 1);
-    memcpy(&emu->cpu->opcode_state, &buf[17], 2);
-    memcpy(&emu->cpu->operand, &buf[19], 2);
-    memcpy(&emu->cpu->opcode_cache_variable, &buf[21], 2);
-}
+#define X(value) UNSERIALIZE(value);
+UNSERIALIZER_FUNCTION(cpu_t, cpu,
+    SERIALIZED_MEMBERS
+)
+#undef X

@@ -11,6 +11,7 @@
 #include "boot.h"
 #include "cpu.h"
 #include "link.h"
+#include "serialize.h"
 
 typedef enum {
     OAM_DMA_NO_INIT,
@@ -1058,6 +1059,9 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
     }
 }
 
+// TODO replace this with serialize macros once the mmu has been reworked
+// (it needs better eram/rom/vram banking logic and struct representation: instead of making on huge array for eram,
+// malloc it at the correct size, etc.)
 size_t mmu_serialized_length(emulator_t *emu) {
     size_t mem_len = sizeof(emu->mmu->mem);
     size_t eram_len = 0x2000 * emu->mmu->eram_banks;

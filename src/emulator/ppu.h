@@ -3,6 +3,7 @@
 #include "types.h"
 #include "mmu.h"
 #include "cpu.h"
+#include "serialize.h"
 
 #define PPU_GET_MODE(emu_ptr) ((emu_ptr)->mmu->mem[STAT] & 0x03)
 #define PPU_IS_MODE(emu_ptr, mode) (PPU_GET_MODE(emu_ptr) == (mode))
@@ -41,8 +42,4 @@ void ppu_init(emulator_t *emu);
 
 void ppu_quit(emulator_t *emu);
 
-size_t ppu_serialized_length(emulator_t *emu);
-
-byte_t *ppu_serialize(emulator_t *emu, size_t *size);
-
-void ppu_unserialize(emulator_t *emu, byte_t *buf);
+SERIALIZE_FUNCTION_DECLS(ppu);

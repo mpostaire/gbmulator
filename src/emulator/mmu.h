@@ -1,6 +1,7 @@
 #pragma once
 
 #include "types.h"
+#include "serialize.h"
 
 #define ROM_BANK_SIZE 0x4000
 #define ERAM_BANK_SIZE 0x2000
@@ -121,8 +122,4 @@ byte_t mmu_read(emulator_t *emu, word_t address);
  */
 void mmu_write(emulator_t *emu, word_t address, byte_t data);
 
-size_t mmu_serialized_length(emulator_t *emu);
-
-byte_t *mmu_serialize(emulator_t *emu, size_t *size);
-
-void mmu_unserialize(emulator_t *emu, byte_t *buf);
+SERIALIZE_FUNCTION_DECLS(mmu);

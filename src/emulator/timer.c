@@ -4,6 +4,7 @@
 #include "timer.h"
 #include "mmu.h"
 #include "cpu.h"
+#include "serialize.h"
 
 // timer behavior is subtle: https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html
 
@@ -67,23 +68,26 @@ void timer_quit(emulator_t *emu) {
     free(emu->timer);
 }
 
-size_t timer_serialized_length(UNUSED emulator_t *emu) {
-    return 6;
-}
+#define SERIALIZED_MEMBERS         \
+    X(tima_increase_div_bit)       \
+    X(falling_edge_detector_delay) \
+    X(tima_loading_value)          \
+    X(old_tma)
 
-byte_t *timer_serialize(emulator_t *emu, size_t *size) {
-    *size = timer_serialized_length(emu);
-    byte_t *buf = xmalloc(*size);
-    memcpy(buf, &emu->timer->tima_increase_div_bit, 1);
-    memcpy(&buf[1], &emu->timer->falling_edge_detector_delay, 1);
-    memcpy(&buf[2], &emu->timer->tima_loading_value, 2);
-    memcpy(&buf[4], &emu->timer->old_tma, 2);
-    return buf;
-}
+#define X(value) SERIALIZED_LENGTH(value);
+SERIALIZED_SIZE_FUNCTION(gbtimer_t, timer,
+    SERIALIZED_MEMBERS
+)
+#undef X
 
-void timer_unserialize(emulator_t *emu, byte_t *buf) {
-    memcpy(&emu->timer->tima_increase_div_bit, buf, 1);
-    memcpy(&emu->timer->falling_edge_detector_delay, &buf[1], 1);
-    memcpy(&emu->timer->tima_loading_value, &buf[2], 2);
-    memcpy(&emu->timer->old_tma, &buf[4], 2);
-}
+#define X(value) SERIALIZE(value);
+SERIALIZER_FUNCTION(gbtimer_t, timer,
+    SERIALIZED_MEMBERS
+)
+#undef X
+
+#define X(value) UNSERIALIZE(value);
+UNSERIALIZER_FUNCTION(gbtimer_t, timer,
+    SERIALIZED_MEMBERS
+)
+#undef X
