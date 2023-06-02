@@ -1,10 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "emulator.h"
-#include "ppu.h"
-#include "mmu.h"
-#include "cpu.h"
+#include "emulator_priv.h"
 #include "serialize.h"
 
 // Useful resources
@@ -25,15 +22,21 @@
 
 #define IS_PPU_BG_NORMAL_ADDRESS(mmu_ptr) CHECK_BIT((mmu_ptr)->mem[LCDC], 4)
 
-#define SET_PIXEL_DMG(ppu_ptr, x, y, color, palette) { *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = ppu_color_palettes[(palette)][(color)][0]; \
-                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 1) = ppu_color_palettes[(palette)][(color)][1]; \
-                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 2) = ppu_color_palettes[(palette)][(color)][2]; }
+#define SET_PIXEL_DMG(emu_ptr, x, y, color)                                                                                       \
+    do {                                                                                                                          \
+        *((emu_ptr)->ppu->pixels + ((y) *GB_SCREEN_WIDTH * 3) + ((x) *3)) = dmg_palettes[(emu_ptr)->dmg_palette][(color)][0];     \
+        *((emu_ptr)->ppu->pixels + ((y) *GB_SCREEN_WIDTH * 3) + ((x) *3) + 1) = dmg_palettes[(emu_ptr)->dmg_palette][(color)][1]; \
+        *((emu_ptr)->ppu->pixels + ((y) *GB_SCREEN_WIDTH * 3) + ((x) *3) + 2) = dmg_palettes[(emu_ptr)->dmg_palette][(color)][2]; \
+    } while (0)
 
-#define SET_PIXEL_CGB(ppu_ptr, x, y, r, g, b) { *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3)) = (r); \
-                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 1) = (g); \
-                            *((ppu_ptr)->pixels + ((y) * GB_SCREEN_WIDTH * 3) + ((x) * 3) + 2) = (b); }
+#define SET_PIXEL_CGB(emu_ptr, x, y, r, g, b)                                        \
+    do {                                                                             \
+        *((emu_ptr)->ppu->pixels + ((y) *GB_SCREEN_WIDTH * 3) + ((x) *3)) = (r);     \
+        *((emu_ptr)->ppu->pixels + ((y) *GB_SCREEN_WIDTH * 3) + ((x) *3) + 1) = (g); \
+        *((emu_ptr)->ppu->pixels + ((y) *GB_SCREEN_WIDTH * 3) + ((x) *3) + 2) = (b); \
+    } while (0)
 
-byte_t ppu_color_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
+byte_t dmg_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
     { // grayscale colors
         { 0xFF, 0xFF, 0xFF },
         { 0xAA, 0xAA, 0xAA },
@@ -47,8 +50,6 @@ byte_t ppu_color_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
         { 0x0F, 0x38, 0x0F }
     }
 };
-
-extern inline void ppu_ly_lyc_compare(emulator_t *emu);
 
 /**
  * @returns color after applying palette.
@@ -65,6 +66,18 @@ static byte_t get_color(mmu_t *mmu, byte_t color_data, word_t palette_address) {
 
     // return the color using the palette
     return (mmu->mem[palette_address] & filter) >> (color_data * 2);
+}
+
+void ppu_ly_lyc_compare(emulator_t *emu) {
+    mmu_t *mmu = emu->mmu;
+
+    if (mmu->mem[LY] == mmu->mem[LYC]) {
+        SET_BIT(mmu->mem[STAT], 2);
+        if (IS_LY_LYC_IRQ_STAT_ENABLED(emu))
+            CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
+    } else {
+        RESET_BIT(mmu->mem[STAT], 2);
+    }
 }
 
 // TODO if the ppu vram access is blocked, the tile id, tile map, etc. reads are 0xFF
@@ -346,7 +359,7 @@ static inline void drawing_step(emulator_t *emu) {
         }
     }
 
-    SET_PIXEL_DMG(ppu, ppu->lcd_x, mmu->mem[LY], get_color(mmu, color, palette), emu->ppu_color_palette);
+    SET_PIXEL_DMG(emu, ppu->lcd_x, mmu->mem[LY], get_color(mmu, color, palette));
     ppu->lcd_x++;
 
     if (ppu->lcd_x >= GB_SCREEN_WIDTH) {
@@ -478,7 +491,7 @@ void ppu_step(emulator_t *emu) {
             // blank screen
             for (int i = 0; i < GB_SCREEN_WIDTH; i++)
                 for (int j = 0; j < GB_SCREEN_HEIGHT; j++)
-                    SET_PIXEL_DMG(ppu, i, j, DMG_WHITE, emu->ppu_color_palette);
+                    SET_PIXEL_DMG(emu, i, j, DMG_WHITE);
 
             if (emu->on_new_frame)
                 emu->on_new_frame(ppu->pixels);

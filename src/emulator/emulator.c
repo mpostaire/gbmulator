@@ -6,14 +6,7 @@
 #include <zlib.h>
 #endif
 
-#include "emulator.h"
-#include "mmu.h"
-#include "cpu.h"
-#include "ppu.h"
-#include "timer.h"
-#include "joypad.h"
-#include "link.h"
-#include "apu.h"
+#include "emulator_priv.h"
 
 #define FORMAT_STRING EMULATOR_NAME"-sav"
 
@@ -23,6 +16,7 @@ typedef struct __attribute__((packed)) {
     byte_t mode; // DMG or CGB
 } savestate_header_t;
 
+// TODO fix the weird options getter/setters and default values implementation
 emulator_options_t defaults_opts = {
     .mode = DMG,
     .disable_cgb_color_correction = 0,
@@ -480,14 +474,14 @@ void emulator_update_pixels_with_palette(emulator_t *emu, byte_t new_palette) {
 
             // find which color is at pixel (i,j)
             for (dmg_color_t c = DMG_WHITE; c <= DMG_BLACK; c++) {
-                if (*R == ppu_color_palettes[emu->ppu_color_palette][c][0] &&
-                    *G == ppu_color_palettes[emu->ppu_color_palette][c][1] &&
-                    *B == ppu_color_palettes[emu->ppu_color_palette][c][2]) {
+                if (*R == dmg_palettes[emu->dmg_palette][c][0] &&
+                    *G == dmg_palettes[emu->dmg_palette][c][1] &&
+                    *B == dmg_palettes[emu->dmg_palette][c][2]) {
 
                     // replace old color value by the new one according to the new palette
-                    *R = ppu_color_palettes[new_palette][c][0];
-                    *G = ppu_color_palettes[new_palette][c][1];
-                    *B = ppu_color_palettes[new_palette][c][2];
+                    *R = dmg_palettes[new_palette][c][0];
+                    *G = dmg_palettes[new_palette][c][1];
+                    *B = dmg_palettes[new_palette][c][2];
                     break;
                 }
             }
@@ -504,7 +498,7 @@ void emulator_get_options(emulator_t *emu, emulator_options_t *opts) {
     opts->apu_sound_level = emu->apu_sound_level;
     opts->apu_format = emu->apu_format;
     opts->on_new_frame = emu->on_new_frame;
-    opts->palette = emu->ppu_color_palette;
+    opts->palette = emu->dmg_palette;
 }
 
 void emulator_set_options(emulator_t *emu, emulator_options_t *opts) {
@@ -523,19 +517,30 @@ void emulator_set_options(emulator_t *emu, emulator_options_t *opts) {
     emu->apu_speed = opts->apu_speed < 1.0f ? defaults_opts.apu_speed : opts->apu_speed;
     emu->apu_sound_level = opts->apu_sound_level > 1.0f ? defaults_opts.apu_sound_level : opts->apu_sound_level;
     emu->on_new_frame = opts->on_new_frame;
-    emu->ppu_color_palette = opts->palette >= 0 && opts->palette < PPU_COLOR_PALETTE_MAX ? opts->palette : defaults_opts.palette;
+    emu->dmg_palette = opts->palette >= 0 && opts->palette < PPU_COLOR_PALETTE_MAX ? opts->palette : defaults_opts.palette;
 }
 
 byte_t *emulator_get_color_values(emulator_t *emu, dmg_color_t color) {
-    return ppu_color_palettes[emu->ppu_color_palette][color];
+    return dmg_palettes[emu->dmg_palette][color];
 }
 
 byte_t *emulator_get_color_values_from_palette(color_palette_t palette, dmg_color_t color) {
-    return ppu_color_palettes[palette][color];
+    return dmg_palettes[palette][color];
 }
 
 byte_t *emulator_get_pixels(emulator_t *emu) {
     return emu->ppu->pixels;
+}
+
+emulator_mode_t emulator_get_mode(emulator_t *emu) {
+    return emu->mode;
+}
+
+word_t emulator_get_cartridge_checksum(emulator_t *emu) {
+    word_t checksum = 0;
+    for (unsigned int i = 0; i < sizeof(emu->mmu->cartridge); i += 2)
+        checksum = checksum - (emu->mmu->cartridge[i] + emu->mmu->cartridge[i + 1]) - 1;
+    return checksum;
 }
 
 void emulator_set_apu_speed(emulator_t *emu, float speed) {

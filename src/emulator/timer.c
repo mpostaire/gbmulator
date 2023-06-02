@@ -1,9 +1,6 @@
 #include <stdlib.h>
 
-#include "emulator.h"
-#include "timer.h"
-#include "mmu.h"
-#include "cpu.h"
+#include "emulator_priv.h"
 #include "serialize.h"
 
 // timer behavior is subtle: https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html

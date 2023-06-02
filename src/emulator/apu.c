@@ -1,9 +1,6 @@
 #include <stdlib.h>
 
-#include "emulator.h"
-#include "apu.h"
-#include "mmu.h"
-#include "cpu.h"
+#include "emulator_priv.h"
 
 // FIXME rare audible pops
 

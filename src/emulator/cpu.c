@@ -1,9 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "emulator.h"
-#include "cpu.h"
-#include "mmu.h"
+#include "emulator_priv.h"
 
 #define FLAG_Z 0x80 // flag zero
 #define FLAG_N 0x40 // flag substraction

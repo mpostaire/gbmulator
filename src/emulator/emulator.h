@@ -135,6 +135,10 @@ byte_t *emulator_get_color_values_from_palette(color_palette_t palette, dmg_colo
 
 byte_t *emulator_get_pixels(emulator_t *emu);
 
+emulator_mode_t emulator_get_mode(emulator_t *emu);
+
+word_t emulator_get_cartridge_checksum(emulator_t *emu);
+
 void emulator_set_apu_speed(emulator_t *emu, float speed);
 
 void emulator_set_apu_sound_level(emulator_t *emu, float level);
