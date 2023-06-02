@@ -1,6 +1,7 @@
 #pragma once
 
 #include "types.h"
+#include "serialize.h"
 
 typedef enum {
 	IRQ_VBLANK,
@@ -19,8 +20,4 @@ void cpu_init(emulator_t *emu);
 
 void cpu_quit(emulator_t *emu);
 
-size_t cpu_serialized_length(emulator_t *emu);
-
-byte_t *cpu_serialize(emulator_t *emu, size_t *size);
-
-void cpu_unserialize(emulator_t *emu, byte_t *buf);
+SERIALIZE_FUNCTION_DECLS(cpu);

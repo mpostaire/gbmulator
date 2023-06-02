@@ -13,6 +13,7 @@
 // https://github.com/trekawek/coffee-gb/tree/master/src/main/java/eu/rekawek/coffeegb/gpu
 
 // TODO read this: http://gameboy.mongenel.com/dmg/istat98.txt
+// TODO read this for fetcher timings: https://www.reddit.com/r/EmuDev/comments/s6cpis/comment/htlwkx9
 // TODO GBC
 
 #define PPU_SET_MODE(mmu_ptr, mode) (mmu_ptr)->mem[STAT] = ((mmu_ptr)->mem[STAT] & 0xFC) | (mode)
@@ -541,25 +542,43 @@ void ppu_quit(emulator_t *emu) {
     free(emu->ppu);
 }
 
-size_t ppu_serialized_length(UNUSED emulator_t *emu) {
-    return 25;
-}
+#define SERIALIZED_MEMBERS           \
+    X(wly)                           \
+    X(is_lcd_turning_on)             \
+    X(cycles)                        \
+    X(discarded_pixels)              \
+    X(lcd_x)                         \
+    X(wly)                           \
+    X(is_last_vblank_line)           \
+    X(oam_scan.objs)                 \
+    X(oam_scan.size)                 \
+    X(oam_scan.index)                \
+    X(oam_scan.step)                 \
+    X(bg_win_fifo)                   \
+    X(obj_fifo)                      \
+    X(pixel_fetcher.pixels)          \
+    X(pixel_fetcher.mode)            \
+    X(pixel_fetcher.old_mode)        \
+    X(pixel_fetcher.step)            \
+    X(pixel_fetcher.curr_oam_index)  \
+    X(pixel_fetcher.init_delay_done) \
+    X(pixel_fetcher.current_tile_id) \
+    X(pixel_fetcher.x)
 
-byte_t *ppu_serialize(emulator_t *emu, size_t *size) {
-    *size = ppu_serialized_length(emu);
-    byte_t *buf = xmalloc(*size);
-    memcpy(buf, &emu->ppu->is_lcd_turning_on, 1);
-    memcpy(&buf[1], &emu->ppu->wly, 2);
-    memcpy(&buf[3], &emu->ppu->cycles, 2);
-    // memcpy(&buf[5], &emu->ppu->oam_scan.objs_addresses, sizeof(emu->ppu->oam_scan.objs_addresses));
-    // memcpy(&buf[5 + sizeof(emu->ppu->oam_scan.objs_addresses)], &emu->ppu->oam_scan.size, 1);
-    return buf;
-}
+#define X(value) SERIALIZED_LENGTH(value);
+SERIALIZED_SIZE_FUNCTION(ppu_t, ppu,
+    SERIALIZED_MEMBERS;
+)
+#undef X
 
-void ppu_unserialize(emulator_t *emu, byte_t *buf) {
-    memcpy(&emu->ppu->is_lcd_turning_on, buf, 1);
-    memcpy(&emu->ppu->wly, &buf[1], 2);
-    memcpy(&emu->ppu->cycles, &buf[3], 2);
-    // memcpy(&emu->ppu->oam_scan.objs_addresses, &buf[5], sizeof(emu->ppu->oam_scan.objs_addresses));
-    // memcpy(&emu->ppu->oam_scan.size, &buf[5 + sizeof(emu->ppu->oam_scan.objs_addresses)], 1);
-}
+#define X(value) SERIALIZE(value);
+SERIALIZER_FUNCTION(ppu_t, ppu,
+    SERIALIZED_MEMBERS
+)
+#undef X
+
+#define X(value) UNSERIALIZE(value);
+UNSERIALIZER_FUNCTION(ppu_t, ppu,
+    SERIALIZED_MEMBERS
+)
+#undef X
