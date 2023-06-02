@@ -9,7 +9,7 @@
 #include <dirent.h>
 #include <MagickWand/MagickWand.h>
 
-#include "../emulator/emulator.h"
+#include "../emulator/emulator_priv.h"
 
 #define BOLD "\033[1m"
 #define COLOR_OFF "\033[0m"
