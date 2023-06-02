@@ -2,6 +2,11 @@
 
 #include "types.h"
 
+typedef struct {
+    byte_t action;
+    byte_t direction;
+} joypad_t;
+
 void joypad_init(emulator_t *emu);
 
 void joypad_quit(emulator_t *emu);

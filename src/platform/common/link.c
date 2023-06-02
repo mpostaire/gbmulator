@@ -135,13 +135,11 @@ static inline int receive(int fd, void *buf, size_t n, int flags) {
 static int exchange_info(int sfd, emulator_t *emu, emulator_mode_t *mode, int *can_compress) {
     // --- SEND PKT_INFO ---
 
-    word_t checksum = 0;
-    for (unsigned int i = 0; i < sizeof(emu->mmu->cartridge); i += 2)
-        checksum = checksum - (emu->mmu->cartridge[i] + emu->mmu->cartridge[i + 1]) - 1;
+    word_t checksum = emulator_get_cartridge_checksum(emu);
 
     byte_t pkt[4] = { 0 };
     pkt[0] = PKT_INFO;
-    pkt[1] = emu->mode;
+    pkt[1] = emulator_get_mode(emu);
     #ifdef __HAVE_ZLIB__
     // SET_BIT(pkt[1], 7); // TODO fix compression
     #endif

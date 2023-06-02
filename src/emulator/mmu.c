@@ -3,15 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "emulator.h"
-#include "mmu.h"
-#include "ppu.h"
-#include "joypad.h"
-#include "apu.h"
+#include "emulator_priv.h"
 #include "boot.h"
-#include "cpu.h"
-#include "link.h"
-#include "serialize.h"
 
 typedef enum {
     OAM_DMA_NO_INIT,

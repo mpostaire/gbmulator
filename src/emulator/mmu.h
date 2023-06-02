@@ -104,6 +104,105 @@ typedef enum {
     IE = 0xFFFF // Interrupt Enable
 } mem_map_t;
 
+typedef enum {
+    ROM_ONLY,
+    MBC1,
+    MBC1M,
+    MBC2,
+    MBC3,
+    MBC30,
+    MBC5,
+    MBC6,
+    MBC7,
+    HuC1
+} mbc_type_t;
+
+typedef enum {
+    GDMA,
+    HDMA
+} hdma_type_t;
+
+typedef struct {
+    byte_t latched_s;
+    byte_t latched_m;
+    byte_t latched_h;
+    byte_t latched_dl;
+    byte_t latched_dh;
+
+    byte_t s;
+    byte_t m;
+    byte_t h;
+    byte_t dl;
+    byte_t dh;
+
+    byte_t enabled;
+    byte_t reg; // rtc register
+    byte_t latch;
+    uint32_t rtc_cycles;
+} rtc_t;
+
+typedef struct {
+    byte_t cartridge[8400000];
+    size_t cartridge_size;
+
+    byte_t mem[0x10000];
+    byte_t eram[0x20000]; // max 16 banks of size 0x2000
+    byte_t wram_extra[0x7000]; // 7 extra banks of wram of size 0x1000 for a total of 8 banks
+    byte_t vram_extra[0x2000]; // 1 extra bank of wram of size 0x1000 for a total of 2 banks
+    byte_t cram_bg[0x40]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
+    byte_t cram_obj[0x40]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
+
+    struct {
+        byte_t step;
+        byte_t hdma_ly;
+        byte_t lock_cpu;
+        byte_t type;
+        word_t src_address;
+        word_t dest_address;
+    } hdma;
+
+    struct {
+        byte_t starting_statuses[2]; // array of statuses of the initialization of the oam dma (this is an array to allow multiple initializations at the same time; the last will eventually overwrite the previous oam dma)
+        byte_t starting_count; // holds the number of oam dma initializations
+        s_word_t progress; // < 0 if oam dma not running, else [0, 159)
+        word_t src_address;
+    } oam_dma;
+
+    byte_t mbc;
+    word_t rom_banks;
+    byte_t eram_banks;
+
+    // MBC
+    byte_t ramg_reg; // 1 if eram is enabled, else 0
+    // MBC1/MBC1M: bits 7-5: unused, bits 4-0 (MBC1M: bits 3-0): lower 5 (MBC1M: 4) bits of the ROM_BANKN number
+    // (also used as a convenience variable in other MBCs to store the ROM_BANKN number)
+    byte_t bank1_reg;
+    // bits 7-2: unused, bits 1-0: upper 2 bits (bits 6-5) of the ROM_BANKN number
+    // (also used as a convenience variable in other MBCs to store the ERAM_BANK number)
+    byte_t bank2_reg;
+    byte_t mode_reg; // bits 7-1: unused, bit 0: BANK2 mode
+    byte_t rtc_mapped; // MBC3
+    byte_t romb0_reg; // MBC5: lower ROM BANK register
+    byte_t romb1_reg; // MBC5: upper ROM BANK register
+    // MBC5: RAMB register is stored in bank2_reg
+
+    // pointer to the start of the ROM memory region when accessing the 0x0000-0x3FFF range.
+    byte_t *rom_bank0_pointer;
+    // pointer to the start of the ROM memory region  when accessing the 0x4000-0x7FFF range
+    // (actually with an offset of -0x4000 to avoid converting the address passed to the mmu_read() function).
+    byte_t *rom_bankn_pointer;
+    // pointer to the start of the ERAM memory region when accessing the 0x8000-0x9FFF range.
+    // (actually with an offset of -0xA000 to avoid converting the address passed to the mmu_read() and mmu_write() functions).
+    byte_t *eram_bank_pointer;
+
+    byte_t has_eram;
+    byte_t has_battery;
+    byte_t has_rumble;
+    byte_t has_rtc;
+
+    rtc_t rtc;
+} mmu_t;
+
 int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size);
 
 void mmu_quit(emulator_t *emu);

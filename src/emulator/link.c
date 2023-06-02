@@ -1,8 +1,6 @@
 #include <stdlib.h>
 
-#include "emulator.h"
-#include "cpu.h"
-#include "mmu.h"
+#include "emulator_priv.h"
 #include "serialize.h"
 
 void link_set_clock(emulator_t *emu) {
