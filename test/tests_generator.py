@@ -63,6 +63,7 @@ def generate_strikethrough_tests(output_file):
 def generate_tests(tests_root, category, max_depth, output_file,
                    reference_image_getter=None, screenshot_test_generator=None,
                    internal_state_test_generator=None):
+    output = []
     category_path = os.path.join(tests_root, category)
     for path, subdirs, files in os.walk(category_path):
         if path[len(category_path):].count(os.sep) > max_depth:
@@ -79,7 +80,7 @@ def generate_tests(tests_root, category, max_depth, output_file,
                 if internal_state_test_generator is not None:
                     tests = internal_state_test_generator(rom_path)
                     for test in tests:
-                        output_file.write(test)
+                        output.append(test)
                     continue
                 continue
 
@@ -91,19 +92,21 @@ def generate_tests(tests_root, category, max_depth, output_file,
                 if internal_state_test_generator is not None:
                     tests = internal_state_test_generator(rom_path)
                     for test in tests:
-                        output_file.write(test)
+                        output.append(test)
             elif screenshot_test_generator is not None:
                 # parse screenshot test
                 for image in dmg_ref_images:
                     test = screenshot_test_generator(
                         "DMG", rom_path, os.path.basename(image))
                     if test is not None:
-                        output_file.write(test)
+                        output.append(test)
                 for image in cgb_ref_images:
                     test = screenshot_test_generator(
                         "CGB", rom_path, os.path.basename(image))
                     if test is not None:
-                        output_file.write(test)
+                        output.append(test)
+
+    output_file.writelines(sorted(output))
 
 
 def blargg_reference_image_getter(mode, full_rom_path):
