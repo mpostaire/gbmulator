@@ -62,7 +62,10 @@ def main():
         if items[3] == "success":
             succeeded_count += 1
 
-        ret = compare(old_summary_entries, *items)
+        try:
+            ret = compare(old_summary_entries, *items)
+        except KeyError:
+            continue  # new tests have been added
         if ret == 1:
             improvement_count += 1
         elif ret == 0:
