@@ -409,7 +409,7 @@ static char *get_savestate_path(const char *rom_filepath, int slot) {
 }
 
 static void toggle_pause(GSimpleAction *action, GVariant *parameter, gpointer app) {
-    show_toast(is_paused ? "Resume" : "Paused");
+    show_toast(is_paused ? "Resumed" : "Paused");
     toggle_loop();
 }
 
