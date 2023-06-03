@@ -24,9 +24,9 @@ typedef enum {
 
 typedef struct {
     byte_t color;
-    word_t palette;
-    byte_t obj_priority; // only on CGB mode
-    byte_t bg_priority;
+    word_t palette; // the address of the palette in DMG mode, the palette id in CGB mode (and CGB compatibility mode)
+    byte_t attributes; // obj attributes or of bg/win attributes (only in CGB mode) depending if pixel is from obj or bg/win
+    byte_t oam_pos; // position of the obj in the oam memory for oam priority (only if this is an obj pixel and in CGB mode)
 } pixel_t;
 
 #define PIXEL_FIFO_SIZE 8
@@ -68,6 +68,7 @@ typedef struct {
 
     struct {
         obj_t objs[10]; // this is ordered on the x coord of the obj_t, popping an element is just increasing the index
+        byte_t objs_oam_pos[10]; // objs_oam_pos[i] is objs[i]'s pos in the oam memory (used in CGB mode for OAM priority)
         byte_t size;
         byte_t index; // used in oam mode to iterate over the oam memory, in drawing mode this is the first element of the objs array
         byte_t step;
