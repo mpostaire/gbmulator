@@ -582,28 +582,15 @@ static inline void oam_scan_step(emulator_t *emu) {
     byte_t obj_height = IS_PPU_OBJ_TALL(mmu) ? 16 : 8;
     // NOTE: obj->x != 0 condition should not be checked even if ultimate gameboy talk says it should
     if (ppu->oam_scan.size < 10 && (obj->y <= mmu->mem[LY] + 16) && (obj->y + obj_height > mmu->mem[LY] + 16)) {
-        byte_t is_cgb_mode = emu->mode == CGB; // TODO also handle cgb compat with DMG mode
-        if (is_cgb_mode && !CHECK_BIT(mmu->mem[OPRI], 0)) {
-            s_byte_t i;
-            // if equal x: insert after so that the drawing doesn't overwrite the existing sprite (equal x -> first scanned obj priority)
-            for (i = ppu->oam_scan.size - 1; i >= 0 && ppu->oam_scan.objs[i].x > obj->x; i--) {
-                ppu->oam_scan.objs[i + 1] = ppu->oam_scan.objs[i];
-                ppu->oam_scan.objs_oam_pos[i + 1] = ppu->oam_scan.objs_oam_pos[i];
-            }
-            ppu->oam_scan.objs[i + 1] = *obj;
-            ppu->oam_scan.objs_oam_pos[i + 1] = ppu->oam_scan.index;
-            ppu->oam_scan.size++;
-        } else {
-            s_byte_t i;
-            // if equal x: insert after so that the drawing doesn't overwrite the existing sprite (equal x -> first scanned obj priority)
-            for (i = ppu->oam_scan.size - 1; i >= 0 && ppu->oam_scan.objs[i].x > obj->x; i--) {
-                ppu->oam_scan.objs[i + 1] = ppu->oam_scan.objs[i];
-                ppu->oam_scan.objs_oam_pos[i + 1] = ppu->oam_scan.objs_oam_pos[i];
-            }
-            ppu->oam_scan.objs[i + 1] = *obj;
-            ppu->oam_scan.objs_oam_pos[i + 1] = ppu->oam_scan.index;
-            ppu->oam_scan.size++;
+        s_byte_t i;
+        // if equal x: insert after so that the drawing doesn't overwrite the existing sprite (equal x -> first scanned obj priority)
+        for (i = ppu->oam_scan.size - 1; i >= 0 && ppu->oam_scan.objs[i].x > obj->x; i--) {
+            ppu->oam_scan.objs[i + 1] = ppu->oam_scan.objs[i];
+            ppu->oam_scan.objs_oam_pos[i + 1] = ppu->oam_scan.objs_oam_pos[i];
         }
+        ppu->oam_scan.objs[i + 1] = *obj;
+        ppu->oam_scan.objs_oam_pos[i + 1] = ppu->oam_scan.index;
+        ppu->oam_scan.size++;
     }
 
     ppu->oam_scan.step = 0;
