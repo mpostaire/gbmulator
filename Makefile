@@ -128,9 +128,6 @@ $(ICONS): $(ICONDIR)/$(BIN).svg
 	mkdir -p $(ICONDIR)/$(patsubst $(ICONDIR)/%/$(BIN).png,%,$@)
 	convert -background none -density 1200 -resize $(patsubst $(ICONDIR)/%/$(BIN).png,%,$@) $^ $(ICONDIR)/$(patsubst $(ICONDIR)/%/$(BIN).png,%,$@)/$(BIN).png
 
-run: desktop
-	LIBGL_DRI3_DISABLE=1 ./$(BIN) "roms/tetris.gb"
-
 check: $(SDIR)
 	cppcheck --enable=all --suppress=missingIncludeSystem -i $(SDIR)/platform/android/android-project $(SDIR)
 
