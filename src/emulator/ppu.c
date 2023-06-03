@@ -684,9 +684,17 @@ void ppu_step(emulator_t *emu) {
 
         if (!ppu->is_lcd_turning_on) {
             // blank screen
-            for (int i = 0; i < GB_SCREEN_WIDTH; i++)
-                for (int j = 0; j < GB_SCREEN_HEIGHT; j++)
-                    SET_PIXEL_DMG(emu, i, j, DMG_WHITE);
+            for (int x = 0; x < GB_SCREEN_WIDTH; x++) {
+                for (int y = 0; y < GB_SCREEN_HEIGHT; y++) {
+                    if (emu->mode == CGB) {
+                        byte_t r, g, b;
+                        cgb_get_color(0xFFFF, &r, &g, &b, emu->disable_cgb_color_correction);
+                        SET_PIXEL_CGB(emu, x, y, r, g, b);
+                    } else {
+                        SET_PIXEL_DMG(emu, x, y, DMG_WHITE);
+                    }
+                }
+            }
 
             if (emu->on_new_frame)
                 emu->on_new_frame(ppu->pixels);
