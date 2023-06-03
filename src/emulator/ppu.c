@@ -12,7 +12,6 @@
 // TODO read this: http://gameboy.mongenel.com/dmg/istat98.txt
 // TODO read this for fetcher timings: https://www.reddit.com/r/EmuDev/comments/s6cpis/comment/htlwkx9
 
-// TODO pokemon red has strange glitch where the pokemon scrolls vertically with the falling logo
 // TODO clean code (there's lots of code duplication and unecessary long lines)
 
 #define PPU_SET_MODE(mmu_ptr, mode) (mmu_ptr)->mem[STAT] = ((mmu_ptr)->mem[STAT] & 0xFC) | (mode)
@@ -136,11 +135,11 @@ static inline word_t get_bg_tiledata_address(emulator_t *emu, byte_t is_high, by
 
 static inline word_t get_win_tiledata_address(emulator_t *emu, byte_t is_high, byte_t flip_y) {
     byte_t bit_12 = !((emu->mmu->mem[LCDC] & 0x10) || (emu->ppu->pixel_fetcher.current_tile_id & 0x80));
-    byte_t wly = emu->ppu->wly;
+    s_word_t wly = emu->ppu->wly;
     if (flip_y)
         wly = ~wly;
     wly &= 0x07; // modulo 8
-    return 0x8000 | (bit_12 << 12) | (emu->ppu->pixel_fetcher.current_tile_id << 4) | (emu->ppu->wly << 1) | !!is_high;
+    return 0x8000 | (bit_12 << 12) | (emu->ppu->pixel_fetcher.current_tile_id << 4) | (wly << 1) | !!is_high;
 }
 
 static inline word_t get_obj_tiledata_address(emulator_t *emu, byte_t is_high) {
@@ -258,13 +257,13 @@ static inline void fetch_tileslice_low(emulator_t *emu) {
             byte_t flip_y = CHECK_BIT(attributes, 6);
             byte_t flip_x = CHECK_BIT(attributes, 5);
 
-            word_t tiledata_address = get_bg_tiledata_address(emu, 0, flip_y);
+            word_t tiledata_address = get_win_tiledata_address(emu, 0, flip_y);
             if (CHECK_BIT(attributes, 3)) // tile is in VRAM bank 1
                 tileslice = flip_x ? reverse_bits_order(mmu->vram_extra[tiledata_address - VRAM]) : mmu->vram_extra[tiledata_address - VRAM];
             else
                 tileslice = flip_x ? reverse_bits_order(mmu->mem[tiledata_address]) : mmu->mem[tiledata_address];
         } else {
-            tileslice = mmu->mem[get_bg_tiledata_address(emu, 0, 0)];
+            tileslice = mmu->mem[get_win_tiledata_address(emu, 0, 0)];
         }
         break;
     case FETCH_OBJ:
@@ -322,13 +321,13 @@ static inline void fetch_tileslice_high(emulator_t *emu) {
 
             palette = IS_CGB_COMPAT_MODE(mmu) ? 0 : attributes & 0x07;
 
-            word_t tiledata_address = get_bg_tiledata_address(emu, 1, flip_y);
+            word_t tiledata_address = get_win_tiledata_address(emu, 1, flip_y);
             if (CHECK_BIT(attributes, 3)) // tile is in VRAM bank 1
                 tileslice = flip_x ? reverse_bits_order(mmu->vram_extra[tiledata_address - VRAM]) : mmu->vram_extra[tiledata_address - VRAM];
             else
                 tileslice = flip_x ? reverse_bits_order(mmu->mem[tiledata_address]) : mmu->mem[tiledata_address];
         } else {
-            tileslice = mmu->mem[get_bg_tiledata_address(emu, 1, 0)];
+            tileslice = mmu->mem[get_win_tiledata_address(emu, 1, 0)];
             palette = BGP;
         }
         break;
