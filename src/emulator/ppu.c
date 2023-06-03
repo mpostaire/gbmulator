@@ -742,46 +742,71 @@ void ppu_quit(emulator_t *emu) {
     free(emu->ppu);
 }
 
-#define SERIALIZED_MEMBERS           \
-    X(wly)                           \
-    X(is_lcd_turning_on)             \
-    X(cycles)                        \
-    X(discarded_pixels)              \
-    X(lcd_x)                         \
-    X(wly)                           \
-    X(is_last_vblank_line)           \
-    X(oam_scan.objs)                 \
-    X(oam_scan.size)                 \
-    X(oam_scan.index)                \
-    X(oam_scan.step)                 \
-    X(bg_win_fifo)                   \
-    X(obj_fifo)                      \
-    X(pixel_fetcher.pixels)          \
-    X(pixel_fetcher.mode)            \
-    X(pixel_fetcher.old_mode)        \
-    X(pixel_fetcher.step)            \
-    X(pixel_fetcher.curr_oam_index)  \
-    X(pixel_fetcher.init_delay_done) \
-    X(pixel_fetcher.current_tile_id) \
+#define SERIALIZED_OAM_SCAN      \
+    Y(oam_scan.objs, y)          \
+    Y(oam_scan.objs, x)          \
+    Y(oam_scan.objs, tile_id)    \
+    Y(oam_scan.objs, attributes) \
+    X(oam_scan.objs_oam_pos)     \
+    X(oam_scan.size)             \
+    X(oam_scan.index)            \
+    X(oam_scan.step)
+
+#define SERIALIZED_FIFO(fifo)  \
+    Y(fifo.pixels, color)      \
+    Y(fifo.pixels, palette)    \
+    Y(fifo.pixels, attributes) \
+    Y(fifo.pixels, oam_pos)    \
+    X(fifo.size)               \
+    X(fifo.head)               \
+    X(fifo.tail)
+
+#define SERIALIZED_FETCHER              \
+    Y(pixel_fetcher.pixels, color)      \
+    Y(pixel_fetcher.pixels, palette)    \
+    Y(pixel_fetcher.pixels, attributes) \
+    Y(pixel_fetcher.pixels, oam_pos)    \
+    X(pixel_fetcher.mode)               \
+    X(pixel_fetcher.old_mode)           \
+    X(pixel_fetcher.step)               \
+    X(pixel_fetcher.curr_oam_index)     \
+    X(pixel_fetcher.init_delay_done)    \
+    X(pixel_fetcher.current_tile_id)    \
     X(pixel_fetcher.x)
-// TODO pixel_fetcher.pixels (and oam_scan.objs) need to individually save all the members n times where n is the size of the array
-// --> make a macro to repeat a serialization for an array
-// ---> DO THE SAME FOR bg_win_fifo and obj_fifo
+
+#define SERIALIZED_MEMBERS       \
+    X(wly)                       \
+    X(is_lcd_turning_on)         \
+    X(cycles)                    \
+    X(discarded_pixels)          \
+    X(lcd_x)                     \
+    X(wly)                       \
+    X(is_last_vblank_line)       \
+    SERIALIZED_OAM_SCAN          \
+    SERIALIZED_FIFO(bg_win_fifo) \
+    SERIALIZED_FIFO(obj_fifo)    \
+    SERIALIZED_FETCHER
 
 #define X(value) SERIALIZED_LENGTH(value);
+#define Y(array, value) SERIALIZED_LENGTH_ARRAY_OF_STRUCTS(array, value);
 SERIALIZED_SIZE_FUNCTION(ppu_t, ppu,
-    SERIALIZED_MEMBERS;
+    SERIALIZED_MEMBERS
 )
 #undef X
+#undef Y
 
 #define X(value) SERIALIZE(value);
+#define Y(array, value) SERIALIZE_ARRAY_OF_STRUCTS(array, value);
 SERIALIZER_FUNCTION(ppu_t, ppu,
     SERIALIZED_MEMBERS
 )
 #undef X
+#undef Y
 
 #define X(value) UNSERIALIZE(value);
+#define Y(array, value) UNSERIALIZE_ARRAY_OF_STRUCTS(array, value);
 UNSERIALIZER_FUNCTION(ppu_t, ppu,
     SERIALIZED_MEMBERS
 )
 #undef X
+#undef Y

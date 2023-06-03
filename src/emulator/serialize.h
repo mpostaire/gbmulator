@@ -34,16 +34,31 @@
         __VA_ARGS__;                           \
     }
 
-#define SERIALIZED_LENGTH(value) length += sizeof(tmp->value)
+#define SERIALIZED_LENGTH(member) length += sizeof(tmp->member)
 
-#define SERIALIZE(value)                                         \
-    do {                                                         \
-        memcpy(buf + offset, &(tmp->value), sizeof(tmp->value)); \
-        offset += sizeof(tmp->value);                            \
+#define SERIALIZED_LENGTH_ARRAY_OF_STRUCTS(array, member) \
+    length += sizeof(tmp->array[0].member) * (sizeof(tmp->array) / sizeof(tmp->array[0]));
+
+#define SERIALIZE(member)                                          \
+    do {                                                           \
+        memcpy(buf + offset, &(tmp->member), sizeof(tmp->member)); \
+        offset += sizeof(tmp->member);                             \
     } while (0)
 
-#define UNSERIALIZE(value)                                       \
-    do {                                                         \
-        memcpy(&(tmp->value), buf + offset, sizeof(tmp->value)); \
-        offset += sizeof(tmp->value);                            \
+#define SERIALIZE_ARRAY_OF_STRUCTS(array, member)                                    \
+    for (size_t i = 0; i < sizeof(tmp->array) / sizeof(tmp->array[0]); i++) {        \
+        memcpy(buf + offset, &(tmp->array[i].member), sizeof(tmp->array[i].member)); \
+        offset += sizeof(tmp->array[i].member);                                    \
+    }
+
+#define UNSERIALIZE(member)                                        \
+    do {                                                           \
+        memcpy(&(tmp->member), buf + offset, sizeof(tmp->member)); \
+        offset += sizeof(tmp->member);                             \
     } while (0)
+
+#define UNSERIALIZE_ARRAY_OF_STRUCTS(array, member)                                  \
+    for (size_t i = 0; i < sizeof(tmp->array) / sizeof(tmp->array[0]); i++) {        \
+        memcpy(&(tmp->array[i].member), buf + offset, sizeof(tmp->array[i].member)); \
+        offset += sizeof(tmp->array[i].member);                                    \
+    }
