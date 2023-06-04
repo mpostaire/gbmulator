@@ -67,7 +67,7 @@ The following table show the default keybindings (they can be changed in GBmulat
 | *Load savesate 1 → 8   | <kbd>F1</kbd> → <kbd>F8</kbd>                    |
 | *Create savesate 1 → 8 | <kbd>Shift</kbd> + <kbd>F1</kbd> → <kbd>F8</kbd> |
 
-There is also support for gamepad controllers but the buttons aren't configurable.
+There is also support for gamepad controllers.
 
 ## Features
 
