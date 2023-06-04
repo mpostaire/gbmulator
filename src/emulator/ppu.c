@@ -12,8 +12,6 @@
 // TODO read this: http://gameboy.mongenel.com/dmg/istat98.txt
 // TODO read this for fetcher timings: https://www.reddit.com/r/EmuDev/comments/s6cpis/comment/htlwkx9
 
-// TODO clean code (there's lots of code duplication and unecessary long lines)
-
 #define PPU_SET_MODE(mmu_ptr, mode) (mmu_ptr)->mem[STAT] = ((mmu_ptr)->mem[STAT] & 0xFC) | (mode)
 
 #define IS_PPU_WIN_ENABLED(mmu_ptr) (CHECK_BIT((mmu_ptr)->mem[LCDC], 5))
@@ -87,7 +85,6 @@ static inline void cgb_get_color(word_t color_palette_data, byte_t *r, byte_t *g
     }
 }
 
-
 void ppu_ly_lyc_compare(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
@@ -113,7 +110,7 @@ static inline byte_t cgb_get_bg_win_tile_attributes(emulator_t *emu) {
         break;
     }
     case FETCH_WIN:
-        tile_id_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 6) << 10) | (((emu->ppu->wly / 8) & 0x1F) << 5) | ((ppu->pixel_fetcher.x / 8) & 0x1F);
+        tile_id_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 6) << 10) | (((ppu->wly / 8) & 0x1F) << 5) | ((ppu->pixel_fetcher.x / 8) & 0x1F);
         break;
     default:
         eprintf("this function can't be for objs");
@@ -126,21 +123,26 @@ static inline byte_t cgb_get_bg_win_tile_attributes(emulator_t *emu) {
 // TODO if the ppu vram access is blocked, the tile id, tile map, etc. reads are 0xFF
 static inline word_t get_bg_tiledata_address(emulator_t *emu, byte_t is_high, byte_t flip_y) {
     mmu_t *mmu = emu->mmu;
-    byte_t bit_12 = !((mmu->mem[LCDC] & 0x10) || (emu->ppu->pixel_fetcher.current_tile_id & 0x80));
+    ppu_t *ppu = emu->ppu;
+
+    byte_t bit_12 = !((mmu->mem[LCDC] & 0x10) || (ppu->pixel_fetcher.current_tile_id & 0x80));
     byte_t ly_scy = mmu->mem[LY] + mmu->mem[SCY]; // addition carried out in 8 bits (== result % 256)
     if (flip_y)
         ly_scy = ~ly_scy;
     ly_scy &= 0x07; // modulo 8
-    return 0x8000 | (bit_12 << 12) | (emu->ppu->pixel_fetcher.current_tile_id << 4) | (ly_scy << 1) | !!is_high;
+    return 0x8000 | (bit_12 << 12) | (ppu->pixel_fetcher.current_tile_id << 4) | (ly_scy << 1) | !!is_high;
 }
 
 static inline word_t get_win_tiledata_address(emulator_t *emu, byte_t is_high, byte_t flip_y) {
-    byte_t bit_12 = !((emu->mmu->mem[LCDC] & 0x10) || (emu->ppu->pixel_fetcher.current_tile_id & 0x80));
-    s_word_t wly = emu->ppu->wly;
+    mmu_t *mmu = emu->mmu;
+    ppu_t *ppu = emu->ppu;
+
+    byte_t bit_12 = !((mmu->mem[LCDC] & 0x10) || (ppu->pixel_fetcher.current_tile_id & 0x80));
+    s_word_t wly = ppu->wly;
     if (flip_y)
         wly = ~wly;
     wly &= 0x07; // modulo 8
-    return 0x8000 | (bit_12 << 12) | (emu->ppu->pixel_fetcher.current_tile_id << 4) | (wly << 1) | !!is_high;
+    return 0x8000 | (bit_12 << 12) | (ppu->pixel_fetcher.current_tile_id << 4) | (wly << 1) | !!is_high;
 }
 
 static inline word_t get_obj_tiledata_address(emulator_t *emu, byte_t is_high) {
@@ -231,55 +233,41 @@ static inline void fetch_tile_id(emulator_t *emu) {
     }
 }
 
-static inline void fetch_tileslice_low(emulator_t *emu) {
+static inline byte_t get_tileslice(emulator_t *emu, word_t tiledata_address, byte_t attributes) {
     mmu_t *mmu = emu->mmu;
+
+    byte_t flip_x = CHECK_BIT(attributes, 5);
+    if (emu->mode == CGB) {
+        if (CHECK_BIT(attributes, 3)) // tile is in VRAM bank 1
+            return flip_x ? reverse_bits_order(mmu->vram_extra[tiledata_address - VRAM]) : mmu->vram_extra[tiledata_address - VRAM];
+        else
+            return flip_x ? reverse_bits_order(mmu->mem[tiledata_address]) : mmu->mem[tiledata_address];
+    } else {
+        return flip_x ? reverse_bits_order(mmu->mem[tiledata_address]) : mmu->mem[tiledata_address];
+    }
+}
+
+static inline void fetch_tileslice_low(emulator_t *emu) {
     ppu_t *ppu = emu->ppu;
 
     byte_t tileslice = 0;
     switch (ppu->pixel_fetcher.mode) {
         case FETCH_BG: {
-            if (emu->mode == CGB) {
-                byte_t attributes = cgb_get_bg_win_tile_attributes(emu);
-                byte_t flip_y = CHECK_BIT(attributes, 6);
-                byte_t flip_x = CHECK_BIT(attributes, 5);
-
-                word_t tiledata_address = get_bg_tiledata_address(emu, 0, flip_y);
-                if (CHECK_BIT(attributes, 3)) // tile is in VRAM bank 1
-                    tileslice = flip_x ? reverse_bits_order(mmu->vram_extra[tiledata_address - VRAM]) : mmu->vram_extra[tiledata_address - VRAM];
-                else
-                    tileslice = flip_x ? reverse_bits_order(mmu->mem[tiledata_address]) : mmu->mem[tiledata_address];
-            } else {
-                tileslice = mmu->mem[get_bg_tiledata_address(emu, 0, 0)];
-            }
+            byte_t attributes = emu->mode == CGB ? cgb_get_bg_win_tile_attributes(emu) : 0;
+            word_t tiledata_address = get_bg_tiledata_address(emu, 0, CHECK_BIT(attributes, 6));
+            tileslice = get_tileslice(emu, tiledata_address, attributes);
             break;
         }
         case FETCH_WIN: {
-                if (emu->mode == CGB) {
-                    byte_t attributes = cgb_get_bg_win_tile_attributes(emu);
-                    byte_t flip_y = CHECK_BIT(attributes, 6);
-                    byte_t flip_x = CHECK_BIT(attributes, 5);
-
-                    word_t tiledata_address = get_win_tiledata_address(emu, 0, flip_y);
-                    if (CHECK_BIT(attributes, 3)) // tile is in VRAM bank 1
-                        tileslice = flip_x ? reverse_bits_order(mmu->vram_extra[tiledata_address - VRAM]) : mmu->vram_extra[tiledata_address - VRAM];
-                    else
-                        tileslice = flip_x ? reverse_bits_order(mmu->mem[tiledata_address]) : mmu->mem[tiledata_address];
-                } else {
-                    tileslice = mmu->mem[get_win_tiledata_address(emu, 0, 0)];
-                }
-                break;
+            byte_t attributes = emu->mode == CGB ? cgb_get_bg_win_tile_attributes(emu) : 0;
+            word_t tiledata_address = get_win_tiledata_address(emu, 0, CHECK_BIT(attributes, 6));
+            tileslice = get_tileslice(emu, tiledata_address, attributes);
+            break;
         }
         case FETCH_OBJ: {
+            byte_t attributes = ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].attributes;
             word_t tiledata_address = get_obj_tiledata_address(emu, 0);
-            byte_t flip_x = CHECK_BIT(ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].attributes, 5);
-            if (emu->mode == CGB) {
-                if (CHECK_BIT(ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].attributes, 3)) // tile is in VRAM bank 1
-                    tileslice = flip_x ? reverse_bits_order(mmu->vram_extra[tiledata_address - VRAM]) : mmu->vram_extra[tiledata_address - VRAM];
-                else
-                    tileslice = flip_x ? reverse_bits_order(mmu->mem[tiledata_address]) : mmu->mem[tiledata_address];
-            } else {
-                tileslice = flip_x ? reverse_bits_order(mmu->mem[tiledata_address]) : mmu->mem[tiledata_address];
-            }
+            tileslice = get_tileslice(emu, tiledata_address, attributes);
             break;
         }
     }
@@ -302,62 +290,39 @@ static inline void fetch_tileslice_high(emulator_t *emu) {
         case FETCH_BG: {
             if (emu->mode == CGB) {
                 attributes = cgb_get_bg_win_tile_attributes(emu);
-                byte_t flip_y = CHECK_BIT(attributes, 6);
-                byte_t flip_x = CHECK_BIT(attributes, 5);
-
                 palette = IS_CGB_COMPAT_MODE(mmu) ? 0 : attributes & 0x07;
-
-                word_t tiledata_address = get_bg_tiledata_address(emu, 1, flip_y);
-                if (CHECK_BIT(attributes, 3)) // tile is in VRAM bank 1
-                    tileslice = flip_x ? reverse_bits_order(mmu->vram_extra[tiledata_address - VRAM]) : mmu->vram_extra[tiledata_address - VRAM];
-                else
-                    tileslice = flip_x ? reverse_bits_order(mmu->mem[tiledata_address]) : mmu->mem[tiledata_address];
             } else {
-                tileslice = mmu->mem[get_bg_tiledata_address(emu, 1, 0)];
                 palette = BGP;
             }
+            word_t tiledata_address = get_bg_tiledata_address(emu, 1, CHECK_BIT(attributes, 6));
+            tileslice = get_tileslice(emu, tiledata_address, attributes);
             break;
         }
         case FETCH_WIN: {
             if (emu->mode == CGB) {
                 attributes = cgb_get_bg_win_tile_attributes(emu);
-                byte_t flip_y = CHECK_BIT(attributes, 6);
-                byte_t flip_x = CHECK_BIT(attributes, 5);
-
                 palette = IS_CGB_COMPAT_MODE(mmu) ? 0 : attributes & 0x07;
-
-                word_t tiledata_address = get_win_tiledata_address(emu, 1, flip_y);
-                if (CHECK_BIT(attributes, 3)) // tile is in VRAM bank 1
-                    tileslice = flip_x ? reverse_bits_order(mmu->vram_extra[tiledata_address - VRAM]) : mmu->vram_extra[tiledata_address - VRAM];
-                else
-                    tileslice = flip_x ? reverse_bits_order(mmu->mem[tiledata_address]) : mmu->mem[tiledata_address];
             } else {
-                tileslice = mmu->mem[get_win_tiledata_address(emu, 1, 0)];
                 palette = BGP;
             }
+            word_t tiledata_address = get_win_tiledata_address(emu, 1, CHECK_BIT(attributes, 6));
+            tileslice = get_tileslice(emu, tiledata_address, attributes);
             break;
         }
         case FETCH_OBJ: {
-            word_t tiledata_address = get_obj_tiledata_address(emu, 1);
-
-            byte_t flip_x = CHECK_BIT(ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].attributes, 5);
-            if (emu->mode == CGB) {
-                if (CHECK_BIT(ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].attributes, 3)) // tile is in VRAM bank 1
-                    tileslice = flip_x ? reverse_bits_order(mmu->vram_extra[tiledata_address - VRAM]) : mmu->vram_extra[tiledata_address - VRAM];
-                else
-                    tileslice = flip_x ? reverse_bits_order(mmu->mem[tiledata_address]) : mmu->mem[tiledata_address];
-
-                if (IS_CGB_COMPAT_MODE(mmu))
-                    palette = CHECK_BIT(ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].attributes, 4) ? 1 : 0;
-                else
-                    palette = ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].attributes & 0x07;
-            } else {
-                tileslice = flip_x ? reverse_bits_order(mmu->mem[tiledata_address]) : mmu->mem[tiledata_address];
-                palette = CHECK_BIT(ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].attributes, 4) ? OBP1 : OBP0;
-            }
-
             attributes = ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].attributes;
+            word_t tiledata_address = get_obj_tiledata_address(emu, 1);
+            tileslice = get_tileslice(emu, tiledata_address, attributes);
             oam_pos = ppu->oam_scan.objs_oam_pos[ppu->pixel_fetcher.curr_oam_index];
+
+            if (emu->mode == CGB) {
+                if (IS_CGB_COMPAT_MODE(mmu))
+                    palette = CHECK_BIT(attributes, 4) ? 1 : 0;
+                else
+                    palette = attributes & 0x07;
+            } else {
+                palette = CHECK_BIT(attributes, 4) ? OBP1 : OBP0;
+            }
             break;
         }
     }
@@ -390,32 +355,17 @@ static inline byte_t push(emulator_t *emu) {
             if (ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].x < 8)
                 offset = 8 - ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].x;
 
-            byte_t is_cgb_mode = emu->mode == CGB; // TODO also handle cgb compat with DMG mode
-            if (is_cgb_mode && !CHECK_BIT(emu->mmu->mem[OPRI], 0)) {
-                // overwrite old transparent obj pixels, then fill rest of fifo with the last pixels of this obj to not overwrite any old pixels
-                for (byte_t fetcher_index = offset; fetcher_index < PIXEL_FIFO_SIZE; fetcher_index++) {
-                    byte_t fifo_index = ((fetcher_index - offset) + ppu->obj_fifo.head) % PIXEL_FIFO_SIZE;
+            byte_t is_cgb_mode = emu->mode == CGB && !CHECK_BIT(emu->mmu->mem[OPRI], 0);
+            for (byte_t fetcher_index = offset; fetcher_index < PIXEL_FIFO_SIZE; fetcher_index++) {
+                byte_t fifo_index = ((fetcher_index - offset) + ppu->obj_fifo.head) % PIXEL_FIFO_SIZE;
 
-                    if (fetcher_index < old_size) {
-                        if (ppu->pixel_fetcher.pixels[fetcher_index].color == DMG_WHITE)
-                            continue;
-                        if (ppu->obj_fifo.pixels[fifo_index].color == DMG_WHITE || ppu->pixel_fetcher.pixels[fetcher_index].oam_pos < ppu->obj_fifo.pixels[fifo_index].oam_pos)
-                            ppu->obj_fifo.pixels[fifo_index] = ppu->pixel_fetcher.pixels[fetcher_index];
-                    } else {
-                        pixel_fifo_push(&ppu->obj_fifo, &ppu->pixel_fetcher.pixels[fetcher_index]);
-                    }
-                }
-            } else {
-                // overwrite old transparent obj pixels, then fill rest of fifo with the last pixels of this obj to not overwrite any old pixels
-                for (byte_t fetcher_index = offset; fetcher_index < PIXEL_FIFO_SIZE; fetcher_index++) {
-                    byte_t fifo_index = ((fetcher_index - offset) + ppu->obj_fifo.head) % PIXEL_FIFO_SIZE;
-
-                    if (fetcher_index < old_size) {
-                        if (ppu->obj_fifo.pixels[fifo_index].color == DMG_WHITE)
-                            ppu->obj_fifo.pixels[fifo_index] = ppu->pixel_fetcher.pixels[fetcher_index];
-                    } else {
-                        pixel_fifo_push(&ppu->obj_fifo, &ppu->pixel_fetcher.pixels[fetcher_index]);
-                    }
+                if (fetcher_index < old_size) {
+                    if (is_cgb_mode && ppu->pixel_fetcher.pixels[fetcher_index].oam_pos < ppu->obj_fifo.pixels[fifo_index].oam_pos)
+                        ppu->obj_fifo.pixels[fifo_index] = ppu->pixel_fetcher.pixels[fetcher_index];
+                    if (ppu->obj_fifo.pixels[fifo_index].color == DMG_WHITE)
+                        ppu->obj_fifo.pixels[fifo_index] = ppu->pixel_fetcher.pixels[fetcher_index];
+                } else {
+                    pixel_fifo_push(&ppu->obj_fifo, &ppu->pixel_fetcher.pixels[fetcher_index]);
                 }
             }
 
@@ -430,31 +380,24 @@ static inline byte_t push(emulator_t *emu) {
 static inline pixel_t *select_pixel(emulator_t *emu, pixel_t *bg_win_pixel, pixel_t *obj_pixel) {
     mmu_t *mmu = emu->mmu;
 
-    byte_t is_cgb_mode = emu->mode == CGB && !IS_CGB_COMPAT_MODE(mmu); // TODO also handle cgb compat with DMG mode (check scanline renderer as example)
+    byte_t is_cgb_mode = emu->mode == CGB && !IS_CGB_COMPAT_MODE(mmu);
     if (is_cgb_mode) {
-        if (!obj_pixel)
+        if (!obj_pixel || !IS_PPU_OBJ_ENABLED(mmu) || obj_pixel->color == DMG_WHITE)
             return bg_win_pixel;
-        if (!CHECK_BIT(mmu->mem[LCDC], 1)) // TODO !IS_PPU_OBJ_ENABLED(mmu)
-            return bg_win_pixel;
-
-        if (obj_pixel->color == DMG_WHITE)
-            return bg_win_pixel;
-        if (bg_win_pixel->color == DMG_WHITE)
-            return obj_pixel;
-        if (!CHECK_BIT(mmu->mem[LCDC], 0))
+        if (bg_win_pixel->color == DMG_WHITE || !IS_PPU_BG_WIN_ENABLED(mmu))
             return obj_pixel;
         if (!CHECK_BIT(bg_win_pixel->attributes, 7) && !CHECK_BIT(obj_pixel->attributes, 7))
             return obj_pixel;
         return bg_win_pixel;
     } else {
-        if (!CHECK_BIT(mmu->mem[LCDC], 0)) { // TODO !IS_PPU_BG_WIN_ENABLED(mmu)
+        if (!IS_PPU_BG_WIN_ENABLED(mmu)) {
             bg_win_pixel->color = DMG_WHITE;
-            // TODO change palette or force white?
+            // TODO keep palette / change palette / force white?
         }
 
         if (!obj_pixel)
             return bg_win_pixel;
-        if (!CHECK_BIT(mmu->mem[LCDC], 1)) // TODO !IS_PPU_OBJ_ENABLED(mmu)
+        if (!IS_PPU_OBJ_ENABLED(mmu))
             return bg_win_pixel;
 
         byte_t bg_over_obj = CHECK_BIT(obj_pixel->attributes, 7) && bg_win_pixel->color != DMG_WHITE;
@@ -617,32 +560,33 @@ static inline void hblank_step(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
     ppu_t *ppu = emu->ppu;
 
-    if (ppu->cycles == 456) {
-        mmu->mem[LY]++;
-        ppu->cycles = 0;
+    if (ppu->cycles != 456)
+        return;
 
-        if (mmu->mem[LY] >= GB_SCREEN_HEIGHT) {
-            ppu->wly = -1;
-            PPU_SET_MODE(mmu, PPU_MODE_VBLANK);
-            if (IS_VBLANK_IRQ_STAT_ENABLED(emu))
-                CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
+    mmu->mem[LY]++;
+    ppu->cycles = 0;
 
-            CPU_REQUEST_INTERRUPT(emu, IRQ_VBLANK);
+    if (mmu->mem[LY] >= GB_SCREEN_HEIGHT) {
+        ppu->wly = -1;
+        PPU_SET_MODE(mmu, PPU_MODE_VBLANK);
+        if (IS_VBLANK_IRQ_STAT_ENABLED(emu))
+            CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
 
-            // skip first screen rendering after the LCD was just turned on
-            if (ppu->is_lcd_turning_on) {
-                ppu->is_lcd_turning_on = 0;
-                return;
-            }
+        CPU_REQUEST_INTERRUPT(emu, IRQ_VBLANK);
 
-            if (emu->on_new_frame)
-                emu->on_new_frame(ppu->pixels);
-        } else {
-            ppu->oam_scan.size = 0;
-            PPU_SET_MODE(mmu, PPU_MODE_OAM);
-            if (IS_OAM_IRQ_STAT_ENABLED(emu))
-                CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
+        // skip first screen rendering after the LCD was just turned on
+        if (ppu->is_lcd_turning_on) {
+            ppu->is_lcd_turning_on = 0;
+            return;
         }
+
+        if (emu->on_new_frame)
+            emu->on_new_frame(ppu->pixels);
+    } else {
+        ppu->oam_scan.size = 0;
+        PPU_SET_MODE(mmu, PPU_MODE_OAM);
+        if (IS_OAM_IRQ_STAT_ENABLED(emu))
+            CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
     }
 }
 
@@ -674,6 +618,20 @@ static inline void vblank_step(emulator_t *emu) {
     }
 }
 
+static inline void blank_screen(emulator_t *emu) {
+    for (int x = 0; x < GB_SCREEN_WIDTH; x++) {
+        for (int y = 0; y < GB_SCREEN_HEIGHT; y++) {
+            if (emu->mode == CGB) {
+                byte_t r, g, b;
+                cgb_get_color(0xFFFF, &r, &g, &b, emu->disable_cgb_color_correction);
+                SET_PIXEL_CGB(emu, x, y, r, g, b);
+            } else {
+                SET_PIXEL_DMG(emu, x, y, DMG_WHITE);
+            }
+        }
+    }
+}
+
 void ppu_step(emulator_t *emu) {
     ppu_t *ppu = emu->ppu;
     mmu_t *mmu = emu->mmu;
@@ -683,18 +641,7 @@ void ppu_step(emulator_t *emu) {
         // TODO LCD disabled should fill screen with a color brighter than WHITE
 
         if (!ppu->is_lcd_turning_on) {
-            // blank screen
-            for (int x = 0; x < GB_SCREEN_WIDTH; x++) {
-                for (int y = 0; y < GB_SCREEN_HEIGHT; y++) {
-                    if (emu->mode == CGB) {
-                        byte_t r, g, b;
-                        cgb_get_color(0xFFFF, &r, &g, &b, emu->disable_cgb_color_correction);
-                        SET_PIXEL_CGB(emu, x, y, r, g, b);
-                    } else {
-                        SET_PIXEL_DMG(emu, x, y, DMG_WHITE);
-                    }
-                }
-            }
+            blank_screen(emu);
 
             if (emu->on_new_frame)
                 emu->on_new_frame(ppu->pixels);
