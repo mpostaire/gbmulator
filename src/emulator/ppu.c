@@ -55,26 +55,32 @@ byte_t dmg_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
 /**
  * @returns dmg color after applying palette.
  */
-static inline dmg_color_t dmg_get_color(mmu_t *mmu, byte_t color_id, word_t palette_address) {
+static inline dmg_color_t dmg_get_color(mmu_t *mmu, pixel_t *pixel, byte_t is_obj) {
     // return the color using the palette
-    return (mmu->mem[palette_address] >> (color_id << 1)) & 0x03;
+    word_t palette_address = is_obj ? OBP0 + pixel->palette : BGP;
+    return (mmu->mem[palette_address] >> (pixel->color << 1)) & 0x03;
 }
 
 /**
  * @returns cgb colors in r, g, b arguments after applying palette.
  */
-static inline void cgb_get_color(word_t color_palette_data, byte_t *r, byte_t *g, byte_t *b, byte_t disable_color_correction) {
-    *r = color_palette_data & 0x1F;
-    *g = (color_palette_data & 0x3E0) >> 5;
-    *b = (color_palette_data & 0x7C00) >> 10;
-
-    if (disable_color_correction) {
-        // from 5 bit depth to 8 bit depth (no color correction)
-        *r = (*r << 3) | (*r >> 2);
-        *g = (*g << 3) | (*g >> 2);
-        *b = (*b << 3) | (*b >> 2);
+static inline void cgb_get_color(mmu_t *mmu, pixel_t *pixel, byte_t is_obj, byte_t enable_color_correction, byte_t *r, byte_t *g, byte_t *b) {
+    word_t color_data;
+    if (pixel) {
+        byte_t color_address = pixel->palette * 8 + pixel->color * 2;
+        if (is_obj)
+            color_data = (mmu->cram_obj[color_address + 1] << 8) | mmu->cram_obj[color_address];
+        else
+            color_data = (mmu->cram_bg[color_address + 1] << 8) | mmu->cram_bg[color_address];
     } else {
-        // color correction
+        color_data = 0xFFFF;
+    }
+
+    *r = color_data & 0x1F;
+    *g = (color_data & 0x3E0) >> 5;
+    *b = (color_data & 0x7C00) >> 10;
+
+    if (enable_color_correction) {
         int R = (26 * *r) + (4 * *g) + (2 * *b);
         int G = (24 * *g) + (8 * *b);
         int B = (6 * *r) + (4 * *g) + (22 * *b);
@@ -82,6 +88,11 @@ static inline void cgb_get_color(word_t color_palette_data, byte_t *r, byte_t *g
         *r = MIN(960, R) >> 2;
         *g = MIN(960, G) >> 2;
         *b = MIN(960, B) >> 2;
+    } else {
+        // from 5 bit depth to 8 bit depth (no color correction)
+        *r = (*r << 3) | (*r >> 2);
+        *g = (*g << 3) | (*g >> 2);
+        *b = (*b << 3) | (*b >> 2);
     }
 }
 
@@ -292,7 +303,7 @@ static inline void fetch_tileslice_high(emulator_t *emu) {
                 attributes = cgb_get_bg_win_tile_attributes(emu);
                 palette = IS_CGB_COMPAT_MODE(mmu) ? 0 : attributes & 0x07;
             } else {
-                palette = BGP;
+                palette = 0;
             }
             word_t tiledata_address = get_bg_tiledata_address(emu, 1, CHECK_BIT(attributes, 6));
             tileslice = get_tileslice(emu, tiledata_address, attributes);
@@ -303,7 +314,7 @@ static inline void fetch_tileslice_high(emulator_t *emu) {
                 attributes = cgb_get_bg_win_tile_attributes(emu);
                 palette = IS_CGB_COMPAT_MODE(mmu) ? 0 : attributes & 0x07;
             } else {
-                palette = BGP;
+                palette = 0;
             }
             word_t tiledata_address = get_win_tiledata_address(emu, 1, CHECK_BIT(attributes, 6));
             tileslice = get_tileslice(emu, tiledata_address, attributes);
@@ -315,14 +326,8 @@ static inline void fetch_tileslice_high(emulator_t *emu) {
             tileslice = get_tileslice(emu, tiledata_address, attributes);
             oam_pos = ppu->oam_scan.objs_oam_pos[ppu->pixel_fetcher.curr_oam_index];
 
-            if (emu->mode == CGB) {
-                if (IS_CGB_COMPAT_MODE(mmu))
-                    palette = CHECK_BIT(attributes, 4) ? 1 : 0;
-                else
-                    palette = attributes & 0x07;
-            } else {
-                palette = CHECK_BIT(attributes, 4) ? OBP1 : OBP0;
-            }
+            byte_t is_cgb_mode = emu->mode == CGB && !IS_CGB_COMPAT_MODE(mmu);
+            palette = is_cgb_mode ? attributes & 0x07 : GET_BIT(attributes, 4);
             break;
         }
     }
@@ -473,28 +478,18 @@ static inline void drawing_step(emulator_t *emu) {
 
     pixel_t *obj_pixel = pixel_fifo_pop(&ppu->obj_fifo);
     pixel_t *selected_pixel = select_pixel(emu, bg_win_pixel, obj_pixel);
+    byte_t selected_is_obj = selected_pixel == obj_pixel;
 
     if (emu->mode == CGB) {
-        if (IS_CGB_COMPAT_MODE(mmu)) {
-            if (selected_pixel == obj_pixel) // TODO just need to get selected pixel attributes (or place this logic in the fetcher)
-                selected_pixel->color = dmg_get_color(mmu, selected_pixel->color, CHECK_BIT(selected_pixel->attributes, 4) ? OBP1 : OBP0);
-            else
-                selected_pixel->color = dmg_get_color(mmu, selected_pixel->color, BGP);
-        }
-
-        byte_t color_address = selected_pixel->palette * 8 + selected_pixel->color * 2;
-        word_t color_data;
-        if (selected_pixel == obj_pixel)
-            color_data = (mmu->cram_obj[color_address + 1] << 8) | mmu->cram_obj[color_address];
-        else
-            color_data = (mmu->cram_bg[color_address + 1] << 8) | mmu->cram_bg[color_address];
+        if (IS_CGB_COMPAT_MODE(mmu))
+            selected_pixel->color = dmg_get_color(mmu, selected_pixel, selected_is_obj);
 
         byte_t r, g, b;
-        cgb_get_color(color_data, &r, &g, &b, emu->disable_cgb_color_correction);
+        cgb_get_color(mmu, selected_pixel, selected_is_obj, !emu->disable_cgb_color_correction, &r, &g, &b);
 
         SET_PIXEL_CGB(emu, ppu->lcd_x, mmu->mem[LY], r, g, b);
     } else {
-        SET_PIXEL_DMG(emu, ppu->lcd_x, mmu->mem[LY], dmg_get_color(mmu, selected_pixel->color, selected_pixel->palette));
+        SET_PIXEL_DMG(emu, ppu->lcd_x, mmu->mem[LY], dmg_get_color(mmu, selected_pixel, selected_is_obj));
     }
     ppu->lcd_x++;
 
@@ -623,7 +618,7 @@ static inline void blank_screen(emulator_t *emu) {
         for (int y = 0; y < GB_SCREEN_HEIGHT; y++) {
             if (emu->mode == CGB) {
                 byte_t r, g, b;
-                cgb_get_color(0xFFFF, &r, &g, &b, emu->disable_cgb_color_correction);
+                cgb_get_color(emu->mmu, NULL, 0, !emu->disable_cgb_color_correction, &r, &g, &b);
                 SET_PIXEL_CGB(emu, x, y, r, g, b);
             } else {
                 SET_PIXEL_DMG(emu, x, y, DMG_WHITE);
