@@ -365,6 +365,8 @@ static inline byte_t push(emulator_t *emu) {
                 byte_t fifo_index = ((fetcher_index - offset) + ppu->obj_fifo.head) % PIXEL_FIFO_SIZE;
 
                 if (fetcher_index < old_size) {
+                    if (ppu->pixel_fetcher.pixels[fetcher_index].color == DMG_WHITE)
+                        continue;
                     if (is_cgb_mode && ppu->pixel_fetcher.pixels[fetcher_index].oam_pos < ppu->obj_fifo.pixels[fifo_index].oam_pos)
                         ppu->obj_fifo.pixels[fifo_index] = ppu->pixel_fetcher.pixels[fetcher_index];
                     if (ppu->obj_fifo.pixels[fifo_index].color == DMG_WHITE)
