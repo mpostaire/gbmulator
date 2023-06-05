@@ -1,4 +1,5 @@
 #include "../../emulator/emulator.h"
+#include "../../emulator/emulator_priv.h"
 
 #include <adwaita.h>
 #include <libmanette.h>
@@ -10,6 +11,8 @@
 
 #include "glrenderer.h"
 #include "alrenderer.h"
+#include "utils.h"
+#include "link.h"
 #include "../common/utils.h"
 #include "../common/link.h"
 #include "../common/config.h"
@@ -135,9 +138,12 @@ GtkWidget *joypad_name, *restart_dialog, *link_dialog, *status, *link_mode_sette
 GtkFileDialog *file_dialog;
 guint loop_source;
 
+GSocketService *socket_service = NULL;
+gboolean is_connected = FALSE;
+
 gboolean is_paused = TRUE, link_is_server = TRUE;
 int steps_per_frame, sfd;
-emulator_t *emu, *linked_emu;
+emulator_t *emu;
 byte_t joypad_state = 0xFF;
 
 char *rom_path, *forced_save_path, *config_path;
@@ -254,17 +260,54 @@ static void set_window_size(int width, int height) {
     XResizeWindow(gdk_x11_display_get_xdisplay(display), wid, new_w, new_h);
 }
 
+int count = 0;
+int frames = 0;
+int first_connected = 1;
 static gboolean loop(gpointer user_data) {
     // gint64 start = g_get_monotonic_time();
+
+    emulator_t *linked_emu = NULL;
+    if (is_connected) {
+        linked_emu = link_cable(emu, joypad_state);
+        if (!linked_emu) {
+            // printf("%d\n", count);
+            count = 0;
+            return TRUE;
+        } else {
+            if (first_connected) {
+                frames = 0;
+                first_connected = 0;
+            }
+            if (link_is_server)
+                printf("[%d] DIV = 0x%X 0x%X\n", frames, emu->mmu->mem[DIV], emu->mmu->mem[DIV_LSB]);
+            else
+                printf("[%d] DIV = 0x%X 0x%X\n", frames, emu->link->other_emu->mmu->mem[DIV], emu->link->other_emu->mmu->mem[DIV_LSB]);
+
+        }
+    }
 
     // set emulator joypad state only once per loop (and not as soon as an input is detected) to allow link cable synchronization
     emulator_set_joypad_state(emu, joypad_state);
 
     // run the emulator for the approximate number of cycles it takes for the ppu to render a frame
-    if (linked_emu)
+    count++;
+    frames++;
+    // TODO sdl - android link don't work anymore
+    //      sdl - sdl link works
+    //      maybe the culprit is the PPU fifo renderer? it changes timings...
+    //      --> checkout scanline git tag, test sdl on android again
+    //      --> copy desktop.c, link.c and link.h files, checkout scanline git tag, paste them retry then
+    //  >>>>>> IT SEEMS LIKE THE SCANLINE GIT TAG ALSO HAS BROKEN SDL - ANDROID LINK
+    //      ---> find commit that works if there was one...
+    //      if use sdl build to show the 2 screen next to each other (to show the hidden linked_emu) and see
+    //      if there is a difference...
+    if (linked_emu) {
         emulator_linked_run_frames(emu, linked_emu, 1);
-    else
+        puts("LINKED emulator_run");
+    } else {
         emulator_run_steps(emu, steps_per_frame);
+        puts("emulator_run");
+    }
 
     gtk_gl_area_queue_render(GTK_GL_AREA(gl_area));
 
@@ -313,13 +356,13 @@ static void show_toast(const char *text) {
 }
 
 static void on_link_connect(emulator_t *new_linked_emu) {
-    linked_emu = new_linked_emu;
-    is_paused = FALSE;
-    config.speed = 1.0f;
+    // linked_emu = new_linked_emu;
+    // is_paused = FALSE;
+    // config.speed = 1.0f;
 }
 
 static void on_link_disconnect(void) {
-    linked_emu = NULL;
+    // linked_emu = NULL;
 }
 
 static void ppu_vblank_cb(const byte_t *pixels) {
@@ -356,58 +399,6 @@ static byte_t *get_rom_data(const char *path, size_t *rom_size) {
     return buf;
 }
 
-static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
-    char *xdg = getenv(xdg_variable);
-    if (xdg) return xdg;
-
-    char *home = getenv("HOME");
-    size_t home_len = strlen(home);
-    size_t fallback_len = strlen(fallback);
-    char *buf = xmalloc(home_len + fallback_len + 3);
-    snprintf(buf, home_len + fallback_len + 2, "%s/%s", home, fallback);
-    return buf;
-}
-
-static char *get_config_path(void) {
-    char *xdg_config = get_xdg_path("XDG_CONFIG_HOME", ".config");
-
-    char *path = xmalloc(strlen(xdg_config) + 27);
-    snprintf(path, strlen(xdg_config) + 26, "%s%s", xdg_config, "/gbmulator/gbmulator.conf");
-
-    free(xdg_config);
-    return path;
-}
-
-static char *get_save_path(const char *rom_filepath) {
-    char *xdg_data = get_xdg_path("XDG_DATA_HOME", ".local/share");
-
-    char *last_slash = strrchr(rom_filepath, '/');
-    char *last_period = strrchr(last_slash ? last_slash : rom_filepath, '.');
-    int last_period_index = last_period ? (int) (last_period - last_slash) : (int) strlen(rom_filepath);
-
-    size_t len = strlen(xdg_data) + strlen(last_slash ? last_slash : rom_filepath);
-    char *save_path = xmalloc(len + 13);
-    snprintf(save_path, len + 12, "%s/gbmulator%.*s.sav", xdg_data, last_period_index, last_slash);
-
-    free(xdg_data);
-    return save_path;
-}
-
-static char *get_savestate_path(const char *rom_filepath, int slot) {
-    char *xdg_data = get_xdg_path("XDG_DATA_HOME", ".local/share");
-
-    char *last_slash = strrchr(rom_filepath, '/');
-    char *last_period = strrchr(last_slash ? last_slash : rom_filepath, '.');
-    int last_period_index = last_period ? (int) (last_period - last_slash) : (int) strlen(rom_filepath);
-
-    size_t len = strlen(xdg_data) + strlen(last_slash);
-    char *save_path = xmalloc(len + 33);
-    snprintf(save_path, len + 32, "%s/gbmulator/savestates%.*s-%d.gbstate", xdg_data, last_period_index, last_slash, slot);
-
-    free(xdg_data);
-    return save_path;
-}
-
 static void toggle_pause(GSimpleAction *action, GVariant *parameter, gpointer app) {
     show_toast(is_paused ? "Resumed" : "Paused");
     toggle_loop();
@@ -415,11 +406,8 @@ static void toggle_pause(GSimpleAction *action, GVariant *parameter, gpointer ap
 
 static void restart_emulator(AdwMessageDialog *self, gchar *response, gpointer user_data) {
     if (!strncmp(response, "restart", 8)) {
-        if (linked_emu) {
-            emulator_link_disconnect(emu);
-            emulator_quit(linked_emu);
-            on_link_disconnect();
-        }
+        // if (linked_emu)
+        //     on_link_disconnect();
         emulator_reset(emu, config.mode);
         emulator_print_status(emu);
     }
@@ -433,8 +421,14 @@ static void ask_restart_emulator(GSimpleAction *action, GVariant *parameter, gpo
 }
 
 gboolean link_server_incoming(GSocketService *service, GSocketConnection *connection, GObject *source_object, gpointer user_data) {
-    printf("Received Connection from client! Refusing new requests. %d %d\n", g_socket_service_is_active(service), g_socket_get_fd(g_socket_connection_get_socket(connection)));
+    printf("Received Connection from client! Refusing new requests. %d %d %d\n", g_socket_service_is_active(service), g_socket_get_fd(g_socket_connection_get_socket(connection)), g_socket_connection_is_connected(connection));
     g_socket_service_stop(service); // TODO useless? this works stopping this signal but the print Hurray client still works and new file descriptor are still created...
+
+    g_object_ref(connection); // don't close connection at the end of this handler
+    link_setup_connection(connection);
+    is_connected = TRUE;
+    config.speed = 1.0f;
+
     return TRUE;
 }
 
@@ -449,11 +443,16 @@ void link_client_connected(GObject *client, GAsyncResult *res, gpointer user_dat
 
     if (connection) {
         printf("Hurray! %d\n", g_socket_get_fd(g_socket_connection_get_socket(connection)));
-        sfd = g_socket_get_fd(g_socket_connection_get_socket(connection));
+        // g_object_ref(connection); // useless?
+        link_setup_connection(connection);
+        is_connected = TRUE;
+        // is_paused = TRUE;
+        // TODO print mmu->mem[DIV] before sending savestate and after loading savestate to check if there was no desync
+        config.speed = 1.0f;
         // on_link_connect();
         show_toast("Link cable connected");
     } else {
-        fprintf(stderr, "%s\n", err->message);
+        g_error("%s", err->message);
         show_toast(err->message);
         g_error_free(err);
     }
@@ -479,10 +478,11 @@ static void start_link(void) {
         }
 
         GSocketAddress *address = g_socket_address_new_from_native(res->ai_addr, res->ai_addrlen);
-        GSocketService *server = g_socket_service_new();
-        g_signal_connect(server, "incoming", G_CALLBACK(link_server_incoming), NULL);
+        if (!socket_service)
+            socket_service = g_socket_service_new();
+        g_signal_connect(socket_service, "incoming", G_CALLBACK(link_server_incoming), NULL);
 
-        if (g_socket_listener_add_address(G_SOCKET_LISTENER(server), address, G_SOCKET_TYPE_STREAM, G_SOCKET_PROTOCOL_TCP, NULL, NULL, NULL))
+        if (g_socket_listener_add_address(G_SOCKET_LISTENER(socket_service), address, G_SOCKET_TYPE_STREAM, G_SOCKET_PROTOCOL_TCP, NULL, NULL, NULL))
             show_toast("Link server listening...");
         else
             show_toast("Error listening to given address");
@@ -508,6 +508,7 @@ static void start_link(void) {
         freeaddrinfo(res);
     }
 
+    // TODO
     // if (link_is_server)
     //     sfd = link_connect_to_server(config.link_host, config.link_port, config.mptcp_enabled);
     // else
@@ -576,11 +577,8 @@ static int load_cartridge(char *path) {
     free(save_path);
 
     if (emu) {
-        if (linked_emu) {
-            emulator_link_disconnect(emu);
-            emulator_quit(linked_emu);
-            on_link_disconnect();
-        }
+        // if (linked_emu)
+        //     on_link_disconnect();
         emulator_quit(emu);
     } else {
         // init audio at the first successful call to load_cartridge to avoid opening audio device when there is no rom loaded

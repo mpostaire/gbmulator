@@ -18,9 +18,17 @@
 #define TOGGLE_BIT(var, pos) ((var) ^= 1UL << (pos))
 #define CHANGE_BIT(var, pos, value) ((var) ^= (-(value) ^ (var)) & (1UL << (pos)))
 
+#ifndef MIN
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
+#endif
+
+#ifndef MAX
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
+#endif
+
+#ifndef CLAMP
 #define CLAMP(x, lo, hi) MAX(MIN((x), (hi)), (lo))
+#endif
 
 #define XSTRINGIFY(x) #x
 #define STRINGIFY(x) XSTRINGIFY(x)
