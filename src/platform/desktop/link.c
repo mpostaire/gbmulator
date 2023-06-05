@@ -1,6 +1,6 @@
 #include <gio/gio.h>
 #include "../../emulator/emulator.h"
-#include "../../emulator/mmu.h"
+#include "../../emulator/emulator_priv.h"
 
 typedef enum {
     PKT_INFO,
@@ -85,16 +85,12 @@ static void exchange_info(emulator_t *emu) {
     out_pkt = xrealloc(out_pkt, 4);
     memset(out_pkt, 0, 4);
     out_pkt[0] = PKT_INFO;
-    out_pkt[1] = emu->mode;
+    out_pkt[1] = emulator_get_mode(emu);
     #ifdef __HAVE_ZLIB__
     // SET_BIT(out_pkt[1], 7); // TODO fix compression
     #endif
 
-    checksum = 0;
-    for (unsigned int i = 0; i < sizeof(emu->mmu->cartridge); i += 2)
-        checksum = checksum - (emu->mmu->cartridge[i] + emu->mmu->cartridge[i + 1]) - 1;
-
-    // checksum = emulator_get_cartridge_checksum(emu);
+    checksum = emulator_get_cartridge_checksum(emu);
     memcpy(&out_pkt[2], &checksum, 2);
 
     g_output_stream_write_async(output_stream, out_pkt, 4, G_PRIORITY_DEFAULT, NULL, write_cb, NULL);
