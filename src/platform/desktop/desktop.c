@@ -142,7 +142,7 @@ gboolean is_connected = FALSE;
 gboolean is_paused = TRUE, link_is_server = TRUE;
 int steps_per_frame, sfd;
 emulator_t *emu;
-byte_t joypad_state = 0xFF;
+GQueue *joypad_queue;
 
 char *rom_path, *forced_save_path, *config_path;
 
@@ -264,29 +264,31 @@ static void set_window_size(int width, int height) {
 //      android - android link ????
 //      adwaita - adwaita works if joypad exchange is done synchronously
 
-// TODO going back home, don't pull new changes, use its current old version to check if link works on sdl - android
-
-// TODO maybe the async version can change joypad_state of the local emulator between a joypad exchange and a joypad exchange done
-// --> ONLY UPDATE JOYPAD STATE AND LISTEN TO JOYPAD STATE CHANGES JUST BEFORE DOING THE JOYPAD EXCHANGE
-
-// TODO for more timeout precision, move this to another thread, then tell the glarea to update from this thread
-//      --> for link connection, use platform/common/link.c functions
 static gboolean loop(gpointer user_data) {
     emulator_t *linked_emu = NULL;
     if (is_connected) {
-        linked_emu = link_cable(emu, joypad_state);
+        linked_emu = link_cable(emu);
         if (!linked_emu)
             return G_SOURCE_CONTINUE;
+        // prevent changing joypad state if we are waiting for an async call to end
     }
-
-    // set emulator joypad state only once per loop (and not as soon as an input is detected) to allow link cable synchronization
-    emulator_set_joypad_state(emu, joypad_state);
 
     // run the emulator for the approximate number of cycles it takes for the ppu to render a frame
     if (linked_emu)
         emulator_linked_run_frames(emu, linked_emu, 1);
     else
         emulator_run_steps(emu, steps_per_frame);
+
+    // process joypad input events (processing input before running the emulator frame causes link cable desync)
+    guint len = g_queue_get_length(joypad_queue);
+    for (guint i = 0; i < len; i += 2) {
+        gpointer is_release_event = g_queue_pop_head(joypad_queue);
+        joypad_button_t button = (joypad_button_t) g_queue_pop_head(joypad_queue);
+        if (is_release_event)
+            emulator_joypad_release(emu, button);
+        else
+            emulator_joypad_press(emu, button);
+    }
 
     gtk_gl_area_queue_render(GTK_GL_AREA(gl_area));
 
@@ -372,6 +374,7 @@ static void toggle_pause(GSimpleAction *action, GVariant *parameter, gpointer ap
 
 static void restart_emulator(AdwMessageDialog *self, gchar *response, gpointer user_data) {
     if (!strncmp(response, "restart", 8)) {
+        // TODO what to do if there is an active link cable connection
         // if (linked_emu)
         //     on_link_disconnect();
         emulator_reset(emu, config.mode);
@@ -392,8 +395,8 @@ gboolean link_server_incoming(GSocketService *service, GSocketConnection *connec
 
     g_object_ref(connection); // don't close connection at the end of this handler
     link_setup_connection(connection);
+    show_toast("Link cable connected");
     is_connected = TRUE;
-    config.speed = 1.0f;
 
     return TRUE;
 }
@@ -412,13 +415,9 @@ void link_client_connected(GObject *client, GAsyncResult *res, gpointer user_dat
         // g_object_ref(connection); // useless?
         link_setup_connection(connection);
         is_connected = TRUE;
-        // is_paused = TRUE;
-        // TODO print mmu->mem[DIV] before sending savestate and after loading savestate to check if there was no desync
-        config.speed = 1.0f;
-        // on_link_connect();
         show_toast("Link cable connected");
     } else {
-        g_error("%s", err->message);
+        eprintf("%s", err->message);
         show_toast(err->message);
         g_error_free(err);
     }
@@ -782,7 +781,8 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
     // don't use emulator_joypad_press() here as we want to keep track of the joypad state and set it once per loop for link cable synchronization
     int joypad = keycode_to_joypad(&config, keyval);
     if (joypad < 0) return TRUE;
-    RESET_BIT(joypad_state, joypad);
+    g_queue_push_tail(joypad_queue, (gpointer) 0); // 0 -> joypad press event
+    g_queue_push_tail(joypad_queue, (gpointer) ((glong) joypad));
     return TRUE;
 }
 
@@ -791,8 +791,9 @@ static gboolean key_released_main(GtkEventControllerKey *self, guint keyval, gui
 
     // don't use emulator_joypad_release() here as we want to keep track of the joypad state and set it once per loop for link cable synchronization
     int joypad = keycode_to_joypad(&config, keyval);
-    SET_BIT(joypad_state, joypad);
     if (joypad < 0) return TRUE;
+    g_queue_push_tail(joypad_queue, (gpointer) 1); // 1 -> joypad release event
+    g_queue_push_tail(joypad_queue, (gpointer) ((glong) joypad));
     return TRUE;
 }
 
@@ -863,7 +864,8 @@ static void gamepad_button_press_event_cb(ManetteDevice *emitter, ManetteEvent *
         if (manette_event_get_button(event, &button)) {
             int joypad = button_to_joypad(&config, button);
             if (joypad < 0) return;
-            RESET_BIT(joypad_state, joypad);
+            g_queue_push_tail(joypad_queue, (gpointer) 0); // 0 -> joypad press event
+            g_queue_push_tail(joypad_queue, (gpointer) ((glong) joypad));
         }
         break;
     case GAMEPAD_BINDING:
@@ -883,7 +885,8 @@ static void gamepad_button_release_event_cb(ManetteDevice *emitter, ManetteEvent
         if (manette_event_get_button(event, &button)) {
             int joypad = button_to_joypad(&config, button);
             if (joypad < 0) return;
-            SET_BIT(joypad_state, joypad);
+            g_queue_push_tail(joypad_queue, (gpointer) 1); // 1 -> joypad release event
+            g_queue_push_tail(joypad_queue, (gpointer) ((glong) joypad));
         }
         break;
     case GAMEPAD_BINDING:
@@ -1130,6 +1133,8 @@ int main(int argc, char **argv) {
     ManetteDevice *device;
     while (manette_monitor_iter_next(iter, &device))
         gamepad_connected_cb(NULL, device, NULL);
+
+    joypad_queue = g_queue_new();
 
     return g_application_run(G_APPLICATION(app), argc, argv);
 }
