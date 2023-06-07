@@ -118,7 +118,7 @@ static gboolean exchange_info_done(void) {
     if (received_checksum == checksum) {
         link_state = EXCHANGE_STATE;
     } else {
-        printf("checksum mismatch ('%x' != '%x'): exchanging ROMs\n", checksum, received_checksum);
+        eprintf("checksum mismatch ('%x' != '%x'): exchanging ROMs\n", checksum, received_checksum);
         link_state = EXCHANGE_ROM;
     }
 
@@ -126,9 +126,7 @@ static gboolean exchange_info_done(void) {
 }
 
 static void exchange_state(emulator_t *emu) {
-    size_t savestate_len = 0;
     savestate_data = emulator_get_savestate(emu, &savestate_len, can_compress);
-    printf("[%d] sent div: 0x%X\n", emu->mode, emu->mmu->mem[DIV]);
 
     out_pkt = xrealloc(out_pkt, savestate_len + 9);
     memset(out_pkt, 0, savestate_len + 9);
@@ -190,7 +188,6 @@ static gboolean exchange_state_done(emulator_t *emu) {
         eprintf("received invalid or corrupted savestate\n");
         return FALSE;
     }
-    printf("[%d] received div: 0x%X\n", linked_emu->mode, linked_emu->mmu->mem[DIV]);
 
     emulator_link_connect(emu, linked_emu);
 
@@ -205,28 +202,41 @@ static gboolean exchange_state_done(emulator_t *emu) {
     return TRUE;
 }
 
-static void exchange_joypad(byte_t joypad_state) {
+// TODO make it work asynchronously OR implement the separate emulation thread, making this obsolete
+static void exchange_joypad(byte_t joypad_state, emulator_t *emu) {
     out_pkt[0] = PKT_JOYPAD;
     out_pkt[1] = joypad_state;
-    g_output_stream_write_async(output_stream, out_pkt, 2, G_PRIORITY_DEFAULT, NULL, write_cb, NULL);
 
-    g_input_stream_read_async(input_stream, in_pkt, 2, G_PRIORITY_DEFAULT, NULL, read_cb, (gpointer) 2);
+    // g_output_stream_write_async(output_stream, out_pkt, 2, G_PRIORITY_DEFAULT, NULL, write_cb, NULL);
 
-    link_state++;
-}
+    // g_input_stream_read_async(input_stream, in_pkt, 2, G_PRIORITY_DEFAULT, NULL, read_cb, (gpointer) 2);
 
-static gboolean exchange_joypad_done(void) {
-    if (in_pkt[0] != PKT_JOYPAD) {
-        eprintf("received packet type %d but expected %d (ignored)\n", in_pkt[0], PKT_JOYPAD);
-        return FALSE;
-    }
+    // link_state++;
+
+    g_output_stream_write(output_stream, out_pkt, 2, NULL, NULL);
+
+    gssize read = 0;
+    gssize target = 2;
+    do {
+        target -= read;
+        read = g_input_stream_read(input_stream, &in_pkt[2 - target], target, NULL, NULL);
+    } while (target > 0);
 
     emulator_set_joypad_state(linked_emu, in_pkt[1]);
-
-    link_state = EXCHANGE_JOYPAD;
-
-    return TRUE;
 }
+
+// static gboolean exchange_joypad_done(void) {
+//     if (in_pkt[0] != PKT_JOYPAD) {
+//         eprintf("received packet type %d but expected %d (ignored)\n", in_pkt[0], PKT_JOYPAD);
+//         return FALSE;
+//     }
+
+//     emulator_set_joypad_state(linked_emu, in_pkt[1]);
+
+//     link_state = EXCHANGE_JOYPAD;
+
+//     return TRUE;
+// }
 
 emulator_t *link_cable(emulator_t *emu, byte_t joypad_state) {
     // TODO allow fallthrough in case we have the results directly (don't wait for another 16ms loop)
@@ -247,10 +257,10 @@ emulator_t *link_cable(emulator_t *emu, byte_t joypad_state) {
         }
         return NULL;
     case EXCHANGE_ROM:
-        puts("TODO EXCHANGE_ROM");
+        puts("TODO EXCHANGE_ROM"); // TODO
         return NULL;
     case EXCHANGE_ROM_DONE:
-        puts("TODO EXCHANGE_ROM_DONE");
+        puts("TODO EXCHANGE_ROM_DONE"); // TODO
         return NULL;
     case EXCHANGE_STATE:
         exchange_state(emu);
@@ -265,14 +275,16 @@ emulator_t *link_cable(emulator_t *emu, byte_t joypad_state) {
         }
         return NULL;
     case EXCHANGE_JOYPAD:
-        exchange_joypad(joypad_state);
-        return NULL;
-    case EXCHANGE_JOYPAD_DONE:
-        if (!exchange_joypad_done()) {
-            eprintf("ERROR EXCHANGE_JOYPAD_DONE");
-            exit(42);
-        }
+        exchange_joypad(joypad_state, emu);
+        // return NULL;
         return linked_emu;
+    case EXCHANGE_JOYPAD_DONE:
+        // if (!exchange_joypad_done()) {
+        //     eprintf("ERROR EXCHANGE_JOYPAD_DONE");
+        //     exit(42);
+        // }
+        // return linked_emu;
+        return NULL;
     default:
         eprintf("ERROR UNDEFINED LINK BEHAVIOR %d\n", link_state);
         return NULL;

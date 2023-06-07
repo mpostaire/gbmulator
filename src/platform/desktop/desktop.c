@@ -29,8 +29,6 @@ const char *gamepad_gamepad_button_parser(guint16 button);
 int gamepad_button_name_parser(const char *button_name);
 
 static gboolean loop(gpointer user_data);
-static void on_link_connect(emulator_t *new_linked_emu);
-static void on_link_disconnect(void);
 
 // config struct initialized to defaults
 config_t config = {
@@ -230,7 +228,7 @@ int gamepad_button_name_parser(const char *button_name) {
 }
 
 static void start_loop(void) {
-    loop_source = g_timeout_add(1000 / 60, G_SOURCE_FUNC(loop), NULL);
+    loop_source = g_timeout_add_full(G_PRIORITY_HIGH, 1000 / 60, G_SOURCE_FUNC(loop), NULL, NULL);
     is_paused = FALSE;
 }
 
@@ -260,61 +258,39 @@ static void set_window_size(int width, int height) {
     XResizeWindow(gdk_x11_display_get_xdisplay(display), wid, new_w, new_h);
 }
 
-int count = 0;
-int frames = 0;
-int first_connected = 1;
-static gboolean loop(gpointer user_data) {
-    // gint64 start = g_get_monotonic_time();
+// TODO sdl - android link doesn't work
+//      sld - adwaita link doesn't work
+//      sdl - sdl link works
+//      android - android link ????
+//      adwaita - adwaita works if joypad exchange is done synchronously
 
+// TODO going back home, don't pull new changes, use its current old version to check if link works on sdl - android
+
+// TODO maybe the async version can change joypad_state of the local emulator between a joypad exchange and a joypad exchange done
+// --> ONLY UPDATE JOYPAD STATE AND LISTEN TO JOYPAD STATE CHANGES JUST BEFORE DOING THE JOYPAD EXCHANGE
+
+// TODO for more timeout precision, move this to another thread, then tell the glarea to update from this thread
+//      --> for link connection, use platform/common/link.c functions
+static gboolean loop(gpointer user_data) {
     emulator_t *linked_emu = NULL;
     if (is_connected) {
         linked_emu = link_cable(emu, joypad_state);
-        if (!linked_emu) {
-            // printf("%d\n", count);
-            count = 0;
-            return TRUE;
-        } else {
-            if (first_connected) {
-                frames = 0;
-                first_connected = 0;
-            }
-            if (link_is_server)
-                printf("[%d] DIV = 0x%X 0x%X\n", frames, emu->mmu->mem[DIV], emu->mmu->mem[DIV_LSB]);
-            else
-                printf("[%d] DIV = 0x%X 0x%X\n", frames, emu->link->other_emu->mmu->mem[DIV], emu->link->other_emu->mmu->mem[DIV_LSB]);
-
-        }
+        if (!linked_emu)
+            return G_SOURCE_CONTINUE;
     }
 
     // set emulator joypad state only once per loop (and not as soon as an input is detected) to allow link cable synchronization
     emulator_set_joypad_state(emu, joypad_state);
 
     // run the emulator for the approximate number of cycles it takes for the ppu to render a frame
-    count++;
-    frames++;
-    // TODO sdl - android link don't work anymore
-    //      sdl - sdl link works
-    //      maybe the culprit is the PPU fifo renderer? it changes timings...
-    //      --> checkout scanline git tag, test sdl on android again
-    //      --> copy desktop.c, link.c and link.h files, checkout scanline git tag, paste them retry then
-    //  >>>>>> IT SEEMS LIKE THE SCANLINE GIT TAG ALSO HAS BROKEN SDL - ANDROID LINK
-    //      ---> find commit that works if there was one...
-    //      if use sdl build to show the 2 screen next to each other (to show the hidden linked_emu) and see
-    //      if there is a difference...
-    if (linked_emu) {
+    if (linked_emu)
         emulator_linked_run_frames(emu, linked_emu, 1);
-        puts("LINKED emulator_run");
-    } else {
+    else
         emulator_run_steps(emu, steps_per_frame);
-        puts("emulator_run");
-    }
 
     gtk_gl_area_queue_render(GTK_GL_AREA(gl_area));
 
-    // TODO don't adjust loop interval as it introduces micro loops in the audio
-    // gint64 elapsed = (g_get_monotonic_time() - start) / 1000; // from us to ms
-    // loop_source = g_timeout_add((1000 / 60) - elapsed, G_SOURCE_FUNC(loop), NULL);
-    return TRUE;
+    return G_SOURCE_CONTINUE;
 }
 
 static void on_realize(GtkGLArea *area, gpointer user_data) {
@@ -353,16 +329,6 @@ static void show_toast(const char *text) {
     AdwToast *toast = adw_toast_new(text);
     adw_toast_set_timeout(toast, 1);
     adw_toast_overlay_add_toast(ADW_TOAST_OVERLAY(toast_overlay), toast);
-}
-
-static void on_link_connect(emulator_t *new_linked_emu) {
-    // linked_emu = new_linked_emu;
-    // is_paused = FALSE;
-    // config.speed = 1.0f;
-}
-
-static void on_link_disconnect(void) {
-    // linked_emu = NULL;
 }
 
 static void ppu_vblank_cb(const byte_t *pixels) {
@@ -462,7 +428,6 @@ static void start_link(void) {
     if (!emu) return;
 
     if (link_is_server) {
-        puts("TODO server");
         struct addrinfo hints = {
             .ai_family = AF_UNSPEC,
             .ai_socktype = SOCK_STREAM,
@@ -487,7 +452,6 @@ static void start_link(void) {
         else
             show_toast("Error listening to given address");
     } else {
-        puts("TODO client");
         struct addrinfo hints = {
             .ai_family = AF_UNSPEC,
             .ai_socktype = SOCK_STREAM,
@@ -507,16 +471,6 @@ static void start_link(void) {
 
         freeaddrinfo(res);
     }
-
-    // TODO
-    // if (link_is_server)
-    //     sfd = link_connect_to_server(config.link_host, config.link_port, config.mptcp_enabled);
-    // else
-    //     sfd = link_start_server(config.link_port, config.mptcp_enabled);
-
-    // emulator_t *new_linked_emu;
-    // if (sfd > 0 && link_init_transfer(sfd, emu, &new_linked_emu))
-    //     on_link_connect(new_linked_emu);
 }
 
 static void link_dialog_response(GtkDialog *self, gint response_id, gpointer user_data) {
