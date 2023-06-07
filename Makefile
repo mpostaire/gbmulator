@@ -129,7 +129,7 @@ $(ICONS): $(ICONDIR)/$(BIN).svg
 	convert -background none -density 1200 -resize $(patsubst $(ICONDIR)/%/$(BIN).png,%,$@) $^ $(ICONDIR)/$(patsubst $(ICONDIR)/%/$(BIN).png,%,$@)/$(BIN).png
 
 check: $(SDIR)
-	cppcheck --enable=all --suppress=missingIncludeSystem -i $(SDIR)/platform/android/android-project $(SDIR)
+	cppcheck --enable=all --suppress=missingIncludeSystem -i $(SDIR)/platform/android/android-project -i $(SDIR)/platform/desktop/resources.c $(SDIR)
 
 clean:
 	rm -rf $(ODIR)
