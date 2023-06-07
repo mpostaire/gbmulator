@@ -141,7 +141,7 @@ static inline word_t get_bg_tiledata_address(emulator_t *emu, byte_t is_high, by
     if (flip_y)
         ly_scy = ~ly_scy;
     ly_scy &= 0x07; // modulo 8
-    return 0x8000 | (bit_12 << 12) | (ppu->pixel_fetcher.current_tile_id << 4) | (ly_scy << 1) | !!is_high;
+    return 0x8000 | (bit_12 << 12) | (ppu->pixel_fetcher.current_tile_id << 4) | (ly_scy << 1) | (!!is_high);
 }
 
 static inline word_t get_win_tiledata_address(emulator_t *emu, byte_t is_high, byte_t flip_y) {
@@ -153,7 +153,7 @@ static inline word_t get_win_tiledata_address(emulator_t *emu, byte_t is_high, b
     if (flip_y)
         wly = ~wly;
     wly &= 0x07; // modulo 8
-    return 0x8000 | (bit_12 << 12) | (ppu->pixel_fetcher.current_tile_id << 4) | (wly << 1) | !!is_high;
+    return 0x8000 | (bit_12 << 12) | (ppu->pixel_fetcher.current_tile_id << 4) | (wly << 1) | (!!is_high);
 }
 
 static inline word_t get_obj_tiledata_address(emulator_t *emu, byte_t is_high) {
@@ -175,7 +175,7 @@ static inline word_t get_obj_tiledata_address(emulator_t *emu, byte_t is_high) {
         bits_3_1 = ~bits_3_1;
     bits_3_1 &= 0x07; // modulo 8
 
-    return 0x8000 | (actual_tile_id << 4) | (bits_3_1 << 1) | !!is_high;
+    return 0x8000 | (actual_tile_id << 4) | (bits_3_1 << 1) | (!!is_high);
 }
 
 static inline pixel_t *pixel_fifo_pop(pixel_fifo_t *fifo) {

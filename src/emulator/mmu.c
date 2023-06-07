@@ -583,7 +583,7 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
     if (address >= OAM && address < UNUSABLE && IS_LCD_ENABLED(emu) && ((PPU_IS_MODE(emu, PPU_MODE_OAM) || PPU_IS_MODE(emu, PPU_MODE_DRAWING))))
         return 0xFF;
 
-    if (address >= VRAM && address < ERAM) {
+    if (/*address >= VRAM &&*/ address < ERAM) {
         // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
         if (IS_LCD_ENABLED(emu) && PPU_IS_MODE(emu, PPU_MODE_DRAWING))
             return 0xFF;
