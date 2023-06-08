@@ -1,11 +1,12 @@
 #pragma once
 
 #include <gio/gio.h>
+#include "../../emulator/emulator.h"
+
+emulator_t *link_communicate(void);
 
 /**
- * @return the remotely linked emulator_t pointer if emulation can continue,
- *         NULL if a transfer is in progress and must block emulation.
+ * This pauses the emulation loop, asynchronoulsy initialize the connection and starts exchanging savestates...
+ * Once the connection initialization is done the emulation loop is resumed
  */
-emulator_t *link_cable(emulator_t *emu);
-
-void link_setup_connection(GSocketConnection *connection);
+void link_setup_connection(GSocketConnection *conn, emulator_t *emu);

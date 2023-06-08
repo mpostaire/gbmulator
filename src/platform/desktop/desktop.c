@@ -1,5 +1,4 @@
 #include "../../emulator/emulator.h"
-#include "../../emulator/emulator_priv.h"
 
 #include <adwaita.h>
 #include <libmanette.h>
@@ -14,7 +13,6 @@
 #include "utils.h"
 #include "link.h"
 #include "../common/utils.h"
-#include "../common/link.h"
 #include "../common/config.h"
 
 #define APP_NAME EMULATOR_NAME
@@ -142,7 +140,7 @@ gboolean is_connected = FALSE;
 gboolean is_paused = TRUE, link_is_server = TRUE;
 int steps_per_frame, sfd;
 emulator_t *emu;
-GQueue *joypad_queue;
+byte_t joypad_state = 0xFF;
 
 char *rom_path, *forced_save_path, *config_path;
 
@@ -227,12 +225,12 @@ int gamepad_button_name_parser(const char *button_name) {
     return 0;
 }
 
-static void start_loop(void) {
+void start_loop(void) {
     loop_source = g_timeout_add_full(G_PRIORITY_HIGH, 1000 / 60, G_SOURCE_FUNC(loop), NULL, NULL);
     is_paused = FALSE;
 }
 
-static void stop_loop(void) {
+void stop_loop(void) {
     g_source_remove(loop_source);
     is_paused = TRUE;
 }
@@ -265,30 +263,14 @@ static void set_window_size(int width, int height) {
 //      adwaita - adwaita works if joypad exchange is done synchronously
 
 static gboolean loop(gpointer user_data) {
-    emulator_t *linked_emu = NULL;
-    if (is_connected) {
-        linked_emu = link_cable(emu);
-        if (!linked_emu)
-            return G_SOURCE_CONTINUE;
-        // prevent changing joypad state if we are waiting for an async call to end
-    }
+    emulator_set_joypad_state(emu, joypad_state);
 
     // run the emulator for the approximate number of cycles it takes for the ppu to render a frame
+    emulator_t *linked_emu = link_communicate();
     if (linked_emu)
         emulator_linked_run_frames(emu, linked_emu, 1);
     else
         emulator_run_steps(emu, steps_per_frame);
-
-    // process joypad input events (processing input before running the emulator frame causes link cable desync)
-    guint len = g_queue_get_length(joypad_queue);
-    for (guint i = 0; i < len; i += 2) {
-        gpointer is_release_event = g_queue_pop_head(joypad_queue);
-        joypad_button_t button = (joypad_button_t) g_queue_pop_head(joypad_queue);
-        if (is_release_event)
-            emulator_joypad_release(emu, button);
-        else
-            emulator_joypad_press(emu, button);
-    }
 
     gtk_gl_area_queue_render(GTK_GL_AREA(gl_area));
 
@@ -394,7 +376,7 @@ gboolean link_server_incoming(GSocketService *service, GSocketConnection *connec
     g_socket_service_stop(service); // TODO useless? this works stopping this signal but the print Hurray client still works and new file descriptor are still created...
 
     g_object_ref(connection); // don't close connection at the end of this handler
-    link_setup_connection(connection);
+    link_setup_connection(connection, emu);
     show_toast("Link cable connected");
     is_connected = TRUE;
 
@@ -408,12 +390,10 @@ void link_client_connected(GObject *client, GAsyncResult *res, gpointer user_dat
     // https://docs.gtk.org/gio/index.html
     // https://docs.gtk.org/gio/class.SocketService.html
 
-    // TODO maybe put loop() (emulator_run_steps() and gtk_gl_area_queue_render()) code in another thread so that the gui is not affected by the frames that may be slow due to a bad connection
-
     if (connection) {
         printf("Hurray! %d\n", g_socket_get_fd(g_socket_connection_get_socket(connection)));
         // g_object_ref(connection); // useless?
-        link_setup_connection(connection);
+        link_setup_connection(connection, emu);
         is_connected = TRUE;
         show_toast("Link cable connected");
     } else {
@@ -781,8 +761,7 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
     // don't use emulator_joypad_press() here as we want to keep track of the joypad state and set it once per loop for link cable synchronization
     int joypad = keycode_to_joypad(&config, keyval);
     if (joypad < 0) return TRUE;
-    g_queue_push_tail(joypad_queue, (gpointer) 0); // 0 -> joypad press event
-    g_queue_push_tail(joypad_queue, (gpointer) ((glong) joypad));
+    RESET_BIT(joypad_state, joypad);
     return TRUE;
 }
 
@@ -792,8 +771,7 @@ static gboolean key_released_main(GtkEventControllerKey *self, guint keyval, gui
     // don't use emulator_joypad_release() here as we want to keep track of the joypad state and set it once per loop for link cable synchronization
     int joypad = keycode_to_joypad(&config, keyval);
     if (joypad < 0) return TRUE;
-    g_queue_push_tail(joypad_queue, (gpointer) 1); // 1 -> joypad release event
-    g_queue_push_tail(joypad_queue, (gpointer) ((glong) joypad));
+    SET_BIT(joypad_state, joypad);
     return TRUE;
 }
 
@@ -864,8 +842,7 @@ static void gamepad_button_press_event_cb(ManetteDevice *emitter, ManetteEvent *
         if (manette_event_get_button(event, &button)) {
             int joypad = button_to_joypad(&config, button);
             if (joypad < 0) return;
-            g_queue_push_tail(joypad_queue, (gpointer) 0); // 0 -> joypad press event
-            g_queue_push_tail(joypad_queue, (gpointer) ((glong) joypad));
+            RESET_BIT(joypad_state, joypad);
         }
         break;
     case GAMEPAD_BINDING:
@@ -885,8 +862,7 @@ static void gamepad_button_release_event_cb(ManetteDevice *emitter, ManetteEvent
         if (manette_event_get_button(event, &button)) {
             int joypad = button_to_joypad(&config, button);
             if (joypad < 0) return;
-            g_queue_push_tail(joypad_queue, (gpointer) 1); // 1 -> joypad release event
-            g_queue_push_tail(joypad_queue, (gpointer) ((glong) joypad));
+            SET_BIT(joypad_state, joypad);
         }
         break;
     case GAMEPAD_BINDING:
@@ -1133,8 +1109,6 @@ int main(int argc, char **argv) {
     ManetteDevice *device;
     while (manette_monitor_iter_next(iter, &device))
         gamepad_connected_cb(NULL, device, NULL);
-
-    joypad_queue = g_queue_new();
 
     return g_application_run(G_APPLICATION(app), argc, argv);
 }
