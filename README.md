@@ -74,7 +74,7 @@ There is also support for gamepad controllers.
 - GameBoy and GameBoy Color emulator
 - PPU implements fifo rendering
 - Audio
-- Wireless link cable (currently only for android and desktop_sdl builds)
+- Wireless link cable
 - Support for MBC1, MBC1M, MBC2, MBC3, MBC30 and MBC5 cartridges
 - Battery saves and savestates
 - Supports keyboard and gamepad controllers
@@ -84,10 +84,8 @@ There is also support for gamepad controllers.
 - check that MBC3/MBC30 is accurate
 - implement MBC6, MBC7, HuC1 and multicart MBCs
 - better audio/video sync
-
-- desktop link cable + android link cable via bluetooth
+- android link cable via bluetooth + cross platform link cable
 - Maybe: web link cable using Emscripten WebSockets API (https://emscripten.org/docs/porting/networking.html and https://github.com/emscripten-core/emscripten/blob/main/system/include/emscripten/websocket.h. Example gist: https://gist.github.com/nus/564e9e57e4c107faa1a45b8332c265b9)
-
 - rewrite Makefile (it's a mess) maybe use CMake instead
 
 ## Resources used
