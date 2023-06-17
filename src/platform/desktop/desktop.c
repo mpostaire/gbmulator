@@ -10,8 +10,9 @@
 
 #include "glrenderer.h"
 #include "alrenderer.h"
+#include "utils.h"
+#include "link.h"
 #include "../common/utils.h"
-#include "../common/link.h"
 #include "../common/config.h"
 
 #define APP_NAME EMULATOR_NAME
@@ -26,8 +27,6 @@ const char *gamepad_gamepad_button_parser(guint16 button);
 int gamepad_button_name_parser(const char *button_name);
 
 static gboolean loop(gpointer user_data);
-static void on_link_connect(emulator_t *new_linked_emu);
-static void on_link_disconnect(void);
 
 // config struct initialized to defaults
 config_t config = {
@@ -135,9 +134,12 @@ GtkWidget *joypad_name, *restart_dialog, *link_dialog, *status, *link_mode_sette
 GtkFileDialog *file_dialog;
 guint loop_source;
 
+GSocketService *socket_service = NULL;
+gboolean is_connected = FALSE;
+
 gboolean is_paused = TRUE, link_is_server = TRUE;
 int steps_per_frame, sfd;
-emulator_t *emu, *linked_emu;
+emulator_t *emu;
 byte_t joypad_state = 0xFF;
 
 char *rom_path, *forced_save_path, *config_path;
@@ -223,12 +225,12 @@ int gamepad_button_name_parser(const char *button_name) {
     return 0;
 }
 
-static void start_loop(void) {
-    loop_source = g_timeout_add(1000 / 60, G_SOURCE_FUNC(loop), NULL);
+void start_loop(void) {
+    loop_source = g_timeout_add_full(G_PRIORITY_HIGH, 1000 / 60, G_SOURCE_FUNC(loop), NULL, NULL);
     is_paused = FALSE;
 }
 
-static void stop_loop(void) {
+void stop_loop(void) {
     g_source_remove(loop_source);
     is_paused = TRUE;
 }
@@ -254,13 +256,17 @@ static void set_window_size(int width, int height) {
     XResizeWindow(gdk_x11_display_get_xdisplay(display), wid, new_w, new_h);
 }
 
-static gboolean loop(gpointer user_data) {
-    // gint64 start = g_get_monotonic_time();
+// TODO sdl - android link doesn't work
+//      sld - adwaita link doesn't work
+//      sdl - sdl link works
+//      android - android link ????
+//      adwaita - adwaita works if joypad exchange is done synchronously
 
-    // set emulator joypad state only once per loop (and not as soon as an input is detected) to allow link cable synchronization
+static gboolean loop(gpointer user_data) {
     emulator_set_joypad_state(emu, joypad_state);
 
     // run the emulator for the approximate number of cycles it takes for the ppu to render a frame
+    emulator_t *linked_emu = link_communicate();
     if (linked_emu)
         emulator_linked_run_frames(emu, linked_emu, 1);
     else
@@ -268,10 +274,7 @@ static gboolean loop(gpointer user_data) {
 
     gtk_gl_area_queue_render(GTK_GL_AREA(gl_area));
 
-    // TODO don't adjust loop interval as it introduces micro loops in the audio
-    // gint64 elapsed = (g_get_monotonic_time() - start) / 1000; // from us to ms
-    // loop_source = g_timeout_add((1000 / 60) - elapsed, G_SOURCE_FUNC(loop), NULL);
-    return TRUE;
+    return G_SOURCE_CONTINUE;
 }
 
 static void on_realize(GtkGLArea *area, gpointer user_data) {
@@ -312,16 +315,6 @@ static void show_toast(const char *text) {
     adw_toast_overlay_add_toast(ADW_TOAST_OVERLAY(toast_overlay), toast);
 }
 
-static void on_link_connect(emulator_t *new_linked_emu) {
-    linked_emu = new_linked_emu;
-    is_paused = FALSE;
-    config.speed = 1.0f;
-}
-
-static void on_link_disconnect(void) {
-    linked_emu = NULL;
-}
-
 static void ppu_vblank_cb(const byte_t *pixels) {
     glrenderer_update_screen_texture(0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, pixels);
 }
@@ -356,70 +349,16 @@ static byte_t *get_rom_data(const char *path, size_t *rom_size) {
     return buf;
 }
 
-static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
-    char *xdg = getenv(xdg_variable);
-    if (xdg) return xdg;
-
-    char *home = getenv("HOME");
-    size_t home_len = strlen(home);
-    size_t fallback_len = strlen(fallback);
-    char *buf = xmalloc(home_len + fallback_len + 3);
-    snprintf(buf, home_len + fallback_len + 2, "%s/%s", home, fallback);
-    return buf;
-}
-
-static char *get_config_path(void) {
-    char *xdg_config = get_xdg_path("XDG_CONFIG_HOME", ".config");
-
-    char *config_path = xmalloc(strlen(xdg_config) + 27);
-    snprintf(config_path, strlen(xdg_config) + 26, "%s%s", xdg_config, "/gbmulator/gbmulator.conf");
-
-    free(xdg_config);
-    return config_path;
-}
-
-static char *get_save_path(const char *rom_filepath) {
-    char *xdg_data = get_xdg_path("XDG_DATA_HOME", ".local/share");
-
-    char *last_slash = strrchr(rom_filepath, '/');
-    char *last_period = strrchr(last_slash ? last_slash : rom_filepath, '.');
-    int last_period_index = last_period ? (int) (last_period - last_slash) : (int) strlen(rom_filepath);
-
-    size_t len = strlen(xdg_data) + strlen(last_slash ? last_slash : rom_filepath);
-    char *save_path = xmalloc(len + 13);
-    snprintf(save_path, len + 12, "%s/gbmulator%.*s.sav", xdg_data, last_period_index, last_slash);
-
-    free(xdg_data);
-    return save_path;
-}
-
-static char *get_savestate_path(const char *rom_filepath, int slot) {
-    char *xdg_data = get_xdg_path("XDG_DATA_HOME", ".local/share");
-
-    char *last_slash = strrchr(rom_filepath, '/');
-    char *last_period = strrchr(last_slash ? last_slash : rom_filepath, '.');
-    int last_period_index = last_period ? (int) (last_period - last_slash) : (int) strlen(rom_filepath);
-
-    size_t len = strlen(xdg_data) + strlen(last_slash);
-    char *save_path = xmalloc(len + 33);
-    snprintf(save_path, len + 32, "%s/gbmulator/savestates%.*s-%d.gbstate", xdg_data, last_period_index, last_slash, slot);
-
-    free(xdg_data);
-    return save_path;
-}
-
 static void toggle_pause(GSimpleAction *action, GVariant *parameter, gpointer app) {
-    show_toast(is_paused ? "Resume" : "Paused");
+    show_toast(is_paused ? "Resumed" : "Paused");
     toggle_loop();
 }
 
 static void restart_emulator(AdwMessageDialog *self, gchar *response, gpointer user_data) {
     if (!strncmp(response, "restart", 8)) {
-        if (linked_emu) {
-            emulator_link_disconnect(emu);
-            emulator_quit(linked_emu);
-            on_link_disconnect();
-        }
+        // TODO what to do if there is an active link cable connection
+        // if (linked_emu)
+        //     on_link_disconnect();
         emulator_reset(emu, config.mode);
         emulator_print_status(emu);
     }
@@ -433,8 +372,14 @@ static void ask_restart_emulator(GSimpleAction *action, GVariant *parameter, gpo
 }
 
 gboolean link_server_incoming(GSocketService *service, GSocketConnection *connection, GObject *source_object, gpointer user_data) {
-    printf("Received Connection from client! Refusing new requests. %d %d\n", g_socket_service_is_active(service), g_socket_get_fd(g_socket_connection_get_socket(connection)));
+    printf("Received Connection from client! Refusing new requests. %d %d %d\n", g_socket_service_is_active(service), g_socket_get_fd(g_socket_connection_get_socket(connection)), g_socket_connection_is_connected(connection));
     g_socket_service_stop(service); // TODO useless? this works stopping this signal but the print Hurray client still works and new file descriptor are still created...
+
+    g_object_ref(connection); // don't close connection at the end of this handler
+    link_setup_connection(connection, emu);
+    show_toast("Link cable connected");
+    is_connected = TRUE;
+
     return TRUE;
 }
 
@@ -445,15 +390,14 @@ void link_client_connected(GObject *client, GAsyncResult *res, gpointer user_dat
     // https://docs.gtk.org/gio/index.html
     // https://docs.gtk.org/gio/class.SocketService.html
 
-    // TODO maybe put loop() (emulator_run_steps() and gtk_gl_area_queue_render()) code in another thread so that the gui is not affected by the frames that may be slow due to a bad connection
-
     if (connection) {
         printf("Hurray! %d\n", g_socket_get_fd(g_socket_connection_get_socket(connection)));
-        sfd = g_socket_get_fd(g_socket_connection_get_socket(connection));
-        // on_link_connect();
+        // g_object_ref(connection); // useless?
+        link_setup_connection(connection, emu);
+        is_connected = TRUE;
         show_toast("Link cable connected");
     } else {
-        fprintf(stderr, "%s\n", err->message);
+        eprintf("%s", err->message);
         show_toast(err->message);
         g_error_free(err);
     }
@@ -463,7 +407,6 @@ static void start_link(void) {
     if (!emu) return;
 
     if (link_is_server) {
-        puts("TODO server");
         struct addrinfo hints = {
             .ai_family = AF_UNSPEC,
             .ai_socktype = SOCK_STREAM,
@@ -479,15 +422,15 @@ static void start_link(void) {
         }
 
         GSocketAddress *address = g_socket_address_new_from_native(res->ai_addr, res->ai_addrlen);
-        GSocketService *server = g_socket_service_new();
-        g_signal_connect(server, "incoming", G_CALLBACK(link_server_incoming), NULL);
+        if (!socket_service)
+            socket_service = g_socket_service_new();
+        g_signal_connect(socket_service, "incoming", G_CALLBACK(link_server_incoming), NULL);
 
-        if (g_socket_listener_add_address(G_SOCKET_LISTENER(server), address, G_SOCKET_TYPE_STREAM, G_SOCKET_PROTOCOL_TCP, NULL, NULL, NULL))
+        if (g_socket_listener_add_address(G_SOCKET_LISTENER(socket_service), address, G_SOCKET_TYPE_STREAM, G_SOCKET_PROTOCOL_TCP, NULL, NULL, NULL))
             show_toast("Link server listening...");
         else
             show_toast("Error listening to given address");
     } else {
-        puts("TODO client");
         struct addrinfo hints = {
             .ai_family = AF_UNSPEC,
             .ai_socktype = SOCK_STREAM,
@@ -507,15 +450,6 @@ static void start_link(void) {
 
         freeaddrinfo(res);
     }
-
-    // if (link_is_server)
-    //     sfd = link_connect_to_server(config.link_host, config.link_port, config.mptcp_enabled);
-    // else
-    //     sfd = link_start_server(config.link_port, config.mptcp_enabled);
-
-    // emulator_t *new_linked_emu;
-    // if (sfd > 0 && link_init_transfer(sfd, emu, &new_linked_emu))
-    //     on_link_connect(new_linked_emu);
 }
 
 static void link_dialog_response(GtkDialog *self, gint response_id, gpointer user_data) {
@@ -576,11 +510,8 @@ static int load_cartridge(char *path) {
     free(save_path);
 
     if (emu) {
-        if (linked_emu) {
-            emulator_link_disconnect(emu);
-            emulator_quit(linked_emu);
-            on_link_disconnect();
-        }
+        // if (linked_emu)
+        //     on_link_disconnect();
         emulator_quit(emu);
     } else {
         // init audio at the first successful call to load_cartridge to avoid opening audio device when there is no rom loaded
@@ -839,8 +770,8 @@ static gboolean key_released_main(GtkEventControllerKey *self, guint keyval, gui
 
     // don't use emulator_joypad_release() here as we want to keep track of the joypad state and set it once per loop for link cable synchronization
     int joypad = keycode_to_joypad(&config, keyval);
-    SET_BIT(joypad_state, joypad);
     if (joypad < 0) return TRUE;
+    SET_BIT(joypad_state, joypad);
     return TRUE;
 }
 

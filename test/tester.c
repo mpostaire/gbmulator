@@ -9,7 +9,7 @@
 #include <dirent.h>
 #include <MagickWand/MagickWand.h>
 
-#include "../emulator/emulator.h"
+#include "../emulator/emulator_priv.h"
 
 #define BOLD "\033[1m"
 #define COLOR_OFF "\033[0m"
@@ -272,6 +272,8 @@ static int run_test(test_t *test) {
     free(rom_data);
     if (!emu)
         return 0;
+
+    emu->exit_on_invalid_opcode = 0;
 
     // TODO GBmulator's boot roms aren't the same as the original DMG and CGB. This may cause problems in some test roms
     //      like timer based test roms

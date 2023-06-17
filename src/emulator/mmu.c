@@ -3,14 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "emulator.h"
-#include "mmu.h"
-#include "ppu.h"
-#include "joypad.h"
-#include "apu.h"
+#include "emulator_priv.h"
 #include "boot.h"
-#include "cpu.h"
-#include "link.h"
 
 typedef enum {
     OAM_DMA_NO_INIT,
@@ -113,7 +107,7 @@ static int parse_cartridge(emulator_t *emu) {
 
     // detect MBC1M
     if (mmu->mbc == MBC1 && mmu->cartridge_size == 0x100000) {
-        unsigned int addrs[] = { 0x00104, 0x40104, 0x80104, 0xC0104 };
+        const unsigned int addrs[] = { 0x00104, 0x40104, 0x80104, 0xC0104 };
         byte_t logo[] = {
             0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0C, 0x00, 0x0D,
             0x00, 0x08, 0x11, 0x1F, 0x88, 0x89, 0x00, 0x0E, 0xDC, 0xCC, 0x6E, 0xE6, 0xDD, 0xDD, 0xD9, 0x99,
@@ -325,7 +319,7 @@ static inline void hdma_gdma_step(emulator_t *emu, byte_t *src, byte_t *dest) {
             if (mmu->mem[HDMA5] == 0xFF)
                 mmu->hdma.lock_cpu = 0;
         }
-    } else if (CHECK_BIT(mmu->mem[LCDC], 7) && PPU_IS_MODE(emu, PPU_MODE_HBLANK) && mmu->hdma.hdma_ly == mmu->mem[LY]) {
+    } else if (IS_LCD_ENABLED(emu) && PPU_IS_MODE(emu, PPU_MODE_HBLANK) && mmu->hdma.hdma_ly == mmu->mem[LY]) {
         // TODO hdma still not perfect? pokemon crystal has some visual glitches when displaying menus/text windows
         // TODO vram viewer like bgb to see what's happening in vram for these glitches to happen
         mmu->hdma.lock_cpu = 1;
@@ -399,7 +393,7 @@ void mmu_step(emulator_t *emu) {
         byte_t *src;
         if (/*mmu->hdma.src_address >= ROM_BANK0 &&*/ mmu->hdma.src_address < ROM_BANKN) {
             src = &mmu->rom_bank0_pointer[mmu->hdma.src_address];
-        } else if (mmu->hdma.src_address >= ROM_BANKN && mmu->hdma.src_address < VRAM) {
+        } else if (/*mmu->hdma.src_address >= ROM_BANKN &&*/ mmu->hdma.src_address < VRAM) {
             src = &mmu->rom_bankn_pointer[mmu->hdma.src_address];
         } else if (mmu->ramg_reg && mmu->oam_dma.src_address >= ERAM && mmu->oam_dma.src_address < WRAM_BANK0) {
             // TODO check if this is accurate
@@ -582,16 +576,16 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
 
     if (/*address >= ROM_BANK0 &&*/ address < ROM_BANKN)
         return mmu->rom_bank0_pointer[address];
-    if (address >= ROM_BANKN && address < VRAM)
+    if (/*address >= ROM_BANKN &&*/ address < VRAM)
         return mmu->rom_bankn_pointer[address];
 
     // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
-    if (address >= OAM && address < UNUSABLE && CHECK_BIT(mmu->mem[LCDC], 7) && ((PPU_IS_MODE(emu, PPU_MODE_OAM) || PPU_IS_MODE(emu, PPU_MODE_DRAWING))))
+    if (address >= OAM && address < UNUSABLE && IS_LCD_ENABLED(emu) && ((PPU_IS_MODE(emu, PPU_MODE_OAM) || PPU_IS_MODE(emu, PPU_MODE_DRAWING))))
         return 0xFF;
 
-    if (address >= VRAM && address < ERAM) {
+    if (/*address >= VRAM &&*/ address < ERAM) {
         // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
-        if (CHECK_BIT(mmu->mem[LCDC], 7) && PPU_IS_MODE(emu, PPU_MODE_DRAWING))
+        if (IS_LCD_ENABLED(emu) && PPU_IS_MODE(emu, PPU_MODE_DRAWING))
             return 0xFF;
 
         if (emu->mode == CGB && CHECK_BIT(mmu->mem[VBK], 0))
@@ -712,6 +706,9 @@ byte_t mmu_read(emulator_t *emu, word_t address) {
     if (address > NR52 && address < WAVE_RAM)
         return 0xFF;
 
+    if (address == STAT)
+        return mmu->mem[address] | 0x80;
+
     if (address == KEY0)
         return emu->mode == CGB ? mmu->mem[address] : 0xFF;
 
@@ -767,7 +764,7 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         write_mbc_registers(mmu, address, data);
     } else if (/*address >= VRAM &&*/ address < ERAM) {
         // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
-        if (CHECK_BIT(mmu->mem[LCDC], 7) && PPU_IS_MODE(emu, PPU_MODE_DRAWING))
+        if (IS_LCD_ENABLED(emu) && PPU_IS_MODE(emu, PPU_MODE_DRAWING))
             return;
 
         if (emu->mode == CGB && CHECK_BIT(mmu->mem[VBK], 0))
@@ -799,7 +796,7 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
         } else {
             mmu->mem[address - (ECHO - WRAM_BANK0)] = data;
         }
-    } else if ((address >= OAM && address < UNUSABLE) && ((PPU_IS_MODE(emu, PPU_MODE_OAM) || PPU_IS_MODE(emu, PPU_MODE_DRAWING)) && CHECK_BIT(mmu->mem[LCDC], 7))) {
+    } else if ((address >= OAM && address < UNUSABLE) && ((PPU_IS_MODE(emu, PPU_MODE_OAM) || PPU_IS_MODE(emu, PPU_MODE_DRAWING)) && IS_LCD_ENABLED(emu))) {
         // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD enabled
     } else if (address >= UNUSABLE && address < IO) {
         // UNUSABLE memory is unusable
@@ -950,7 +947,7 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
             return;
         mmu->mem[address] = data;
     } else if (address == NR52) {
-        CHANGE_BIT(mmu->mem[NR52], data >> 7, 7);
+        CHANGE_BIT(mmu->mem[NR52], 7, data >> 7);
         if (!IS_APU_ENABLED(emu))
             memset(&mmu->mem[NR10], 0x00, 32 * sizeof(byte_t)); // clear all registers
     } else if (address >= WAVE_RAM && address < LCDC) {
@@ -1055,6 +1052,9 @@ void mmu_write(emulator_t* emu, word_t address, byte_t data) {
     }
 }
 
+// TODO replace this with serialize macros once the mmu has been reworked
+// (it needs better eram/rom/vram banking logic and struct representation: instead of making on huge array for eram,
+// malloc it at the correct size, etc.)
 size_t mmu_serialized_length(emulator_t *emu) {
     size_t mem_len = sizeof(emu->mmu->mem);
     size_t eram_len = 0x2000 * emu->mmu->eram_banks;

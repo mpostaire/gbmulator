@@ -7,6 +7,7 @@
 #include "../common/config.h"
 #include "../common/utils.h"
 #include "../../emulator/emulator.h"
+#include "../../emulator/emulator_priv.h"
 
 // TODO implemented MBCs have a few bugs (see https://github.com/drhelius/Gearboy to understand how its handled)
 

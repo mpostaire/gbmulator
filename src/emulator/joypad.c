@@ -1,9 +1,6 @@
 #include <stdlib.h>
 
-#include "emulator.h"
-#include "joypad.h"
-#include "cpu.h"
-#include "mmu.h"
+#include "emulator_priv.h"
 
 void joypad_init(emulator_t *emu) {
     emu->joypad = xmalloc(sizeof(joypad_t));

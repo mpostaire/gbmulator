@@ -51,18 +51,18 @@ static GLuint create_shader_program(const char *vertex_source_path, const char *
     glCompileShader(fragment_shader);
 
     // Create Shader Program Object and get its reference
-    GLuint shader_program = glCreateProgram();
+    GLuint program = glCreateProgram();
     // Attach the Vertex and Fragment Shaders to the Shader Program
-    glAttachShader(shader_program, vertex_shader);
-    glAttachShader(shader_program, fragment_shader);
+    glAttachShader(program, vertex_shader);
+    glAttachShader(program, fragment_shader);
     // Wrap-up/Link all the shaders together into the Shader Program
-    glLinkProgram(shader_program);
+    glLinkProgram(program);
 
     // Delete the now useless Vertex and Fragment Shader objects
     glDeleteShader(vertex_shader);
     glDeleteShader(fragment_shader);
 
-    return shader_program;
+    return program;
 }
 
 static GLuint create_screen_texture(GLsizei width, GLsizei height, const GLvoid *pixels) {

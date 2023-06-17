@@ -67,14 +67,14 @@ The following table show the default keybindings (they can be changed in GBmulat
 | *Load savesate 1 → 8   | <kbd>F1</kbd> → <kbd>F8</kbd>                    |
 | *Create savesate 1 → 8 | <kbd>Shift</kbd> + <kbd>F1</kbd> → <kbd>F8</kbd> |
 
-There is also support for gamepad controllers but the buttons aren't configurable.
+There is also support for gamepad controllers.
 
 ## Features
 
 - GameBoy and GameBoy Color emulator
-- Scanline ppu rendering
+- PPU implements fifo rendering
 - Audio
-- Wireless link cable (currently only for android and desktop_sdl builds)
+- Wireless link cable
 - Support for MBC1, MBC1M, MBC2, MBC3, MBC30 and MBC5 cartridges
 - Battery saves and savestates
 - Supports keyboard and gamepad controllers
@@ -84,11 +84,8 @@ There is also support for gamepad controllers but the buttons aren't configurabl
 - check that MBC3/MBC30 is accurate
 - implement MBC6, MBC7, HuC1 and multicart MBCs
 - better audio/video sync
-- rewrite ppu from scanline rendering to cycle accurate rendering
-
-- libadwaita link cable + android bluetooth link cable
+- android link cable via bluetooth + cross platform link cable
 - Maybe: web link cable using Emscripten WebSockets API (https://emscripten.org/docs/porting/networking.html and https://github.com/emscripten-core/emscripten/blob/main/system/include/emscripten/websocket.h. Example gist: https://gist.github.com/nus/564e9e57e4c107faa1a45b8332c265b9)
-
 - rewrite Makefile (it's a mess) maybe use CMake instead
 
 ## Resources used
@@ -99,3 +96,4 @@ There is also support for gamepad controllers but the buttons aren't configurabl
 - https://gbdev.gg8.se/wiki/
 - https://www.youtube.com/watch?v=HyzD8pNlpwI
 - https://github.com/AntonioND/giibiiadvance/blob/master/docs/TCAGBD.pdf
+- https://pixelbits.16-b.it/GBEDG/ppu/
