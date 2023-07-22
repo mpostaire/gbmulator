@@ -124,7 +124,7 @@ static inline byte_t cgb_get_bg_win_tile_attributes(emulator_t *emu) {
         tile_id_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 6) << 10) | (((ppu->wly / 8) & 0x1F) << 5) | ((ppu->pixel_fetcher.x / 8) & 0x1F);
         break;
     default:
-        eprintf("this function can't be for objs");
+        eprintf("this function can't be used for objs");
         exit(EXIT_FAILURE);
         break;
     }
@@ -473,9 +473,22 @@ static inline void drawing_step(emulator_t *emu) {
     if (!bg_win_pixel)
         return;
 
-    if ((ppu->pixel_fetcher.mode == FETCH_WIN && ppu->discarded_pixels < 7 - mmu->mem[WX]) || ppu->discarded_pixels < mmu->mem[SCX] % 8) {
-        ppu->discarded_pixels++;
-        return;
+    // discards pixels if needed, due either to SCX or window starting before screen (WX < 7)
+    switch (ppu->pixel_fetcher.mode) {
+    case FETCH_BG:
+        if (ppu->discarded_pixels < mmu->mem[SCX] % 8) {
+            ppu->discarded_pixels++;
+            return;
+        }
+        break;
+    case FETCH_WIN:
+        if (mmu->mem[WX] < 7 && ppu->discarded_pixels < 7 - mmu->mem[WX]) {
+            ppu->discarded_pixels++;
+            return;
+        }
+        break;
+    default:
+        break;
     }
 
     pixel_t *obj_pixel = pixel_fifo_pop(&ppu->obj_fifo);
