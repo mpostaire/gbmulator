@@ -53,7 +53,7 @@ DMG:age-test-roms/stat-mode-sprites/stat-mode-sprites-dmgC-cgbBCE.gb::failed
 CGB:age-test-roms/stat-mode-sprites/stat-mode-sprites-ds-cgbBCE.gb::failed
 CGB:age-test-roms/stat-mode-window/stat-mode-window-cgbBCE.gb::failed
 DMG:age-test-roms/stat-mode-window/stat-mode-window-dmgC.gb::failed
-CGB:age-test-roms/stat-mode-window/stat-mode-window-ds-cgbBCE.gb::timeout
+CGB:age-test-roms/stat-mode-window/stat-mode-window-ds-cgbBCE.gb::failed
 CGB:age-test-roms/stat-mode-window/stat-mode-window-ncmBCE.gb::failed
 CGB:age-test-roms/stat-mode/stat-mode-dmgC-cgbBC.gb::failed
 DMG:age-test-roms/stat-mode/stat-mode-dmgC-cgbBC.gb::failed
