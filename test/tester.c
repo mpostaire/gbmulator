@@ -27,9 +27,10 @@ typedef struct {
     char *reference_image_filename; // relative to the dir of the rom_path
     char *result_diff_image_suffix;
     emulator_mode_t mode;
-    int time;
+    int running_frames;
     byte_t exit_opcode;
     char *input_sequence;
+    int is_gbmicrotest;
 } test_t;
 
 test_t tests[] = {
@@ -209,6 +210,9 @@ static int save_and_check_result(test_t *test, emulator_t *emu, char *rom_path) 
             return !distortion;
     }
 
+    if (test->is_gbmicrotest)
+        return emu->mmu->mem[0xFF82] == 0x01;
+
     registers_t regs = emu->cpu->registers;
     return regs.bc == 0x0305 && regs.de == 0x080D && regs.hl == 0x1522;
 }
@@ -296,7 +300,7 @@ static int run_test(test_t *test) {
         }
     }
     if (timeout_cycles > 0)
-        emulator_run_frames(emu, test->time * GB_CPU_FRAMES_PER_SECONDS);
+        emulator_run_frames(emu, test->running_frames);
 
     // take screenshot, save it and compare to the reference
     int ret = save_and_check_result(test, emu, rom_path);
