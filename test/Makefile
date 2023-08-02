@@ -9,7 +9,7 @@ BIN=tester
 EMU_SRC=$(wildcard $(EMU_SDIR)/*.c)
 EMU_OBJ=$(EMU_SRC:$(EMU_SDIR)/%.c=$(ODIR)/%.o)
 
-TEST_ROMS=game-boy-test-roms-v5.1
+TEST_ROMS=game-boy-test-roms-v6.0
 
 all: $(ODIR)
 	$(MAKE) tests.txt
@@ -22,9 +22,9 @@ tests.txt: tests_generator.py $(TEST_ROMS)
 	python3 $< $(TEST_ROMS)
 
 $(TEST_ROMS):
-	wget https://github.com/c-sp/gameboy-test-roms/releases/download/v5.1/game-boy-test-roms-v5.1.zip
-	unzip game-boy-test-roms-v5.1.zip -d $(TEST_ROMS)
-	rm -f game-boy-test-roms-v5.1.zip
+	wget https://github.com/c-sp/gameboy-test-roms/releases/download/v6.0/game-boy-test-roms-v6.0.zip
+	unzip game-boy-test-roms-v6.0.zip -d $(TEST_ROMS)
+	rm -f game-boy-test-roms-v6.0.zip
 
 $(BIN): $(EMU_OBJ) $(ODIR)/$(BIN).o
 	$(CC) -o $@ $^ $(CFLAGS) $(EXTRA_CFLAGS) $(LDLIBS)
