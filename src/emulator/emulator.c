@@ -136,7 +136,7 @@ void emulator_print_status(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
     char *ram_str = NULL;
-    if (mmu->has_eram && mmu->eram_banks > 0) {
+    if (mmu->eram_banks > 0) {
         ram_str = xmalloc(18);
         snprintf(ram_str, 17, " + %d RAM banks", mmu->eram_banks);
     }
@@ -221,7 +221,7 @@ int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
     if (!emu->mmu->has_battery || (!emu->mmu->has_rtc && emu->mmu->eram_banks == 0))
         return 0;
 
-    size_t eram_len = 0x2000 * emu->mmu->eram_banks;
+    size_t eram_len = emu->mmu->eram_banks * VRAM_BANK_SIZE;
 
     size_t rtc_len = 0;
     if (emu->mmu->has_rtc) {
@@ -419,6 +419,7 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
     offset += link_len;
     ppu_unserialize(emu, &savestate_data[offset]);
     offset += ppu_len;
+    // TODO before we should be sure that the mmu structs are allocated to the correct size...
     mmu_unserialize(emu, &savestate_data[offset]);
 
     free(savestate_header);

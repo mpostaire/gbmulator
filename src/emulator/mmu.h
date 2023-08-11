@@ -206,7 +206,6 @@ typedef struct {
     byte_t romb1_reg; // MBC5: upper ROM BANK register
     // MBC5: RAMB register is stored in bank2_reg
 
-    byte_t has_eram;
     byte_t has_battery;
     byte_t has_rumble;
     byte_t has_rtc;

@@ -31,6 +31,7 @@ typedef enum {
 static int parse_cartridge(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
+    byte_t has_eram = 0;
     switch (mmu->rom[0x0147]) {
     case 0x00:
         mmu->mbc = ROM_ONLY;
@@ -40,11 +41,11 @@ static int parse_cartridge(emulator_t *emu) {
         break;
     case 0x02:
         mmu->mbc = MBC1;
-        mmu->has_eram = 1;
+        has_eram = 1;
         break;
     case 0x03:
         mmu->mbc = MBC1;
-        mmu->has_eram = 1;
+        has_eram = 1;
         mmu->has_battery = 1;
         break;
     case 0x05:
@@ -52,7 +53,7 @@ static int parse_cartridge(emulator_t *emu) {
         break;
     case 0x06:
         mmu->mbc = MBC2;
-        mmu->has_eram = 1;
+        has_eram = 1;
         mmu->has_battery = 1;
         break;
     case 0x0F:
@@ -64,30 +65,30 @@ static int parse_cartridge(emulator_t *emu) {
         mmu->mbc = MBC3;
         mmu->has_rtc = 1;
         mmu->has_battery = 1;
-        mmu->has_eram = 1;
+        has_eram = 1;
         break;
     case 0x11:
         mmu->mbc = MBC3;
         break;
     case 0x12:
         mmu->mbc = MBC3;
-        mmu->has_eram = 1;
+        has_eram = 1;
         break;
     case 0x13:
         mmu->mbc = MBC3;
         mmu->has_battery = 1;
-        mmu->has_eram = 1;
+        has_eram = 1;
         break;
     case 0x19:
         mmu->mbc = MBC5;
         break;
     case 0x1A:
         mmu->mbc = MBC5;
-        mmu->has_eram = 1;
+        has_eram = 1;
         break;
     case 0x1B:
         mmu->mbc = MBC5;
-        mmu->has_eram = 1;
+        has_eram = 1;
         mmu->has_battery = 1;
         break;
     case 0x1C:
@@ -97,12 +98,12 @@ static int parse_cartridge(emulator_t *emu) {
     case 0x1D:
         mmu->mbc = MBC5;
         mmu->has_rumble = 1;
-        mmu->has_eram = 1;
+        has_eram = 1;
         break;
     case 0x1E:
         mmu->mbc = MBC5;
         mmu->has_rumble = 1;
-        mmu->has_eram = 1;
+        has_eram = 1;
         mmu->has_battery = 1;
         break;
     // case 0x20:
@@ -137,12 +138,14 @@ static int parse_cartridge(emulator_t *emu) {
 
     mmu->rom_banks = 2 << mmu->rom[0x0148];
 
-    switch (mmu->rom[0x0149]) {
-    case 0x00: mmu->eram_banks = 0; break;
-    case 0x02: mmu->eram_banks = 1; break;
-    case 0x03: mmu->eram_banks = 4; break;
-    case 0x04: mmu->eram_banks = 16; break;
-    case 0x05: mmu->eram_banks = 8; break;
+    if (has_eram) {
+        switch (mmu->rom[0x0149]) {
+        case 0x00: mmu->eram_banks = 0; break;
+        case 0x02: mmu->eram_banks = 1; break;
+        case 0x03: mmu->eram_banks = 4; break;
+        case 0x04: mmu->eram_banks = 16; break;
+        case 0x05: mmu->eram_banks = 8; break;
+        }
     }
 
     // MBC3 cartridges are 2MiB, MBC30 cartridges are 4MiB (but the mbctest.gb test rom is a bit smaller)
@@ -411,7 +414,7 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
     case MBC1:
         switch (address & 0xE000) {
         case 0x0000:
-            mmu->ramg_reg = mmu->has_eram && (data & 0x0F) == 0x0A;
+            mmu->ramg_reg = mmu->eram_banks > 0 && (data & 0x0F) == 0x0A;
             break;
         case 0x2000:
             data &= 0x1F;
@@ -432,7 +435,7 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
     case MBC1M:
         switch (address & 0xE000) {
         case 0x0000:
-            mmu->ramg_reg = mmu->has_eram && (data & 0x0F) == 0x0A;
+            mmu->ramg_reg = mmu->eram_banks > 0 && (data & 0x0F) == 0x0A;
             break;
         case 0x2000:
             data &= 0x1F;
@@ -1161,7 +1164,6 @@ void mmu_write(emulator_t *emu, word_t address, byte_t data) {
     X(rtc_mapped)                \
     X(romb0_reg)                 \
     X(romb1_reg)                 \
-    X(has_eram)                  \
     X(has_battery)               \
     X(has_rumble)                \
     X(has_rtc)                   \

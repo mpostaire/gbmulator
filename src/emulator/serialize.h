@@ -48,7 +48,7 @@
 #define SERIALIZE_ARRAY_OF_STRUCTS(array, member)                                    \
     for (size_t i = 0; i < sizeof(tmp->array) / sizeof(tmp->array[0]); i++) {        \
         memcpy(buf + offset, &(tmp->array[i].member), sizeof(tmp->array[i].member)); \
-        offset += sizeof(tmp->array[i].member);                                    \
+        offset += sizeof(tmp->array[i].member);                                      \
     }
 
 #define UNSERIALIZE(member)                                        \
@@ -60,5 +60,5 @@
 #define UNSERIALIZE_ARRAY_OF_STRUCTS(array, member)                                  \
     for (size_t i = 0; i < sizeof(tmp->array) / sizeof(tmp->array[0]); i++) {        \
         memcpy(&(tmp->array[i].member), buf + offset, sizeof(tmp->array[i].member)); \
-        offset += sizeof(tmp->array[i].member);                                    \
+        offset += sizeof(tmp->array[i].member);                                      \
     }
