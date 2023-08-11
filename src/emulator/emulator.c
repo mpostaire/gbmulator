@@ -95,9 +95,9 @@ void emulator_quit(emulator_t *emu) {
 }
 
 void emulator_reset(emulator_t *emu, emulator_mode_t mode) {
-    size_t rom_size = emu->mmu->cartridge_size;
+    size_t rom_size = emu->mmu->rom_size;
     byte_t *rom_data = xmalloc(rom_size);
-    memcpy(rom_data, emu->mmu->cartridge, rom_size);
+    memcpy(rom_data, emu->mmu->rom, rom_size);
 
     emu->mode = 0;
     emulator_options_t opts;
@@ -439,7 +439,7 @@ void emulator_set_joypad_state(emulator_t *emu, byte_t state) {
     emu->joypad->action = (state >> 4) & 0x0F;
     emu->joypad->direction = state & 0x0F;
 
-    if (!CHECK_BIT(emu->mmu->mem[P1], 4) || !CHECK_BIT(emu->mmu->mem[P1], 5))
+    if (!CHECK_BIT(emu->mmu->io_registers[P1 - IO], 4) || !CHECK_BIT(emu->mmu->io_registers[P1 - IO], 5))
         CPU_REQUEST_INTERRUPT(emu, IRQ_JOYPAD);
 }
 
@@ -449,8 +449,8 @@ char *emulator_get_rom_title(emulator_t *emu) {
 
 byte_t *emulator_get_rom(emulator_t *emu, size_t *rom_size) {
     if (rom_size)
-        *rom_size = emu->mmu->cartridge_size;
-    return emu->mmu->cartridge;
+        *rom_size = emu->mmu->rom_size;
+    return emu->mmu->rom;
 }
 
 char *emulator_get_rom_title_from_data(byte_t *rom_data, size_t size) {
@@ -538,8 +538,8 @@ emulator_mode_t emulator_get_mode(emulator_t *emu) {
 
 word_t emulator_get_cartridge_checksum(emulator_t *emu) {
     word_t checksum = 0;
-    for (unsigned int i = 0; i < sizeof(emu->mmu->cartridge); i += 2)
-        checksum = checksum - (emu->mmu->cartridge[i] + emu->mmu->cartridge[i + 1]) - 1;
+    for (unsigned int i = 0; i < sizeof(emu->mmu->rom); i += 2)
+        checksum = checksum - (emu->mmu->rom[i] + emu->mmu->rom[i + 1]) - 1;
     return checksum;
 }
 

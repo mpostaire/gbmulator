@@ -12,11 +12,11 @@
 #define CHECK_FLAG(cpu, x) ((cpu)->registers.f & (x))
 #define RESET_FLAG(cpu, x) ((cpu)->registers.f &= ~(x))
 
-#define PREPARE_SPEED_SWITCH(emu) ((emu)->mmu->mem[KEY1] & 0x01)
-#define ENABLE_DOUBLE_SPEED(emu) { ((emu)->mmu->mem[KEY1] |= 0x80); ((emu)->mmu->mem[KEY1] &= 0xFE); }
-#define DISABLE_DOUBLE_SPEED(emu) { ((emu)->mmu->mem[KEY1] &= 0x7F); ((emu)->mmu->mem[KEY1] &= 0xFE); }
+#define PREPARE_SPEED_SWITCH(emu) ((emu)->mmu->io_registers[KEY1 - IO] & 0x01)
+#define ENABLE_DOUBLE_SPEED(emu) { ((emu)->mmu->io_registers[KEY1 - IO] |= 0x80); ((emu)->mmu->io_registers[KEY1 - IO] &= 0xFE); }
+#define DISABLE_DOUBLE_SPEED(emu) { ((emu)->mmu->io_registers[KEY1 - IO] &= 0x7F); ((emu)->mmu->io_registers[KEY1 - IO] &= 0xFE); }
 
-#define IS_INTERRUPT_PENDING(emu) ((emu)->mmu->mem[IE] & (emu)->mmu->mem[IF] & 0x1F)
+#define IS_INTERRUPT_PENDING(emu) ((emu)->mmu->ie & (emu)->mmu->io_registers[IF - IO] & 0x1F)
 
 typedef enum {
     IME_DISABLED,
@@ -1538,8 +1538,8 @@ static void exec_opcode(emulator_t *emu) {
         // TODO Halts until button press.
         CLOCK(
             // reset timer to 0
-            emu->mmu->mem[DIV_LSB] = 0x00;
-            emu->mmu->mem[DIV] = 0x00;
+            emu->mmu->io_registers[DIV_LSB - IO] = 0x00;
+            emu->mmu->io_registers[DIV - IO] = 0x00;
             if (PREPARE_SPEED_SWITCH(emu)) {
                 // TODO this should also stop the cpu for 2050 steps (8200 cycles)
                 // https://gbdev.io/pandocs/CGB_Registers.html?highlight=key1#ff4d--key1-cgb-mode-only-prepare-speed-switch
@@ -2249,21 +2249,25 @@ static void exec_opcode(emulator_t *emu) {
 #ifdef DEBUG
 static void print_trace(emulator_t *emu) {
     cpu_t *cpu = emu->cpu;
-    mmu_t *mmu = emu->mmu;
 
     byte_t opcode = mmu_read(emu, cpu->registers.pc);
     byte_t operand_size = instructions[mmu_read(emu, cpu->registers.pc)].operand_size;
 
+    // TODO print CB opcodes names
     if (operand_size == 0) {
         printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x        %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, instructions[opcode].name);
     } else if (operand_size == 1) {
         char buf[32];
-        snprintf(buf, sizeof(buf), instructions[opcode].name, mmu->mem[cpu->registers.pc + 1]);
-        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x     %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, mmu->mem[cpu->registers.pc + 1], buf);
+        byte_t operand = mmu_read(emu, cpu->registers.pc + 1);
+        snprintf(buf, sizeof(buf), instructions[opcode].name, operand);
+        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x     %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, operand, buf);
     } else {
         char buf[32];
-        snprintf(buf, sizeof(buf), instructions[opcode].name, mmu->mem[cpu->registers.pc + 1] | mmu->mem[cpu->registers.pc + 2] << 8);
-        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x %02x  %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, mmu->mem[cpu->registers.pc + 1], mmu->mem[cpu->registers.pc + 2], buf);
+        byte_t first_operand = mmu_read(emu, cpu->registers.pc + 1);
+        byte_t second_operand = mmu_read(emu, cpu->registers.pc + 2);
+        word_t both_operands = first_operand | second_operand << 8;
+        snprintf(buf, sizeof(buf), instructions[opcode].name, both_operands);
+        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x %02x  %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, first_operand, second_operand, buf);
     }
 }
 #endif
@@ -2279,22 +2283,22 @@ static void push_interrupt(emulator_t *emu) {
         CLOCK();
         CLOCK(mmu_write(emu, --cpu->registers.sp, (cpu->registers.pc) >> 8));
         CLOCK(
-            byte_t old_ie = mmu->mem[IE]; // in case the mmu_write below overwrites the IE register
-            mmu_write(emu, --cpu->registers.sp, (cpu->registers.pc) & 0xFF);
-            if (CHECK_BIT(mmu->mem[IF], IRQ_VBLANK) && CHECK_BIT(old_ie, IRQ_VBLANK)) {
-                RESET_BIT(mmu->mem[IF], IRQ_VBLANK);
+            byte_t old_ie = mmu->ie; // in case the mmu_write below overwrites the IE register
+            mmu_write(emu, --cpu->registers.sp, cpu->registers.pc & 0xFF);
+            if (CHECK_BIT(mmu->io_registers[IF - IO], IRQ_VBLANK) && CHECK_BIT(old_ie, IRQ_VBLANK)) {
+                RESET_BIT(mmu->io_registers[IF - IO], IRQ_VBLANK);
                 cpu->registers.pc = 0x0040;
-            } else if (CHECK_BIT(mmu->mem[IF], IRQ_STAT) && CHECK_BIT(old_ie, IRQ_STAT)) {
-                RESET_BIT(mmu->mem[IF], IRQ_STAT);
+            } else if (CHECK_BIT(mmu->io_registers[IF - IO], IRQ_STAT) && CHECK_BIT(old_ie, IRQ_STAT)) {
+                RESET_BIT(mmu->io_registers[IF - IO], IRQ_STAT);
                 cpu->registers.pc = 0x0048;
-            } else if (CHECK_BIT(mmu->mem[IF], IRQ_TIMER) && CHECK_BIT(old_ie, IRQ_TIMER)) {
-                RESET_BIT(mmu->mem[IF], IRQ_TIMER);
+            } else if (CHECK_BIT(mmu->io_registers[IF - IO], IRQ_TIMER) && CHECK_BIT(old_ie, IRQ_TIMER)) {
+                RESET_BIT(mmu->io_registers[IF - IO], IRQ_TIMER);
                 cpu->registers.pc = 0x0050;
-            } else if (CHECK_BIT(mmu->mem[IF], IRQ_SERIAL) && CHECK_BIT(old_ie, IRQ_SERIAL)) {
-                RESET_BIT(mmu->mem[IF], IRQ_SERIAL);
+            } else if (CHECK_BIT(mmu->io_registers[IF - IO], IRQ_SERIAL) && CHECK_BIT(old_ie, IRQ_SERIAL)) {
+                RESET_BIT(mmu->io_registers[IF - IO], IRQ_SERIAL);
                 cpu->registers.pc = 0x0058;
-            } else if (CHECK_BIT(mmu->mem[IF], IRQ_JOYPAD) && CHECK_BIT(old_ie, IRQ_JOYPAD)) {
-                RESET_BIT(mmu->mem[IF], IRQ_JOYPAD);
+            } else if (CHECK_BIT(mmu->io_registers[IF - IO], IRQ_JOYPAD) && CHECK_BIT(old_ie, IRQ_JOYPAD)) {
+                RESET_BIT(mmu->io_registers[IF - IO], IRQ_JOYPAD);
                 cpu->registers.pc = 0x0060;
             } else {
                 // an overwrite of the IE register happened during the previous CLOCK() and disabled all interrupts

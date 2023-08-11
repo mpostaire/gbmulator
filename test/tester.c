@@ -211,7 +211,7 @@ static int save_and_check_result(test_t *test, emulator_t *emu, char *rom_path) 
     }
 
     if (test->is_gbmicrotest)
-        return emu->mmu->mem[0xFF82] == 0x01;
+        return emu->mmu->io_registers[0xFF82 - HRAM] == 0x01;
 
     registers_t regs = emu->cpu->registers;
     return regs.bc == 0x0305 && regs.de == 0x080D && regs.hl == 0x1522;

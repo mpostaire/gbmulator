@@ -60,8 +60,8 @@ typedef struct {
     word_t opcode_cache_variable; // storage used for an easier implementation of some opcodes
 } cpu_t;
 
-#define CPU_REQUEST_INTERRUPT(emu, irq) SET_BIT((emu)->mmu->mem[IF], (irq))
-#define IS_DOUBLE_SPEED(emu) (((emu)->mmu->mem[KEY1] & 0x80) >> 7)
+#define CPU_REQUEST_INTERRUPT(emu, irq) SET_BIT((emu)->mmu->io_registers[IF - IO], (irq))
+#define IS_DOUBLE_SPEED(emu) (((emu)->mmu->io_registers[KEY1 - IO] & 0x80) >> 7)
 
 void cpu_step(emulator_t *emu);
 
