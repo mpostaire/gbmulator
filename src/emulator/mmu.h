@@ -144,8 +144,6 @@ typedef struct {
 } rtc_t;
 
 typedef struct {
-    byte_t boot_finished;
-
     size_t rom_size;
     // TODO dynamic allocation of rom, vram, eram, wram, cram_bg and cram_obj
     byte_t rom[8400000];
@@ -158,6 +156,8 @@ typedef struct {
     byte_t ie;
     byte_t cram_bg[0x40]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
     byte_t cram_obj[0x40]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
+
+    byte_t boot_finished;
 
     struct {
         byte_t step;

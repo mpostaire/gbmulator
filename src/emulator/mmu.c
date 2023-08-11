@@ -1124,200 +1124,76 @@ void mmu_write(emulator_t *emu, word_t address, byte_t data) {
     mmu_write_io_src(emu, address, data, IO_SRC_CPU);
 }
 
-// TODO replace this with serialize macros once the mmu has been reworked
-// (it needs better eram/rom/vram banking logic and struct representation: instead of making on huge array for eram,
-// malloc it at the correct size, etc.)
-size_t mmu_serialized_length(emulator_t *emu) {
-    // size_t mem_len = sizeof(emu->mmu->mem);
-    // size_t eram_len = 0x2000 * emu->mmu->eram_banks;
-    // size_t wram_extra_len = 0;
-    // size_t vram_extra_len = 0;
-    // size_t cram_len = 0;
-    // size_t oam_dma_len = 5;
-    // size_t hdma_len = 0;
-    // size_t rtc_len = 17 + time_to_string_length();
-    // size_t mmu_other_len = 15;
-    // if (emu->mode == CGB) {
-    //     wram_extra_len = sizeof(emu->mmu->wram_extra);
-    //     vram_extra_len = sizeof(emu->mmu->vram_extra);
-    //     cram_len = sizeof(emu->mmu->cram_bg) + sizeof(emu->mmu->cram_obj);
-    //     hdma_len = 8;
-    // }
-    // return mem_len + mmu_other_len + eram_len + wram_extra_len + vram_extra_len + cram_len + hdma_len + oam_dma_len + rtc_len;
-    return 0;
-}
+#define SERIALIZED_MEMBERS       \
+    X(rom_size)                  \
+    X(rom)                       \
+    X(vram)                      \
+    X(eram)                      \
+    X(wram)                      \
+    X(oam)                       \
+    X(io_registers)              \
+    X(hram)                      \
+    X(ie)                        \
+    X(cram_bg)                   \
+    X(cram_obj)                  \
+    X(boot_finished)             \
+    X(hdma.step)                 \
+    X(hdma.progress)             \
+    X(hdma.hdma_ly)              \
+    X(hdma.lock_cpu)             \
+    X(hdma.type)                 \
+    X(oam_dma.starting_statuses) \
+    X(oam_dma.starting_count)    \
+    X(oam_dma.progress)          \
+    X(oam_dma.src_address)       \
+    X(vram_bank_addr_offset)     \
+    X(wram_bankn_addr_offset)    \
+    X(mbc)                       \
+    X(rom_banks)                 \
+    X(eram_banks)                \
+    X(rom_bank0_addr)            \
+    X(rom_bankn_addr)            \
+    X(eram_bank_addr)            \
+    X(ramg_reg)                  \
+    X(bank1_reg)                 \
+    X(bank2_reg)                 \
+    X(mode_reg)                  \
+    X(rtc_mapped)                \
+    X(romb0_reg)                 \
+    X(romb1_reg)                 \
+    X(has_eram)                  \
+    X(has_battery)               \
+    X(has_rumble)                \
+    X(has_rtc)                   \
+    X(rtc.latched_s)             \
+    X(rtc.latched_m)             \
+    X(rtc.latched_h)             \
+    X(rtc.latched_dl)            \
+    X(rtc.latched_dh)            \
+    X(rtc.s)                     \
+    X(rtc.m)                     \
+    X(rtc.h)                     \
+    X(rtc.dl)                    \
+    X(rtc.dh)                    \
+    X(rtc.enabled)               \
+    X(rtc.reg)                   \
+    X(rtc.latch)                 \
+    X(rtc.rtc_cycles)
 
-byte_t *mmu_serialize(emulator_t *emu, size_t *size) {
-    // *size = mmu_serialized_length(emu);
-    // byte_t *buf = xmalloc(*size);
+#define X(value) SERIALIZED_LENGTH(value);
+SERIALIZED_SIZE_FUNCTION(mmu_t, mmu,
+    SERIALIZED_MEMBERS
+)
+#undef X
 
-    // size_t offset = 0;
-    // memcpy(buf, emu->mmu->mem, sizeof(emu->mmu->mem));
-    // offset += sizeof(emu->mmu->mem);
+#define X(value) SERIALIZE(value);
+SERIALIZER_FUNCTION(mmu_t, mmu,
+    SERIALIZED_MEMBERS
+)
+#undef X
 
-    // size_t eram_len = 0x2000 * emu->mmu->eram_banks;
-    // memcpy(&buf[offset], emu->mmu->eram, eram_len);
-    // offset += eram_len;
-
-    // if (emu->mode == CGB) {
-    //     size_t wram_extra_len = sizeof(emu->mmu->wram_extra);
-    //     memcpy(&buf[offset], emu->mmu->wram_extra, wram_extra_len);
-    //     offset += wram_extra_len;
-
-    //     size_t vram_extra_len = sizeof(emu->mmu->vram_extra);
-    //     memcpy(&buf[offset], emu->mmu->vram_extra, vram_extra_len);
-    //     offset += vram_extra_len;
-
-    //     size_t cram_bg_len = sizeof(emu->mmu->cram_bg);
-    //     memcpy(&buf[offset], emu->mmu->cram_bg, cram_bg_len);
-    //     offset += cram_bg_len;
-    //     size_t cram_obj_len = sizeof(emu->mmu->cram_obj);
-    //     memcpy(&buf[offset], emu->mmu->cram_obj, cram_obj_len);
-    //     offset += cram_obj_len;
-
-    //     size_t hdma_len = 8;
-    //     memcpy(&buf[offset], &emu->mmu->hdma.step, 1);
-    //     memcpy(&buf[offset + 1], &emu->mmu->hdma.hdma_ly, 1);
-    //     memcpy(&buf[offset + 2], &emu->mmu->hdma.lock_cpu, 1);
-    //     memcpy(&buf[offset + 3], &emu->mmu->hdma.type, 1);
-    //     memcpy(&buf[offset + 4], &emu->mmu->hdma.src_address, 2);
-    //     memcpy(&buf[offset + 6], &emu->mmu->hdma.dest_address, 2);
-    //     offset += hdma_len;
-    // }
-
-    // size_t starting_status_size = sizeof(emu->mmu->oam_dma.starting_statuses);
-    // memcpy(&buf[offset], &emu->mmu->oam_dma.starting_statuses, starting_status_size);
-    // memcpy(&buf[offset], &emu->mmu->oam_dma.starting_count, 1);
-    // memcpy(&buf[offset + starting_status_size + 1], &emu->mmu->oam_dma.progress, 2);
-    // memcpy(&buf[offset + starting_status_size + 3], &emu->mmu->oam_dma.src_address, 2);
-    // offset += starting_status_size + 5;
-
-    // memcpy(&buf[offset], &emu->mmu->mbc, 1);
-    // memcpy(&buf[offset + 1], &emu->mmu->rom_banks, 2);
-    // memcpy(&buf[offset + 3], &emu->mmu->eram_banks, 1);
-    // memcpy(&buf[offset + 4], &emu->mmu->ramg_reg, 1);
-    // memcpy(&buf[offset + 5], &emu->mmu->bank1_reg, 1);
-    // memcpy(&buf[offset + 6], &emu->mmu->bank2_reg, 1);
-    // memcpy(&buf[offset + 7], &emu->mmu->mode_reg, 1);
-    // memcpy(&buf[offset + 8], &emu->mmu->rtc_mapped, 1);
-    // memcpy(&buf[offset + 9], &emu->mmu->romb0_reg, 1);
-    // memcpy(&buf[offset + 10], &emu->mmu->romb1_reg, 1);
-
-    // memcpy(&buf[offset + 11], &emu->mmu->has_eram, 1);
-    // memcpy(&buf[offset + 12], &emu->mmu->has_battery, 1);
-    // memcpy(&buf[offset + 13], &emu->mmu->has_rumble, 1);
-    // memcpy(&buf[offset + 14], &emu->mmu->has_rtc, 1);
-    // offset += 15;
-
-    // memcpy(&buf[offset], &emu->mmu->rtc.latched_s, 1);
-    // memcpy(&buf[offset + 1], &emu->mmu->rtc.latched_m, 1);
-    // memcpy(&buf[offset + 2], &emu->mmu->rtc.latched_h, 1);
-    // memcpy(&buf[offset + 3], &emu->mmu->rtc.latched_dl, 1);
-    // memcpy(&buf[offset + 4], &emu->mmu->rtc.latched_dh, 1);
-    // memcpy(&buf[offset + 5], &emu->mmu->rtc.s, 1);
-    // memcpy(&buf[offset + 6], &emu->mmu->rtc.m, 1);
-    // memcpy(&buf[offset + 7], &emu->mmu->rtc.h, 1);
-    // memcpy(&buf[offset + 8], &emu->mmu->rtc.dl, 1);
-    // memcpy(&buf[offset + 9], &emu->mmu->rtc.dh, 1);
-    // memcpy(&buf[offset + 10], &emu->mmu->rtc.enabled, 1);
-    // memcpy(&buf[offset + 11], &emu->mmu->rtc.reg, 1);
-    // memcpy(&buf[offset + 12], &emu->mmu->rtc.latch, 1);
-    // memcpy(&buf[offset + 13], &emu->mmu->rtc.rtc_cycles, 4);
-
-    // return buf;
-    return NULL;
-}
-
-void mmu_unserialize(emulator_t *emu, byte_t *buf) {
-    // size_t offset = 0;
-    // memcpy(emu->mmu->mem, buf, sizeof(emu->mmu->mem));
-    // offset += sizeof(emu->mmu->mem);
-
-    // size_t eram_len = 0x2000 * emu->mmu->eram_banks;
-    // memcpy(emu->mmu->eram, &buf[offset], eram_len);
-    // offset += eram_len;
-
-    // if (emu->mode == CGB) {
-    //     size_t wram_extra_len = sizeof(emu->mmu->wram_extra);
-    //     memcpy(emu->mmu->wram_extra, &buf[offset], wram_extra_len);
-    //     offset += wram_extra_len;
-
-    //     size_t vram_extra_len = sizeof(emu->mmu->vram_extra);
-    //     memcpy(emu->mmu->vram_extra, &buf[offset], vram_extra_len);
-    //     offset += vram_extra_len;
-
-    //     size_t cram_bg_len = sizeof(emu->mmu->cram_bg);
-    //     memcpy(emu->mmu->cram_bg, &buf[offset], cram_bg_len);
-    //     offset += cram_bg_len;
-    //     size_t cram_obj_len = sizeof(emu->mmu->cram_obj);
-    //     memcpy(emu->mmu->cram_obj, &buf[offset], cram_obj_len);
-    //     offset += cram_obj_len;
-
-    //     size_t hdma_len = 8;
-    //     memcpy(&emu->mmu->hdma.step, &buf[offset], 1);
-    //     memcpy(&emu->mmu->hdma.hdma_ly, &buf[offset + 1], 1);
-    //     memcpy(&emu->mmu->hdma.lock_cpu, &buf[offset + 2], 1);
-    //     memcpy(&emu->mmu->hdma.type, &buf[offset + 3], 1);
-    //     memcpy(&emu->mmu->hdma.src_address, &buf[offset + 4], 2);
-    //     memcpy(&emu->mmu->hdma.dest_address, &buf[offset + 6], 2);
-    //     offset += hdma_len;
-    // }
-
-    // size_t starting_status_size = sizeof(emu->mmu->oam_dma.starting_statuses);
-    // memcpy(&emu->mmu->oam_dma.starting_statuses, &buf[offset], starting_status_size);
-    // memcpy(&emu->mmu->oam_dma.starting_count, &buf[offset + starting_status_size], 1);
-    // memcpy(&emu->mmu->oam_dma.progress, &buf[offset + starting_status_size + 1], 2);
-    // memcpy(&emu->mmu->oam_dma.src_address, &buf[offset + starting_status_size + 3], 2);
-    // offset += starting_status_size + 5;
-
-    // memcpy(&emu->mmu->mbc, &buf[offset], 1);
-    // memcpy(&emu->mmu->rom_banks, &buf[offset + 1], 2);
-    // memcpy(&emu->mmu->eram_banks, &buf[offset + 3], 1);
-    // memcpy(&emu->mmu->ramg_reg, &buf[offset + 4], 1);
-    // memcpy(&emu->mmu->bank1_reg, &buf[offset + 5], 1);
-    // memcpy(&emu->mmu->bank2_reg, &buf[offset + 6], 1);
-    // memcpy(&emu->mmu->mode_reg, &buf[offset + 7], 1);
-    // memcpy(&emu->mmu->rtc_mapped, &buf[offset + 8], 1);
-    // memcpy(&emu->mmu->romb0_reg, &buf[offset + 9], 1);
-    // memcpy(&emu->mmu->romb1_reg, &buf[offset + 10], 1);
-
-    // // reset bank and eram pointers
-    // switch (emu->mmu->mbc) {
-    // case MBC1:
-    //     mbc1_set_bank_addrs(emu->mmu, 5);
-    //     break;
-    // case MBC1M:
-    //     mbc1_set_bank_addrs(emu->mmu, 4);
-    //     break;
-    // case MBC2:
-    //     emu->mmu->eram_bank_addr = emu->mmu->eram - ERAM;
-    //     emu->mmu->rom_bankn_addr = &emu->mmu->cartridge[(emu->mmu->bank1_reg - 1) * ROM_BANK_SIZE];
-    //     break;
-    // case MBC3:
-    // case MBC30:
-    //     emu->mmu->eram_bank_addr = &emu->mmu->eram[emu->mmu->bank2_reg * ERAM_BANK_SIZE] - ERAM;
-    //     emu->mmu->rom_bankn_addr = &emu->mmu->cartridge[(emu->mmu->bank1_reg - 1) * ROM_BANK_SIZE];
-    //     break;
-    // }
-
-    // memcpy(&emu->mmu->has_eram, &buf[offset + 11], 1);
-    // memcpy(&emu->mmu->has_battery, &buf[offset + 12], 1);
-    // memcpy(&emu->mmu->has_rumble, &buf[offset + 13], 1);
-    // memcpy(&emu->mmu->has_rtc, &buf[offset + 14], 1);
-    // offset += 15;
-
-    // memcpy(&emu->mmu->rtc.latched_s, &buf[offset], 1);
-    // memcpy(&emu->mmu->rtc.latched_m, &buf[offset + 1], 1);
-    // memcpy(&emu->mmu->rtc.latched_h, &buf[offset + 2], 1);
-    // memcpy(&emu->mmu->rtc.latched_dl, &buf[offset + 3], 1);
-    // memcpy(&emu->mmu->rtc.latched_dh, &buf[offset + 4], 1);
-    // memcpy(&emu->mmu->rtc.s, &buf[offset + 5], 1);
-    // memcpy(&emu->mmu->rtc.m, &buf[offset + 6], 1);
-    // memcpy(&emu->mmu->rtc.h, &buf[offset + 7], 1);
-    // memcpy(&emu->mmu->rtc.dl, &buf[offset + 8], 1);
-    // memcpy(&emu->mmu->rtc.dh, &buf[offset + 9], 1);
-    // memcpy(&emu->mmu->rtc.enabled, &buf[offset + 10], 1);
-    // memcpy(&emu->mmu->rtc.reg, &buf[offset + 11], 1);
-    // memcpy(&emu->mmu->rtc.latch, &buf[offset + 12], 1);
-    // memcpy(&emu->mmu->rtc.rtc_cycles, &buf[offset + 13], 4);
-}
+#define X(value) UNSERIALIZE(value);
+UNSERIALIZER_FUNCTION(mmu_t, mmu,
+    SERIALIZED_MEMBERS
+)
+#undef X

@@ -397,7 +397,7 @@ void link_client_connected(GObject *client, GAsyncResult *res, gpointer user_dat
         is_connected = TRUE;
         show_toast("Link cable connected");
     } else {
-        eprintf("%s", err->message);
+        eprintf("%s\n", err->message);
         show_toast(err->message);
         g_error_free(err);
     }
