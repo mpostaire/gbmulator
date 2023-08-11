@@ -1127,6 +1127,8 @@ void mmu_write(emulator_t *emu, word_t address, byte_t data) {
     mmu_write_io_src(emu, address, data, IO_SRC_CPU);
 }
 
+// TODO this makes large (> 100KiB) savestate files because it ignores unsused rom, eram, wram, vram banks: most roms won't use them all
+//      --> implement dynamic allocation for these + dynamic serialization/deserialization
 #define SERIALIZED_MEMBERS       \
     X(rom_size)                  \
     X(rom)                       \
