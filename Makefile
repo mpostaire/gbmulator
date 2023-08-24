@@ -75,15 +75,23 @@ debug_android: android
 	cd $(SDIR)/platform/android/android-project && ./gradlew installDebug
 	adb shell am start -n io.github.mpostaire.gbmulator/.MainMenu
 
+web_build:
+	mkdir -p web_build
+
+web_build/favicon.png: $(SDIR)/platform/web/favicon.png
+	cp $^ $@
+web_build/style.css: $(SDIR)/platform/web/style.css
+	cp $^ $@
+
 web: CC:=emcc
 web: LDLIBS:=
 web: CFLAGS+=-sUSE_SDL=2 -sUSE_ZLIB=1
-web: $(PLATFORM_ODIR_STRUCTURE) docs docs/index.html
+web: $(PLATFORM_ODIR_STRUCTURE) web_build web_build/favicon.png web_build/style.css web_build/index.html
 
 debug_web: web
-	emrun docs/index.html
+	emrun web_build/index.html
 
-docs/index.html: $(SDIR)/platform/web/template.html $(OBJ)
+web_build/index.html: $(SDIR)/platform/web/template.html $(OBJ)
 	$(CC) -o $@ $(OBJ) $(CFLAGS) -sABORTING_MALLOC=0 -sINITIAL_MEMORY=32MB -sWASM=1 -sEXPORTED_RUNTIME_METHODS=[ccall] -sASYNCIFY --shell-file $<
 
 test:
@@ -120,9 +128,6 @@ $(ODIR)/bootroms/%: $(SDIR)/bootroms/%.asm $(ODIR)/bootroms/gbmulator_logo.pb8 $
 	dd if=$@.tmp2 of=$@ count=1 bs=$(if $(findstring dmg,$@),256,2304)
 	@rm $@.tmp $@.tmp2
 #
-
-docs:
-	mkdir -p $@
 
 $(ICONS): $(ICONDIR)/$(BIN).svg
 	mkdir -p $(ICONDIR)/$(patsubst $(ICONDIR)/%/$(BIN).png,%,$@)
