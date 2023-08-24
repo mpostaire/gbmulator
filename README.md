@@ -1,7 +1,7 @@
 # GBmulator
 A Game Boy Color emulator with sound and wireless link cable support.
 
-You can compile and run it on your linux machine or use it in your browser [here](https://mpostaire.github.io/gbmulator) (Note: the browser version doesn't have link cable support).
+You can compile and run it on your linux machine or use it in your browser [here](https://mpostaire.github.io/gbmulator) (Note: the browser version does not have support for the link cable).
 
 ## Screenshots
 
@@ -82,6 +82,7 @@ There is also support for gamepad controllers.
 ### TODO
 
 - implement MBC6, MBC7, HuC1 and multicart MBCs
+- find out what are the accurate timings for the ppu pixel fifo/fetcher (especially for corner cases)
 - better audio/video sync
 - android link cable via bluetooth + cross platform link cable
 - Maybe: web link cable using Emscripten WebSockets API (https://emscripten.org/docs/porting/networking.html and https://github.com/emscripten-core/emscripten/blob/main/system/include/emscripten/websocket.h. Example gist: https://gist.github.com/nus/564e9e57e4c107faa1a45b8332c265b9)
