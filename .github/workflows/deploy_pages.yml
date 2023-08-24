@@ -3,7 +3,7 @@ on: [push]
 permissions:
   contents: write
 env:
-  EM_VERSION: 3.1.45
+  EM_VERSION: 3.1.15
   EM_CACHE_FOLDER: 'emsdk-cache'
 jobs:
   build-and-deploy:
@@ -23,7 +23,7 @@ jobs:
             /usr/bin/rgbfix
             /usr/bin/rgbasm
           key: ${{ runner.os }}-rgbds-${{ hashFiles('/usr/bin/rgbasm', '/usr/bin/rgblink', '/usr/bin/rgbfix', '/usr/bin/rgbasm') }}
-      
+
       - name: Install rgbds
         run: |
           git clone https://github.com/gbdev/rgbds.git
