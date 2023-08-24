@@ -10,6 +10,16 @@ You can compile and run it on your linux machine or use it in your browser [here
 ![pokemon_gold](images/pokemon_gold.png)
 ![link_awakening](images/link_awakening.png)
 
+## Features
+
+- GameBoy and GameBoy Color emulator
+- PPU implements fifo rendering
+- Audio
+- Wireless link cable
+- Support for MBC1, MBC1M, MBC2, MBC3, MBC30 and MBC5 cartridges
+- Battery saves and savestates
+- Supports keyboard and gamepad controllers
+
 ## Installation
 
 Various dependencies are needed to build the desktop app:
@@ -69,19 +79,8 @@ The following table show the default keybindings (they can be changed in GBmulat
 
 There is also support for gamepad controllers.
 
-## Features
-
-- GameBoy and GameBoy Color emulator
-- PPU implements fifo rendering
-- Audio
-- Wireless link cable
-- Support for MBC1, MBC1M, MBC2, MBC3, MBC30 and MBC5 cartridges
-- Battery saves and savestates
-- Supports keyboard and gamepad controllers
-
 ### TODO
 
-- check that MBC3/MBC30 is accurate
 - implement MBC6, MBC7, HuC1 and multicart MBCs
 - better audio/video sync
 - android link cable via bluetooth + cross platform link cable
