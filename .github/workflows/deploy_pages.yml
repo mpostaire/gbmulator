@@ -13,7 +13,26 @@ jobs:
       - name: Checkout 🛎️
         uses: actions/checkout@v3
 
-      - name: Setup cache
+      - name: Cache rgbds
+        id: cache-rgbds
+        uses: actions/cache@v3
+        with:
+          path: |
+            /usr/bin/rgbasm
+            /usr/bin/rgblink
+            /usr/bin/rgbfix
+            /usr/bin/rgbasm
+          key: ${{ runner.os }}-rgbds-${{ hashFiles('/usr/bin/rgbasm', '/usr/bin/rgblink', '/usr/bin/rgbfix', '/usr/bin/rgbasm') }}
+      
+      - name: Install rgbds
+        run: |
+          git clone https://github.com/gbdev/rgbds.git
+          cd rgbds
+          make
+          sudo make install PREFIX=/usr
+        if: steps.cache-rgbds.output.cache-hit != 'true'
+
+      - name: Setup emscripten cache
         id: cache-system-libraries
         uses: actions/cache@v2
         with:
@@ -24,11 +43,11 @@ jobs:
           version: ${{env.EM_VERSION}}
           actions-cache-folder: ${{env.EM_CACHE_FOLDER}}
 
-      - name: Install and Build 🔧
+      - name: Install and Build gbmulator web
         run: |
           make web
 
-      - name: Deploy 🚀
+      - name: Deploy to github pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: web_build
