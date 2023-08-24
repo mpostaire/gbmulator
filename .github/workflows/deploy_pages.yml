@@ -13,23 +13,26 @@ jobs:
       - name: Checkout 🛎️
         uses: actions/checkout@v3
 
+      - name: Add $HOME/.local/bin to PATH
+        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+
       - name: Cache rgbds
         id: cache-rgbds
         uses: actions/cache@v3
         with:
           path: |
-            /usr/bin/rgbasm
-            /usr/bin/rgblink
-            /usr/bin/rgbfix
-            /usr/bin/rgbasm
-          key: ${{ runner.os }}-rgbds-${{ hashFiles('/usr/bin/rgbasm', '/usr/bin/rgblink', '/usr/bin/rgbfix', '/usr/bin/rgbasm') }}
+            $HOME/.local/bin/rgbasm
+            $HOME/.local/bin/rgblink
+            $HOME/.local/bin/rgbfix
+            $HOME/.local/bin/rgbgfx
+          key: ${{ runner.os }}-rgbds-${{ hashFiles('$HOME/.local/bin/rgbasm', '$HOME/.local/bin/rgblink', '$HOME/.local/bin/rgbfix', '$HOME/.local/bin/rgbgfx') }}
 
-      - name: Install rgbds
+      - name: Get and compile rgbds
         run: |
           git clone https://github.com/gbdev/rgbds.git
           cd rgbds
           make
-          sudo make install PREFIX=/usr
+          sudo make install PREFIX=$HOME/.local/
         if: steps.cache-rgbds.output.cache-hit != 'true'
 
       - name: Setup emscripten cache
