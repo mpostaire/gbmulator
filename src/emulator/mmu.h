@@ -160,11 +160,13 @@ typedef struct {
     byte_t boot_finished;
 
     struct {
-        byte_t step;
-        byte_t progress;
-        byte_t hdma_ly;
+        byte_t initializing; // 4 cycles of initialization delay
+        byte_t allow_hdma_block; // set to 1 while the current 0x10 bytes block of HDMA can be copied, else 0 (emu->mode == CGB is assumed)
         byte_t lock_cpu;
         byte_t type;
+        byte_t progress;
+        word_t src_address;
+        word_t dest_address;
     } hdma;
 
     struct {
@@ -217,9 +219,9 @@ int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size);
 
 void mmu_quit(emulator_t *emu);
 
-void mmu_step(emulator_t *emu);
+void dma_step(emulator_t *emu);
 
-void mmu_rtc_step(emulator_t *emu);
+void rtc_step(emulator_t *emu);
 
 /**
  * only used in cpu instructions (opcode execution)

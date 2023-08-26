@@ -525,6 +525,7 @@ static inline void drawing_step(emulator_t *emu) {
         PPU_SET_MODE(mmu, PPU_MODE_HBLANK);
         if (IS_HBLANK_IRQ_STAT_ENABLED(emu))
             CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
+        mmu->hdma.allow_hdma_block = mmu->hdma.type == HDMA && mmu->hdma.progress > 0;
     }
 }
 
@@ -658,6 +659,7 @@ void ppu_step(emulator_t *emu) {
             ppu->is_lcd_turning_on = 1;
 
             PPU_SET_MODE(mmu, PPU_MODE_HBLANK);
+            mmu->hdma.allow_hdma_block = mmu->hdma.type == HDMA && mmu->hdma.progress > 0;
             RESET_BIT(mmu->io_registers[STAT - IO], 2); // set LYC=LY to 0?
             ppu->wly = -1;
             reset_pixel_fetcher(ppu);

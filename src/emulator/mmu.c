@@ -8,8 +8,8 @@
 
 typedef enum {
     IO_SRC_CPU,
-    IO_SRC_OAM_DMA
-    // TODO more? or not useful at all?
+    IO_SRC_OAM_DMA,
+    IO_SRC_GDMA_HDMA
 } io_source_t;
 
 static inline byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_t io_src);
@@ -188,19 +188,18 @@ int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size) {
     memcpy(mmu->rom, rom_data, mmu->rom_size);
     emu->mmu = mmu;
 
-    if (parse_cartridge(emu)) {
+    if (parse_cartridge(emu))
         return 1;
-    } else {
-        mmu_quit(emu);
-        return 0;
-    }
+
+    mmu_quit(emu);
+    return 0;
 }
 
 void mmu_quit(emulator_t *emu) {
     free(emu->mmu);
 }
 
-void mmu_rtc_step(emulator_t *emu) {
+void rtc_step(emulator_t *emu) {
     rtc_t *rtc = &emu->mmu->rtc;
 
     if (IS_RTC_HALTED(rtc))
@@ -256,105 +255,80 @@ void mmu_rtc_step(emulator_t *emu) {
     SET_BIT(rtc->dh, 7); // set overflow bit
 }
 
-static inline void hdma_gdma_step(emulator_t *emu) {
+static inline byte_t gdma_hdma_copy_step(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
-    mmu->hdma.step += 4; // 4 cycles per step
 
-    if (mmu->hdma.type == GDMA) {
-        mmu->hdma.lock_cpu = 1;
+    // normal speed: one step is 4 cycles -> 2 cycles to copy 1 byte -> copy 2 bytes from src to dest
+    // double speed: one step is 8 cycles -> 4 cycles to copy 1 byte -> copy 1 byte from src to dest
+    for (byte_t i = 0; i < !IS_DOUBLE_SPEED(emu) + 1; i++) {
+        byte_t data = mmu_read_io_src(emu, mmu->hdma.src_address++, IO_SRC_GDMA_HDMA);
+        mmu_write_io_src(emu, mmu->hdma.dest_address++, data, IO_SRC_GDMA_HDMA);
 
-        // TODO 32 cycles to transfer 0x10 bytes (not affected by double speed)
-        // byte_t limit = IS_DOUBLE_SPEED(emu) ? 64 : 32;
-        // if (mmu->hdma.step >= limit) {
-        if (mmu->hdma.step >= 32) { // instead of doing the 0x10 bytes copy in one go after 32 cycles, do 1 byte per 2 cycles (with read on 1st cycle and write on 2nd?)
-            mmu->hdma.step = 0;
+        // printf("copy %x from %x to %x\n", data, mmu->hdma.src_address - 1, mmu->hdma.dest_address - 1);
 
-            word_t src_address = ((mmu->io_registers[HDMA1 - IO] << 8) | mmu->io_registers[HDMA2 - IO]) & 0xFFF0;
-            word_t dest_address = 0x8000 | (((mmu->io_registers[HDMA3 - IO] << 8) | mmu->io_registers[HDMA4 - IO]) & 0x1FF0);
-
-            // copy a block of 16 bytes from src to dest
-            for (byte_t i = 0; i < 0x10; i++) {
-                // HDMA src and dest registers need to increase as the transfer progresses
-                // TODO not sure about the IO_SRC_CPU source here...
-                byte_t data = mmu_read(emu, src_address++);
-                mmu_write(emu, dest_address++, data);
-
-                // TODO both if statements below should be above the mmu_read and mmu_write calls?
-                // TODO src can't be inside vram, is this the correct way to handle this case?
-                if (src_address >= VRAM && src_address < ERAM)
-                    src_address += ERAM - src_address;
-
-                if (dest_address >= ERAM) // vram overflow
-                    dest_address = 0; // TODO accurate?
-            }
-
-            mmu->io_registers[HDMA1 - IO] = src_address >> 8;
-            mmu->io_registers[HDMA2 - IO] = src_address & 0xF0;
-            mmu->io_registers[HDMA3 - IO] = (dest_address >> 8) & 0x1F;
-            mmu->io_registers[HDMA4 - IO] = dest_address & 0xF0;
-
-            mmu->io_registers[HDMA5 - IO] = (mmu->io_registers[HDMA5 - IO] & 0x80) | (GBC_GDMA_HDMA_LENGTH(mmu) - 1);
-            mmu->hdma.progress--;
-
-            if (mmu->hdma.progress == 0) {
-                mmu->hdma.lock_cpu = 0;
-                mmu->io_registers[HDMA5 - IO] = 0xFF;
-            }
+        if (mmu->hdma.dest_address >= ERAM) { // vram overflow stops prematurely the transfer
+            mmu->hdma.progress = 0;
+            break;
         }
-    } else if (IS_LCD_ENABLED(emu) && PPU_IS_MODE(emu, PPU_MODE_HBLANK) && mmu->hdma.hdma_ly == mmu->io_registers[LY - IO]) {
-        // TODO hdma still not perfect? pokemon crystal has some visual glitches when displaying menus/text windows
-        // TODO vram viewer like bgb to see what's happening in vram for these glitches to happen
+    }
 
-        // TODO lock_cpu true here but false just below --> locks cpu while transfer of 32 cycles in progress
-        //      BUT what about the case where HBLANK finises in the middle of a 0x10 bytes transfer?
-        //      ---> maybe we need to unlock the cpu and finish later (in this case reset mmu->hdma.step?)
-        mmu->hdma.lock_cpu = 1;
+    if (!(mmu->hdma.src_address & 0x000F)) { // a block of 0x10 bytes has been copied
+        mmu->io_registers[HDMA5 - IO] = (GBC_GDMA_HDMA_LENGTH(mmu) - 1) & 0x7F;
+        mmu->hdma.progress--;
 
-        // 32 cycles to transfer 0x10 bytes
-        if (mmu->hdma.step >= 32) { // instead of doing the 0x10 bytes copy in one go after 32 cycles, do 1 byte per 2 cycles (with read on 1st cycle and write on 2nd?)
-            mmu->hdma.step = 0;
+        // HDMA src and dest registers need to increase as the transfer progresses
+        mmu->io_registers[HDMA1 - IO] = mmu->hdma.src_address >> 8;
+        mmu->io_registers[HDMA2 - IO] = mmu->hdma.src_address & 0xF0;
+        mmu->io_registers[HDMA3 - IO] = (mmu->hdma.dest_address >> 8) & 0x1F;
+        mmu->io_registers[HDMA4 - IO] = mmu->hdma.dest_address & 0xF0;
 
-            word_t src_address = ((mmu->io_registers[HDMA1 - IO] << 8) | mmu->io_registers[HDMA2 - IO]) & 0xFFF0;
-            word_t dest_address = 0x8000 | (((mmu->io_registers[HDMA3 - IO] << 8) | mmu->io_registers[HDMA4 - IO]) & 0x1FF0);
+        return 1;
+    }
 
-            mmu->hdma.hdma_ly++;
-            if (mmu->hdma.hdma_ly == GB_SCREEN_HEIGHT)
-                mmu->hdma.hdma_ly = 0;
+    return 0;
+}
 
-            // copy a block of 16 bytes from src to dest
-            for (byte_t i = 0; i < 0x10; i++) {
-                // HDMA src and dest registers need to increase as the transfer progresses
-                // TODO not sure about the IO_SRC_CPU source here...
-                byte_t data = mmu_read(emu, src_address++);
-                mmu_write(emu, dest_address++, data);
+static inline void gdma_hdma_step(emulator_t *emu) {
+    mmu_t *mmu = emu->mmu;
 
-                // TODO both if statements below should be above the mmu_read and mmu_write calls?
-                // TODO src can't be inside vram, is this the correct way to handle this case?
-                if (src_address >= VRAM && src_address < ERAM)
-                    src_address += ERAM - src_address;
+    if (mmu->hdma.progress == 0)
+        return;
 
-                if (dest_address >= ERAM) // vram overflow
-                    dest_address = 0; // TODO accurate?
-            }
+    if (mmu->hdma.initializing) {
+        mmu->hdma.initializing = 0;
+        return;
+    }
 
-            mmu->io_registers[HDMA1 - IO] = src_address >> 8;
-            mmu->io_registers[HDMA2 - IO] = src_address & 0xF0;
-            mmu->io_registers[HDMA3 - IO] = (dest_address >> 8) & 0x1F;
-            mmu->io_registers[HDMA4 - IO] = dest_address & 0xF0;
+    switch (mmu->hdma.type) {
+    case GDMA:
+        // cpu locked as soon as GDMA was requested, don't need to lock it here
+        gdma_hdma_copy_step(emu);
 
-            mmu->io_registers[HDMA5 - IO] = (mmu->io_registers[HDMA5 - IO] & 0x80) | (GBC_GDMA_HDMA_LENGTH(mmu) - 1);
-            mmu->hdma.progress--;
-
+        if (mmu->hdma.progress == 0) { // finished copying?
             mmu->hdma.lock_cpu = 0;
-
-            if (mmu->hdma.progress == 0) {
-                mmu->io_registers[HDMA5 - IO] = 0xFF;
-            }
+            mmu->io_registers[HDMA5 - IO] = 0xFF;
         }
+        break;
+    case HDMA:
+        if (!mmu->hdma.allow_hdma_block || emu->cpu->halt) // HDMA can't work while cpu is halted
+            return;
+
+        // locks cpu while transfer of 0x10 byte block in progress
+        mmu->hdma.lock_cpu = 1;
+
+        if (gdma_hdma_copy_step(emu)) {
+            // one block of 0x10 bytes has been copied
+            mmu->hdma.lock_cpu = 0;
+            mmu->hdma.allow_hdma_block = 0;
+
+            if (mmu->hdma.progress == 0) // finished copying?
+                mmu->io_registers[HDMA5 - IO] = 0xFF;
+        }
+        break;
     }
 }
 
-void mmu_step(emulator_t *emu) {
+static inline void oam_dma_step(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
     // run oam dma initializations procedure if there are any starting oam dma
@@ -378,13 +352,16 @@ void mmu_step(emulator_t *emu) {
     }
 
     if (IS_OAM_DMA_RUNNING(mmu)) {
-        // oam dma step
+        // oam dma step (no need to call mmu_write_io_src() because dest can only be inside OAM and there are no access restrictions)
         mmu->oam[mmu->oam_dma.progress] = mmu_read_io_src(emu, mmu->oam_dma.src_address + mmu->oam_dma.progress, IO_SRC_OAM_DMA);
         mmu->oam_dma.progress++;
     }
+}
 
-    if (emu->mode == CGB && mmu->hdma.progress > 0)
-        hdma_gdma_step(emu);
+void dma_step(emulator_t *emu) {
+    oam_dma_step(emu);
+    if (emu->mode == CGB)
+        gdma_hdma_step(emu);
 }
 
 static inline void mbc1_set_bank_addrs(mmu_t *mmu, byte_t bank1_reg_size) {
@@ -598,7 +575,7 @@ static inline byte_t read_io_register(emulator_t *emu, word_t address) {
     case BANK: return 0xFF;
     case HDMA1 ... HDMA4: return 0xFF;
     case HDMA5: return emu->mode == CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
-    case RP: return 0xFF; // TODO GBC infrared LED
+    case RP: return emu->mode == CGB ? 0x3E : 0xFF; // TODO GBC infrared LED
     case 0xFF57 ... 0xFF67: return 0xFF;
     case BGPI: return emu->mode == CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
     case BGPD: {
@@ -852,30 +829,38 @@ static inline void write_io_register(emulator_t *emu, word_t address, byte_t dat
 
         // writing to this register starts a VRAM DMA transfer
 
-        if (!CHECK_BIT(mmu->io_registers[io_reg_addr], 7) && mmu->hdma.type == HDMA && GET_BIT(data, 7))
-            eprintf("TODO cancel HDMA\n"); // TODO cancel HDMA at next HBLANK
+        if (mmu->hdma.progress > 0 && mmu->hdma.type == HDMA && !GET_BIT(data, 7)) {
+            // cancel HDMA
+            mmu->hdma.progress = 0;
+            mmu->io_registers[io_reg_addr] = 0x80 | data;
+            return;
+        }
+        // if mmu->hdma.progress > 0 && mmu->hdma.type == HDMA && GET_BIT(data, 7)
+        // --> let the execution continue to restart HDMA
 
-        mmu->hdma.type = GET_BIT(data, 7);
-
-        // bit 7 of HDMA5 is 0 to show that there is an active HDMA/GDMA, bits 0-6 are the size of the DMA
+        // bit 7 of HDMA5 is always 0, bits 0-6 are the size of the DMA
         mmu->io_registers[io_reg_addr] = data & 0x7F;
         mmu->hdma.progress = mmu->io_registers[io_reg_addr] + 1;
 
-        mmu->hdma.step = 31; // TODO is this set to the correct value? why 31 and not 0?
-        // TODO there should be a 4 cycles delay to setup the transfer (maybe the 31 above was an attempt to do this but it doesn't works: it is too high)
-        if (mmu->hdma.type == HDMA) {
-            mmu->hdma.hdma_ly = mmu->io_registers[LY - IO] + 1; // start HDMA at next HBLANK
-            if (mmu->hdma.hdma_ly == GB_SCREEN_HEIGHT)
-                mmu->hdma.hdma_ly = 0;
+        // bit 7 of data is 0 if requesting GDMA, 1 if requesting HDMA
+        mmu->hdma.type = GET_BIT(data, 7);
+        if (mmu->hdma.type == GDMA) {
+            mmu->hdma.lock_cpu = 1;
+        } else { // HDMA
+            // Start HDMA now if we are in ppu HBLANK mode or if LCD is disabled.
+            // In the latter case, only the first 0x10 bytes block are copied, the rest are done at HBLANK once LCD turns on.
+            mmu->hdma.allow_hdma_block = PPU_IS_MODE(emu, PPU_MODE_HBLANK) || !IS_LCD_ENABLED(emu);
         }
 
-        // word_t src_address = ((mmu->io_registers[HDMA1 - IO] << 8) | mmu->io_registers[HDMA2 - IO]) & 0xFFF0;
-        // word_t dest_address = /*0x8000 | */(((mmu->io_registers[HDMA3 - IO] << 8) | mmu->io_registers[HDMA4 - IO]) & 0x1FF0);
-        // if (mmu->hdma.type) { // HBLANK DMA (HDMA)
-        //     printf("HDMA size=%d, vram bank=%d, wram bank n=%d, src=%x, dest=%x\n", (mmu->io_registers[io_reg_addr] + 1) * 0x10, GBC_CURRENT_VRAM_BANK(mmu), GBC_CURRENT_WRAM_BANK(mmu), src_address, dest_address + VRAM);
-        // } else { // General purpose DMA (GDMA)
-        //     printf("GDMA size=%d, vram bank=%d, wram bank n=%d, src=%x, dest=%x\n", (mmu->io_registers[io_reg_addr] + 1) * 0x10, GBC_CURRENT_VRAM_BANK(mmu), GBC_CURRENT_WRAM_BANK(mmu), src_address, dest_address + VRAM);
-        // }
+        mmu->hdma.src_address = ((mmu->io_registers[HDMA1 - IO] << 8) | mmu->io_registers[HDMA2 - IO]) & 0xFFF0;
+        mmu->hdma.dest_address = 0x8000 | (((mmu->io_registers[HDMA3 - IO] << 8) | mmu->io_registers[HDMA4 - IO]) & 0x1FF0);
+
+        mmu->hdma.initializing = 1;
+
+        // if (mmu->hdma.type) // HBLANK DMA (HDMA)
+        //     printf("HDMA size=%d (%d blocs), vram bank=%d, wram bank n=%d, src=%x, dest=%x\n", (mmu->io_registers[io_reg_addr] + 1) * 0x10, mmu->io_registers[io_reg_addr] + 1, GBC_CURRENT_VRAM_BANK(mmu), GBC_CURRENT_WRAM_BANK(mmu), mmu->hdma.src_address, mmu->hdma.dest_address);
+        // else // General purpose DMA (GDMA)
+        //     printf("GDMA size=%d (%d blocs), vram bank=%d, wram bank n=%d, src=%x, dest=%x\n", (mmu->io_registers[io_reg_addr] + 1) * 0x10, mmu->io_registers[io_reg_addr] + 1, GBC_CURRENT_VRAM_BANK(mmu), GBC_CURRENT_WRAM_BANK(mmu), mmu->hdma.src_address, mmu->hdma.dest_address);
         break;
     case BGPD:
         if (emu->mode == DMG)
@@ -943,7 +928,6 @@ static inline void write_io_register(emulator_t *emu, word_t address, byte_t dat
 }
 
 static inline byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_t io_src) {
-    // TODO check old mmu_read function to compare missing features
     mmu_t *mmu = emu->mmu;
 
     switch (address & 0xF000) {
@@ -966,6 +950,9 @@ static inline byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_
         return mmu->rom[mmu->rom_bankn_addr + address];
     case VRAM:
     case VRAM + 0x1000:
+        // TODO src can be inside vram but it reads incorrect data: see TCAGBD.pdf for more details
+        if (io_src == IO_SRC_GDMA_HDMA)
+            return 0xFF;
         // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
         if (io_src == IO_SRC_CPU && IS_LCD_ENABLED(emu) && PPU_IS_MODE(emu, PPU_MODE_DRAWING))
             return 0xFF;
@@ -1004,7 +991,7 @@ static inline byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_
         // in most cases echo ram is only E000-FDFF. 
         // oam dma is one of the exceptions here which have the entire E000-FFFF
         // region as echo ram for dma source (therefore only for memory reads by the oam dma)
-        if (address < OAM || io_src == IO_SRC_OAM_DMA) // we are still in ECHO ram
+        if (address < OAM || io_src == IO_SRC_OAM_DMA || io_src == IO_SRC_GDMA_HDMA) // we are still in ECHO ram
             return mmu->wram[(mmu->wram_bankn_addr_offset - (ECHO - WRAM_BANK0)) + address];
 
         if (address < UNUSABLE) { // we are in OAM
@@ -1039,7 +1026,6 @@ static inline byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_
 }
 
 static inline void mmu_write_io_src(emulator_t *emu, word_t address, byte_t data, io_source_t io_src) {
-    // TODO check old mmu_write function to compare missing features
     mmu_t *mmu = emu->mmu;
 
     switch (address & 0xF000) {
@@ -1142,11 +1128,13 @@ void mmu_write(emulator_t *emu, word_t address, byte_t data) {
     X(cram_bg)                   \
     X(cram_obj)                  \
     X(boot_finished)             \
-    X(hdma.step)                 \
-    X(hdma.progress)             \
-    X(hdma.hdma_ly)              \
+    X(hdma.initializing)         \
+    X(hdma.allow_hdma_block)     \
     X(hdma.lock_cpu)             \
     X(hdma.type)                 \
+    X(hdma.progress)             \
+    X(hdma.src_address)          \
+    X(hdma.dest_address)         \
     X(oam_dma.starting_statuses) \
     X(oam_dma.starting_count)    \
     X(oam_dma.progress)          \
