@@ -24,31 +24,31 @@ void timer_step(emulator_t *emu) {
         timer->tima_loading_value = -2;
     } else if (timer->tima_loading_value >= 0) {
         // finish TIMA loading if TIMA was being loaded
-        mmu->mem[TIMA] = timer->tima_loading_value;
+        mmu->io_registers[TIMA - IO] = timer->tima_loading_value;
         timer->tima_loading_value = -1;
         CPU_REQUEST_INTERRUPT(emu, IRQ_TIMER);
     }
 
     // DIV register incremented at 16384 Hz (every 256 cycles)
-    word_t div = (mmu->mem[DIV] << 8) | mmu->mem[DIV_LSB];
+    word_t div = (mmu->io_registers[DIV - IO] << 8) | mmu->io_registers[DIV_LSB - IO];
     div += 4; // each step is 4 cycles
-    mmu->mem[DIV_LSB] = div & 0x00FF;
-    mmu->mem[DIV] = div >> 8;
+    mmu->io_registers[DIV_LSB - IO] = div & 0x00FF;
+    mmu->io_registers[DIV - IO] = div >> 8;
 
-    byte_t tima_signal = CHECK_BIT(div, timer->tima_increase_div_bit) && CHECK_BIT(mmu->mem[TAC], 2);
+    byte_t tima_signal = CHECK_BIT(div, timer->tima_increase_div_bit) && CHECK_BIT(mmu->io_registers[TAC - IO], 2);
 
     if (falling_edge_detector(timer, tima_signal)) {
         // increase TIMA (and handle its overflow)
-        if (mmu->mem[TIMA] == 0xFF) { // TIMA is about to overflow
+        if (mmu->io_registers[TIMA - IO] == 0xFF) { // TIMA is about to overflow
             // If a TMA write is executed on the same step as the content of TMA
             // is transferred to TIMA due to a timer overflow, the old value of TMA is transferred to TIMA.
-            timer->tima_loading_value = timer->old_tma >= 0 ? timer->old_tma : mmu->mem[TMA];
+            timer->tima_loading_value = timer->old_tma >= 0 ? timer->old_tma : mmu->io_registers[TMA - IO];
 
             // TIMA has a value of 0x00 for 4 cycles. Delay TIMA loading until next timer_step() call.
             // Timer interrupt is also delayed for 4 cycles.
-            mmu->mem[TIMA] = 0x00;
+            mmu->io_registers[TIMA - IO] = 0x00;
         } else {
-            mmu->mem[TIMA]++;
+            mmu->io_registers[TIMA - IO]++;
         }
     }
 

@@ -16,12 +16,12 @@ byte_t joypad_get_input(emulator_t *emu) {
     joypad_t *joypad = emu->joypad;
     mmu_t *mmu = emu->mmu;
 
-    if (!CHECK_BIT(mmu->mem[P1], 4))
-        return 0xC0 | (mmu->mem[P1] & 0xF0) | joypad->direction;
-    else if (!CHECK_BIT(mmu->mem[P1], 5))
-        return 0xC0 | (mmu->mem[P1] & 0xF0) | joypad->action;
-    else if (!CHECK_BIT(mmu->mem[P1], 4) && (!CHECK_BIT(mmu->mem[P1], 5)))
-        return 0xC0 | (mmu->mem[P1] & 0xF0) | joypad->direction | joypad->action;
+    if (!CHECK_BIT(mmu->io_registers[P1 - IO], 4))
+        return 0xC0 | (mmu->io_registers[P1 - IO] & 0xF0) | joypad->direction;
+    else if (!CHECK_BIT(mmu->io_registers[P1 - IO], 5))
+        return 0xC0 | (mmu->io_registers[P1 - IO] & 0xF0) | joypad->action;
+    else if (!CHECK_BIT(mmu->io_registers[P1 - IO], 4) && (!CHECK_BIT(mmu->io_registers[P1 - IO], 5)))
+        return 0xC0 | (mmu->io_registers[P1 - IO] & 0xF0) | joypad->direction | joypad->action;
     else
         return 0xFF;
 }
@@ -36,7 +36,7 @@ void joypad_press(emulator_t *emu, joypad_button_t key) {
     case JOYPAD_UP:
     case JOYPAD_DOWN:
         RESET_BIT(joypad->direction, key);
-        if (!CHECK_BIT(mmu->mem[P1], 4))
+        if (!CHECK_BIT(mmu->io_registers[P1 - IO], 4))
             CPU_REQUEST_INTERRUPT(emu, IRQ_JOYPAD);
         break;
     case JOYPAD_A:
@@ -44,7 +44,7 @@ void joypad_press(emulator_t *emu, joypad_button_t key) {
     case JOYPAD_SELECT:
     case JOYPAD_START:
         RESET_BIT(joypad->action, key - 4);
-        if (!CHECK_BIT(mmu->mem[P1], 5))
+        if (!CHECK_BIT(mmu->io_registers[P1 - IO], 5))
             CPU_REQUEST_INTERRUPT(emu, IRQ_JOYPAD);
         break;
     }

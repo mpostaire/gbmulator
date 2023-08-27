@@ -186,7 +186,7 @@ static void exchange_info(void) {
     out_pkt[0] = PKT_INFO;
     out_pkt[1] = emulator_get_mode(local_emu);
     #ifdef __HAVE_ZLIB__
-    // SET_BIT(out_pkt[1], 7); // TODO fix compression
+    SET_BIT(out_pkt[1], 7);
     #endif
 
     checksum = emulator_get_cartridge_checksum(local_emu);

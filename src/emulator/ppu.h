@@ -5,15 +5,15 @@
 #include "cpu.h"
 #include "serialize.h"
 
-#define PPU_GET_MODE(emu_ptr) ((emu_ptr)->mmu->mem[STAT] & 0x03)
+#define PPU_GET_MODE(emu_ptr) ((emu_ptr)->mmu->io_registers[STAT - IO] & 0x03)
 #define PPU_IS_MODE(emu_ptr, mode) (PPU_GET_MODE(emu_ptr) == (mode))
 
-#define IS_LCD_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->mem[LCDC], 7))
+#define IS_LCD_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->io_registers[LCDC - IO], 7))
 
-#define IS_LY_LYC_IRQ_STAT_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->mem[STAT], 6))
-#define IS_OAM_IRQ_STAT_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->mem[STAT], 5))
-#define IS_VBLANK_IRQ_STAT_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->mem[STAT], 4))
-#define IS_HBLANK_IRQ_STAT_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->mem[STAT], 3))
+#define IS_LY_LYC_IRQ_STAT_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->io_registers[STAT - IO], 6))
+#define IS_OAM_IRQ_STAT_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->io_registers[STAT - IO], 5))
+#define IS_VBLANK_IRQ_STAT_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->io_registers[STAT - IO], 4))
+#define IS_HBLANK_IRQ_STAT_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->io_registers[STAT - IO], 3))
 
 typedef enum {
     PPU_MODE_HBLANK,

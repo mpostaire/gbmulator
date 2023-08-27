@@ -149,11 +149,11 @@ static float channel_dac(emulator_t *emu, channel_t *c) {
         break;
     case APU_CHANNEL_3:
         if ((*c->NRx0 >> 7) /*&& APU_IS_CHANNEL_ENABLED(c->id)*/) { // if dac enabled and channel enabled -- TODO check why channel 3 enabled flag is not working properly
-            byte_t sample = emu->mmu->mem[WAVE_RAM + (c->wave_position / 2)];
+            byte_t sample = emu->mmu->io_registers[(WAVE_RAM - IO) + (c->wave_position / 2)];
             if (c->wave_position % 2 == 0) // TODO check if this works properly (I think it always reads the 2 nibbles as the same values)
                 sample >>= 4;
             sample &= 0x0F;
-            switch ((emu->mmu->mem[NR32] >> 5) & 0x03) {
+            switch ((emu->mmu->io_registers[NR32 - IO] >> 5) & 0x03) {
             case 0:
                 sample >>= 4; // mute
                 break;
@@ -237,16 +237,16 @@ void apu_step(emulator_t *emu) {
         if (apu->take_sample_cycles_count >= (GB_CPU_FREQ / GB_APU_SAMPLE_RATE) * emu->apu_speed) { // 44100 Hz (if speed == 1.0f)
             apu->take_sample_cycles_count = 0;
 
-            float S01_volume = ((mmu->mem[NR50] & 0x07) + 1) / 8.0f; // keep it between 0.0f and 1.0f
-            float S02_volume = (((mmu->mem[NR50] & 0x70) >> 4) + 1) / 8.0f; // keep it between 0.0f and 1.0f
-            float S01_output = ((CHECK_BIT(mmu->mem[NR51], APU_CHANNEL_1) ? channel_dac(emu, &apu->channel1) : 0.0f)
-                                + (CHECK_BIT(mmu->mem[NR51], APU_CHANNEL_2) ? channel_dac(emu, &apu->channel2) : 0.0f)
-                                + (CHECK_BIT(mmu->mem[NR51], APU_CHANNEL_3) ? channel_dac(emu, &apu->channel3) : 0.0f)
-                                + (CHECK_BIT(mmu->mem[NR51], APU_CHANNEL_4) ? channel_dac(emu, &apu->channel4) : 0.0f)) / 4.0f;
-            float S02_output = ((CHECK_BIT(mmu->mem[NR51], APU_CHANNEL_1 + 4) ? channel_dac(emu, &apu->channel1) : 0.0f)
-                                + (CHECK_BIT(mmu->mem[NR51], APU_CHANNEL_2 + 4) ? channel_dac(emu, &apu->channel2) : 0.0f)
-                                + (CHECK_BIT(mmu->mem[NR51], APU_CHANNEL_3 + 4) ? channel_dac(emu, &apu->channel3) : 0.0f)
-                                + (CHECK_BIT(mmu->mem[NR51], APU_CHANNEL_4 + 4) ? channel_dac(emu, &apu->channel4) : 0.0f)) / 4.0f;
+            float S01_volume = ((mmu->io_registers[NR50 - IO] & 0x07) + 1) / 8.0f; // keep it between 0.0f and 1.0f
+            float S02_volume = (((mmu->io_registers[NR50 - IO] & 0x70) >> 4) + 1) / 8.0f; // keep it between 0.0f and 1.0f
+            float S01_output = ((CHECK_BIT(mmu->io_registers[NR51 - IO], APU_CHANNEL_1) ? channel_dac(emu, &apu->channel1) : 0.0f)
+                                + (CHECK_BIT(mmu->io_registers[NR51 - IO], APU_CHANNEL_2) ? channel_dac(emu, &apu->channel2) : 0.0f)
+                                + (CHECK_BIT(mmu->io_registers[NR51 - IO], APU_CHANNEL_3) ? channel_dac(emu, &apu->channel3) : 0.0f)
+                                + (CHECK_BIT(mmu->io_registers[NR51 - IO], APU_CHANNEL_4) ? channel_dac(emu, &apu->channel4) : 0.0f)) / 4.0f;
+            float S02_output = ((CHECK_BIT(mmu->io_registers[NR51 - IO], APU_CHANNEL_1 + 4) ? channel_dac(emu, &apu->channel1) : 0.0f)
+                                + (CHECK_BIT(mmu->io_registers[NR51 - IO], APU_CHANNEL_2 + 4) ? channel_dac(emu, &apu->channel2) : 0.0f)
+                                + (CHECK_BIT(mmu->io_registers[NR51 - IO], APU_CHANNEL_3 + 4) ? channel_dac(emu, &apu->channel3) : 0.0f)
+                                + (CHECK_BIT(mmu->io_registers[NR51 - IO], APU_CHANNEL_4 + 4) ? channel_dac(emu, &apu->channel4) : 0.0f)) / 4.0f;
 
             // apply channel volume and global volume to its output
             S01_output = S01_output * S01_volume * emu->apu_sound_level;
@@ -284,33 +284,33 @@ void apu_init(emulator_t *emu) {
     apu->audio_buffer = xmalloc(apu->audio_buffer_sample_size * emu->apu_sample_count);
 
     apu->channel1 = (channel_t) {
-        .NRx0 = &emu->mmu->mem[NR10],
-        .NRx1 = &emu->mmu->mem[NR11],
-        .NRx2 = &emu->mmu->mem[NR12],
-        .NRx3 = &emu->mmu->mem[NR13],
-        .NRx4 = &emu->mmu->mem[NR14],
+        .NRx0 = &emu->mmu->io_registers[NR10 - IO],
+        .NRx1 = &emu->mmu->io_registers[NR11 - IO],
+        .NRx2 = &emu->mmu->io_registers[NR12 - IO],
+        .NRx3 = &emu->mmu->io_registers[NR13 - IO],
+        .NRx4 = &emu->mmu->io_registers[NR14 - IO],
         .id = APU_CHANNEL_1
     };
     apu->channel2 = (channel_t) { 
-        .NRx1 = &emu->mmu->mem[NR21],
-        .NRx2 = &emu->mmu->mem[NR22],
-        .NRx3 = &emu->mmu->mem[NR23],
-        .NRx4 = &emu->mmu->mem[NR24],
+        .NRx1 = &emu->mmu->io_registers[NR21 - IO],
+        .NRx2 = &emu->mmu->io_registers[NR22 - IO],
+        .NRx3 = &emu->mmu->io_registers[NR23 - IO],
+        .NRx4 = &emu->mmu->io_registers[NR24 - IO],
         .id = APU_CHANNEL_2
     };
     apu->channel3 = (channel_t) {
-        .NRx0 = &emu->mmu->mem[NR30],
-        .NRx1 = &emu->mmu->mem[NR31],
-        .NRx2 = &emu->mmu->mem[NR32],
-        .NRx3 = &emu->mmu->mem[NR33],
-        .NRx4 = &emu->mmu->mem[NR34],
+        .NRx0 = &emu->mmu->io_registers[NR30 - IO],
+        .NRx1 = &emu->mmu->io_registers[NR31 - IO],
+        .NRx2 = &emu->mmu->io_registers[NR32 - IO],
+        .NRx3 = &emu->mmu->io_registers[NR33 - IO],
+        .NRx4 = &emu->mmu->io_registers[NR34 - IO],
         .id = APU_CHANNEL_3
     };
     apu->channel4 = (channel_t) { 
-        .NRx1 = &emu->mmu->mem[NR41],
-        .NRx2 = &emu->mmu->mem[NR42],
-        .NRx3 = &emu->mmu->mem[NR43],
-        .NRx4 = &emu->mmu->mem[NR44],
+        .NRx1 = &emu->mmu->io_registers[NR41 - IO],
+        .NRx2 = &emu->mmu->io_registers[NR42 - IO],
+        .NRx3 = &emu->mmu->io_registers[NR43 - IO],
+        .NRx4 = &emu->mmu->io_registers[NR44 - IO],
         .LFSR = 0,
         .id = APU_CHANNEL_4
     };

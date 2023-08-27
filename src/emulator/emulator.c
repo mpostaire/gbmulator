@@ -45,16 +45,16 @@ const char *mbc_names[] = {
 int emulator_step(emulator_t *emu) {
     byte_t double_speed = IS_DOUBLE_SPEED(emu);
     for (int i = double_speed + 1; i; i--) {
-        // stop execution of the program while a VBLANK DMA is active
+        // stop execution of the program while a GDMA or HDMA is active
         if (!emu->mmu->hdma.lock_cpu)
             cpu_step(emu);
-        mmu_step(emu); // TODO only OAM DMA is double sped (break down mmu_step into mmu_oam_dma_step and mmu_vram_dma_step)
+        dma_step(emu);
         timer_step(emu);
         link_step(emu);
     }
 
     if (emu->mmu->has_rtc)
-        mmu_rtc_step(emu);
+        rtc_step(emu);
 
     // TODO during the time the cpu is blocked after a STOP opcode triggering a speed switch, the ppu and apu
     //      behave in a weird way: https://gbdev.io/pandocs/CGB_Registers.html?highlight=key1#ff4d--key1-cgb-mode-only-prepare-speed-switch
@@ -95,9 +95,9 @@ void emulator_quit(emulator_t *emu) {
 }
 
 void emulator_reset(emulator_t *emu, emulator_mode_t mode) {
-    size_t rom_size = emu->mmu->cartridge_size;
+    size_t rom_size = emu->mmu->rom_size;
     byte_t *rom_data = xmalloc(rom_size);
-    memcpy(rom_data, emu->mmu->cartridge, rom_size);
+    memcpy(rom_data, emu->mmu->rom, rom_size);
 
     emu->mode = 0;
     emulator_options_t opts;
@@ -136,7 +136,7 @@ void emulator_print_status(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
     char *ram_str = NULL;
-    if (mmu->has_eram && mmu->eram_banks > 0) {
+    if (mmu->eram_banks > 0) {
         ram_str = xmalloc(18);
         snprintf(ram_str, 17, " + %d RAM banks", mmu->eram_banks);
     }
@@ -221,7 +221,7 @@ int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
     if (!emu->mmu->has_battery || (!emu->mmu->has_rtc && emu->mmu->eram_banks == 0))
         return 0;
 
-    size_t eram_len = 0x2000 * emu->mmu->eram_banks;
+    size_t eram_len = emu->mmu->eram_banks * VRAM_BANK_SIZE;
 
     size_t rtc_len = 0;
     if (emu->mmu->has_rtc) {
@@ -372,6 +372,9 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
         return 0;
     }
 
+    if ((savestate_header->mode & 0x03) != emu->mode)
+        emulator_reset(emu, savestate_header->mode & 0x03);
+
     size_t savestate_data_len = length - sizeof(savestate_header_t);
     byte_t *savestate_data = xmalloc(savestate_data_len);
     memcpy(savestate_data, data + sizeof(savestate_header_t), savestate_data_len);
@@ -393,7 +396,7 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
         savestate_data_len = dest_len;
         savestate_data = dest;
         #else
-        eprintf("this binary isn't compiled with compressed savestates support\n");
+        eprintf("this binary isn't compiled with support for compressed savestates\n");
         free(savestate_header);
         free(savestate_data);
         return 0;
@@ -407,9 +410,6 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
         return 0;
     }
 
-    if ((savestate_header->mode & 0x03) != emu->mode)
-        emulator_reset(emu, savestate_header->mode & 0x03);
-
     size_t offset = 0;
     cpu_unserialize(emu, savestate_data);
     offset += cpu_len;
@@ -419,6 +419,7 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
     offset += link_len;
     ppu_unserialize(emu, &savestate_data[offset]);
     offset += ppu_len;
+    // TODO before we should be sure that the mmu structs are allocated to the correct size...
     mmu_unserialize(emu, &savestate_data[offset]);
 
     free(savestate_header);
@@ -439,7 +440,7 @@ void emulator_set_joypad_state(emulator_t *emu, byte_t state) {
     emu->joypad->action = (state >> 4) & 0x0F;
     emu->joypad->direction = state & 0x0F;
 
-    if (!CHECK_BIT(emu->mmu->mem[P1], 4) || !CHECK_BIT(emu->mmu->mem[P1], 5))
+    if (!CHECK_BIT(emu->mmu->io_registers[P1 - IO], 4) || !CHECK_BIT(emu->mmu->io_registers[P1 - IO], 5))
         CPU_REQUEST_INTERRUPT(emu, IRQ_JOYPAD);
 }
 
@@ -449,8 +450,8 @@ char *emulator_get_rom_title(emulator_t *emu) {
 
 byte_t *emulator_get_rom(emulator_t *emu, size_t *rom_size) {
     if (rom_size)
-        *rom_size = emu->mmu->cartridge_size;
-    return emu->mmu->cartridge;
+        *rom_size = emu->mmu->rom_size;
+    return emu->mmu->rom;
 }
 
 char *emulator_get_rom_title_from_data(byte_t *rom_data, size_t size) {
@@ -538,8 +539,8 @@ emulator_mode_t emulator_get_mode(emulator_t *emu) {
 
 word_t emulator_get_cartridge_checksum(emulator_t *emu) {
     word_t checksum = 0;
-    for (unsigned int i = 0; i < sizeof(emu->mmu->cartridge); i += 2)
-        checksum = checksum - (emu->mmu->cartridge[i] + emu->mmu->cartridge[i + 1]) - 1;
+    for (unsigned int i = 0; i < sizeof(emu->mmu->rom); i += 2)
+        checksum = checksum - (emu->mmu->rom[i] + emu->mmu->rom[i + 1]) - 1;
     return checksum;
 }
 

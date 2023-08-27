@@ -12,16 +12,16 @@
 // TODO read this: http://gameboy.mongenel.com/dmg/istat98.txt
 // TODO read this for fetcher timings: https://www.reddit.com/r/EmuDev/comments/s6cpis/comment/htlwkx9
 
-#define PPU_SET_MODE(mmu_ptr, mode) (mmu_ptr)->mem[STAT] = ((mmu_ptr)->mem[STAT] & 0xFC) | (mode)
+#define PPU_SET_MODE(mmu_ptr, mode) (mmu_ptr)->io_registers[STAT - IO] = ((mmu_ptr)->io_registers[STAT - IO] & 0xFC) | (mode)
 
-#define IS_PPU_WIN_ENABLED(mmu_ptr) (CHECK_BIT((mmu_ptr)->mem[LCDC], 5))
-#define IS_PPU_OBJ_TALL(mmu_ptr) (CHECK_BIT((mmu_ptr)->mem[LCDC], 2))
-#define IS_PPU_OBJ_ENABLED(mmu_ptr) (CHECK_BIT((mmu_ptr)->mem[LCDC], 1))
-#define IS_PPU_BG_WIN_ENABLED(mmu_ptr) (CHECK_BIT((mmu_ptr)->mem[LCDC], 0))
+#define IS_PPU_WIN_ENABLED(mmu_ptr) (CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 5))
+#define IS_PPU_OBJ_TALL(mmu_ptr) (CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 2))
+#define IS_PPU_OBJ_ENABLED(mmu_ptr) (CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 1))
+#define IS_PPU_BG_WIN_ENABLED(mmu_ptr) (CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 0))
 
-#define IS_PPU_BG_NORMAL_ADDRESS(mmu_ptr) CHECK_BIT((mmu_ptr)->mem[LCDC], 4)
+#define IS_PPU_BG_NORMAL_ADDRESS(mmu_ptr) CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 4)
 
-#define IS_CGB_COMPAT_MODE(mmu_ptr) ((((mmu_ptr)->mem[KEY0] >> 2) & 0x03) == 1)
+#define IS_CGB_COMPAT_MODE(mmu_ptr) ((((mmu_ptr)->io_registers[KEY0 - IO] >> 2) & 0x03) == 1)
 
 #define SET_PIXEL_DMG(emu_ptr, x, y, color)                                                                                       \
     do {                                                                                                                          \
@@ -58,7 +58,7 @@ byte_t dmg_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
 static inline dmg_color_t dmg_get_color(mmu_t *mmu, pixel_t *pixel, byte_t is_obj) {
     // return the color using the palette
     word_t palette_address = is_obj ? OBP0 + pixel->palette : BGP;
-    return (mmu->mem[palette_address] >> (pixel->color << 1)) & 0x03;
+    return (mmu->io_registers[palette_address - IO] >> (pixel->color << 1)) & 0x03;
 }
 
 /**
@@ -99,12 +99,12 @@ static inline void cgb_get_color(mmu_t *mmu, pixel_t *pixel, byte_t is_obj, byte
 void ppu_ly_lyc_compare(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
-    if (mmu->mem[LY] == mmu->mem[LYC]) {
-        SET_BIT(mmu->mem[STAT], 2);
+    if (mmu->io_registers[LY - IO] == mmu->io_registers[LYC - IO]) {
+        SET_BIT(mmu->io_registers[STAT - IO], 2);
         if (IS_LY_LYC_IRQ_STAT_ENABLED(emu))
             CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
     } else {
-        RESET_BIT(mmu->mem[STAT], 2);
+        RESET_BIT(mmu->io_registers[STAT - IO], 2);
     }
 }
 
@@ -115,20 +115,20 @@ static inline byte_t cgb_get_bg_win_tile_attributes(emulator_t *emu) {
     word_t tile_id_address;
     switch (ppu->pixel_fetcher.mode) {
     case FETCH_BG: {
-        byte_t ly_scy = mmu->mem[LY] + mmu->mem[SCY]; // addition carried out in 8 bits (== result % 256)
-        byte_t fetcher_x_scx = ppu->pixel_fetcher.x + mmu->mem[SCX]; // addition carried out in 8 bits (== result % 256)
-        tile_id_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 3) << 10) | ((ly_scy / 8) << 5) | ((fetcher_x_scx / 8) & 0x1F);
+        byte_t ly_scy = mmu->io_registers[LY - IO] + mmu->io_registers[SCY - IO]; // addition carried out in 8 bits (== result % 256)
+        byte_t fetcher_x_scx = ppu->pixel_fetcher.x + mmu->io_registers[SCX - IO]; // addition carried out in 8 bits (== result % 256)
+        tile_id_address = 0x9800 | (GET_BIT(mmu->io_registers[LCDC - IO], 3) << 10) | ((ly_scy / 8) << 5) | ((fetcher_x_scx / 8) & 0x1F);
         break;
     }
     case FETCH_WIN:
-        tile_id_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 6) << 10) | (((ppu->wly / 8) & 0x1F) << 5) | ((ppu->pixel_fetcher.x / 8) & 0x1F);
+        tile_id_address = 0x9800 | (GET_BIT(mmu->io_registers[LCDC - IO], 6) << 10) | (((ppu->wly / 8) & 0x1F) << 5) | ((ppu->pixel_fetcher.x / 8) & 0x1F);
         break;
     default:
         eprintf("this function can't be used for objs");
         exit(EXIT_FAILURE);
         break;
     }
-    return mmu->vram_extra[tile_id_address - VRAM];
+    return mmu->vram[tile_id_address - VRAM + VRAM_BANK_SIZE]; // read inside VRAM bank 1
 }
 
 // TODO if the ppu vram access is blocked, the tile id, tile map, etc. reads are 0xFF
@@ -136,8 +136,8 @@ static inline word_t get_bg_tiledata_address(emulator_t *emu, byte_t is_high, by
     mmu_t *mmu = emu->mmu;
     ppu_t *ppu = emu->ppu;
 
-    byte_t bit_12 = !((mmu->mem[LCDC] & 0x10) || (ppu->pixel_fetcher.current_tile_id & 0x80));
-    byte_t ly_scy = mmu->mem[LY] + mmu->mem[SCY]; // addition carried out in 8 bits (== result % 256)
+    byte_t bit_12 = !((mmu->io_registers[LCDC - IO] & 0x10) || (ppu->pixel_fetcher.current_tile_id & 0x80));
+    byte_t ly_scy = mmu->io_registers[LY - IO] + mmu->io_registers[SCY - IO]; // addition carried out in 8 bits (== result % 256)
     if (flip_y)
         ly_scy = ~ly_scy;
     ly_scy &= 0x07; // modulo 8
@@ -148,7 +148,7 @@ static inline word_t get_win_tiledata_address(emulator_t *emu, byte_t is_high, b
     mmu_t *mmu = emu->mmu;
     ppu_t *ppu = emu->ppu;
 
-    byte_t bit_12 = !((mmu->mem[LCDC] & 0x10) || (ppu->pixel_fetcher.current_tile_id & 0x80));
+    byte_t bit_12 = !((mmu->io_registers[LCDC - IO] & 0x10) || (ppu->pixel_fetcher.current_tile_id & 0x80));
     s_word_t wly = ppu->wly;
     if (flip_y)
         wly = ~wly;
@@ -166,11 +166,11 @@ static inline word_t get_obj_tiledata_address(emulator_t *emu, byte_t is_high) {
     byte_t actual_tile_id = obj.tile_id;
 
     if (IS_PPU_OBJ_TALL(mmu)) {
-        byte_t is_top_tile = abs(mmu->mem[LY] - obj.y) > 8;
+        byte_t is_top_tile = abs(mmu->io_registers[LY - IO] - obj.y) > 8;
         CHANGE_BIT(actual_tile_id, 0, flip_y ? is_top_tile : !is_top_tile);
     }
 
-    byte_t bits_3_1 = (mmu->mem[LY] - obj.y) % 8;
+    byte_t bits_3_1 = (mmu->io_registers[LY - IO] - obj.y) % 8;
     if (flip_y)
         bits_3_1 = ~bits_3_1;
     bits_3_1 &= 0x07; // modulo 8
@@ -225,15 +225,15 @@ static inline void fetch_tile_id(emulator_t *emu) {
 
     switch (ppu->pixel_fetcher.mode) {
         case FETCH_BG: {
-            byte_t ly_scy = mmu->mem[LY] + mmu->mem[SCY]; // addition carried out in 8 bits (== result % 256)
-            byte_t fetcher_x_scx = ppu->pixel_fetcher.x + mmu->mem[SCX]; // addition carried out in 8 bits (== result % 256)
-            word_t tile_id_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 3) << 10) | ((ly_scy / 8) << 5) | ((fetcher_x_scx / 8) & 0x1F);
-            ppu->pixel_fetcher.current_tile_id = mmu->mem[tile_id_address];
+            byte_t ly_scy = mmu->io_registers[LY - IO] + mmu->io_registers[SCY - IO]; // addition carried out in 8 bits (== result % 256)
+            byte_t fetcher_x_scx = ppu->pixel_fetcher.x + mmu->io_registers[SCX - IO]; // addition carried out in 8 bits (== result % 256)
+            word_t tile_id_address = 0x9800 | (GET_BIT(mmu->io_registers[LCDC - IO], 3) << 10) | ((ly_scy / 8) << 5) | ((fetcher_x_scx / 8) & 0x1F);
+            ppu->pixel_fetcher.current_tile_id = mmu->vram[tile_id_address - VRAM];
             break;
         }
         case FETCH_WIN: {
-            word_t tile_id_address = 0x9800 | (GET_BIT(mmu->mem[LCDC], 6) << 10) | (((emu->ppu->wly / 8) & 0x1F) << 5) | ((ppu->pixel_fetcher.x / 8) & 0x1F);
-            ppu->pixel_fetcher.current_tile_id = mmu->mem[tile_id_address];
+            word_t tile_id_address = 0x9800 | (GET_BIT(mmu->io_registers[LCDC - IO], 6) << 10) | (((emu->ppu->wly / 8) & 0x1F) << 5) | ((ppu->pixel_fetcher.x / 8) & 0x1F);
+            ppu->pixel_fetcher.current_tile_id = mmu->vram[tile_id_address - VRAM];
             break;
         }
         case FETCH_OBJ: {
@@ -250,11 +250,11 @@ static inline byte_t get_tileslice(emulator_t *emu, word_t tiledata_address, byt
     byte_t flip_x = CHECK_BIT(attributes, 5);
     if (emu->mode == CGB) {
         if (CHECK_BIT(attributes, 3)) // tile is in VRAM bank 1
-            return flip_x ? reverse_bits_order(mmu->vram_extra[tiledata_address - VRAM]) : mmu->vram_extra[tiledata_address - VRAM];
+            return flip_x ? reverse_bits_order(mmu->vram[tiledata_address - VRAM + VRAM_BANK_SIZE]) : mmu->vram[tiledata_address - VRAM + VRAM_BANK_SIZE];
         else
-            return flip_x ? reverse_bits_order(mmu->mem[tiledata_address]) : mmu->mem[tiledata_address];
+            return flip_x ? reverse_bits_order(mmu->vram[tiledata_address - VRAM]) : mmu->vram[tiledata_address - VRAM];
     } else {
-        return flip_x ? reverse_bits_order(mmu->mem[tiledata_address]) : mmu->mem[tiledata_address];
+        return flip_x ? reverse_bits_order(mmu->vram[tiledata_address - VRAM]) : mmu->vram[tiledata_address - VRAM];
     }
 }
 
@@ -360,7 +360,7 @@ static inline byte_t push(emulator_t *emu) {
             if (ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].x < 8)
                 offset = 8 - ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].x;
 
-            byte_t is_cgb_mode = emu->mode == CGB && !CHECK_BIT(emu->mmu->mem[OPRI], 0);
+            byte_t is_cgb_mode = emu->mode == CGB && !CHECK_BIT(emu->mmu->io_registers[OPRI - IO], 0);
             for (byte_t fetcher_index = offset; fetcher_index < PIXEL_FIFO_SIZE; fetcher_index++) {
                 byte_t fifo_index = ((fetcher_index - offset) + ppu->obj_fifo.head) % PIXEL_FIFO_SIZE;
 
@@ -439,7 +439,7 @@ static inline void drawing_step(emulator_t *emu) {
         break;
     }
 
-    if (IS_PPU_WIN_ENABLED(mmu) && mmu->mem[WY] <= mmu->mem[LY] && mmu->mem[WX] - 7 <= ppu->lcd_x && ppu->pixel_fetcher.mode == FETCH_BG) {
+    if (IS_PPU_WIN_ENABLED(mmu) && mmu->io_registers[WY - IO] <= mmu->io_registers[LY - IO] && mmu->io_registers[WX - IO] - 7 <= ppu->lcd_x && ppu->pixel_fetcher.mode == FETCH_BG) {
         // the fetcher must switch to window mode for the remaining of the scanline (except when an object needs to be drawn)
         ppu->pixel_fetcher.mode = FETCH_WIN;
         ppu->pixel_fetcher.old_mode = FETCH_WIN;
@@ -476,13 +476,13 @@ static inline void drawing_step(emulator_t *emu) {
     // discards pixels if needed, due either to SCX or window starting before screen (WX < 7)
     switch (ppu->pixel_fetcher.mode) {
     case FETCH_BG:
-        if (ppu->discarded_pixels < mmu->mem[SCX] % 8) {
+        if (ppu->discarded_pixels < mmu->io_registers[SCX - IO] % 8) {
             ppu->discarded_pixels++;
             return;
         }
         break;
     case FETCH_WIN:
-        if (mmu->mem[WX] < 7 && ppu->discarded_pixels < 7 - mmu->mem[WX]) {
+        if (mmu->io_registers[WX - IO] < 7 && ppu->discarded_pixels < 7 - mmu->io_registers[WX - IO]) {
             ppu->discarded_pixels++;
             return;
         }
@@ -502,14 +502,14 @@ static inline void drawing_step(emulator_t *emu) {
         byte_t r, g, b;
         cgb_get_color(mmu, selected_pixel, selected_is_obj, !emu->disable_cgb_color_correction, &r, &g, &b);
 
-        SET_PIXEL_CGB(emu, ppu->lcd_x, mmu->mem[LY], r, g, b);
+        SET_PIXEL_CGB(emu, ppu->lcd_x, mmu->io_registers[LY - IO], r, g, b);
     } else {
-        SET_PIXEL_DMG(emu, ppu->lcd_x, mmu->mem[LY], dmg_get_color(mmu, selected_pixel, selected_is_obj));
+        SET_PIXEL_DMG(emu, ppu->lcd_x, mmu->io_registers[LY - IO], dmg_get_color(mmu, selected_pixel, selected_is_obj));
     }
     ppu->lcd_x++;
 
     if (ppu->lcd_x >= GB_SCREEN_WIDTH) {
-        // if (mmu->mem[LY] == 0) {
+        // if (mmu->io_registers[LY - IO] == 0) {
         //     printf("%d in [172, 289]?\n", ppu->cycles - 80);
         // }
         // the new position is outside the screen, this scanline is done: go into HBLANK mode
@@ -525,6 +525,7 @@ static inline void drawing_step(emulator_t *emu) {
         PPU_SET_MODE(mmu, PPU_MODE_HBLANK);
         if (IS_HBLANK_IRQ_STAT_ENABLED(emu))
             CPU_REQUEST_INTERRUPT(emu, IRQ_STAT);
+        mmu->hdma.allow_hdma_block = mmu->hdma.type == HDMA && mmu->hdma.progress > 0;
     }
 }
 
@@ -538,10 +539,10 @@ static inline void oam_scan_step(emulator_t *emu) {
         return;
     }
 
-    obj_t *obj = (obj_t *) &mmu->mem[OAM + (ppu->oam_scan.index * 4)];
+    obj_t *obj = (obj_t *) &mmu->oam[ppu->oam_scan.index * 4];
     byte_t obj_height = IS_PPU_OBJ_TALL(mmu) ? 16 : 8;
     // NOTE: obj->x != 0 condition should not be checked even if ultimate gameboy talk says it should
-    if (ppu->oam_scan.size < 10 && (obj->y <= mmu->mem[LY] + 16) && (obj->y + obj_height > mmu->mem[LY] + 16)) {
+    if (ppu->oam_scan.size < 10 && (obj->y <= mmu->io_registers[LY - IO] + 16) && (obj->y + obj_height > mmu->io_registers[LY - IO] + 16)) {
         s_byte_t i;
         // if equal x: insert after so that the drawing doesn't overwrite the existing sprite (equal x -> first scanned obj priority)
         for (i = ppu->oam_scan.size - 1; i >= 0 && ppu->oam_scan.objs[i].x > obj->x; i--) {
@@ -573,10 +574,10 @@ static inline void hblank_step(emulator_t *emu) {
     if (ppu->cycles != 456)
         return;
 
-    mmu->mem[LY]++;
+    mmu->io_registers[LY - IO]++;
     ppu->cycles = 0;
 
-    if (mmu->mem[LY] >= GB_SCREEN_HEIGHT) {
+    if (mmu->io_registers[LY - IO] >= GB_SCREEN_HEIGHT) {
         ppu->wly = -1;
         PPU_SET_MODE(mmu, PPU_MODE_VBLANK);
         if (IS_VBLANK_IRQ_STAT_ENABLED(emu))
@@ -605,8 +606,8 @@ static inline void vblank_step(emulator_t *emu) {
     ppu_t *ppu = emu->ppu;
 
     if (ppu->cycles == 4) {
-        if (mmu->mem[LY] == 153) {
-            mmu->mem[LY] = 0;
+        if (mmu->io_registers[LY - IO] == 153) {
+            mmu->io_registers[LY - IO] = 0;
             ppu->is_last_vblank_line = 1;
         }
     } else if (ppu->cycles == 12) {
@@ -614,7 +615,7 @@ static inline void vblank_step(emulator_t *emu) {
             ppu_ly_lyc_compare(emu);
     } else if (ppu->cycles == 456) {
         if (!ppu->is_last_vblank_line)
-            mmu->mem[LY]++; // increase on each new line
+            mmu->io_registers[LY - IO]++; // increase on each new line
         ppu->cycles = 0;
 
         if (ppu->is_last_vblank_line) { // we actually are on line 153 but LY reads 0
@@ -658,13 +659,14 @@ void ppu_step(emulator_t *emu) {
             ppu->is_lcd_turning_on = 1;
 
             PPU_SET_MODE(mmu, PPU_MODE_HBLANK);
-            RESET_BIT(mmu->mem[STAT], 2); // set LYC=LY to 0?
+            mmu->hdma.allow_hdma_block = mmu->hdma.type == HDMA && mmu->hdma.progress > 0;
+            RESET_BIT(mmu->io_registers[STAT - IO], 2); // set LYC=LY to 0?
             ppu->wly = -1;
             reset_pixel_fetcher(ppu);
             pixel_fifo_clear(&ppu->bg_win_fifo);
             pixel_fifo_clear(&ppu->obj_fifo);
             ppu->cycles = 0; //369; // (== 456 - 87) set hblank duration to its minimum possible value
-            mmu->mem[LY] = 0;
+            mmu->io_registers[LY - IO] = 0;
         }
         return;
     }
