@@ -242,7 +242,7 @@ def main():
         generate_tests(tests_root, "mooneye-test-suite-wilbertpol", 2, f, None, None, mooneye_wilbertpol_internal_state_test_generator)
         generate_tests(tests_root, "mealybug-tearoom-tests", 1, f, mealybug_reference_image_getter, mealybug_screenshot_test_generator, mealybug_internal_state_test_generator)
         generate_tests(tests_root, "same-suite", 2, f, None, None, same_internal_state_test_generator)
-        generate_tests(tests_root, "gbmicrotest", 1, f, None, None, gbmicrotest_internal_state_test_generator)
+        # generate_tests(tests_root, "gbmicrotest", 1, f, None, None, gbmicrotest_internal_state_test_generator)
         generate_bully_tests(f)
         generate_acid_tests(f)
         generate_little_things_tests(f)

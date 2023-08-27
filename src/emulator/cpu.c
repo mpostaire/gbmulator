@@ -13,8 +13,8 @@
 #define RESET_FLAG(cpu, x) ((cpu)->registers.f &= ~(x))
 
 #define PREPARE_SPEED_SWITCH(emu) ((emu)->mmu->io_registers[KEY1 - IO] & 0x01)
-#define ENABLE_DOUBLE_SPEED(emu) { ((emu)->mmu->io_registers[KEY1 - IO] |= 0x80); ((emu)->mmu->io_registers[KEY1 - IO] &= 0xFE); }
-#define DISABLE_DOUBLE_SPEED(emu) { ((emu)->mmu->io_registers[KEY1 - IO] &= 0x7F); ((emu)->mmu->io_registers[KEY1 - IO] &= 0xFE); }
+#define ENABLE_DOUBLE_SPEED(emu) do { ((emu)->mmu->io_registers[KEY1 - IO] |= 0x80); ((emu)->mmu->io_registers[KEY1 - IO] &= 0xFE); } while (0)
+#define DISABLE_DOUBLE_SPEED(emu) do { ((emu)->mmu->io_registers[KEY1 - IO] &= 0x7F); ((emu)->mmu->io_registers[KEY1 - IO] &= 0xFE); } while (0)
 
 #define IS_INTERRUPT_PENDING(emu) ((emu)->mmu->ie & (emu)->mmu->io_registers[IF - IO] & 0x1F)
 
@@ -1543,11 +1543,10 @@ static void exec_opcode(emulator_t *emu) {
             if (PREPARE_SPEED_SWITCH(emu)) {
                 // TODO this should also stop the cpu for 2050 steps (8200 cycles)
                 // https://gbdev.io/pandocs/CGB_Registers.html?highlight=key1#ff4d--key1-cgb-mode-only-prepare-speed-switch
-                if (IS_DOUBLE_SPEED(emu)) {
+                if (IS_DOUBLE_SPEED(emu))
                     DISABLE_DOUBLE_SPEED(emu);
-                } else {
+                else
                     ENABLE_DOUBLE_SPEED(emu);
-                }
             }
             eprintf("STOP instruction not fully implemented\n");
             END_OPCODE;

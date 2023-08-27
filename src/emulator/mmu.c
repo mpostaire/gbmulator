@@ -162,6 +162,7 @@ static int parse_cartridge(emulator_t *emu) {
 
     // TODO better understand and implement CGB's DMG compatbility mode
     // byte_t cgb_dmg_compat = emu->mode == CGB && !cgb_flag;
+    // byte_t cgb_mode_enabled = emu->mode == CGB && cgb_flag;
 
     // 8-bit cartridge header checksum validation
     byte_t checksum = 0;

@@ -184,8 +184,7 @@ void apu_step(emulator_t *emu) {
     apu_t *apu = emu->apu;
     mmu_t *mmu = emu->mmu;
 
-    byte_t cycles = 4; // 4 cycles per step
-    while (cycles-- > 0) {
+    for (byte_t cycles = 0; cycles < 4; cycles++) { // 4 cycles per step
         apu->frame_sequencer_cycles_count++;
         if (apu->frame_sequencer_cycles_count >= 8192) { // 512 Hz
             apu->frame_sequencer_cycles_count = 0;
