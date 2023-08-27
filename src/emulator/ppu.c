@@ -571,7 +571,7 @@ static inline void hblank_step(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
     ppu_t *ppu = emu->ppu;
 
-    if (ppu->cycles != 456)
+    if (ppu->cycles < 456)
         return;
 
     mmu->io_registers[LY - IO]++;
@@ -665,21 +665,17 @@ void ppu_step(emulator_t *emu) {
             reset_pixel_fetcher(ppu);
             pixel_fifo_clear(&ppu->bg_win_fifo);
             pixel_fifo_clear(&ppu->obj_fifo);
-            ppu->cycles = 0; //369; // (== 456 - 87) set hblank duration to its minimum possible value
+            ppu->cycles = 8; // TODO for some reason values from 5 to 8 (included) are needed to pass some tests (like blargg/oam_bug/rom_singles/1-lcd_sync.gb)...
             mmu->io_registers[LY - IO] = 0;
         }
         return;
     }
 
-    // if lcd was just enabled, check for LYC=LY
-    if (ppu->is_lcd_turning_on)
+    // check for LYC=LY at the 4th cycle or if lcd was just enabled
+    if (ppu->cycles == 4 || ppu->is_lcd_turning_on)
         ppu_ly_lyc_compare(emu);
 
-    if (ppu->cycles == 4)
-        ppu_ly_lyc_compare(emu);
-
-    int cycles = 4;
-    while (cycles--) {
+    for (byte_t cycles = 0; cycles < 4; cycles++) { // 4 cycles per step
         switch (PPU_GET_MODE(emu)) {
         case PPU_MODE_OAM:
             // Scanning OAM for (X, Y) coordinates of sprites that overlap this line
