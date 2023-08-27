@@ -177,6 +177,8 @@ static int parse_cartridge(emulator_t *emu) {
 
 int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size) {
     mmu_t *mmu = xcalloc(1, sizeof(mmu_t));
+    mmu->rom = xcalloc(1, rom_size);
+
     mmu->bank1_reg = 1;
     // mmu->rom_bank0_addr = 0; // initialized to 0 by xcalloc
     // mmu->rom_bankn_addr = 0; // initialized to ROM_BANKN - ROM_BANK_SIZE = 0 by xcalloc
@@ -196,6 +198,7 @@ int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size) {
 }
 
 void mmu_quit(emulator_t *emu) {
+    free(emu->mmu->rom);
     free(emu->mmu);
 }
 
@@ -950,12 +953,10 @@ static inline byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_
         return mmu->rom[mmu->rom_bankn_addr + address];
     case VRAM:
     case VRAM + 0x1000:
-        // TODO src can be inside vram but it reads incorrect data: see TCAGBD.pdf for more details
         if (io_src == IO_SRC_GDMA_HDMA)
-            return 0xFF;
-        // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
+            return 0xFF; // src can be inside vram but it reads incorrect data: see TCAGBD.pdf for more details
         if (io_src == IO_SRC_CPU && IS_LCD_ENABLED(emu) && PPU_IS_MODE(emu, PPU_MODE_DRAWING))
-            return 0xFF;
+            return 0xFF; // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
         return mmu->vram[mmu->vram_bank_addr_offset + address];
     case ERAM:
     case ERAM + 0x1000:
@@ -1113,79 +1114,95 @@ void mmu_write(emulator_t *emu, word_t address, byte_t data) {
     mmu_write_io_src(emu, address, data, IO_SRC_CPU);
 }
 
-// TODO this makes large (> 100KiB) savestate files because it ignores unsused rom, eram, wram, vram banks: most roms won't use them all
-//      --> implement dynamic allocation for these + dynamic serialization/deserialization
-#define SERIALIZED_MEMBERS       \
-    X(rom_size)                  \
-    X(rom)                       \
-    X(vram)                      \
-    X(eram)                      \
-    X(wram)                      \
-    X(oam)                       \
-    X(io_registers)              \
-    X(hram)                      \
-    X(ie)                        \
-    X(cram_bg)                   \
-    X(cram_obj)                  \
-    X(boot_finished)             \
-    X(hdma.initializing)         \
-    X(hdma.allow_hdma_block)     \
-    X(hdma.lock_cpu)             \
-    X(hdma.type)                 \
-    X(hdma.progress)             \
-    X(hdma.src_address)          \
-    X(hdma.dest_address)         \
-    X(oam_dma.starting_statuses) \
-    X(oam_dma.starting_count)    \
-    X(oam_dma.progress)          \
-    X(oam_dma.src_address)       \
-    X(vram_bank_addr_offset)     \
-    X(wram_bankn_addr_offset)    \
-    X(mbc)                       \
-    X(rom_banks)                 \
-    X(eram_banks)                \
-    X(rom_bank0_addr)            \
-    X(rom_bankn_addr)            \
-    X(eram_bank_addr)            \
-    X(ramg_reg)                  \
-    X(bank1_reg)                 \
-    X(bank2_reg)                 \
-    X(mode_reg)                  \
-    X(rtc_mapped)                \
-    X(romb0_reg)                 \
-    X(romb1_reg)                 \
-    X(has_battery)               \
-    X(has_rumble)                \
-    X(has_rtc)                   \
-    X(rtc.latched_s)             \
-    X(rtc.latched_m)             \
-    X(rtc.latched_h)             \
-    X(rtc.latched_dl)            \
-    X(rtc.latched_dh)            \
-    X(rtc.s)                     \
-    X(rtc.m)                     \
-    X(rtc.h)                     \
-    X(rtc.dl)                    \
-    X(rtc.dh)                    \
-    X(rtc.enabled)               \
-    X(rtc.reg)                   \
-    X(rtc.latch)                 \
+// serialize everything except rom
+#define SERIALIZED_MEMBERS                                            \
+    X(rom_size)                                                       \
+    Y(vram, emu->mode == CGB, 2 * VRAM_BANK_SIZE, VRAM_BANK_SIZE)     \
+    Z(eram, eram_banks, ERAM_BANK_SIZE)                               \
+    Y(wram, emu->mode == CGB, 8 * WRAM_BANK_SIZE, 2 * WRAM_BANK_SIZE) \
+    X(oam)                                                            \
+    X(io_registers)                                                   \
+    X(hram)                                                           \
+    X(ie)                                                             \
+    W(cram_bg)                                                        \
+    W(cram_obj)                                                       \
+    X(boot_finished)                                                  \
+    X(hdma.initializing)                                              \
+    X(hdma.allow_hdma_block)                                          \
+    X(hdma.lock_cpu)                                                  \
+    X(hdma.type)                                                      \
+    X(hdma.progress)                                                  \
+    X(hdma.src_address)                                               \
+    X(hdma.dest_address)                                              \
+    X(oam_dma.starting_statuses)                                      \
+    X(oam_dma.starting_count)                                         \
+    X(oam_dma.progress)                                               \
+    X(oam_dma.src_address)                                            \
+    X(vram_bank_addr_offset)                                          \
+    X(wram_bankn_addr_offset)                                         \
+    X(mbc)                                                            \
+    X(rom_banks)                                                      \
+    X(eram_banks)                                                     \
+    X(rom_bank0_addr)                                                 \
+    X(rom_bankn_addr)                                                 \
+    X(eram_bank_addr)                                                 \
+    X(ramg_reg)                                                       \
+    X(bank1_reg)                                                      \
+    X(bank2_reg)                                                      \
+    X(mode_reg)                                                       \
+    X(rtc_mapped)                                                     \
+    X(romb0_reg)                                                      \
+    X(romb1_reg)                                                      \
+    X(has_battery)                                                    \
+    X(has_rumble)                                                     \
+    X(has_rtc)                                                        \
+    X(rtc.latched_s)                                                  \
+    X(rtc.latched_m)                                                  \
+    X(rtc.latched_h)                                                  \
+    X(rtc.latched_dl)                                                 \
+    X(rtc.latched_dh)                                                 \
+    X(rtc.s)                                                          \
+    X(rtc.m)                                                          \
+    X(rtc.h)                                                          \
+    X(rtc.dl)                                                         \
+    X(rtc.dh)                                                         \
+    X(rtc.enabled)                                                    \
+    X(rtc.reg)                                                        \
+    X(rtc.latch)                                                      \
     X(rtc.rtc_cycles)
 
 #define X(value) SERIALIZED_LENGTH(value);
+#define Y(...) SERIALIZED_LENGTH_COND_LITERAL(__VA_ARGS__);
+#define Z(...) SERIALIZED_LENGTH_FROM_MEMBER(__VA_ARGS__);
+#define W(...) SERIALIZED_LENGTH_IF_CGB(__VA_ARGS__);
 SERIALIZED_SIZE_FUNCTION(mmu_t, mmu,
     SERIALIZED_MEMBERS
 )
+#undef W
+#undef Z
+#undef Y
 #undef X
 
 #define X(value) SERIALIZE(value);
+#define Y(...) SERIALIZE_LENGTH_COND_LITERAL(__VA_ARGS__);
+#define Z(...) SERIALIZE_LENGTH_FROM_MEMBER(__VA_ARGS__);
+#define W(...) SERIALIZE_LENGTH_IF_CGB(__VA_ARGS__);
 SERIALIZER_FUNCTION(mmu_t, mmu,
     SERIALIZED_MEMBERS
 )
+#undef W
+#undef Z
+#undef Y
 #undef X
 
 #define X(value) UNSERIALIZE(value);
+#define Y(...) UNSERIALIZE_LENGTH_COND_LITERAL(__VA_ARGS__);
+#define Z(...) UNSERIALIZE_LENGTH_FROM_MEMBER(__VA_ARGS__);
+#define W(...) UNSERIALIZE_LENGTH_IF_CGB(__VA_ARGS__);
 UNSERIALIZER_FUNCTION(mmu_t, mmu,
     SERIALIZED_MEMBERS
 )
+#undef W
+#undef Z
+#undef Y
 #undef X

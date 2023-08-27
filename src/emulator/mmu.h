@@ -7,6 +7,8 @@
 #define VRAM_BANK_SIZE 0x2000
 #define ERAM_BANK_SIZE 0x2000
 #define WRAM_BANK_SIZE 0x1000
+#define CRAM_BG_SIZE 0x0040
+#define CRAM_OBJ_SIZE 0x0040
 
 typedef enum {
     ROM_BANK0 = 0x0000, // From cartridge, usually a fixed bank.
@@ -145,8 +147,8 @@ typedef struct {
 
 typedef struct {
     size_t rom_size;
-    // TODO dynamic allocation of rom, vram, eram, wram, cram_bg and cram_obj
-    byte_t rom[8400000];
+
+    byte_t *rom; // max size: 8400000
     byte_t vram[2 * VRAM_BANK_SIZE]; // DMG: 1 bank / CGB: 2 banks of size 0x2000
     byte_t eram[16 * ERAM_BANK_SIZE]; // max 16 banks of size 0x2000
     byte_t wram[8 * WRAM_BANK_SIZE]; // DMG: 2 banks / CGB: 8 banks of size 0x1000 (bank 0 non switchable)
@@ -154,8 +156,8 @@ typedef struct {
     byte_t io_registers[0x80];
     byte_t hram[0x7F];
     byte_t ie;
-    byte_t cram_bg[0x40]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
-    byte_t cram_obj[0x40]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
+    byte_t cram_bg[CRAM_BG_SIZE]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
+    byte_t cram_obj[CRAM_OBJ_SIZE]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
 
     byte_t boot_finished;
 

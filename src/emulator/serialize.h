@@ -62,3 +62,53 @@
         memcpy(&(tmp->array[i].member), buf + offset, sizeof(tmp->array[i].member)); \
         offset += sizeof(tmp->array[i].member);                                      \
     }
+
+// serialization macros for the special cases of the mmu:
+
+#define SERIALIZED_LENGTH_COND_LITERAL(member, cond, size_literal_true, size_literal_else) \
+    length += cond ? size_literal_true : size_literal_else
+
+#define SERIALIZE_LENGTH_COND_LITERAL(member, cond, size_literal_true, size_literal_else) \
+    do {                                                                                  \
+        size_t sz = cond ? size_literal_true : size_literal_else;                         \
+        memcpy(buf + offset, &(tmp->member), sz);                                         \
+        offset += sz;                                                                     \
+    } while (0)
+
+#define UNSERIALIZE_LENGTH_COND_LITERAL(member, cond, size_literal_true, size_literal_else) \
+    do {                                                                                    \
+        size_t sz = cond ? size_literal_true : size_literal_else;                           \
+        memcpy(&(tmp->member), buf + offset, sz);                                           \
+        offset += sz;                                                                       \
+    } while (0)
+
+#define SERIALIZED_LENGTH_FROM_MEMBER(member, size_member, multiplier) \
+    length += tmp->size_member * (multiplier)
+
+#define SERIALIZE_LENGTH_FROM_MEMBER(member, size_member, multiplier) \
+    do {                                                              \
+        size_t sz = tmp->size_member * (multiplier);                  \
+        memcpy(buf + offset, &(tmp->member), sz);                     \
+        offset += sz;                                                 \
+    } while (0)
+
+#define UNSERIALIZE_LENGTH_FROM_MEMBER(member, size_member, multiplier) \
+    do {                                                                \
+        size_t sz = tmp->size_member * (multiplier);                    \
+        memcpy(&(tmp->member), buf + offset, sz);                       \
+        offset += sz;                                                   \
+    } while (0)
+
+#define SERIALIZED_LENGTH_IF_CGB(member) \
+    length += emu->mode == CGB ? sizeof(tmp->member) : 0
+#define SERIALIZE_LENGTH_IF_CGB(member) \
+    do {                                \
+        if (emu->mode == CGB)           \
+            SERIALIZE(member);          \
+    } while (0)
+
+#define UNSERIALIZE_LENGTH_IF_CGB(member) \
+    do {                                  \
+        if (emu->mode == CGB)             \
+            UNSERIALIZE(member);          \
+    } while (0)

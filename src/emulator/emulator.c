@@ -372,6 +372,9 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
         return 0;
     }
 
+    if ((savestate_header->mode & 0x03) != emu->mode)
+        emulator_reset(emu, savestate_header->mode & 0x03);
+
     size_t savestate_data_len = length - sizeof(savestate_header_t);
     byte_t *savestate_data = xmalloc(savestate_data_len);
     memcpy(savestate_data, data + sizeof(savestate_header_t), savestate_data_len);
@@ -393,7 +396,7 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
         savestate_data_len = dest_len;
         savestate_data = dest;
         #else
-        eprintf("this binary isn't compiled with compressed savestates support\n");
+        eprintf("this binary isn't compiled with support for compressed savestates\n");
         free(savestate_header);
         free(savestate_data);
         return 0;
@@ -406,9 +409,6 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
         free(savestate_data);
         return 0;
     }
-
-    if ((savestate_header->mode & 0x03) != emu->mode)
-        emulator_reset(emu, savestate_header->mode & 0x03);
 
     size_t offset = 0;
     cpu_unserialize(emu, savestate_data);
