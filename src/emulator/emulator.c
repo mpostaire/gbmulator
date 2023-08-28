@@ -419,7 +419,6 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
     offset += link_len;
     ppu_unserialize(emu, &savestate_data[offset]);
     offset += ppu_len;
-    // TODO before we should be sure that the mmu structs are allocated to the correct size...
     mmu_unserialize(emu, &savestate_data[offset]);
 
     free(savestate_header);
