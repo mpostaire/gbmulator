@@ -29,6 +29,7 @@ Various dependencies are needed to build the desktop app:
 - opengl
 - glew
 - openal
+- zlib (optional: enables compressed savestates)
 
 In addition to these dependencies, the following tools are needed to build the desktop app:
 
