@@ -52,8 +52,8 @@ all: desktop
 debug: CFLAGS+=-g -O0
 debug: all
 
-desktop: CFLAGS+=$(shell pkg-config --cflags gtk4 libadwaita-1 manette-0.2 opengl glew openal x11)
-desktop: LDLIBS+=$(shell pkg-config --libs gtk4 libadwaita-1 manette-0.2 opengl glew openal x11)
+desktop: CFLAGS+=$(shell pkg-config --cflags gtk4 libadwaita-1 manette-0.2 opengl glew openal)
+desktop: LDLIBS+=$(shell pkg-config --libs gtk4 libadwaita-1 manette-0.2 opengl glew openal)
 desktop: $(PLATFORM_ODIR_STRUCTURE) $(BIN) $(ICONS)
 
 $(SDIR)/platform/desktop/resources.c: $(SDIR)/platform/desktop/ui/gbmulator.gresource.xml $(UI) $(SHADERS)

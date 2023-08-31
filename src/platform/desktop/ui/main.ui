@@ -20,9 +20,9 @@
                                 <property name="child">
                                     <object class="AdwButtonContent">
                                         <property name="icon-name">document-open-symbolic</property>
-                                        <property name="label">Open</property>
                                     </object>
                                 </property>
+                                <property name="tooltip-text">Open</property>
                             </object>
                         </child>
 
@@ -31,6 +31,7 @@
                                 <property name="menu-model">app_menu</property>
                                 <property name="icon-name">open-menu-symbolic</property>
                                 <property name="primary">true</property>
+                                <property name="tooltip-text">Menu</property>
                             </object>
                         </child>
                     </object>

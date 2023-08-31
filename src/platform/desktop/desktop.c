@@ -3,7 +3,6 @@
 #include <adwaita.h>
 #include <libmanette.h>
 #include <linux/input-event-codes.h>
-#include <gdk/x11/gdkx.h>
 #include <ctype.h>
 #include <netdb.h>
 #include <string.h>
@@ -112,20 +111,11 @@ const char *joypad_names[] = {
     "Start:"
 };
 
-setter_handler_t scale_handlers[] = {
-    { "pref_scale_setter_x2", "", 2, NULL },
-    { "pref_scale_setter_x3", "", 3, NULL },
-    { "pref_scale_setter_x4", "", 4, NULL },
-    { "pref_scale_setter_x5", "", 5, NULL },
-};
-
 gint argc;
 gchar **argv = NULL;
 
 int current_bind_setter;
-int surface_width_handler = -1, binding_setter_handler = -1;
-int previous_scale;
-int window_width_offset = -1, window_height_offset = -1;
+int binding_setter_handler = -1;
 int gamepad_state = GAMEPAD_DISABLED;
 
 AdwApplication *app;
@@ -242,20 +232,6 @@ static void toggle_loop(void) {
         stop_loop();
 }
 
-// TODO compiled under Xorg and ran under wayland ==> crash
-static void set_window_size(int width, int height) {
-    GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(main_window));
-    GdkDisplay *display = gtk_widget_get_display(main_window);
-
-    if (!surface || !display) return;
-    Window wid = gdk_x11_surface_get_xid(surface);
-
-    int new_w = width + window_width_offset;
-    int new_h = height + window_height_offset;
-
-    XResizeWindow(gdk_x11_display_get_xdisplay(display), wid, new_w, new_h);
-}
-
 // TODO sdl - android link doesn't work
 //      sld - adwaita link doesn't work
 //      sdl - sdl link works
@@ -278,9 +254,6 @@ static gboolean loop(gpointer user_data) {
 }
 
 static void on_realize(GtkGLArea *area, gpointer user_data) {
-    // set window size here, once glarea is realized, to ensure that the window size is not changed by long rom titles
-    set_window_size(GB_SCREEN_WIDTH * config.scale, GB_SCREEN_HEIGHT * config.scale);
-
     gtk_gl_area_make_current(area);
     if (gtk_gl_area_get_error(area) != NULL) {
         fprintf(stderr, "Unknown error\n");
@@ -536,12 +509,6 @@ static int load_cartridge(char *path) {
     return 1;
 }
 
-static void set_scale(GtkButton* self, gpointer user_data) {
-    previous_scale = config.scale;
-    config.scale = *((int *) user_data);
-    set_window_size(GB_SCREEN_WIDTH * config.scale, GB_SCREEN_HEIGHT * config.scale);
-}
-
 static void set_speed(GtkRange* self, gpointer user_data) {
     config.speed = gtk_range_get_value(self);
     steps_per_frame = GB_CPU_STEPS_PER_FRAME * config.speed;
@@ -740,6 +707,12 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
     if (!emu || is_paused) return FALSE;
 
     switch (keyval) {
+    case GDK_KEY_F11:
+        if (gtk_window_is_fullscreen(GTK_WINDOW(main_window)))
+            gtk_window_unfullscreen(GTK_WINDOW(main_window));
+        else
+            gtk_window_fullscreen(GTK_WINDOW(main_window));
+        return TRUE;
     case GDK_KEY_F1: case GDK_KEY_F2:
     case GDK_KEY_F3: case GDK_KEY_F4:
     case GDK_KEY_F5: case GDK_KEY_F6:
@@ -810,26 +783,6 @@ static gchar *sound_slider_format(GtkScale *self, gdouble value, gpointer user_d
 
 static gchar *speed_slider_format(GtkScale *self, gdouble value, gpointer user_data) {
     return g_strdup_printf("x%0.1f", value);
-}
-
-static void on_surface_notify_witdh(GObject *self, GParamSpec *pspec, gpointer user_data) {
-    // this function is a hack to get the window size because I can't figure how to get it before it's been shown to the screen
-    if (window_width_offset >= 0 && window_height_offset >= 0) return;
-
-    GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(main_window));
-    GdkDisplay *display = gtk_widget_get_display(main_window);
-
-    if (!surface || !display) return;
-
-    window_width_offset = gdk_surface_get_width(surface) - (GB_SCREEN_WIDTH * previous_scale);
-    window_height_offset = gdk_surface_get_height(surface) - (GB_SCREEN_HEIGHT * previous_scale);
-
-    if (window_width_offset < 0 || window_height_offset < 0) return;
-
-    // set window min size to scale == 2x
-    gtk_widget_set_size_request(gl_area, GB_SCREEN_WIDTH * 2, GB_SCREEN_HEIGHT * 2);
-
-    g_signal_handler_disconnect(GDK_SURFACE(self), surface_width_handler);
 }
 
 static void gamepad_button_press_event_cb(ManetteDevice *emitter, ManetteEvent *event, gpointer user_data) {
@@ -943,13 +896,7 @@ static void activate_cb(GtkApplication *app) {
     gtk_window_set_application(GTK_WINDOW(preferences_window), GTK_APPLICATION(app));
     gtk_window_set_transient_for(GTK_WINDOW(preferences_window), GTK_WINDOW(main_window));
 
-    GtkWidget *widget;
-    for (size_t i = 0; i < G_N_ELEMENTS(scale_handlers); i++) {
-        widget = GTK_WIDGET(gtk_builder_get_object(builder, scale_handlers[i].name));
-        g_signal_connect(widget, "clicked", G_CALLBACK(set_scale), (gpointer) &scale_handlers[i].id);
-    }
-
-    widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_sound"));
+    GtkWidget *widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_sound"));
     GtkAdjustment *sound_adjustment = gtk_adjustment_new(config.sound, 0.0, 1.0, 0.05, 0.25, 0.0);
     gtk_scale_set_format_value_func(GTK_SCALE(widget), sound_slider_format, NULL, NULL);
     gtk_range_set_adjustment(GTK_RANGE(widget), sound_adjustment);
@@ -1070,11 +1017,8 @@ static void activate_cb(GtkApplication *app) {
 
     // show main_window
     gtk_window_present(GTK_WINDOW(main_window));
-    gtk_widget_set_size_request(gl_area, GB_SCREEN_WIDTH * config.scale, GB_SCREEN_HEIGHT * config.scale);
-    // notify when width changed, to then get the initial window size
-    surface_width_handler = g_signal_connect(gtk_native_get_surface(GTK_NATIVE(main_window)), "notify::width", G_CALLBACK(on_surface_notify_witdh), NULL);
-
-    previous_scale = config.scale;
+    // set window min size to scale == 2x
+    gtk_widget_set_size_request(gl_area, GB_SCREEN_WIDTH * 2, GB_SCREEN_HEIGHT * 2);
 }
 
 static void shutdown_cb(GtkApplication *app) {

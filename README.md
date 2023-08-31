@@ -29,7 +29,6 @@ Various dependencies are needed to build the desktop app:
 - opengl
 - glew
 - openal
-- libx11
 
 In addition to these dependencies, the following tools are needed to build the desktop app:
 
