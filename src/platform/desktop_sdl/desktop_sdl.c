@@ -9,20 +9,6 @@
 #include "../../emulator/emulator.h"
 #include "../../emulator/emulator_priv.h"
 
-// TODO implemented MBCs have a few bugs (see https://github.com/drhelius/Gearboy to understand how its handled)
-
-// FIXME dmg-acid2 test: everything good but missing exclamation mark. In fact it works for the 1st frame after
-//       turning lcd on and it doesn't show for the other frames (as the ppu doesn't draw the first frame after lcd on,
-//       it isn't visible). cgb-acid2 doesn't have this problem, the exclamation mark works well.
-
-// TODO fix audio sync: it's "working" but I don't really know how and it's not perfect (good enough compromise of audio/video smoothness and sync)
-// make audio sync to video (effectively replacing the audio sdl_delay by the vsync delay)
-
-// TODO: in pokemon gold (in CGB and DMG modes) at the beginning animation of a battle, when the wild pokemon slides to the
-// right, at the last moment, the top of the pokemon's sprite will appear for a few frames where the combat menu should be located
-
-// TODO make tests and implement mooneye's test suite (and blargg)
-
 static int keycode_filter(SDL_Keycode key);
 static void on_link_connect(emulator_t *new_linked_emu);
 static void on_link_disconnect(void);
@@ -618,8 +604,6 @@ int main(int argc, char **argv) {
     if (scale == 0) {
         is_fullscreen = SDL_TRUE;
         SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
-        // TODO set render logical size for all fullscreen status changes and all window size changes
-        // to check if it fixes the broken window after fullscreen bug
     }
 
     SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
