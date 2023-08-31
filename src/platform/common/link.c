@@ -141,7 +141,7 @@ static int exchange_info(int sfd, emulator_t *emu, emulator_mode_t *mode, int *c
     pkt[0] = PKT_INFO;
     pkt[1] = emulator_get_mode(emu);
     #ifdef __HAVE_ZLIB__
-    // SET_BIT(pkt[1], 7); // TODO fix compression
+    SET_BIT(pkt[1], 7);
     #endif
     memcpy(&pkt[2], &checksum, 2);
 
@@ -270,7 +270,6 @@ int link_init_transfer(int sfd, emulator_t *emu, emulator_t **linked_emu) {
         *linked_emu = emulator_init(rom_data, rom_len, &opts);
     }
 
-    // FIXME this function fails (received invalid or corrupted savestate)
     if (!emulator_load_savestate(*linked_emu, savestate_data, savestate_len)) {
         eprintf("received invalid or corrupted savestate\n");
         return 0;
