@@ -16,7 +16,7 @@ You can compile and run it on your linux machine or use it in your browser [here
 - PPU implements fifo rendering
 - Audio
 - Wireless link cable
-- Support for MBC1, MBC1M, MBC2, MBC3, MBC30 and MBC5 cartridges
+- Support for MBC1, MBC1M, MBC2, MBC3, MBC30, MBC5 and MBC7 cartridges
 - Battery saves and savestates
 - Supports keyboard and gamepad controllers
 
@@ -81,7 +81,8 @@ There is also support for gamepad controllers.
 
 ### TODO
 
-- implement MBC6, MBC7, HuC1 and multicart MBCs
+- implement other MBCs
+- implement printer
 - find out what are the accurate timings for the ppu pixel fifo/fetcher (especially for corner cases)
 - better audio/video sync
 - android link cable via bluetooth + cross platform link cable

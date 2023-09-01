@@ -28,6 +28,11 @@ typedef enum {
 #define GBC_CURRENT_WRAM_BANK(mmu) (((mmu)->io_registers[SVBK - IO] & 0x07) == 0 ? 1 : ((mmu)->io_registers[SVBK - IO] & 0x07))
 #define GBC_GDMA_HDMA_LENGTH(mmu) ((mmu)->io_registers[HDMA5 - IO] & 0x7F)
 
+#define EEPROM_DO(pins) ((pins) & 0x01) // MBC7 EEPROM DO pin
+#define EEPROM_DI(pins) ((pins) & 0x02) // MBC7 EEPROM DI pin
+#define EEPROM_CLK(pins) ((pins) & 0x40) // MBC7 EEPROM CLK pin
+#define EEPROM_CS(pins) ((pins) & 0x80) // MBC7 EEPROM CS pin
+
 static int parse_cartridge(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
 
@@ -109,9 +114,9 @@ static int parse_cartridge(emulator_t *emu) {
     // case 0x20:
     //     mmu->mbc = MBC6;
     //     break;
-    // case 0x22:
-    //     mmu->mbc = MBC7;
-    //     break;
+    case 0x22:
+        mmu->mbc = MBC7;
+        break;
     default:
         eprintf("MBC byte %02X not supported\n", mmu->rom[0x0147]);
         return 0;
@@ -186,6 +191,10 @@ int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size) {
     // mmu->eram_bank_addr = 0; // initialized to 0 by xcalloc
     mmu->wram_bankn_addr_offset = -WRAM_BANK0;
     mmu->vram_bank_addr_offset = -VRAM;
+
+    mmu->mbc7.accelerometer.latched_x = 0x8000;
+    mmu->mbc7.accelerometer.latched_y = 0x8000;
+    mmu->mbc7.accelerometer.latch_ready = 1;
 
     mmu->rom_size = rom_size;
     memcpy(mmu->rom, rom_data, mmu->rom_size);
@@ -368,6 +377,93 @@ void dma_step(emulator_t *emu) {
         gdma_hdma_step(emu);
 }
 
+static inline void write_mbc7_eeprom(mmu_t *mmu, byte_t data) {
+    if (!EEPROM_CS(data)) { // if CS (Chip Select) not set, only update pins
+        byte_t bit_do = mmu->mbc7.eeprom.output_bits >> 15;
+        mmu->mbc7.eeprom.pins = (data & 0xC2) | bit_do;
+        return;
+    }
+
+    if (!EEPROM_CLK(mmu->mbc7.eeprom.pins) && EEPROM_CLK(data)) { // if go from CLK 0 (Clock) to CLK 1, we just clocked
+        // shift out DO
+        mmu->mbc7.eeprom.output_bits <<= 1;
+
+        if (mmu->mbc7.eeprom.command_arg_remaining_bits) {
+            mmu->mbc7.eeprom.output_bits = 0;
+            // shift in DI to build argument for WRITE or WRAL
+            mmu->mbc7.eeprom.command_arg_remaining_bits--;
+            if (EEPROM_DI(data) && mmu->mbc7.eeprom.write_enabled) {
+                if (mmu->mbc7.eeprom.command & 0x100) {
+                    // WRITE
+                    SET_BIT(mmu->mbc7.eeprom.data[mmu->mbc7.eeprom.command & 0x7F], mmu->mbc7.eeprom.command_arg_remaining_bits);
+                } else {
+                    // WRAL
+                    for (byte_t i = 0; i < 0x7F; i++)
+                        SET_BIT(mmu->mbc7.eeprom.data[i], mmu->mbc7.eeprom.command_arg_remaining_bits);
+                }
+            }
+
+            if (!mmu->mbc7.eeprom.command_arg_remaining_bits) {
+                mmu->mbc7.eeprom.command = 0;
+                // Set next bit to be shifted out to 1. This makes DO == 1 now, thus settle time is not emulated (not important).
+                // To emulate settle time we could place the set bit in one of the first 15 bit of 'output_bits'.
+                mmu->mbc7.eeprom.output_bits = 0x8000;
+            }
+        } else {
+            // shift in DI to build command
+            mmu->mbc7.eeprom.command <<= 1;
+            mmu->mbc7.eeprom.command |= (EEPROM_DI(data) >> 1);
+
+            if (mmu->mbc7.eeprom.command & 0x0400) { // valid command if bit 11 is set (start bit)
+                word_t stripped_command = mmu->mbc7.eeprom.command & 0x03FF; // remove start bit from command
+
+                switch ((stripped_command >> 6) & 0x000F) {
+                case 0x00: // EWDS
+                    mmu->mbc7.eeprom.write_enabled = 0;
+                    mmu->mbc7.eeprom.command = 0;
+                    break;
+                case 0x01: // WRAL
+                    if (mmu->mbc7.eeprom.write_enabled)
+                        memset(mmu->mbc7.eeprom.data, 0, sizeof(mmu->mbc7.eeprom.data));
+                    mmu->mbc7.eeprom.command_arg_remaining_bits = 16;
+                    // don't set command to 0 yet as we still need it after its arguments has been shifted in
+                    break;
+                case 0x02: // ERAL
+                    if (mmu->mbc7.eeprom.write_enabled)
+                        memset(mmu->mbc7.eeprom.data, 0xFF, sizeof(mmu->mbc7.eeprom.data));
+                    mmu->mbc7.eeprom.command = 0;
+                    break;
+                case 0x03: // EWEN
+                    mmu->mbc7.eeprom.write_enabled = 1;
+                    mmu->mbc7.eeprom.command = 0;
+                    break;
+                case 0x04 ... 0x07: // WRITE
+                    if (mmu->mbc7.eeprom.write_enabled)
+                        mmu->mbc7.eeprom.data[mmu->mbc7.eeprom.command & 0x7F] = 0;
+                    mmu->mbc7.eeprom.command_arg_remaining_bits = 16;
+                    // don't set command to 0 yet as we still need it after its arguments has been shifted in
+                    break;
+                case 0x08 ... 0x0B: { // READ
+                    word_t eeprom_address = stripped_command & 0x7F;
+                    mmu->mbc7.eeprom.output_bits = ((mmu->mbc7.eeprom.data[eeprom_address + 1]) << 8) | mmu->mbc7.eeprom.data[eeprom_address];
+                    mmu->mbc7.eeprom.command = 0;
+                } break;
+                case 0x0C ... 0x0F: // ERASE
+                    if (mmu->mbc7.eeprom.write_enabled) {
+                        mmu->mbc7.eeprom.data[mmu->mbc7.eeprom.command & 0x7F] = 0xFF;
+                        mmu->mbc7.eeprom.data[(mmu->mbc7.eeprom.command & 0x7F) + 1] = 0xFF;
+                    }
+                    mmu->mbc7.eeprom.command = 0;
+                    break;
+                }
+            }
+        }
+    }
+
+    byte_t bit_do = mmu->mbc7.eeprom.output_bits >> 15;
+    mmu->mbc7.eeprom.pins = (data & 0xC2) | bit_do;
+}
+
 static inline void mbc1_set_bank_addrs(mmu_t *mmu, byte_t bank1_reg_size) {
     if (mmu->mode_reg) { // ERAM mode
         byte_t current_rom_bank0 = (mmu->bank2_reg << bank1_reg_size) & (mmu->rom_banks - 1);
@@ -512,6 +608,25 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
             mmu->bank2_reg = data & 0x0F;
             mmu->bank2_reg &= mmu->eram_banks - 1; // in this case, equivalent to mmu->bank2_reg %= eram_banks but avoid division by 0
             mmu->eram_bank_addr = mmu->bank2_reg * ERAM_BANK_SIZE;
+            break;
+        }
+        break;
+    case MBC7:
+        switch (address & 0xF000) {
+        case 0x0000:
+        case 0x1000:
+            mmu->ramg_reg = data == 0x0A;
+            break;
+        case 0x2000:
+        case 0x3000: {
+            mmu->romb0_reg = data;
+            word_t current_rom_bank = mmu->romb0_reg;
+            current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
+            mmu->rom_bankn_addr = (current_rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
+        } break;
+        case 0x4000:
+        case 0x5000:
+            mmu->mbc7.ramg2_reg = data == 0x40;
             break;
         }
         break;
@@ -961,6 +1076,22 @@ static inline byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_
         return mmu->vram[mmu->vram_bank_addr_offset + address];
     case ERAM:
     case ERAM + 0x1000:
+        if (mmu->mbc == MBC7) {
+            // both mbc7 ram enable registers must be set and everything from ERAM + 0x1000 is unused (always reads 0xFF)
+            if (!mmu->ramg_reg || !mmu->mbc7.ramg2_reg || address >= ERAM + 0x1000)
+                return 0xFF;
+
+            switch (address & 0x00F0) {
+            case 0x0020 /* 0xAx2x */: return mmu->mbc7.accelerometer.latched_x; // accelerometer x low (read only)
+            case 0x0030 /* 0xAx3x */: return mmu->mbc7.accelerometer.latched_x >> 8; // accelerometer x high (read only)
+            case 0x0040 /* 0xAx4x */: return mmu->mbc7.accelerometer.latched_y; // accelerometer y low (read only)
+            case 0x0050 /* 0xAx5x */: return mmu->mbc7.accelerometer.latched_y >> 8; // accelerometer y high (read only)
+            case 0x0060 /* 0xAx6x */: return 0x00; // unused (always reads 0x00)
+            case 0x0080 /* 0xAx8x */: return mmu->mbc7.eeprom.pins;
+            default: return 0xFF; // 0xAx0x -> 0xAx1x are write only, 0xAx7x and 0xAx9x -> 0xAxFx are unused and always reads 0xFF
+            }
+        }
+
         if (mmu->ramg_reg && !mmu->rtc_mapped) {
             if (mmu->mbc == MBC2) {
                 // wrap around from 0xA200 to 0xBFFF (eg: address 0xA200 reads as address 0xA000)
@@ -1050,6 +1181,37 @@ static inline void mmu_write_io_src(emulator_t *emu, word_t address, byte_t data
         break;
     case ERAM:
     case ERAM + 0x1000:
+        if (mmu->mbc == MBC7) {
+            // both mbc7 ram enable registers must be set and everything from ERAM + 0x1000 is unused
+            if (!mmu->ramg_reg || !mmu->mbc7.ramg2_reg || address >= ERAM + 0x1000)
+                break;
+
+            switch (address & 0x00F0) {
+            case 0x0000 /* 0xAx0x */: // erase latched accelerometer (write only)
+                if (data == 0x55) {
+                    mmu->mbc7.accelerometer.latched_x = 0x8000;
+                    mmu->mbc7.accelerometer.latched_y = 0x8000;
+                    mmu->mbc7.accelerometer.latch_ready = 1;
+                }
+                break;
+            case 0x0010 /* 0xAx1x */: // latch accelerometer (write only)
+                if (data == 0xAA && mmu->mbc7.accelerometer.latch_ready) {
+                    float x = 0.0f; // or double?
+                    float y = 0.0f; // or double?
+                    if (emu->on_accelerometer_request)
+                        emu->on_accelerometer_request(&x, &y);
+                    mmu->mbc7.accelerometer.latched_x = 0x81D0 + 0x70 * x; // accelerometer_center + gravity * x
+                    mmu->mbc7.accelerometer.latched_y = 0x81D0 + 0x70 * y; // accelerometer_center + gravity * y
+                    mmu->mbc7.accelerometer.latch_ready = 0;
+                }
+                break;
+            case 0x0080 /* 0xAx8x */:
+                write_mbc7_eeprom(mmu, data);
+                break;
+            default: break; // 0xAx2x -> 0xAx5x are read only, 0xAx6x -> 0xAx7x and 0xAx9x -> 0xAxFx are unused
+            }
+        }
+
         if (mmu->ramg_reg && !mmu->rtc_mapped) {
             mmu->eram[mmu->eram_bank_addr + (address - ERAM)] = data;
         } else if (mmu->rtc.enabled) {
@@ -1170,7 +1332,17 @@ void mmu_write(emulator_t *emu, word_t address, byte_t data) {
     X(rtc.enabled)                                                    \
     X(rtc.reg)                                                        \
     X(rtc.latch)                                                      \
-    X(rtc.rtc_cycles)
+    X(rtc.rtc_cycles)                                                 \
+    X(mbc7.ramg2_reg)                                                 \
+    X(mbc7.accelerometer.latched_x)                                   \
+    X(mbc7.accelerometer.latched_y)                                   \
+    X(mbc7.accelerometer.latch_ready)                                 \
+    X(mbc7.eeprom.data)                                               \
+    X(mbc7.eeprom.pins)                                               \
+    X(mbc7.eeprom.command)                                            \
+    X(mbc7.eeprom.command_arg_remaining_bits)                         \
+    X(mbc7.eeprom.output_bits)                                        \
+    X(mbc7.eeprom.write_enabled)
 
 #define X(value) SERIALIZED_LENGTH(value);
 #define Y(...) SERIALIZED_LENGTH_COND_LITERAL(__VA_ARGS__);
@@ -1185,9 +1357,9 @@ SERIALIZED_SIZE_FUNCTION(mmu_t, mmu,
 #undef X
 
 #define X(value) SERIALIZE(value);
-#define Y(...) SERIALIZE_LENGTH_COND_LITERAL(__VA_ARGS__);
-#define Z(...) SERIALIZE_LENGTH_FROM_MEMBER(__VA_ARGS__);
-#define W(...) SERIALIZE_LENGTH_IF_CGB(__VA_ARGS__);
+#define Y(...) SERIALIZE_COND_LITERAL(__VA_ARGS__);
+#define Z(...) SERIALIZE_FROM_MEMBER(__VA_ARGS__);
+#define W(...) SERIALIZE_IF_CGB(__VA_ARGS__);
 SERIALIZER_FUNCTION(mmu_t, mmu,
     SERIALIZED_MEMBERS
 )
@@ -1197,9 +1369,9 @@ SERIALIZER_FUNCTION(mmu_t, mmu,
 #undef X
 
 #define X(value) UNSERIALIZE(value);
-#define Y(...) UNSERIALIZE_LENGTH_COND_LITERAL(__VA_ARGS__);
-#define Z(...) UNSERIALIZE_LENGTH_FROM_MEMBER(__VA_ARGS__);
-#define W(...) UNSERIALIZE_LENGTH_IF_CGB(__VA_ARGS__);
+#define Y(...) UNSERIALIZE_COND_LITERAL(__VA_ARGS__);
+#define Z(...) UNSERIALIZE_FROM_MEMBER(__VA_ARGS__);
+#define W(...) UNSERIALIZE_IF_CGB(__VA_ARGS__);
 UNSERIALIZER_FUNCTION(mmu_t, mmu,
     SERIALIZED_MEMBERS
 )

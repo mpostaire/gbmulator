@@ -20,6 +20,7 @@ struct emulator_t {
     byte_t dmg_palette;
     on_new_frame_t on_new_frame;
     on_apu_samples_ready_t on_apu_samples_ready;
+    on_accelerometer_request_t on_accelerometer_request;
 
     char rom_title[17];
 

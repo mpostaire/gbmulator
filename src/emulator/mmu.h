@@ -215,6 +215,25 @@ typedef struct {
     byte_t has_rtc;
 
     rtc_t rtc;
+
+    struct {
+        byte_t ramg2_reg; // both ramg_reg and ramg2_reg must be 1 to enable eeprom
+
+        struct {
+            word_t latched_x;
+            word_t latched_y;
+            byte_t latch_ready; // 1 if latch was just erased and not yet relatched, else 0
+        } accelerometer;
+
+        struct {
+            byte_t data[256]; // 2048 bits addressed 16 bits at a time (addresses are 7 bits wide)
+            byte_t pins;
+            word_t command;
+            word_t command_arg_remaining_bits; // how many bits of the WRITE or WRAL command argument remains to be shifted in
+            word_t output_bits;
+            byte_t write_enabled;
+        } eeprom;
+    } mbc7;
 } mmu_t;
 
 int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size);

@@ -46,6 +46,7 @@ typedef enum {
 
 typedef void (*on_new_frame_t)(const byte_t *pixels);
 typedef void (*on_apu_samples_ready_t)(const void *audio_buffer, int audio_buffer_size);
+typedef void (*on_accelerometer_request_t)(float *x, float *y);
 
 typedef struct {
     emulator_mode_t mode; // either `DMG` for original game boy emulation or `CGB` for game boy color emulation
@@ -57,4 +58,5 @@ typedef struct {
     apu_audio_format_t apu_format;
     on_new_frame_t on_new_frame; // the function called whenever the ppu has finished rendering a new frame
     on_apu_samples_ready_t on_apu_samples_ready; // the function called whenever the samples buffer of the apu is full
+    on_accelerometer_request_t on_accelerometer_request; // the function called whenever the MBC7 latches accelerometer data
 } emulator_options_t;

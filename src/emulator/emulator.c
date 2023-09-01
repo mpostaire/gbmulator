@@ -8,10 +8,10 @@
 
 #include "emulator_priv.h"
 
-#define FORMAT_STRING EMULATOR_NAME"-sav"
+#define SAVESTATE_STRING EMULATOR_NAME"-sav"
 
 typedef struct __attribute__((packed)) {
-    char identifier[sizeof(FORMAT_STRING)];
+    char identifier[sizeof(SAVESTATE_STRING)];
     char rom_title[16];
     byte_t mode; // DMG or CGB
 } savestate_header_t;
@@ -26,7 +26,8 @@ emulator_options_t defaults_opts = {
     .apu_sample_count = GB_APU_DEFAULT_SAMPLE_COUNT,
     .apu_format = APU_FORMAT_F32,
     .on_apu_samples_ready = NULL,
-    .on_new_frame = NULL
+    .on_new_frame = NULL,
+    .on_accelerometer_request = NULL
 };
 
 const char *mbc_names[] = {
@@ -171,6 +172,13 @@ void emulator_joypad_release(emulator_t *emu, joypad_button_t key) {
 }
 
 byte_t *emulator_get_save(emulator_t *emu, size_t *save_length) {
+    if (emu->mmu->mbc == MBC7) {
+        *save_length = sizeof(emu->mmu->mbc7.eeprom.data);
+        byte_t *save_data = xmalloc(*save_length);
+        memcpy(save_data, emu->mmu->mbc7.eeprom.data, *save_length);
+        return save_data;
+    }
+
     if (!emu->mmu->has_battery || (!emu->mmu->has_rtc && emu->mmu->eram_banks == 0)) {
         *save_length = 0;
         return NULL;
@@ -217,6 +225,13 @@ byte_t *emulator_get_save(emulator_t *emu, size_t *save_length) {
 }
 
 int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
+    if (emu->mmu->mbc == MBC7) {
+        if (save_length != sizeof(emu->mmu->mbc7.eeprom.data))
+            return 0;
+        memcpy(emu->mmu->mbc7.eeprom.data, save_data, save_length);
+        return 1;
+    }
+
     // don't load save if the cartridge has no battery or there is no rtc and no eram banks
     if (!emu->mmu->has_battery || (!emu->mmu->has_rtc && emu->mmu->eram_banks == 0))
         return 0;
@@ -288,7 +303,7 @@ byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, UNUSED byte_t co
     // make savestate header
     savestate_header_t *savestate_header = xmalloc(sizeof(savestate_header_t));
     savestate_header->mode = emu->mode;
-    memcpy(savestate_header->identifier, FORMAT_STRING, sizeof(savestate_header->identifier));
+    memcpy(savestate_header->identifier, SAVESTATE_STRING, sizeof(savestate_header->identifier));
     memcpy(savestate_header->rom_title, emu->rom_title, sizeof(savestate_header->rom_title));
 
     // make savestate data
@@ -361,7 +376,7 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
     savestate_header_t *savestate_header = xmalloc(sizeof(savestate_header_t));
     memcpy(savestate_header, data, sizeof(savestate_header_t));
 
-    if (strncmp(savestate_header->identifier, FORMAT_STRING, sizeof(FORMAT_STRING))) {
+    if (strncmp(savestate_header->identifier, SAVESTATE_STRING, sizeof(SAVESTATE_STRING))) {
         eprintf("invalid format\n");
         free(savestate_header);
         return 0;
@@ -493,12 +508,13 @@ void emulator_get_options(emulator_t *emu, emulator_options_t *opts) {
     opts->mode = emu->mode;
     opts->disable_cgb_color_correction = emu->disable_cgb_color_correction;
     opts->apu_sample_count = emu->apu_sample_count;
-    opts->on_apu_samples_ready = emu->on_apu_samples_ready;
     opts->apu_speed = emu->apu_speed;
     opts->apu_sound_level = emu->apu_sound_level;
     opts->apu_format = emu->apu_format;
-    opts->on_new_frame = emu->on_new_frame;
     opts->palette = emu->dmg_palette;
+    opts->on_apu_samples_ready = emu->on_apu_samples_ready;
+    opts->on_new_frame = emu->on_new_frame;
+    opts->on_accelerometer_request = emu->on_accelerometer_request;
 }
 
 void emulator_set_options(emulator_t *emu, emulator_options_t *opts) {
@@ -513,11 +529,12 @@ void emulator_set_options(emulator_t *emu, emulator_options_t *opts) {
     }
 
     emu->disable_cgb_color_correction = opts->disable_cgb_color_correction;
-    emu->on_apu_samples_ready = opts->on_apu_samples_ready;
     emu->apu_speed = opts->apu_speed < 1.0f ? defaults_opts.apu_speed : opts->apu_speed;
     emu->apu_sound_level = opts->apu_sound_level > 1.0f ? defaults_opts.apu_sound_level : opts->apu_sound_level;
-    emu->on_new_frame = opts->on_new_frame;
     emu->dmg_palette = opts->palette >= 0 && opts->palette < PPU_COLOR_PALETTE_MAX ? opts->palette : defaults_opts.palette;
+    emu->on_new_frame = opts->on_new_frame;
+    emu->on_apu_samples_ready = opts->on_apu_samples_ready;
+    emu->on_accelerometer_request = opts->on_accelerometer_request;
 }
 
 byte_t *emulator_get_color_values(emulator_t *emu, dmg_color_t color) {
