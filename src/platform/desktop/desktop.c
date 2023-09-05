@@ -292,6 +292,13 @@ static void ppu_vblank_cb(const byte_t *pixels) {
     glrenderer_update_screen_texture(0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, pixels);
 }
 
+float accel_x, accel_y;
+static void set_accelerometer_data(float *x, float *y) {
+    // TODO emulate this with numpad arrows
+    *x = accel_x;
+    *y = accel_y;
+}
+
 static byte_t *get_rom_data(const char *path, size_t *rom_size) {
     const char *dot = strrchr(path, '.');
     if (!dot || (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) && strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))))) {
@@ -469,6 +476,7 @@ static int load_cartridge(char *path) {
         .mode = config.mode,
         .on_apu_samples_ready = (on_apu_samples_ready_t) alrenderer_queue_audio,
         .on_new_frame = ppu_vblank_cb,
+        .on_accelerometer_request = set_accelerometer_data,
         .apu_speed = config.speed,
         .apu_sound_level = config.sound,
         .apu_format = APU_FORMAT_U8,
@@ -707,6 +715,18 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
     if (!emu || is_paused) return FALSE;
 
     switch (keyval) {
+    case GDK_KEY_KP_2:
+        accel_y = MIN(accel_y - 0.01f, -1.0f);
+        return TRUE;
+    case GDK_KEY_KP_8:
+        accel_y = MAX(accel_y + 0.01f, 1.0f);
+        return TRUE;
+    case GDK_KEY_KP_4:
+        accel_x = MIN(accel_x - 0.01f, -1.0f);
+        return TRUE;
+    case GDK_KEY_KP_6:
+        accel_x = MAX(accel_x + 0.01f, 1.0f);
+        return TRUE;
     case GDK_KEY_F11:
         if (gtk_window_is_fullscreen(GTK_WINDOW(main_window)))
             gtk_window_unfullscreen(GTK_WINDOW(main_window));
@@ -740,6 +760,21 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
 
 static gboolean key_released_main(GtkEventControllerKey *self, guint keyval, guint keycode, GdkModifierType state, gpointer user_data) {
     if (!emu || is_paused) return FALSE;
+
+    switch (keyval) {
+    case GDK_KEY_KP_2:
+        accel_y = 0.0f;
+        return TRUE;
+    case GDK_KEY_KP_8:
+        accel_y = 0.0f;
+        return TRUE;
+    case GDK_KEY_KP_4:
+        accel_x = 0.0f;
+        return TRUE;
+    case GDK_KEY_KP_6:
+        accel_x = 0.0f;
+        return TRUE;
+    }
 
     // don't use emulator_joypad_release() here as we want to keep track of the joypad state and set it once per loop for link cable synchronization
     int joypad = keycode_to_joypad(&config, keyval);
