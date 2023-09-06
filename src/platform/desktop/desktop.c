@@ -121,6 +121,8 @@ int gamepad_state = GAMEPAD_DISABLED;
 AdwApplication *app;
 GtkWidget *main_window, *preferences_window, *window_title, *toast_overlay, *gl_area, *keybind_dialog, *bind_value, *mode_setter;
 GtkWidget *joypad_name, *restart_dialog, *link_dialog, *status, *link_mode_setter_server, *link_host, *link_host_revealer;
+GtkEventController *motion_event_controller;
+glong motion_event_handler;
 GtkFileDialog *file_dialog;
 guint loop_source;
 
@@ -131,6 +133,7 @@ gboolean is_paused = TRUE, link_is_server = TRUE;
 int steps_per_frame, sfd;
 emulator_t *emu;
 byte_t joypad_state = 0xFF;
+double accel_x, accel_y;
 
 char *rom_path, *forced_save_path, *config_path;
 
@@ -292,8 +295,7 @@ static void ppu_vblank_cb(const byte_t *pixels) {
     glrenderer_update_screen_texture(0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, pixels);
 }
 
-float accel_x, accel_y;
-static void set_accelerometer_data(float *x, float *y) {
+static void set_accelerometer_data(double *x, double *y) {
     // TODO emulate this with numpad arrows
     *x = accel_x;
     *y = accel_y;
@@ -443,6 +445,15 @@ static void show_link_dialog(GSimpleAction *action, GVariant *parameter, gpointe
     gtk_window_present(GTK_WINDOW(link_dialog));
 }
 
+static gboolean mouse_motion(GtkEventControllerMotion *self, gdouble x, gdouble y, gpointer user_data) {
+    x = CLAMP(x / 2, 0, GB_SCREEN_WIDTH);
+    y = CLAMP(y / 2, 0, GB_SCREEN_HEIGHT);
+    accel_x = (x - 80) / -80.0;
+    accel_y = (y - 72) / -72.0;
+    printf("(%lf, %lf) accel_x=%lf accel_y=%lf\n", x, y, accel_x, accel_y);
+    return TRUE;
+}
+
 static int load_cartridge(char *path) {
     if (!emu && !path) return 0;
 
@@ -511,6 +522,12 @@ static int load_cartridge(char *path) {
     g_action_map_add_action_entries(G_ACTION_MAP(app), app_entries, G_N_ELEMENTS(app_entries), app);
 
     adw_window_title_set_subtitle(ADW_WINDOW_TITLE(window_title), emulator_get_rom_title(emu));
+
+    if (emulator_has_accelerometer(emu))
+        motion_event_handler = g_signal_connect(motion_event_controller, "motion", G_CALLBACK(mouse_motion), NULL);
+    else
+        g_signal_handler_disconnect(motion_event_controller, motion_event_handler);
+
     gamepad_state = GAMEPAD_PLAYING;
     start_loop();
 
@@ -1018,16 +1035,20 @@ static void activate_cb(GtkApplication *app) {
 
     g_object_unref(builder);
 
+    // Mouse motion
+    motion_event_controller = gtk_event_controller_motion_new();
+    gtk_widget_add_controller(GTK_WIDGET(gl_area), GTK_EVENT_CONTROLLER(motion_event_controller));
+
     // Keyboard input (main)
-    GtkEventController *key_controller = gtk_event_controller_key_new();
-    gtk_widget_add_controller(GTK_WIDGET(main_window), GTK_EVENT_CONTROLLER(key_controller));
-    g_signal_connect(key_controller, "key-pressed", G_CALLBACK(key_pressed_main), NULL);
-    g_signal_connect(key_controller, "key-released", G_CALLBACK(key_released_main), NULL);
+    GtkEventController *key_event_controller = gtk_event_controller_key_new();
+    gtk_widget_add_controller(GTK_WIDGET(main_window), GTK_EVENT_CONTROLLER(key_event_controller));
+    g_signal_connect(key_event_controller, "key-pressed", G_CALLBACK(key_pressed_main), NULL);
+    g_signal_connect(key_event_controller, "key-released", G_CALLBACK(key_released_main), NULL);
 
     // Keyboard input (keybind)
-    key_controller = gtk_event_controller_key_new();
-    gtk_widget_add_controller(GTK_WIDGET(keybind_dialog), GTK_EVENT_CONTROLLER(key_controller));
-    g_signal_connect(key_controller, "key-pressed", G_CALLBACK(key_pressed_keybind), NULL);
+    key_event_controller = gtk_event_controller_key_new();
+    gtk_widget_add_controller(GTK_WIDGET(keybind_dialog), GTK_EVENT_CONTROLLER(key_event_controller));
+    g_signal_connect(key_event_controller, "key-pressed", G_CALLBACK(key_pressed_keybind), NULL);
 
     // Drag and drop
     GtkDropTarget *target = gtk_drop_target_new(G_TYPE_INVALID, GDK_ACTION_COPY);

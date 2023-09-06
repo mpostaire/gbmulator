@@ -144,3 +144,5 @@ void emulator_set_apu_speed(emulator_t *emu, float speed);
 void emulator_set_apu_sound_level(emulator_t *emu, float level);
 
 void emulator_set_palette(emulator_t *emu, color_palette_t palette);
+
+byte_t emulator_has_accelerometer(emulator_t *emu);

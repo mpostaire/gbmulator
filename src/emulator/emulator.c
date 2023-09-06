@@ -580,3 +580,7 @@ void emulator_set_palette(emulator_t *emu, color_palette_t palette) {
     opts.palette = palette;
     emulator_set_options(emu, &opts);
 }
+
+byte_t emulator_has_accelerometer(emulator_t *emu) {
+    return emu->mmu->mbc == MBC7;
+}

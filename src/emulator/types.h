@@ -46,7 +46,7 @@ typedef enum {
 
 typedef void (*on_new_frame_t)(const byte_t *pixels);
 typedef void (*on_apu_samples_ready_t)(const void *audio_buffer, int audio_buffer_size);
-typedef void (*on_accelerometer_request_t)(float *x, float *y);
+typedef void (*on_accelerometer_request_t)(double *x, double *y);
 
 typedef struct {
     emulator_mode_t mode; // either `DMG` for original game boy emulation or `CGB` for game boy color emulation

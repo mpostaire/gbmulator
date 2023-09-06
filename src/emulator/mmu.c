@@ -1083,16 +1083,16 @@ static inline byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_
 
             switch (address & 0x00F0) {
             case 0x0020 /* 0xAx2x */:
-                printf("read accel x low: 0x%02X\n",mmu->mbc7.accelerometer.latched_x & 0xFF);
+                // printf("read accel x low: 0x%02X\n", mmu->mbc7.accelerometer.latched_x & 0xFF);
                 return mmu->mbc7.accelerometer.latched_x; // accelerometer x low (read only)
             case 0x0030 /* 0xAx3x */:
-                printf("read accel x high: 0x%02X\n",mmu->mbc7.accelerometer.latched_x >> 8);
+                // printf("read accel x high: 0x%02X\n", mmu->mbc7.accelerometer.latched_x >> 8);
                 return mmu->mbc7.accelerometer.latched_x >> 8; // accelerometer x high (read only)
             case 0x0040 /* 0xAx4x */:
-                printf("read accel y low: 0x%02X\n",mmu->mbc7.accelerometer.latched_y & 0xFF);
+                // printf("read accel y low: 0x%02X\n", mmu->mbc7.accelerometer.latched_y & 0xFF);
                 return mmu->mbc7.accelerometer.latched_y; // accelerometer y low (read only)
             case 0x0050 /* 0xAx5x */:
-                printf("read accel y high: 0x%02X\n",mmu->mbc7.accelerometer.latched_y >> 8);
+                // printf("read accel y high: 0x%02X\n", mmu->mbc7.accelerometer.latched_y >> 8);
                 return mmu->mbc7.accelerometer.latched_y >> 8; // accelerometer y high (read only)
             case 0x0060 /* 0xAx6x */: return 0x00; // unused (always reads 0x00)
             case 0x0080 /* 0xAx8x */: return mmu->mbc7.eeprom.pins;
@@ -1197,23 +1197,20 @@ static inline void mmu_write_io_src(emulator_t *emu, word_t address, byte_t data
             switch (address & 0x00F0) {
             case 0x0000 /* 0xAx0x */: // erase latched accelerometer (write only)
                 if (data == 0x55) {
-                    puts("erase latched accel");
                     mmu->mbc7.accelerometer.latched_x = 0x8000;
                     mmu->mbc7.accelerometer.latched_y = 0x8000;
                     mmu->mbc7.accelerometer.latch_ready = 1;
                 }
                 break;
             case 0x0010 /* 0xAx1x */: // latch accelerometer (write only)
-                if (data == 0xAA /*&& mmu->mbc7.accelerometer.latch_ready*/) {
-                    if (!mmu->mbc7.accelerometer.latch_ready)
-                        exit(42);
-                    puts("latch accel");
-                    float x = 0.0f; // or double?
-                    float y = 0.0f; // or double?
+                if (data == 0xAA && mmu->mbc7.accelerometer.latch_ready) {
+                    // TODO accelerometer is buggy (see kirby tilt n tumble)
+                    double x = 0.0f;
+                    double y = 0.0f;
                     if (emu->on_accelerometer_request)
                         emu->on_accelerometer_request(&x, &y);
-                    mmu->mbc7.accelerometer.latched_x = 0x81D0 + 0x70 * x; // accelerometer_center + gravity * x
-                    mmu->mbc7.accelerometer.latched_y = 0x81D0 + 0x70 * y; // accelerometer_center + gravity * y
+                    mmu->mbc7.accelerometer.latched_x = 0x81D0 + (0x70 * x); // accelerometer_center + gravity * x
+                    mmu->mbc7.accelerometer.latched_y = 0x81D0 + (0x70 * y); // accelerometer_center + gravity * y
                     mmu->mbc7.accelerometer.latch_ready = 0;
                 }
                 break;
