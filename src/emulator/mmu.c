@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "emulator_priv.h"
 #include "boot.h"
@@ -164,6 +165,13 @@ static int parse_cartridge(emulator_t *emu) {
     byte_t cgb_flag = mmu->rom[0x0143] == 0xC0 || mmu->rom[0x0143] == 0x80;
     if (cgb_flag)
         emu->rom_title[15] = '\0';
+
+    // remove trailing non alphanumeric characters from the rom title
+    for (char *c = &emu->rom_title[16]; c >= emu->rom_title; c--) {
+        if (isalnum(*c))
+            break;
+        *c = '\0';
+    }
 
     // TODO better understand and implement CGB's DMG compatbility mode
     // byte_t cgb_dmg_compat = emu->mode == CGB && !cgb_flag;
