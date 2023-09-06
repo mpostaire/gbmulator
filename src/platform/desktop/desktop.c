@@ -122,7 +122,7 @@ AdwApplication *app;
 GtkWidget *main_window, *preferences_window, *window_title, *toast_overlay, *gl_area, *keybind_dialog, *bind_value, *mode_setter;
 GtkWidget *joypad_name, *restart_dialog, *link_dialog, *status, *link_mode_setter_server, *link_host, *link_host_revealer;
 GtkEventController *motion_event_controller;
-glong motion_event_handler;
+glong motion_event_handler = 0;
 GtkFileDialog *file_dialog;
 guint loop_source;
 
@@ -523,10 +523,12 @@ static int load_cartridge(char *path) {
 
     adw_window_title_set_subtitle(ADW_WINDOW_TITLE(window_title), emulator_get_rom_title(emu));
 
-    if (emulator_has_accelerometer(emu))
+    if (emulator_has_accelerometer(emu)) {
         motion_event_handler = g_signal_connect(motion_event_controller, "motion", G_CALLBACK(mouse_motion), NULL);
-    else
+    } else if (motion_event_handler) {
         g_signal_handler_disconnect(motion_event_controller, motion_event_handler);
+        motion_event_handler = 0;
+    }
 
     gamepad_state = GAMEPAD_PLAYING;
     start_loop();
