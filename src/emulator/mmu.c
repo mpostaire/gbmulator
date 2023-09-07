@@ -614,12 +614,14 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
         case 0x2000: {
             mmu->romb0_reg = data;
             word_t current_rom_bank = (mmu->romb1_reg << 8) | mmu->romb0_reg;
+            current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
             mmu->rom_bankn_addr = (current_rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
             break;
         }
         case 0x3000: {
             mmu->romb1_reg = data;
             word_t current_rom_bank = (mmu->romb1_reg << 8) | mmu->romb0_reg;
+            current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
             mmu->rom_bankn_addr = (current_rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
             break;
         }
@@ -636,11 +638,11 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
         case 0x0000:
             mmu->ramg_reg = data == 0x0A;
             break;
-        case 0x2000: {
+        case 0x2000:
             mmu->bank1_reg = data;
+            mmu->bank1_reg &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
             mmu->rom_bankn_addr = (mmu->bank1_reg - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
             break;
-        }
         case 0x4000:
             mmu->mbc7.ramg2_reg = data == 0x40;
             break;
@@ -653,10 +655,12 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
             break;
         case 0x2000:
             mmu->bank1_reg = data;
+            mmu->bank1_reg &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
             mmu->rom_bankn_addr = (mmu->bank1_reg - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
             break;
         case 0x4000:
             mmu->bank2_reg = data;
+            mmu->bank2_reg &= mmu->eram_banks - 1; // in this case, equivalent to mmu->bank2_reg %= eram_banks but avoid division by 0
             mmu->eram_bank_addr = mmu->bank2_reg * ERAM_BANK_SIZE;
             break;
         }
