@@ -734,18 +734,6 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
     if (!emu || is_paused) return FALSE;
 
     switch (keyval) {
-    case GDK_KEY_KP_2:
-        accel_y = MIN(accel_y - 0.01f, -1.0f);
-        return TRUE;
-    case GDK_KEY_KP_8:
-        accel_y = MAX(accel_y + 0.01f, 1.0f);
-        return TRUE;
-    case GDK_KEY_KP_4:
-        accel_x = MIN(accel_x - 0.01f, -1.0f);
-        return TRUE;
-    case GDK_KEY_KP_6:
-        accel_x = MAX(accel_x + 0.01f, 1.0f);
-        return TRUE;
     case GDK_KEY_F11:
         if (gtk_window_is_fullscreen(GTK_WINDOW(main_window)))
             gtk_window_unfullscreen(GTK_WINDOW(main_window));
@@ -779,21 +767,6 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
 
 static gboolean key_released_main(GtkEventControllerKey *self, guint keyval, guint keycode, GdkModifierType state, gpointer user_data) {
     if (!emu || is_paused) return FALSE;
-
-    switch (keyval) {
-    case GDK_KEY_KP_2:
-        accel_y = 0.0f;
-        return TRUE;
-    case GDK_KEY_KP_8:
-        accel_y = 0.0f;
-        return TRUE;
-    case GDK_KEY_KP_4:
-        accel_x = 0.0f;
-        return TRUE;
-    case GDK_KEY_KP_6:
-        accel_x = 0.0f;
-        return TRUE;
-    }
 
     // don't use emulator_joypad_release() here as we want to keep track of the joypad state and set it once per loop for link cable synchronization
     int joypad = keycode_to_joypad(&config, keyval);
