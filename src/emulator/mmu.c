@@ -24,7 +24,7 @@ typedef enum {
 } oam_dma_starting_state;
 
 #define IS_OAM_DMA_RUNNING(mmu) ((mmu)->oam_dma.progress >= 0 && (mmu)->oam_dma.progress < 0xA0)
-#define IS_RTC_HALTED(rtc) ((rtc)->dh & 0x40)
+#define IS_RTC_HALTED(mmu) ((mmu)->rtc.dh & 0x40)
 #define GBC_CURRENT_VRAM_BANK(mmu) ((mmu)->io_registers[VBK - IO] & 0x01)
 #define GBC_CURRENT_WRAM_BANK(mmu) (((mmu)->io_registers[SVBK - IO] & 0x07) == 0 ? 1 : ((mmu)->io_registers[SVBK - IO] & 0x07))
 #define GBC_GDMA_HDMA_LENGTH(mmu) ((mmu)->io_registers[HDMA5 - IO] & 0x7F)
@@ -117,6 +117,20 @@ static int parse_cartridge(emulator_t *emu) {
     //     break;
     case 0x22:
         mmu->mbc = MBC7;
+        break;
+    // case 0xFC:
+    //     mmu->mbc = CAMERA;
+    //     break;
+    // case 0xFD:
+    //     mmu->mbc = TAMA5;
+    //     break;
+    // case 0xFE:
+    //     mmu->mbc = HuC3;
+    //     break;
+    case 0xFF:
+        mmu->mbc = HuC1;
+        has_eram = 1;
+        mmu->has_battery = 1;
         break;
     default:
         eprintf("MBC byte %02X not supported\n", mmu->rom[0x0147]);
@@ -221,59 +235,59 @@ void mmu_quit(emulator_t *emu) {
 }
 
 void rtc_step(emulator_t *emu) {
-    rtc_t *rtc = &emu->mmu->rtc;
+    mmu_t *mmu = emu->mmu;
 
-    if (IS_RTC_HALTED(rtc))
+    if (IS_RTC_HALTED(mmu))
         return;
 
     // rtc internal clock should increase at 32768 Hz but just updating it once per emulated second
     // passes all of the tests of the rtc3test rom.
     // This may be because no time register changes that fast (as the smallest unit is the second).
-    rtc->rtc_cycles += 4;
-    if (rtc->rtc_cycles < GB_CPU_FREQ)
+    mmu->rtc.rtc_cycles += 4;
+    if (mmu->rtc.rtc_cycles < GB_CPU_FREQ)
         return;
-    rtc->rtc_cycles = 0;
+    mmu->rtc.rtc_cycles = 0;
 
-    rtc->s++;
-    if (rtc->s > 0x3F) {
-        rtc->s = 0;
+    mmu->rtc.s++;
+    if (mmu->rtc.s > 0x3F) {
+        mmu->rtc.s = 0;
         return;
     }
-    if (rtc->s != 60)
+    if (mmu->rtc.s != 60)
         return;
-    rtc->s = 0;
+    mmu->rtc.s = 0;
 
-    rtc->m++;
-    if (rtc->m > 0x3F) {
-        rtc->m = 0;
+    mmu->rtc.m++;
+    if (mmu->rtc.m > 0x3F) {
+        mmu->rtc.m = 0;
         return;
     }
-    if (rtc->m != 60)
+    if (mmu->rtc.m != 60)
         return;
-    rtc->m = 0;
+    mmu->rtc.m = 0;
 
-    rtc->h++;
-    if (rtc->h > 0x1F) {
-        rtc->h = 0;
+    mmu->rtc.h++;
+    if (mmu->rtc.h > 0x1F) {
+        mmu->rtc.h = 0;
         return;
     }
-    if (rtc->h != 24)
+    if (mmu->rtc.h != 24)
         return;
-    rtc->h = 0;
+    mmu->rtc.h = 0;
 
-    word_t d = ((rtc->dh & 0x01) << 8) | rtc->dl;
+    word_t d = ((mmu->rtc.dh & 0x01) << 8) | mmu->rtc.dl;
     d++;
-    rtc->dl = d & 0x00FF;
+    mmu->rtc.dl = d & 0x00FF;
     if (CHECK_BIT(d, 8))
-        SET_BIT(rtc->dh, 0);
+        SET_BIT(mmu->rtc.dh, 0);
     else
-        RESET_BIT(rtc->dh, 0);
+        RESET_BIT(mmu->rtc.dh, 0);
     if (d < 512)
         return;
 
-    rtc->dl = 0;
-    RESET_BIT(rtc->dh, 0);
-    SET_BIT(rtc->dh, 7); // set overflow bit
+    mmu->rtc.dl = 0;
+    RESET_BIT(mmu->rtc.dh, 0);
+    SET_BIT(mmu->rtc.dh, 7); // set overflow bit
 }
 
 static inline byte_t gdma_hdma_copy_step(emulator_t *emu) {
@@ -600,14 +614,12 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
         case 0x2000: {
             mmu->romb0_reg = data;
             word_t current_rom_bank = (mmu->romb1_reg << 8) | mmu->romb0_reg;
-            current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
             mmu->rom_bankn_addr = (current_rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
             break;
         }
         case 0x3000: {
             mmu->romb1_reg = data;
             word_t current_rom_bank = (mmu->romb1_reg << 8) | mmu->romb0_reg;
-            current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
             mmu->rom_bankn_addr = (current_rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
             break;
         }
@@ -620,21 +632,32 @@ static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) 
         }
         break;
     case MBC7:
-        switch (address & 0xF000) {
+        switch (address & 0xE000) {
         case 0x0000:
-        case 0x1000:
             mmu->ramg_reg = data == 0x0A;
             break;
-        case 0x2000:
-        case 0x3000: {
-            mmu->romb0_reg = data;
-            word_t current_rom_bank = mmu->romb0_reg;
-            current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
-            mmu->rom_bankn_addr = (current_rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
-        } break;
+        case 0x2000: {
+            mmu->bank1_reg = data;
+            mmu->rom_bankn_addr = (mmu->bank1_reg - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
+            break;
+        }
         case 0x4000:
-        case 0x5000:
             mmu->mbc7.ramg2_reg = data == 0x40;
+            break;
+        }
+        break;
+    case HuC1:
+        switch (address & 0xE000) {
+        case 0x0000:
+            mmu->huc1_ir_mode = (data & 0x0F) == 0x0E;
+            break;
+        case 0x2000:
+            mmu->bank1_reg = data;
+            mmu->rom_bankn_addr = (mmu->bank1_reg - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
+            break;
+        case 0x4000:
+            mmu->bank2_reg = data;
+            mmu->eram_bank_addr = mmu->bank2_reg * ERAM_BANK_SIZE;
             break;
         }
         break;
@@ -1108,7 +1131,13 @@ static inline byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_
             }
         }
 
-        if (mmu->ramg_reg && !mmu->rtc_mapped) {
+        if (mmu->mbc == HuC1 && mmu->huc1_ir_mode) {
+            eprintf("TODO read HuC1 IR light register (read 0xC1 == seen light, 0xC0 == did not see light)\n");
+            return 0xC0;
+        }
+
+        byte_t eram_enabled = mmu->ramg_reg || mmu->mbc == HuC1;
+        if (eram_enabled && !mmu->rtc_mapped) {
             if (mmu->mbc == MBC2) {
                 // wrap around from 0xA200 to 0xBFFF (eg: address 0xA200 reads as address 0xA000)
                 // return mmu->eram_bank_pointer[ERAM + (address & 0x1FF)] | 0xF0;
@@ -1229,7 +1258,13 @@ static inline void mmu_write_io_src(emulator_t *emu, word_t address, byte_t data
             }
         }
 
-        if (mmu->ramg_reg && !mmu->rtc_mapped) {
+        if (mmu->mbc == HuC1 && mmu->huc1_ir_mode) {
+            eprintf("TODO write 0x%02X in HuC1 IR light register (write 0x01 == turn on light, 0x00 == turn off light)\n", data);
+            break;
+        }
+
+        byte_t eram_enabled = mmu->ramg_reg || mmu->mbc == HuC1;
+        if (eram_enabled && !mmu->rtc_mapped) {
             mmu->eram[mmu->eram_bank_addr + (address - ERAM)] = data;
         } else if (mmu->rtc.enabled) {
             switch (mmu->rtc.reg) {

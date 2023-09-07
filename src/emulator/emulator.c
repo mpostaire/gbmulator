@@ -40,7 +40,12 @@ const char *mbc_names[] = {
     STRINGIFY(MBC5),
     STRINGIFY(MBC6),
     STRINGIFY(MBC7),
-    STRINGIFY(HuC1)
+    STRINGIFY(MMM01),
+    STRINGIFY(M161),
+    STRINGIFY(HuC1),
+    STRINGIFY(HuC3),
+    STRINGIFY(CAMERA),
+    STRINGIFY(TAMA5)
 };
 
 int emulator_step(emulator_t *emu) {

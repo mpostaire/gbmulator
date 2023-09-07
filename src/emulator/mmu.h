@@ -118,32 +118,18 @@ typedef enum {
     MBC5,
     MBC6,
     MBC7,
-    HuC1
+    MMM01,
+    M161,
+    HuC1,
+    HuC3,
+    CAMERA,
+    TAMA5
 } mbc_type_t;
 
 typedef enum {
     GDMA,
     HDMA
 } hdma_type_t;
-
-typedef struct {
-    byte_t latched_s;
-    byte_t latched_m;
-    byte_t latched_h;
-    byte_t latched_dl;
-    byte_t latched_dh;
-
-    byte_t s;
-    byte_t m;
-    byte_t h;
-    byte_t dl;
-    byte_t dh;
-
-    byte_t enabled;
-    byte_t reg; // rtc register
-    byte_t latch;
-    uint32_t rtc_cycles;
-} rtc_t;
 
 typedef struct {
     size_t rom_size;
@@ -201,7 +187,7 @@ typedef struct {
     // MBC1/MBC1M: bits 7-5: unused, bits 4-0 (MBC1M: bits 3-0): lower 5 (MBC1M: 4) bits of the ROM_BANKN number
     // (also used as a convenience variable in other MBCs to store the ROM_BANKN number)
     byte_t bank1_reg;
-    // bits 7-2: unused, bits 1-0: upper 2 bits (bits 6-5) of the ROM_BANKN number
+    // MBC1/MBC1M: bits 7-2: unused, bits 1-0: upper 2 bits (bits 6-5) of the ROM_BANKN number
     // (also used as a convenience variable in other MBCs to store the ERAM_BANK number)
     byte_t bank2_reg;
     byte_t mode_reg; // bits 7-1: unused, bit 0: BANK2 mode
@@ -209,12 +195,30 @@ typedef struct {
     byte_t romb0_reg; // MBC5: lower ROM BANK register
     byte_t romb1_reg; // MBC5: upper ROM BANK register
     // MBC5: RAMB register is stored in bank2_reg
+    byte_t huc1_ir_mode; // 1 if HuC1 is in IR mode, 0 if in ERAM mode
 
     byte_t has_battery;
     byte_t has_rumble;
     byte_t has_rtc;
 
-    rtc_t rtc;
+    struct {
+        byte_t latched_s;
+        byte_t latched_m;
+        byte_t latched_h;
+        byte_t latched_dl;
+        byte_t latched_dh;
+
+        byte_t s;
+        byte_t m;
+        byte_t h;
+        byte_t dl;
+        byte_t dh;
+
+        byte_t enabled;
+        byte_t reg; // rtc register
+        byte_t latch;
+        uint32_t rtc_cycles;
+    } rtc;
 
     struct {
         byte_t ramg2_reg; // both ramg_reg and ramg2_reg must be 1 to enable eeprom
