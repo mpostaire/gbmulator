@@ -375,7 +375,7 @@ void emulator_print_status(emulator_t *emu) {
     }
 
     printf("Cartridge using %s with %d ROM banks%s%s%s%s\n",
-            mbc_names[mmu->mbc],
+            mbc_names[mmu->mbc.type],
             mmu->rom_banks,
             ram_str ? ram_str : "",
             mmu->has_battery ? " + BATTERY" : "",
@@ -404,10 +404,10 @@ void emulator_joypad_release(emulator_t *emu, joypad_button_t key) {
 }
 
 byte_t *emulator_get_save(emulator_t *emu, size_t *save_length) {
-    if (emu->mmu->mbc == MBC7) {
-        *save_length = sizeof(emu->mmu->mbc7.eeprom.data);
+    if (emu->mmu->mbc.type == MBC7) {
+        *save_length = sizeof(emu->mmu->mbc.mbc7.eeprom.data);
         byte_t *save_data = xmalloc(*save_length);
-        memcpy(save_data, emu->mmu->mbc7.eeprom.data, *save_length);
+        memcpy(save_data, emu->mmu->mbc.mbc7.eeprom.data, *save_length);
         return save_data;
     }
 
@@ -457,10 +457,10 @@ byte_t *emulator_get_save(emulator_t *emu, size_t *save_length) {
 }
 
 int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
-    if (emu->mmu->mbc == MBC7) {
-        if (save_length != sizeof(emu->mmu->mbc7.eeprom.data))
+    if (emu->mmu->mbc.type == MBC7) {
+        if (save_length != sizeof(emu->mmu->mbc.mbc7.eeprom.data))
             return 0;
-        memcpy(emu->mmu->mbc7.eeprom.data, save_data, save_length);
+        memcpy(emu->mmu->mbc.mbc7.eeprom.data, save_data, save_length);
         return 1;
     }
 
@@ -814,5 +814,5 @@ void emulator_set_palette(emulator_t *emu, color_palette_t palette) {
 }
 
 byte_t emulator_has_accelerometer(emulator_t *emu) {
-    return emu->mmu->mbc == MBC7;
+    return emu->mmu->mbc.type == MBC7;
 }

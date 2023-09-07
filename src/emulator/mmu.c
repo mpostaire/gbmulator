@@ -24,15 +24,9 @@ typedef enum {
 } oam_dma_starting_state;
 
 #define IS_OAM_DMA_RUNNING(mmu) ((mmu)->oam_dma.progress >= 0 && (mmu)->oam_dma.progress < 0xA0)
-#define IS_RTC_HALTED(mmu) ((mmu)->rtc.dh & 0x40)
 #define GBC_CURRENT_VRAM_BANK(mmu) ((mmu)->io_registers[VBK - IO] & 0x01)
 #define GBC_CURRENT_WRAM_BANK(mmu) (((mmu)->io_registers[SVBK - IO] & 0x07) == 0 ? 1 : ((mmu)->io_registers[SVBK - IO] & 0x07))
 #define GBC_GDMA_HDMA_LENGTH(mmu) ((mmu)->io_registers[HDMA5 - IO] & 0x7F)
-
-#define EEPROM_DO(pins) ((pins) & 0x01) // MBC7 EEPROM DO pin
-#define EEPROM_DI(pins) ((pins) & 0x02) // MBC7 EEPROM DI pin
-#define EEPROM_CLK(pins) ((pins) & 0x40) // MBC7 EEPROM CLK pin
-#define EEPROM_CS(pins) ((pins) & 0x80) // MBC7 EEPROM CS pin
 
 static int parse_cartridge(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
@@ -40,95 +34,98 @@ static int parse_cartridge(emulator_t *emu) {
     byte_t has_eram = 0;
     switch (mmu->rom[0x0147]) {
     case 0x00:
-        mmu->mbc = ROM_ONLY;
+        mmu->mbc.type = ROM_ONLY;
         break;
     case 0x01:
-        mmu->mbc = MBC1;
+        mmu->mbc.type = MBC1;
         break;
     case 0x02:
-        mmu->mbc = MBC1;
+        mmu->mbc.type = MBC1;
         has_eram = 1;
         break;
     case 0x03:
-        mmu->mbc = MBC1;
+        mmu->mbc.type = MBC1;
         has_eram = 1;
         mmu->has_battery = 1;
         break;
     case 0x05:
-        mmu->mbc = MBC2;
+        mmu->mbc.type = MBC2;
         break;
     case 0x06:
-        mmu->mbc = MBC2;
+        mmu->mbc.type = MBC2;
         has_eram = 1;
         mmu->has_battery = 1;
         break;
     case 0x0F:
-        mmu->mbc = MBC3;
+        mmu->mbc.type = MBC3;
         mmu->has_rtc = 1;
         mmu->has_battery = 1;
         break;
     case 0x10:
-        mmu->mbc = MBC3;
+        mmu->mbc.type = MBC3;
         mmu->has_rtc = 1;
         mmu->has_battery = 1;
         has_eram = 1;
         break;
     case 0x11:
-        mmu->mbc = MBC3;
+        mmu->mbc.type = MBC3;
         break;
     case 0x12:
-        mmu->mbc = MBC3;
+        mmu->mbc.type = MBC3;
         has_eram = 1;
         break;
     case 0x13:
-        mmu->mbc = MBC3;
+        mmu->mbc.type = MBC3;
         mmu->has_battery = 1;
         has_eram = 1;
         break;
     case 0x19:
-        mmu->mbc = MBC5;
+        mmu->mbc.type = MBC5;
         break;
     case 0x1A:
-        mmu->mbc = MBC5;
+        mmu->mbc.type = MBC5;
         has_eram = 1;
         break;
     case 0x1B:
-        mmu->mbc = MBC5;
+        mmu->mbc.type = MBC5;
         has_eram = 1;
         mmu->has_battery = 1;
         break;
     case 0x1C:
-        mmu->mbc = MBC5;
+        mmu->mbc.type = MBC5;
         mmu->has_rumble = 1;
         break;
     case 0x1D:
-        mmu->mbc = MBC5;
+        mmu->mbc.type = MBC5;
         mmu->has_rumble = 1;
         has_eram = 1;
         break;
     case 0x1E:
-        mmu->mbc = MBC5;
+        mmu->mbc.type = MBC5;
         mmu->has_rumble = 1;
         has_eram = 1;
         mmu->has_battery = 1;
         break;
     // case 0x20:
-    //     mmu->mbc = MBC6;
+    //     mmu->mbc.type = MBC6;
     //     break;
     case 0x22:
-        mmu->mbc = MBC7;
+        mmu->mbc.type = MBC7;
         break;
     // case 0xFC:
-    //     mmu->mbc = CAMERA;
+    //     mmu->mbc.type = CAMERA;
     //     break;
     // case 0xFD:
-    //     mmu->mbc = TAMA5;
+    //     mmu->mbc.type = TAMA5;
     //     break;
-    // case 0xFE:
-    //     mmu->mbc = HuC3;
-    //     break;
+    case 0xFE:
+        mmu->mbc.type = HuC3;
+        mmu->has_rtc = 1;
+        has_eram = 1;
+        mmu->has_battery = 1;
+        break;
     case 0xFF:
-        mmu->mbc = HuC1;
+        mmu->mbc.type = HuC1;
         has_eram = 1;
         mmu->has_battery = 1;
         break;
@@ -138,7 +135,7 @@ static int parse_cartridge(emulator_t *emu) {
     }
 
     // detect MBC1M
-    if (mmu->mbc == MBC1 && mmu->rom_size == 0x100000) {
+    if (mmu->mbc.type == MBC1 && mmu->rom_size == 0x100000) {
         const unsigned int addrs[] = { 0x00104, 0x40104, 0x80104, 0xC0104 };
         byte_t logo[] = {
             0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0C, 0x00, 0x0D,
@@ -150,7 +147,7 @@ static int parse_cartridge(emulator_t *emu) {
         for (byte_t i = 0; i < 4; i++) {
             matches += memcmp(&mmu->rom[addrs[i]], logo, sizeof(logo)) ? 0 : 1;
             if (matches > 1) {
-                mmu->mbc = MBC1M;
+                mmu->mbc.type = MBC1M;
                 break;
             }
         }
@@ -169,9 +166,9 @@ static int parse_cartridge(emulator_t *emu) {
     }
 
     // MBC3 cartridges are 2MiB, MBC30 cartridges are 4MiB (but the mbctest.gb test rom is a bit smaller)
-    if (mmu->mbc == MBC3)
+    if (mmu->mbc.type == MBC3)
         if (mmu->eram_banks == 8 || mmu->rom_size > 0x00200000)
-            mmu->mbc = MBC30;
+            mmu->mbc.type = MBC30;
 
     // get rom title
     memcpy(emu->rom_title, (char *) &mmu->rom[0x0134], 16);
@@ -207,16 +204,16 @@ int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size) {
     mmu_t *mmu = xcalloc(1, sizeof(mmu_t));
     mmu->rom = xcalloc(1, rom_size);
 
-    mmu->bank1_reg = 1;
+    mmu->mbc.mbc1.bank_lo = 1;
     // mmu->rom_bank0_addr = 0; // initialized to 0 by xcalloc
     // mmu->rom_bankn_addr = 0; // initialized to ROM_BANKN - ROM_BANK_SIZE = 0 by xcalloc
     // mmu->eram_bank_addr = 0; // initialized to 0 by xcalloc
     mmu->wram_bankn_addr_offset = -WRAM_BANK0;
     mmu->vram_bank_addr_offset = -VRAM;
 
-    mmu->mbc7.accelerometer.latched_x = 0x8000;
-    mmu->mbc7.accelerometer.latched_y = 0x8000;
-    mmu->mbc7.accelerometer.latch_ready = 1;
+    // mmu->mbc7.accelerometer.latched_x = 0x8000;
+    // mmu->mbc7.accelerometer.latched_y = 0x8000;
+    // mmu->mbc7.accelerometer.latch_ready = 1;
 
     mmu->rom_size = rom_size;
     memcpy(mmu->rom, rom_data, mmu->rom_size);
@@ -232,62 +229,6 @@ int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size) {
 void mmu_quit(emulator_t *emu) {
     free(emu->mmu->rom);
     free(emu->mmu);
-}
-
-void rtc_step(emulator_t *emu) {
-    mmu_t *mmu = emu->mmu;
-
-    if (IS_RTC_HALTED(mmu))
-        return;
-
-    // rtc internal clock should increase at 32768 Hz but just updating it once per emulated second
-    // passes all of the tests of the rtc3test rom.
-    // This may be because no time register changes that fast (as the smallest unit is the second).
-    mmu->rtc.rtc_cycles += 4;
-    if (mmu->rtc.rtc_cycles < GB_CPU_FREQ)
-        return;
-    mmu->rtc.rtc_cycles = 0;
-
-    mmu->rtc.s++;
-    if (mmu->rtc.s > 0x3F) {
-        mmu->rtc.s = 0;
-        return;
-    }
-    if (mmu->rtc.s != 60)
-        return;
-    mmu->rtc.s = 0;
-
-    mmu->rtc.m++;
-    if (mmu->rtc.m > 0x3F) {
-        mmu->rtc.m = 0;
-        return;
-    }
-    if (mmu->rtc.m != 60)
-        return;
-    mmu->rtc.m = 0;
-
-    mmu->rtc.h++;
-    if (mmu->rtc.h > 0x1F) {
-        mmu->rtc.h = 0;
-        return;
-    }
-    if (mmu->rtc.h != 24)
-        return;
-    mmu->rtc.h = 0;
-
-    word_t d = ((mmu->rtc.dh & 0x01) << 8) | mmu->rtc.dl;
-    d++;
-    mmu->rtc.dl = d & 0x00FF;
-    if (CHECK_BIT(d, 8))
-        SET_BIT(mmu->rtc.dh, 0);
-    else
-        RESET_BIT(mmu->rtc.dh, 0);
-    if (d < 512)
-        return;
-
-    mmu->rtc.dl = 0;
-    RESET_BIT(mmu->rtc.dh, 0);
-    SET_BIT(mmu->rtc.dh, 7); // set overflow bit
 }
 
 static inline byte_t gdma_hdma_copy_step(emulator_t *emu) {
@@ -397,275 +338,6 @@ void dma_step(emulator_t *emu) {
     oam_dma_step(emu);
     if (emu->mode == CGB)
         gdma_hdma_step(emu);
-}
-
-static inline void write_mbc7_eeprom(mmu_t *mmu, byte_t data) {
-    if (!EEPROM_CS(data)) { // if CS (Chip Select) not set, only update pins
-        byte_t bit_do = mmu->mbc7.eeprom.output_bits >> 15;
-        mmu->mbc7.eeprom.pins = (data & 0xC2) | bit_do;
-        return;
-    }
-
-    if (!EEPROM_CLK(mmu->mbc7.eeprom.pins) && EEPROM_CLK(data)) { // if go from CLK 0 (Clock) to CLK 1, we just clocked
-        // shift out DO
-        mmu->mbc7.eeprom.output_bits <<= 1;
-
-        if (mmu->mbc7.eeprom.command_arg_remaining_bits) {
-            mmu->mbc7.eeprom.output_bits = 0;
-            // shift in DI to build argument for WRITE or WRAL
-            mmu->mbc7.eeprom.command_arg_remaining_bits--;
-            if (EEPROM_DI(data) && mmu->mbc7.eeprom.write_enabled) {
-                if (mmu->mbc7.eeprom.command & 0x100) {
-                    // WRITE
-                    SET_BIT(mmu->mbc7.eeprom.data[mmu->mbc7.eeprom.command & 0x7F], mmu->mbc7.eeprom.command_arg_remaining_bits);
-                } else {
-                    // WRAL
-                    for (byte_t i = 0; i < 0x7F; i++)
-                        SET_BIT(mmu->mbc7.eeprom.data[i], mmu->mbc7.eeprom.command_arg_remaining_bits);
-                }
-            }
-
-            if (!mmu->mbc7.eeprom.command_arg_remaining_bits) {
-                mmu->mbc7.eeprom.command = 0;
-                // Set next bit to be shifted out to 1. This makes DO == 1 now, thus settle time is not emulated (not important).
-                // To emulate settle time we could place the set bit in one of the first 15 bit of 'output_bits'.
-                mmu->mbc7.eeprom.output_bits = 0x8000;
-            }
-        } else {
-            // shift in DI to build command
-            mmu->mbc7.eeprom.command <<= 1;
-            mmu->mbc7.eeprom.command |= (EEPROM_DI(data) >> 1);
-
-            if (mmu->mbc7.eeprom.command & 0x0400) { // valid command if bit 11 is set (start bit)
-                word_t stripped_command = mmu->mbc7.eeprom.command & 0x03FF; // remove start bit from command
-
-                switch ((stripped_command >> 6) & 0x000F) {
-                case 0x00: // EWDS
-                    mmu->mbc7.eeprom.write_enabled = 0;
-                    mmu->mbc7.eeprom.command = 0;
-                    break;
-                case 0x01: // WRAL
-                    if (mmu->mbc7.eeprom.write_enabled)
-                        memset(mmu->mbc7.eeprom.data, 0, sizeof(mmu->mbc7.eeprom.data));
-                    mmu->mbc7.eeprom.command_arg_remaining_bits = 16;
-                    // don't set command to 0 yet as we still need it after its arguments has been shifted in
-                    break;
-                case 0x02: // ERAL
-                    if (mmu->mbc7.eeprom.write_enabled)
-                        memset(mmu->mbc7.eeprom.data, 0xFF, sizeof(mmu->mbc7.eeprom.data));
-                    mmu->mbc7.eeprom.command = 0;
-                    break;
-                case 0x03: // EWEN
-                    mmu->mbc7.eeprom.write_enabled = 1;
-                    mmu->mbc7.eeprom.command = 0;
-                    break;
-                case 0x04 ... 0x07: // WRITE
-                    if (mmu->mbc7.eeprom.write_enabled)
-                        mmu->mbc7.eeprom.data[mmu->mbc7.eeprom.command & 0x7F] = 0;
-                    mmu->mbc7.eeprom.command_arg_remaining_bits = 16;
-                    // don't set command to 0 yet as we still need it after its arguments has been shifted in
-                    break;
-                case 0x08 ... 0x0B: { // READ
-                    word_t eeprom_address = stripped_command & 0x7F;
-                    mmu->mbc7.eeprom.output_bits = ((mmu->mbc7.eeprom.data[eeprom_address + 1]) << 8) | mmu->mbc7.eeprom.data[eeprom_address];
-                    mmu->mbc7.eeprom.command = 0;
-                } break;
-                case 0x0C ... 0x0F: // ERASE
-                    if (mmu->mbc7.eeprom.write_enabled) {
-                        mmu->mbc7.eeprom.data[mmu->mbc7.eeprom.command & 0x7F] = 0xFF;
-                        mmu->mbc7.eeprom.data[(mmu->mbc7.eeprom.command & 0x7F) + 1] = 0xFF;
-                    }
-                    mmu->mbc7.eeprom.command = 0;
-                    break;
-                }
-            }
-        }
-    }
-
-    byte_t bit_do = mmu->mbc7.eeprom.output_bits >> 15;
-    mmu->mbc7.eeprom.pins = (data & 0xC2) | bit_do;
-}
-
-static inline void mbc1_set_bank_addrs(mmu_t *mmu, byte_t bank1_reg_size) {
-    if (mmu->mode_reg) { // ERAM mode
-        byte_t current_rom_bank0 = (mmu->bank2_reg << bank1_reg_size) & (mmu->rom_banks - 1);
-        mmu->rom_bank0_addr = current_rom_bank0 * ROM_BANK_SIZE;
-
-        byte_t current_eram_bank = mmu->bank2_reg & (mmu->eram_banks - 1);
-        mmu->eram_bank_addr = current_eram_bank * ERAM_BANK_SIZE;
-    } else { // ROM mode
-        // NOTE: this is not really a BANK0 pointer: it's actually a BANKN pointer that happens to be mapped
-        // in the memory address region ROM_BANK0. (IS THIS STILL TRUE? --> read docs)
-        mmu->rom_bank0_addr = 0;
-        mmu->eram_bank_addr = 0;
-    }
-
-    byte_t current_rom_bankn = (mmu->bank2_reg << bank1_reg_size) | mmu->bank1_reg;
-    current_rom_bankn &= mmu->rom_banks - 1;
-
-    mmu->rom_bankn_addr = (current_rom_bankn - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
-}
-
-static inline void write_mbc_registers(mmu_t *mmu, word_t address, byte_t data) {
-    switch (mmu->mbc) {
-    case ROM_ONLY:
-        break; // read only, do nothing
-    case MBC1:
-        switch (address & 0xE000) {
-        case 0x0000:
-            mmu->ramg_reg = mmu->eram_banks > 0 && (data & 0x0F) == 0x0A;
-            break;
-        case 0x2000:
-            data &= 0x1F;
-            mmu->bank1_reg = data == 0x00 ? 0x01 : data; // BANK1 can't be 0
-            mbc1_set_bank_addrs(mmu, 5);
-            break;
-        case 0x4000:
-            data &= 0x03;
-            mmu->bank2_reg = data;
-            mbc1_set_bank_addrs(mmu, 5);
-            break;
-        case 0x6000:
-            mmu->mode_reg = data & 0x01;
-            mbc1_set_bank_addrs(mmu, 5);
-            break;
-        }
-        break;
-    case MBC1M:
-        switch (address & 0xE000) {
-        case 0x0000:
-            mmu->ramg_reg = mmu->eram_banks > 0 && (data & 0x0F) == 0x0A;
-            break;
-        case 0x2000:
-            data &= 0x1F;
-            mmu->bank1_reg = data == 0x00 ? 0x01 : data; // BANK1 can't be 0
-            mmu->bank1_reg &= 0x0F; // MBC1M discards bit 4 of BANK1 register
-            mbc1_set_bank_addrs(mmu, 4);
-            break;
-        case 0x4000:
-            data &= 0x03;
-            mmu->bank2_reg = data;
-            mbc1_set_bank_addrs(mmu, 4);
-            break;
-        case 0x6000:
-            mmu->mode_reg = data & 0x01;
-            mbc1_set_bank_addrs(mmu, 4);
-            break;
-        }
-        break;
-    case MBC2:
-        if (address >= 0x4000)
-            break;
-
-        if (!CHECK_BIT(address, 8)) {
-            mmu->ramg_reg = (data & 0x0F) == 0x0A;
-        } else {
-            data &= 0x0F;
-            mmu->bank1_reg = data == 0x00 ? 0x01 : data; // BANK1 can't be 0
-            mmu->bank1_reg &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
-            mmu->rom_bankn_addr = (mmu->bank1_reg - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
-        }
-        break;
-    case MBC3:
-    case MBC30:
-        switch (address & 0xE000) {
-        case 0x0000:
-            mmu->ramg_reg = (data & 0x0F) == 0x0A;
-            if (mmu->has_rtc)
-                mmu->rtc.enabled = mmu->ramg_reg;
-            break;
-        case 0x2000:
-            mmu->bank1_reg = mmu->mbc == MBC30 ? data : data & 0x7F;
-            if (mmu->bank1_reg == 0x00)
-                mmu->bank1_reg = 0x01; // 0x00 not allowed
-            mmu->bank1_reg &= mmu->rom_banks - 1; // in this case, equivalent to mmu->bank1_reg %= rom_banks but avoid division by 0
-            mmu->rom_bankn_addr = (mmu->bank1_reg - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
-            break;
-        case 0x4000:;
-            byte_t max_ram_bank = mmu->mbc == MBC30 ? 0x07 : 0x03;
-            if (data <= max_ram_bank) {
-                mmu->bank2_reg = data;
-                mmu->bank2_reg &= mmu->eram_banks - 1; // in this case, equivalent to mmu->bank2_reg %= eram_banks but avoid division by 0
-                mmu->eram_bank_addr = mmu->bank2_reg * ERAM_BANK_SIZE;
-                mmu->rtc_mapped = 0;
-            } else if (mmu->has_rtc && data >= 0x08 && data <= 0x0C) {
-                mmu->rtc.reg = data;
-                mmu->rtc_mapped = 1;
-            }
-            break;
-        case 0x6000:
-            if (mmu->rtc.latch == 0x00 && data == 0x01) {
-                mmu->rtc.latched_s = mmu->rtc.s;
-                mmu->rtc.latched_m = mmu->rtc.m;
-                mmu->rtc.latched_h = mmu->rtc.h;
-                mmu->rtc.latched_dl = mmu->rtc.dl;
-                mmu->rtc.latched_dh = mmu->rtc.dh;
-            }
-            mmu->rtc.latch = data;
-            break;
-        }
-        break;
-    case MBC5:
-        switch (address & 0xF000) {
-        case 0x0000:
-        case 0x1000:
-            mmu->ramg_reg = data == 0x0A;
-            break;
-        case 0x2000: {
-            mmu->romb0_reg = data;
-            word_t current_rom_bank = (mmu->romb1_reg << 8) | mmu->romb0_reg;
-            current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
-            mmu->rom_bankn_addr = (current_rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
-            break;
-        }
-        case 0x3000: {
-            mmu->romb1_reg = data;
-            word_t current_rom_bank = (mmu->romb1_reg << 8) | mmu->romb0_reg;
-            current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
-            mmu->rom_bankn_addr = (current_rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
-            break;
-        }
-        case 0x4000:
-        case 0x5000:
-            mmu->bank2_reg = data & 0x0F;
-            mmu->bank2_reg &= mmu->eram_banks - 1; // in this case, equivalent to mmu->bank2_reg %= eram_banks but avoid division by 0
-            mmu->eram_bank_addr = mmu->bank2_reg * ERAM_BANK_SIZE;
-            break;
-        }
-        break;
-    case MBC7:
-        switch (address & 0xE000) {
-        case 0x0000:
-            mmu->ramg_reg = data == 0x0A;
-            break;
-        case 0x2000:
-            mmu->bank1_reg = data;
-            mmu->bank1_reg &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
-            mmu->rom_bankn_addr = (mmu->bank1_reg - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
-            break;
-        case 0x4000:
-            mmu->mbc7.ramg2_reg = data == 0x40;
-            break;
-        }
-        break;
-    case HuC1:
-        switch (address & 0xE000) {
-        case 0x0000:
-            mmu->huc1_ir_mode = (data & 0x0F) == 0x0E;
-            break;
-        case 0x2000:
-            mmu->bank1_reg = data;
-            mmu->bank1_reg &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
-            mmu->rom_bankn_addr = (mmu->bank1_reg - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
-            break;
-        case 0x4000:
-            mmu->bank2_reg = data;
-            mmu->bank2_reg &= mmu->eram_banks - 1; // in this case, equivalent to mmu->bank2_reg %= eram_banks but avoid division by 0
-            mmu->eram_bank_addr = mmu->bank2_reg * ERAM_BANK_SIZE;
-            break;
-        }
-        break;
-    }
 }
 
 static inline byte_t read_io_register(emulator_t *emu, word_t address) {
@@ -1111,57 +783,7 @@ static inline byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_
         return mmu->vram[mmu->vram_bank_addr_offset + address];
     case ERAM:
     case ERAM + 0x1000:
-        if (mmu->mbc == MBC7) {
-            // both mbc7 ram enable registers must be set and everything from ERAM + 0x1000 is unused (always reads 0xFF)
-            if (!mmu->ramg_reg || !mmu->mbc7.ramg2_reg || address >= ERAM + 0x1000)
-                return 0xFF;
-
-            switch (address & 0x00F0) {
-            case 0x0020 /* 0xAx2x */:
-                // printf("read accel x low: 0x%02X\n", mmu->mbc7.accelerometer.latched_x & 0xFF);
-                return mmu->mbc7.accelerometer.latched_x; // accelerometer x low (read only)
-            case 0x0030 /* 0xAx3x */:
-                // printf("read accel x high: 0x%02X\n", mmu->mbc7.accelerometer.latched_x >> 8);
-                return mmu->mbc7.accelerometer.latched_x >> 8; // accelerometer x high (read only)
-            case 0x0040 /* 0xAx4x */:
-                // printf("read accel y low: 0x%02X\n", mmu->mbc7.accelerometer.latched_y & 0xFF);
-                return mmu->mbc7.accelerometer.latched_y; // accelerometer y low (read only)
-            case 0x0050 /* 0xAx5x */:
-                // printf("read accel y high: 0x%02X\n", mmu->mbc7.accelerometer.latched_y >> 8);
-                return mmu->mbc7.accelerometer.latched_y >> 8; // accelerometer y high (read only)
-            case 0x0060 /* 0xAx6x */: return 0x00; // unused (always reads 0x00)
-            case 0x0080 /* 0xAx8x */: return mmu->mbc7.eeprom.pins;
-            default: return 0xFF; // 0xAx0x -> 0xAx1x are write only, 0xAx7x and 0xAx9x -> 0xAxFx are unused and always reads 0xFF
-            }
-        }
-
-        if (mmu->mbc == HuC1 && mmu->huc1_ir_mode) {
-            eprintf("TODO read HuC1 IR light register (read 0xC1 == seen light, 0xC0 == did not see light)\n");
-            return 0xC0;
-        }
-
-        byte_t eram_enabled = mmu->ramg_reg || mmu->mbc == HuC1;
-        if (eram_enabled && !mmu->rtc_mapped) {
-            if (mmu->mbc == MBC2) {
-                // wrap around from 0xA200 to 0xBFFF (eg: address 0xA200 reads as address 0xA000)
-                // return mmu->eram_bank_pointer[ERAM + (address & 0x1FF)] | 0xF0;
-                return mmu->eram[mmu->eram_bank_addr + ((address - ERAM) & 0x1FF)] | 0xF0;
-            } else {
-                return mmu->eram[mmu->eram_bank_addr + address - ERAM];
-            }
-        } else if (mmu->rtc.enabled) {
-            switch (mmu->rtc.reg) {
-            case 0x08: return mmu->rtc.latched_s & 0x3F;
-            case 0x09: return mmu->rtc.latched_m & 0x3F;
-            case 0x0A: return mmu->rtc.latched_h & 0x1F;
-            case 0x0B: return mmu->rtc.latched_dl;
-            case 0x0C: return mmu->rtc.latched_dh & 0xC1;
-            default: return 0xFF;
-            }
-        } else {
-            return 0xFF;
-        }
-        return mmu->eram[mmu->eram_bank_addr + (address - ERAM)];
+        return mbc_read_eram(emu, address);
     case WRAM_BANK0:
         return mmu->wram[address - WRAM_BANK0];
     case WRAM_BANKN:
@@ -1219,7 +841,7 @@ static inline void mmu_write_io_src(emulator_t *emu, word_t address, byte_t data
     case ROM_BANKN + 0x1000:
     case ROM_BANKN + 0x2000:
     case ROM_BANKN + 0x3000:
-        write_mbc_registers(mmu, address, data);
+        mbc_write_registers(emu, address, data);
         break;
     case VRAM:
     case VRAM + 0x1000:
@@ -1230,59 +852,7 @@ static inline void mmu_write_io_src(emulator_t *emu, word_t address, byte_t data
         break;
     case ERAM:
     case ERAM + 0x1000:
-        if (mmu->mbc == MBC7) {
-            // both mbc7 ram enable registers must be set and everything from ERAM + 0x1000 is unused
-            if (!mmu->ramg_reg || !mmu->mbc7.ramg2_reg || address >= ERAM + 0x1000)
-                break;
-
-            switch (address & 0x00F0) {
-            case 0x0000 /* 0xAx0x */: // erase latched accelerometer (write only)
-                if (data == 0x55) {
-                    mmu->mbc7.accelerometer.latched_x = 0x8000;
-                    mmu->mbc7.accelerometer.latched_y = 0x8000;
-                    mmu->mbc7.accelerometer.latch_ready = 1;
-                }
-                break;
-            case 0x0010 /* 0xAx1x */: // latch accelerometer (write only)
-                if (data == 0xAA && mmu->mbc7.accelerometer.latch_ready) {
-                    // TODO accelerometer is buggy (see kirby tilt n tumble)
-                    double x = 0.0f;
-                    double y = 0.0f;
-                    if (emu->on_accelerometer_request)
-                        emu->on_accelerometer_request(&x, &y);
-                    mmu->mbc7.accelerometer.latched_x = 0x81D0 + (0x70 * x); // accelerometer_center + gravity * x
-                    mmu->mbc7.accelerometer.latched_y = 0x81D0 + (0x70 * y); // accelerometer_center + gravity * y
-                    mmu->mbc7.accelerometer.latch_ready = 0;
-                }
-                break;
-            case 0x0080 /* 0xAx8x */:
-                write_mbc7_eeprom(mmu, data);
-                break;
-            default: break; // 0xAx2x -> 0xAx5x are read only, 0xAx6x -> 0xAx7x and 0xAx9x -> 0xAxFx are unused
-            }
-        }
-
-        if (mmu->mbc == HuC1 && mmu->huc1_ir_mode) {
-            eprintf("TODO write 0x%02X in HuC1 IR light register (write 0x01 == turn on light, 0x00 == turn off light)\n", data);
-            break;
-        }
-
-        byte_t eram_enabled = mmu->ramg_reg || mmu->mbc == HuC1;
-        if (eram_enabled && !mmu->rtc_mapped) {
-            mmu->eram[mmu->eram_bank_addr + (address - ERAM)] = data;
-        } else if (mmu->rtc.enabled) {
-            switch (mmu->rtc.reg) {
-            case 0x08:
-                mmu->rtc.s = data & 0x3F;
-                mmu->rtc.rtc_cycles = 0; // writing to the seconds register apparently resets the rtc's internal counter (from rtc3test rom)
-                break;
-            case 0x09: mmu->rtc.m = data & 0x3F; break;
-            case 0x0A: mmu->rtc.h = data & 0x1F; break;
-            case 0x0B: mmu->rtc.dl = data; break;
-            case 0x0C: mmu->rtc.dh = data& 0xC1; break;
-            default: break;
-            }
-        }
+        mbc_write_eram(emu, address, data);
         break;
     case WRAM_BANK0:
         mmu->wram[address - WRAM_BANK0] = data;
@@ -1334,6 +904,7 @@ void mmu_write(emulator_t *emu, word_t address, byte_t data) {
 }
 
 // serialize everything except rom
+// TODO serialize mbc/rtc
 #define SERIALIZED_MEMBERS                                            \
     X(rom_size)                                                       \
     Y(vram, emu->mode == CGB, 2 * VRAM_BANK_SIZE, VRAM_BANK_SIZE)     \
@@ -1359,46 +930,46 @@ void mmu_write(emulator_t *emu, word_t address, byte_t data) {
     X(oam_dma.src_address)                                            \
     X(vram_bank_addr_offset)                                          \
     X(wram_bankn_addr_offset)                                         \
-    X(mbc)                                                            \
-    X(rom_banks)                                                      \
-    X(eram_banks)                                                     \
-    X(rom_bank0_addr)                                                 \
-    X(rom_bankn_addr)                                                 \
-    X(eram_bank_addr)                                                 \
-    X(ramg_reg)                                                       \
-    X(bank1_reg)                                                      \
-    X(bank2_reg)                                                      \
-    X(mode_reg)                                                       \
-    X(rtc_mapped)                                                     \
-    X(romb0_reg)                                                      \
-    X(romb1_reg)                                                      \
-    X(has_battery)                                                    \
-    X(has_rumble)                                                     \
-    X(has_rtc)                                                        \
-    X(rtc.latched_s)                                                  \
-    X(rtc.latched_m)                                                  \
-    X(rtc.latched_h)                                                  \
-    X(rtc.latched_dl)                                                 \
-    X(rtc.latched_dh)                                                 \
-    X(rtc.s)                                                          \
-    X(rtc.m)                                                          \
-    X(rtc.h)                                                          \
-    X(rtc.dl)                                                         \
-    X(rtc.dh)                                                         \
-    X(rtc.enabled)                                                    \
-    X(rtc.reg)                                                        \
-    X(rtc.latch)                                                      \
-    X(rtc.rtc_cycles)                                                 \
-    X(mbc7.ramg2_reg)                                                 \
-    X(mbc7.accelerometer.latched_x)                                   \
-    X(mbc7.accelerometer.latched_y)                                   \
-    X(mbc7.accelerometer.latch_ready)                                 \
-    X(mbc7.eeprom.data)                                               \
-    X(mbc7.eeprom.pins)                                               \
-    X(mbc7.eeprom.command)                                            \
-    X(mbc7.eeprom.command_arg_remaining_bits)                         \
-    X(mbc7.eeprom.output_bits)                                        \
-    X(mbc7.eeprom.write_enabled)
+    // X(mbc)                                                            \
+    // X(rom_banks)                                                      \
+    // X(eram_banks)                                                     \
+    // X(rom_bank0_addr)                                                 \
+    // X(rom_bankn_addr)                                                 \
+    // X(eram_bank_addr)                                                 \
+    // X(ramg_reg)                                                       \
+    // X(bank1_reg)                                                      \
+    // X(bank2_reg)                                                      \
+    // X(mode_reg)                                                       \
+    // X(rtc_mapped)                                                     \
+    // X(romb0_reg)                                                      \
+    // X(romb1_reg)                                                      \
+    // X(has_battery)                                                    \
+    // X(has_rumble)                                                     \
+    // X(has_rtc)                                                        \
+    // X(rtc.latched_s)                                                  \
+    // X(rtc.latched_m)                                                  \
+    // X(rtc.latched_h)                                                  \
+    // X(rtc.latched_dl)                                                 \
+    // X(rtc.latched_dh)                                                 \
+    // X(rtc.s)                                                          \
+    // X(rtc.m)                                                          \
+    // X(rtc.h)                                                          \
+    // X(rtc.dl)                                                         \
+    // X(rtc.dh)                                                         \
+    // X(rtc.enabled)                                                    \
+    // X(rtc.reg)                                                        \
+    // X(rtc.latch)                                                      \
+    // X(rtc.rtc_cycles)                                                 \
+    // X(mbc7.ramg2_reg)                                                 \
+    // X(mbc7.accelerometer.latched_x)                                   \
+    // X(mbc7.accelerometer.latched_y)                                   \
+    // X(mbc7.accelerometer.latch_ready)                                 \
+    // X(mbc7.eeprom.data)                                               \
+    // X(mbc7.eeprom.pins)                                               \
+    // X(mbc7.eeprom.command)                                            \
+    // X(mbc7.eeprom.command_arg_remaining_bits)                         \
+    // X(mbc7.eeprom.output_bits)                                        \
+    // X(mbc7.eeprom.write_enabled)
 
 #define X(value) SERIALIZED_LENGTH(value);
 #define Y(...) SERIALIZED_LENGTH_COND_LITERAL(__VA_ARGS__);

@@ -109,24 +109,6 @@ typedef enum {
 } mem_map_t;
 
 typedef enum {
-    ROM_ONLY,
-    MBC1,
-    MBC1M,
-    MBC2,
-    MBC3,
-    MBC30,
-    MBC5,
-    MBC6,
-    MBC7,
-    MMM01,
-    M161,
-    HuC1,
-    HuC3,
-    CAMERA,
-    TAMA5
-} mbc_type_t;
-
-typedef enum {
     GDMA,
     HDMA
 } hdma_type_t;
@@ -171,7 +153,8 @@ typedef struct {
     // offset to add to address in wram when accessing the 0xD000-0xDFFF range (signed because it can be negative)
     int32_t wram_bankn_addr_offset;
 
-    byte_t mbc;
+    mbc_t mbc;
+
     word_t rom_banks; // number of rom banks
     byte_t eram_banks; // number of eram banks
     // address in rom that is the start of the current ROM bank when accessing the 0x0000-0x3FFF range
@@ -181,21 +164,6 @@ typedef struct {
     uint32_t rom_bankn_addr;
     // address in eram that is the start of the current ERAM bank when accessing the 0x8000-0x9FFF range
     uint32_t eram_bank_addr;
-
-    // MBC registers
-    byte_t ramg_reg; // 1 if eram is enabled, else 0
-    // MBC1/MBC1M: bits 7-5: unused, bits 4-0 (MBC1M: bits 3-0): lower 5 (MBC1M: 4) bits of the ROM_BANKN number
-    // (also used as a convenience variable in other MBCs to store the ROM_BANKN number)
-    byte_t bank1_reg;
-    // MBC1/MBC1M: bits 7-2: unused, bits 1-0: upper 2 bits (bits 6-5) of the ROM_BANKN number
-    // (also used as a convenience variable in other MBCs to store the ERAM_BANK number)
-    byte_t bank2_reg;
-    byte_t mode_reg; // bits 7-1: unused, bit 0: BANK2 mode
-    byte_t rtc_mapped; // MBC3
-    byte_t romb0_reg; // MBC5: lower ROM BANK register
-    byte_t romb1_reg; // MBC5: upper ROM BANK register
-    // MBC5: RAMB register is stored in bank2_reg
-    byte_t huc1_ir_mode; // 1 if HuC1 is in IR mode, 0 if in ERAM mode
 
     byte_t has_battery;
     byte_t has_rumble;
@@ -218,26 +186,7 @@ typedef struct {
         byte_t reg; // rtc register
         byte_t latch;
         uint32_t rtc_cycles;
-    } rtc;
-
-    struct {
-        byte_t ramg2_reg; // both ramg_reg and ramg2_reg must be 1 to enable eeprom
-
-        struct {
-            word_t latched_x;
-            word_t latched_y;
-            byte_t latch_ready; // 1 if latch was just erased and not yet relatched, else 0
-        } accelerometer;
-
-        struct {
-            byte_t data[256]; // 2048 bits addressed 16 bits at a time (addresses are 7 bits wide)
-            byte_t pins;
-            word_t command;
-            word_t command_arg_remaining_bits; // how many bits of the WRITE or WRAL command argument remains to be shifted in
-            word_t output_bits;
-            byte_t write_enabled;
-        } eeprom;
-    } mbc7;
+    } rtc; // TODO put inside mbc3 struct? or can it be reused by huc3?
 } mmu_t;
 
 int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size);
@@ -245,8 +194,6 @@ int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size);
 void mmu_quit(emulator_t *emu);
 
 void dma_step(emulator_t *emu);
-
-void rtc_step(emulator_t *emu);
 
 /**
  * only used in cpu instructions (opcode execution)
