@@ -266,6 +266,7 @@ void mbc_write_registers(emulator_t *emu, word_t address, byte_t data) {
         switch (address & 0xE000) {
         case 0x0000:
             mbc->huc1.ir_mode = (data & 0x0F) == 0x0E;
+            mbc->eram_enabled = !mbc->huc1.ir_mode;
             break;
         case 0x2000:
             mbc->huc1.rom_bank = data;
@@ -276,24 +277,6 @@ void mbc_write_registers(emulator_t *emu, word_t address, byte_t data) {
             mbc->huc1.eram_bank = data;
             mbc->huc1.eram_bank &= mmu->eram_banks - 1; // in this case, equivalent to mbc->huc1.eram_bank %= eram_banks but avoid division by 0
             mmu->eram_bank_addr = mbc->huc1.eram_bank * ERAM_BANK_SIZE;
-            break;
-        }
-        break;
-    case HuC3:
-        switch (address & 0xE000) {
-        case 0x0000:
-            data &= 0x0F;
-            mbc->huc3.mode = (data < 0x0A && data != 0) || data == 0x0F ? HuC3_NONE : data;
-            break;
-        case 0x2000:
-            mbc->huc3.rom_bank = data;
-            mbc->huc3.rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
-            mmu->rom_bankn_addr = (mbc->huc3.rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
-            break;
-        case 0x4000:
-            mbc->huc3.eram_bank = data;
-            mbc->huc3.eram_bank &= mmu->eram_banks - 1; // in this case, equivalent to mbc->huc3.eram_bank %= eram_banks but avoid division by 0
-            mmu->eram_bank_addr = mbc->huc3.eram_bank * ERAM_BANK_SIZE;
             break;
         }
         break;
@@ -334,15 +317,8 @@ byte_t mbc_read_eram(emulator_t *emu, word_t address) {
         return 0xC0;
     }
 
-    if (mbc->type == HuC3 && (mbc->huc3.mode == HuC3_IR || mbc->huc3.mode == HuC3_RTC_CMD_ARG || mbc->huc3.mode == HuC3_RTC_CMD_RES || mbc->huc3.mode == HuC3_RTC_SEMAPHORE)) {
-        // TODO
-        eprintf("TODO read HuC3 RTC or IR\n");
-        return 0xFF;
-    }
-
-    byte_t eram_enabled = mbc->eram_enabled || mbc->type == HuC1 || (mbc->type == HuC3 && (mbc->huc3.mode == HuC3_RAM_RW || mbc->huc3.mode == HuC3_RAM_RO));
-    byte_t access_rtc = (mbc->type == MBC3 || mbc->type == MBC30) && mbc->mbc3.rtc_mapped;
-    if (eram_enabled && !access_rtc) {
+    byte_t can_access_rtc = (mbc->type == MBC3 || mbc->type == MBC30) && mbc->mbc3.rtc_mapped; // mbc->mbc3.rtc_mapped implies that mmu->has_rtc is true
+    if (mbc->eram_enabled && !can_access_rtc) {
         if (mbc->type == MBC2) {
             // wrap around from 0xA200 to 0xBFFF (eg: address 0xA200 reads as address 0xA000)
             // return mmu->eram_bank_pointer[ERAM + (address & 0x1FF)] | 0xF0;
@@ -350,7 +326,9 @@ byte_t mbc_read_eram(emulator_t *emu, word_t address) {
         } else {
             return mmu->eram[mmu->eram_bank_addr + (address - ERAM)];
         }
-    } else if (mbc->mbc3.rtc.enabled) {
+    }
+
+    if (mbc->mbc3.rtc.enabled) { // mbc->mbc3.rtc.enabled implies that mmu->has_rtc is true
         switch (mbc->mbc3.rtc.reg) {
         case 0x08: return mbc->mbc3.rtc.latched_s & 0x3F;
         case 0x09: return mbc->mbc3.rtc.latched_m & 0x3F;
@@ -359,9 +337,9 @@ byte_t mbc_read_eram(emulator_t *emu, word_t address) {
         case 0x0C: return mbc->mbc3.rtc.latched_dh & 0xC1;
         default: return 0xFF;
         }
-    } else {
-        return 0xFF;
     }
+
+    return 0xFF;
 }
 
 void mbc_write_eram(emulator_t *emu, word_t address, byte_t data) {
@@ -406,17 +384,10 @@ void mbc_write_eram(emulator_t *emu, word_t address, byte_t data) {
         return;
     }
 
-    if (mbc->type == HuC3 && (mbc->huc3.mode == HuC3_IR || mbc->huc3.mode == HuC3_RTC_CMD_ARG || mbc->huc3.mode == HuC3_RTC_CMD_RES || mbc->huc3.mode == HuC3_RTC_SEMAPHORE)) {
-        // TODO
-        eprintf("TODO write 0x%02X in HuC3 RTC or IR\n", data);
-        return;
-    }
-
-    byte_t eram_enabled = mbc->eram_enabled || mbc->type == HuC1 || (mbc->type == HuC3 && (mbc->huc3.mode == HuC3_RAM_RW || mbc->huc3.mode == HuC3_RAM_RO));
-    byte_t access_rtc = (mbc->type == MBC3 || mbc->type == MBC30) && mbc->mbc3.rtc_mapped;
-    if (eram_enabled && !access_rtc) {
+    byte_t can_access_rtc = (mbc->type == MBC3 || mbc->type == MBC30) && mbc->mbc3.rtc_mapped; // mbc->mbc3.rtc_mapped implies that mmu->has_rtc is true
+    if (mbc->eram_enabled && !can_access_rtc) {
         mmu->eram[mmu->eram_bank_addr + (address - ERAM)] = data;
-    } else if (mbc->mbc3.rtc.enabled) {
+    } else if (mbc->mbc3.rtc.enabled) { // mbc->mbc3.rtc.enabled implies that mmu->has_rtc is true
         switch (mbc->mbc3.rtc.reg) {
         case 0x08:
             mbc->mbc3.rtc.s = data & 0x3F;

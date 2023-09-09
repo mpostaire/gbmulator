@@ -20,16 +20,6 @@ typedef enum {
     TAMA5
 } mbc_type_t;
 
-typedef enum {
-    HuC3_RAM_RO,
-    HuC3_RAM_RW = 0x0A,
-    HuC3_RTC_CMD_ARG = 0x0B,
-    HuC3_RTC_CMD_RES = 0x0C,
-    HuC3_RTC_SEMAPHORE = 0x0D,
-    HuC3_IR = 0x0E,
-    HuC3_NONE,
-} huc3_mode_t;
-
 typedef struct {
     byte_t type;
     byte_t eram_enabled; // current eram bank number (shared by all MBCs)
@@ -97,16 +87,10 @@ typedef struct {
         } mbc7;
 
         struct {
-            byte_t ir_mode;
+            byte_t ir_mode; // 1 if huc1 eram is in IR mode
             byte_t rom_bank;
             byte_t eram_bank;
         } huc1;
-
-        struct {
-            byte_t mode;
-            byte_t rom_bank;
-            byte_t eram_bank;
-        } huc3;
     };
 } mbc_t;
 
@@ -175,11 +159,6 @@ void rtc_step(emulator_t *emu);
     X(huc1.rom_bank) \
     X(huc1.eram_bank)
 
-#define HuC3_MEMBERS \
-    X(huc3.mode)     \
-    X(huc3.rom_bank) \
-    X(huc3.eram_bank)
-
 #define MBC_SERIALIZED_MEMBERS \
     MBC_COMMON_MEMBERS         \
     switch (tmp->type) {       \
@@ -202,6 +181,4 @@ void rtc_step(emulator_t *emu);
         break;                 \
     case HuC1:                 \
         HuC1_MEMBERS break;    \
-    case HuC3:                 \
-        HuC3_MEMBERS break;    \
     }

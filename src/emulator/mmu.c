@@ -101,12 +101,12 @@ static int parse_cartridge(emulator_t *emu) {
     // case 0xFD:
     //     mmu->mbc.type = TAMA5;
     //     break;
-    case 0xFE:
-        mmu->mbc.type = HuC3;
-        mmu->has_rtc = 1;
-        has_eram = 1;
-        mmu->has_battery = 1;
-        break;
+    // case 0xFE:
+    //     mmu->mbc.type = HuC3;
+    //     mmu->has_rtc = 1;
+    //     has_eram = 1;
+    //     mmu->has_battery = 1;
+    //     break;
     case 0xFF:
         mmu->mbc.type = HuC1;
         has_eram = 1;
