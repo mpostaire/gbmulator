@@ -6,27 +6,10 @@
 
 #include "emulator_priv.h"
 #include "boot.h"
+#include "mbc.h"
 
-typedef enum {
-    IO_SRC_CPU,
-    IO_SRC_OAM_DMA,
-    IO_SRC_GDMA_HDMA
-} io_source_t;
-
-static inline byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_t io_src);
-static inline void mmu_write_io_src(emulator_t *emu, word_t address, byte_t data, io_source_t io_src);
-
-typedef enum {
-    OAM_DMA_NO_INIT,
-    OAM_DMA_INIT_BEGIN,
-    OAM_DMA_INIT_PENDING,
-    OAM_DMA_STARTING
-} oam_dma_starting_state;
-
-#define IS_OAM_DMA_RUNNING(mmu) ((mmu)->oam_dma.progress >= 0 && (mmu)->oam_dma.progress < 0xA0)
 #define GBC_CURRENT_VRAM_BANK(mmu) ((mmu)->io_registers[VBK - IO] & 0x01)
 #define GBC_CURRENT_WRAM_BANK(mmu) (((mmu)->io_registers[SVBK - IO] & 0x07) == 0 ? 1 : ((mmu)->io_registers[SVBK - IO] & 0x07))
-#define GBC_GDMA_HDMA_LENGTH(mmu) ((mmu)->io_registers[HDMA5 - IO] & 0x7F)
 
 static int parse_cartridge(emulator_t *emu) {
     mmu_t *mmu = emu->mmu;
@@ -229,115 +212,6 @@ int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size) {
 void mmu_quit(emulator_t *emu) {
     free(emu->mmu->rom);
     free(emu->mmu);
-}
-
-static inline byte_t gdma_hdma_copy_step(emulator_t *emu) {
-    mmu_t *mmu = emu->mmu;
-
-    // normal speed: one step is 4 cycles -> 2 cycles to copy 1 byte -> copy 2 bytes from src to dest
-    // double speed: one step is 8 cycles -> 4 cycles to copy 1 byte -> copy 1 byte from src to dest
-    for (byte_t i = 0; i < !IS_DOUBLE_SPEED(emu) + 1; i++) {
-        byte_t data = mmu_read_io_src(emu, mmu->hdma.src_address++, IO_SRC_GDMA_HDMA);
-        mmu_write_io_src(emu, mmu->hdma.dest_address++, data, IO_SRC_GDMA_HDMA);
-
-        // printf("copy %x from %x to %x\n", data, mmu->hdma.src_address - 1, mmu->hdma.dest_address - 1);
-
-        if (mmu->hdma.dest_address >= ERAM) { // vram overflow stops prematurely the transfer
-            mmu->hdma.progress = 0;
-            break;
-        }
-    }
-
-    if (!(mmu->hdma.src_address & 0x000F)) { // a block of 0x10 bytes has been copied
-        mmu->io_registers[HDMA5 - IO] = (GBC_GDMA_HDMA_LENGTH(mmu) - 1) & 0x7F;
-        mmu->hdma.progress--;
-
-        // HDMA src and dest registers need to increase as the transfer progresses
-        mmu->io_registers[HDMA1 - IO] = mmu->hdma.src_address >> 8;
-        mmu->io_registers[HDMA2 - IO] = mmu->hdma.src_address & 0xF0;
-        mmu->io_registers[HDMA3 - IO] = (mmu->hdma.dest_address >> 8) & 0x1F;
-        mmu->io_registers[HDMA4 - IO] = mmu->hdma.dest_address & 0xF0;
-
-        return 1;
-    }
-
-    return 0;
-}
-
-static inline void gdma_hdma_step(emulator_t *emu) {
-    mmu_t *mmu = emu->mmu;
-
-    if (mmu->hdma.progress == 0)
-        return;
-
-    if (mmu->hdma.initializing) {
-        mmu->hdma.initializing = 0;
-        return;
-    }
-
-    switch (mmu->hdma.type) {
-    case GDMA:
-        // cpu locked as soon as GDMA was requested, don't need to lock it here
-        gdma_hdma_copy_step(emu);
-
-        if (mmu->hdma.progress == 0) { // finished copying?
-            mmu->hdma.lock_cpu = 0;
-            mmu->io_registers[HDMA5 - IO] = 0xFF;
-        }
-        break;
-    case HDMA:
-        if (!mmu->hdma.allow_hdma_block || emu->cpu->halt) // HDMA can't work while cpu is halted
-            return;
-
-        // locks cpu while transfer of 0x10 byte block in progress
-        mmu->hdma.lock_cpu = 1;
-
-        if (gdma_hdma_copy_step(emu)) {
-            // one block of 0x10 bytes has been copied
-            mmu->hdma.lock_cpu = 0;
-            mmu->hdma.allow_hdma_block = 0;
-
-            if (mmu->hdma.progress == 0) // finished copying?
-                mmu->io_registers[HDMA5 - IO] = 0xFF;
-        }
-        break;
-    }
-}
-
-static inline void oam_dma_step(emulator_t *emu) {
-    mmu_t *mmu = emu->mmu;
-
-    // run oam dma initializations procedure if there are any starting oam dma
-    for (unsigned int i = 0; mmu->oam_dma.starting_count > 0 && i < sizeof(mmu->oam_dma.starting_statuses); i++) {
-        switch (mmu->oam_dma.starting_statuses[i]) {
-        case OAM_DMA_NO_INIT:
-            break;
-        case OAM_DMA_INIT_BEGIN:
-            mmu->oam_dma.starting_statuses[i] = OAM_DMA_INIT_PENDING;
-            break;
-        case OAM_DMA_INIT_PENDING:
-            mmu->oam_dma.starting_statuses[i] = OAM_DMA_STARTING;
-            break;
-        case OAM_DMA_STARTING:
-            mmu->oam_dma.starting_statuses[i] = OAM_DMA_NO_INIT;
-            mmu->oam_dma.progress = 0;
-            mmu->oam_dma.src_address = mmu->io_registers[DMA - IO] << 8;
-            mmu->oam_dma.starting_count--;
-            break;
-        }
-    }
-
-    if (IS_OAM_DMA_RUNNING(mmu)) {
-        // oam dma step (no need to call mmu_write_io_src() because dest can only be inside OAM and there are no access restrictions)
-        mmu->oam[mmu->oam_dma.progress] = mmu_read_io_src(emu, mmu->oam_dma.src_address + mmu->oam_dma.progress, IO_SRC_OAM_DMA);
-        mmu->oam_dma.progress++;
-    }
-}
-
-void dma_step(emulator_t *emu) {
-    oam_dma_step(emu);
-    if (emu->mode == CGB)
-        gdma_hdma_step(emu);
 }
 
 static inline byte_t read_io_register(emulator_t *emu, word_t address) {
@@ -753,7 +627,7 @@ static inline void write_io_register(emulator_t *emu, word_t address, byte_t dat
     }
 }
 
-static inline byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_t io_src) {
+byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_t io_src) {
     mmu_t *mmu = emu->mmu;
 
     switch (address & 0xF000) {
@@ -829,7 +703,7 @@ static inline byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_
     }
 }
 
-static inline void mmu_write_io_src(emulator_t *emu, word_t address, byte_t data, io_source_t io_src) {
+void mmu_write_io_src(emulator_t *emu, word_t address, byte_t data, io_source_t io_src) {
     mmu_t *mmu = emu->mmu;
 
     switch (address & 0xF000) {
@@ -895,16 +769,7 @@ static inline void mmu_write_io_src(emulator_t *emu, word_t address, byte_t data
     }
 }
 
-byte_t mmu_read(emulator_t *emu, word_t address) {
-    return mmu_read_io_src(emu, address, IO_SRC_CPU);
-}
-
-void mmu_write(emulator_t *emu, word_t address, byte_t data) {
-    mmu_write_io_src(emu, address, data, IO_SRC_CPU);
-}
-
 // serialize everything except rom
-// TODO serialize mbc/rtc
 #define SERIALIZED_MEMBERS                                            \
     X(rom_size)                                                       \
     Y(vram, emu->mode == CGB, 2 * VRAM_BANK_SIZE, VRAM_BANK_SIZE)     \
@@ -930,46 +795,14 @@ void mmu_write(emulator_t *emu, word_t address, byte_t data) {
     X(oam_dma.src_address)                                            \
     X(vram_bank_addr_offset)                                          \
     X(wram_bankn_addr_offset)                                         \
-    // X(mbc)                                                            \
-    // X(rom_banks)                                                      \
-    // X(eram_banks)                                                     \
-    // X(rom_bank0_addr)                                                 \
-    // X(rom_bankn_addr)                                                 \
-    // X(eram_bank_addr)                                                 \
-    // X(ramg_reg)                                                       \
-    // X(bank1_reg)                                                      \
-    // X(bank2_reg)                                                      \
-    // X(mode_reg)                                                       \
-    // X(rtc_mapped)                                                     \
-    // X(romb0_reg)                                                      \
-    // X(romb1_reg)                                                      \
-    // X(has_battery)                                                    \
-    // X(has_rumble)                                                     \
-    // X(has_rtc)                                                        \
-    // X(rtc.latched_s)                                                  \
-    // X(rtc.latched_m)                                                  \
-    // X(rtc.latched_h)                                                  \
-    // X(rtc.latched_dl)                                                 \
-    // X(rtc.latched_dh)                                                 \
-    // X(rtc.s)                                                          \
-    // X(rtc.m)                                                          \
-    // X(rtc.h)                                                          \
-    // X(rtc.dl)                                                         \
-    // X(rtc.dh)                                                         \
-    // X(rtc.enabled)                                                    \
-    // X(rtc.reg)                                                        \
-    // X(rtc.latch)                                                      \
-    // X(rtc.rtc_cycles)                                                 \
-    // X(mbc7.ramg2_reg)                                                 \
-    // X(mbc7.accelerometer.latched_x)                                   \
-    // X(mbc7.accelerometer.latched_y)                                   \
-    // X(mbc7.accelerometer.latch_ready)                                 \
-    // X(mbc7.eeprom.data)                                               \
-    // X(mbc7.eeprom.pins)                                               \
-    // X(mbc7.eeprom.command)                                            \
-    // X(mbc7.eeprom.command_arg_remaining_bits)                         \
-    // X(mbc7.eeprom.output_bits)                                        \
-    // X(mbc7.eeprom.write_enabled)
+    X(rom_banks)                                                      \
+    X(eram_banks)                                                     \
+    X(rom_bank0_addr)                                                 \
+    X(rom_bankn_addr)                                                 \
+    X(eram_bank_addr)                                                 \
+    X(has_battery)                                                    \
+    X(has_rumble)                                                     \
+    X(has_rtc)
 
 #define X(value) SERIALIZED_LENGTH(value);
 #define Y(...) SERIALIZED_LENGTH_COND_LITERAL(__VA_ARGS__);
@@ -977,6 +810,10 @@ void mmu_write(emulator_t *emu, word_t address, byte_t data) {
 #define W(...) SERIALIZED_LENGTH_IF_CGB(__VA_ARGS__);
 SERIALIZED_SIZE_FUNCTION(mmu_t, mmu,
     SERIALIZED_MEMBERS
+    {
+        mbc_t *tmp = &emu->mmu->mbc;
+        MBC_SERIALIZED_MEMBERS
+    }
 )
 #undef W
 #undef Z
@@ -989,6 +826,10 @@ SERIALIZED_SIZE_FUNCTION(mmu_t, mmu,
 #define W(...) SERIALIZE_IF_CGB(__VA_ARGS__);
 SERIALIZER_FUNCTION(mmu_t, mmu,
     SERIALIZED_MEMBERS
+    {
+        mbc_t *tmp = &emu->mmu->mbc;
+        MBC_SERIALIZED_MEMBERS
+    }
 )
 #undef W
 #undef Z
@@ -1001,6 +842,10 @@ SERIALIZER_FUNCTION(mmu_t, mmu,
 #define W(...) UNSERIALIZE_IF_CGB(__VA_ARGS__);
 UNSERIALIZER_FUNCTION(mmu_t, mmu,
     SERIALIZED_MEMBERS
+    {
+        mbc_t *tmp = &emu->mmu->mbc;
+        MBC_SERIALIZED_MEMBERS
+    }
 )
 #undef W
 #undef Z

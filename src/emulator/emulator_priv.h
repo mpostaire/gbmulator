@@ -2,8 +2,8 @@
 
 #include "emulator.h"
 #include "cpu.h"
-#include "mbc.h"
 #include "mmu.h"
+#include "dma.h"
 #include "ppu.h"
 #include "apu.h"
 #include "timer.h"

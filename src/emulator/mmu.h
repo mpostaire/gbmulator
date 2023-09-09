@@ -2,6 +2,7 @@
 
 #include "types.h"
 #include "serialize.h"
+#include "mbc.h"
 
 #define ROM_BANK_SIZE 0x4000
 #define VRAM_BANK_SIZE 0x2000
@@ -109,9 +110,10 @@ typedef enum {
 } mem_map_t;
 
 typedef enum {
-    GDMA,
-    HDMA
-} hdma_type_t;
+    IO_SRC_CPU,
+    IO_SRC_OAM_DMA,
+    IO_SRC_GDMA_HDMA
+} io_source_t;
 
 typedef struct {
     size_t rom_size;
@@ -153,8 +155,6 @@ typedef struct {
     // offset to add to address in wram when accessing the 0xD000-0xDFFF range (signed because it can be negative)
     int32_t wram_bankn_addr_offset;
 
-    mbc_t mbc;
-
     word_t rom_banks; // number of rom banks
     byte_t eram_banks; // number of eram banks
     // address in rom that is the start of the current ROM bank when accessing the 0x0000-0x3FFF range
@@ -169,40 +169,25 @@ typedef struct {
     byte_t has_rumble;
     byte_t has_rtc;
 
-    struct {
-        byte_t latched_s;
-        byte_t latched_m;
-        byte_t latched_h;
-        byte_t latched_dl;
-        byte_t latched_dh;
-
-        byte_t s;
-        byte_t m;
-        byte_t h;
-        byte_t dl;
-        byte_t dh;
-
-        byte_t enabled;
-        byte_t reg; // rtc register
-        byte_t latch;
-        uint32_t rtc_cycles;
-    } rtc; // TODO put inside mbc3 struct? or can it be reused by huc3?
+    mbc_t mbc;
 } mmu_t;
 
 int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size);
 
 void mmu_quit(emulator_t *emu);
 
-void dma_step(emulator_t *emu);
+byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_t io_src);
+
+void mmu_write_io_src(emulator_t *emu, word_t address, byte_t data, io_source_t io_src);
 
 /**
- * only used in cpu instructions (opcode execution)
+ * like mmu_read_io_src but using IO_SRC_CPU as io_src
  */
-byte_t mmu_read(emulator_t *emu, word_t address);
+#define mmu_read(emu, address) mmu_read_io_src((emu), (address), IO_SRC_CPU)
 
 /**
- * only used in cpu instructions (opcode execution)
+ * like mmu_write_io_src but using IO_SRC_CPU as io_src
  */
-void mmu_write(emulator_t *emu, word_t address, byte_t data);
+#define mmu_write(emu, address, data) mmu_write_io_src((emu), (address), (data), IO_SRC_CPU)
 
 SERIALIZE_FUNCTION_DECLS(mmu);

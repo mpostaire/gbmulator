@@ -1,6 +1,6 @@
 #pragma once
 
-#include "emulator_priv.h"
+#include "types.h"
 
 typedef enum {
     ROM_ONLY,
@@ -49,6 +49,25 @@ typedef struct {
             byte_t rtc_mapped;
             byte_t rom_bank;
             byte_t eram_bank;
+
+            struct {
+                byte_t latched_s;
+                byte_t latched_m;
+                byte_t latched_h;
+                byte_t latched_dl;
+                byte_t latched_dh;
+
+                byte_t s;
+                byte_t m;
+                byte_t h;
+                byte_t dl;
+                byte_t dh;
+
+                byte_t enabled;
+                byte_t reg; // rtc register
+                byte_t latch;
+                uint32_t rtc_cycles;
+            } rtc;
         } mbc3;
 
         struct {
@@ -78,15 +97,15 @@ typedef struct {
         } mbc7;
 
         struct {
+            byte_t ir_mode;
             byte_t rom_bank;
             byte_t eram_bank;
-            byte_t ir_mode;
         } huc1;
 
         struct {
+            byte_t mode;
             byte_t rom_bank;
             byte_t eram_bank;
-            byte_t mode;
         } huc3;
     };
 } mbc_t;
@@ -98,3 +117,91 @@ byte_t mbc_read_eram(emulator_t *emu, word_t address);
 void mbc_write_eram(emulator_t *emu, word_t address, byte_t data);
 
 void rtc_step(emulator_t *emu);
+
+#define MBC_COMMON_MEMBERS \
+    X(type)                \
+    X(eram_enabled)
+
+#define MBC1_MEMBERS \
+    X(mbc1.mode)     \
+    X(mbc1.bank_lo)  \
+    X(mbc1.bank_hi)
+
+#define MBC2_MEMBERS \
+    X(mbc2.rom_bank)
+
+#define RTC_MEMBERS        \
+    X(mbc3.rtc.latched_s)  \
+    X(mbc3.rtc.latched_m)  \
+    X(mbc3.rtc.latched_h)  \
+    X(mbc3.rtc.latched_dl) \
+    X(mbc3.rtc.latched_dh) \
+    X(mbc3.rtc.s)          \
+    X(mbc3.rtc.m)          \
+    X(mbc3.rtc.h)          \
+    X(mbc3.rtc.dl)         \
+    X(mbc3.rtc.dh)         \
+    X(mbc3.rtc.enabled)    \
+    X(mbc3.rtc.reg)        \
+    X(mbc3.rtc.latch)      \
+    X(mbc3.rtc.rtc_cycles)
+
+#define MBC3_MEMBERS   \
+    X(mbc3.rtc_mapped) \
+    X(mbc3.rom_bank)   \
+    X(mbc3.eram_bank)  \
+    RTC_MEMBERS
+
+#define MBC5_MEMBERS    \
+    X(mbc5.rom_bank_lo) \
+    X(mbc5.rom_bank_hi) \
+    X(mbc5.eram_bank)
+
+#define MBC7_MEMBERS                          \
+    X(mbc7.eram_enabled2)                     \
+    X(mbc7.rom_bank)                          \
+    X(mbc7.accelerometer.latched_x)           \
+    X(mbc7.accelerometer.latched_y)           \
+    X(mbc7.accelerometer.latch_ready)         \
+    X(mbc7.eeprom.data)                       \
+    X(mbc7.eeprom.pins)                       \
+    X(mbc7.eeprom.command)                    \
+    X(mbc7.eeprom.command_arg_remaining_bits) \
+    X(mbc7.eeprom.output_bits)                \
+    X(mbc7.eeprom.write_enabled)
+
+#define HuC1_MEMBERS \
+    X(huc1.ir_mode)  \
+    X(huc1.rom_bank) \
+    X(huc1.eram_bank)
+
+#define HuC3_MEMBERS \
+    X(huc3.mode)     \
+    X(huc3.rom_bank) \
+    X(huc3.eram_bank)
+
+#define MBC_SERIALIZED_MEMBERS \
+    MBC_COMMON_MEMBERS         \
+    switch (tmp->type) {       \
+    case MBC1:                 \
+    case MBC1M:                \
+        MBC1_MEMBERS           \
+        break;                 \
+    case MBC2:                 \
+        MBC2_MEMBERS           \
+        break;                 \
+    case MBC3:                 \
+    case MBC30:                \
+        MBC3_MEMBERS           \
+        break;                 \
+    case MBC5:                 \
+        MBC5_MEMBERS           \
+        break;                 \
+    case MBC7:                 \
+        MBC7_MEMBERS           \
+        break;                 \
+    case HuC1:                 \
+        HuC1_MEMBERS break;    \
+    case HuC3:                 \
+        HuC3_MEMBERS break;    \
+    }

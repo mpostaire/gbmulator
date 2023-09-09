@@ -1,6 +1,7 @@
 #include "emulator_priv.h"
+#include "serialize.h"
 
-#define IS_RTC_HALTED(mmu) ((mmu)->rtc.dh & 0x40)
+#define IS_RTC_HALTED(mbc) ((mbc)->mbc3.rtc.dh & 0x40)
 
 #define EEPROM_DO(pins) ((pins) & 0x01) // MBC7 EEPROM DO pin
 #define EEPROM_DI(pins) ((pins) & 0x02) // MBC7 EEPROM DI pin
@@ -185,7 +186,7 @@ void mbc_write_registers(emulator_t *emu, word_t address, byte_t data) {
         case 0x0000:
             mbc->eram_enabled = (data & 0x0F) == 0x0A;
             if (mmu->has_rtc)
-                mmu->rtc.enabled = mbc->eram_enabled;
+                mbc->mbc3.rtc.enabled = mbc->eram_enabled;
             break;
         case 0x2000:
             mbc->mbc3.rom_bank = mbc->type == MBC30 ? data : data & 0x7F;
@@ -202,19 +203,19 @@ void mbc_write_registers(emulator_t *emu, word_t address, byte_t data) {
                 mmu->eram_bank_addr = mbc->mbc3.eram_bank * ERAM_BANK_SIZE;
                 mbc->mbc3.rtc_mapped = 0;
             } else if (mmu->has_rtc && data >= 0x08 && data <= 0x0C) {
-                mmu->rtc.reg = data;
+                mbc->mbc3.rtc.reg = data;
                 mbc->mbc3.rtc_mapped = 1;
             }
             break;
         case 0x6000:
-            if (mmu->rtc.latch == 0x00 && data == 0x01) {
-                mmu->rtc.latched_s = mmu->rtc.s;
-                mmu->rtc.latched_m = mmu->rtc.m;
-                mmu->rtc.latched_h = mmu->rtc.h;
-                mmu->rtc.latched_dl = mmu->rtc.dl;
-                mmu->rtc.latched_dh = mmu->rtc.dh;
+            if (mbc->mbc3.rtc.latch == 0x00 && data == 0x01) {
+                mbc->mbc3.rtc.latched_s = mbc->mbc3.rtc.s;
+                mbc->mbc3.rtc.latched_m = mbc->mbc3.rtc.m;
+                mbc->mbc3.rtc.latched_h = mbc->mbc3.rtc.h;
+                mbc->mbc3.rtc.latched_dl = mbc->mbc3.rtc.dl;
+                mbc->mbc3.rtc.latched_dh = mbc->mbc3.rtc.dh;
             }
-            mmu->rtc.latch = data;
+            mbc->mbc3.rtc.latch = data;
             break;
         }
         break;
@@ -349,13 +350,13 @@ byte_t mbc_read_eram(emulator_t *emu, word_t address) {
         } else {
             return mmu->eram[mmu->eram_bank_addr + (address - ERAM)];
         }
-    } else if (mmu->rtc.enabled) {
-        switch (mmu->rtc.reg) {
-        case 0x08: return mmu->rtc.latched_s & 0x3F;
-        case 0x09: return mmu->rtc.latched_m & 0x3F;
-        case 0x0A: return mmu->rtc.latched_h & 0x1F;
-        case 0x0B: return mmu->rtc.latched_dl;
-        case 0x0C: return mmu->rtc.latched_dh & 0xC1;
+    } else if (mbc->mbc3.rtc.enabled) {
+        switch (mbc->mbc3.rtc.reg) {
+        case 0x08: return mbc->mbc3.rtc.latched_s & 0x3F;
+        case 0x09: return mbc->mbc3.rtc.latched_m & 0x3F;
+        case 0x0A: return mbc->mbc3.rtc.latched_h & 0x1F;
+        case 0x0B: return mbc->mbc3.rtc.latched_dl;
+        case 0x0C: return mbc->mbc3.rtc.latched_dh & 0xC1;
         default: return 0xFF;
         }
     } else {
@@ -415,73 +416,73 @@ void mbc_write_eram(emulator_t *emu, word_t address, byte_t data) {
     byte_t access_rtc = (mbc->type == MBC3 || mbc->type == MBC30) && mbc->mbc3.rtc_mapped;
     if (eram_enabled && !access_rtc) {
         mmu->eram[mmu->eram_bank_addr + (address - ERAM)] = data;
-    } else if (mmu->rtc.enabled) {
-        switch (mmu->rtc.reg) {
+    } else if (mbc->mbc3.rtc.enabled) {
+        switch (mbc->mbc3.rtc.reg) {
         case 0x08:
-            mmu->rtc.s = data & 0x3F;
-            mmu->rtc.rtc_cycles = 0; // writing to the seconds register apparently resets the rtc's internal counter (from rtc3test rom)
+            mbc->mbc3.rtc.s = data & 0x3F;
+            mbc->mbc3.rtc.rtc_cycles = 0; // writing to the seconds register apparently resets the rtc's internal counter (from rtc3test rom)
             return;
-        case 0x09: mmu->rtc.m = data & 0x3F; return;
-        case 0x0A: mmu->rtc.h = data & 0x1F; return;
-        case 0x0B: mmu->rtc.dl = data; return;
-        case 0x0C: mmu->rtc.dh = data& 0xC1; return;
+        case 0x09: mbc->mbc3.rtc.m = data & 0x3F; return;
+        case 0x0A: mbc->mbc3.rtc.h = data & 0x1F; return;
+        case 0x0B: mbc->mbc3.rtc.dl = data; return;
+        case 0x0C: mbc->mbc3.rtc.dh = data& 0xC1; return;
         default: return;
         }
     }
 }
 
 void rtc_step(emulator_t *emu) {
-    mmu_t *mmu = emu->mmu;
+    mbc_t *mbc = &emu->mmu->mbc;
 
-    if (IS_RTC_HALTED(mmu))
+    if (IS_RTC_HALTED(mbc))
         return;
 
     // rtc internal clock should increase at 32768 Hz but just updating it once per emulated second
     // passes all of the tests of the rtc3test rom.
     // This may be because no time register changes that fast (as the smallest unit is the second).
-    mmu->rtc.rtc_cycles += 4;
-    if (mmu->rtc.rtc_cycles < GB_CPU_FREQ)
+    mbc->mbc3.rtc.rtc_cycles += 4;
+    if (mbc->mbc3.rtc.rtc_cycles < GB_CPU_FREQ)
         return;
-    mmu->rtc.rtc_cycles = 0;
+    mbc->mbc3.rtc.rtc_cycles = 0;
 
-    mmu->rtc.s++;
-    if (mmu->rtc.s > 0x3F) {
-        mmu->rtc.s = 0;
+    mbc->mbc3.rtc.s++;
+    if (mbc->mbc3.rtc.s > 0x3F) {
+        mbc->mbc3.rtc.s = 0;
         return;
     }
-    if (mmu->rtc.s != 60)
+    if (mbc->mbc3.rtc.s != 60)
         return;
-    mmu->rtc.s = 0;
+    mbc->mbc3.rtc.s = 0;
 
-    mmu->rtc.m++;
-    if (mmu->rtc.m > 0x3F) {
-        mmu->rtc.m = 0;
+    mbc->mbc3.rtc.m++;
+    if (mbc->mbc3.rtc.m > 0x3F) {
+        mbc->mbc3.rtc.m = 0;
         return;
     }
-    if (mmu->rtc.m != 60)
+    if (mbc->mbc3.rtc.m != 60)
         return;
-    mmu->rtc.m = 0;
+    mbc->mbc3.rtc.m = 0;
 
-    mmu->rtc.h++;
-    if (mmu->rtc.h > 0x1F) {
-        mmu->rtc.h = 0;
+    mbc->mbc3.rtc.h++;
+    if (mbc->mbc3.rtc.h > 0x1F) {
+        mbc->mbc3.rtc.h = 0;
         return;
     }
-    if (mmu->rtc.h != 24)
+    if (mbc->mbc3.rtc.h != 24)
         return;
-    mmu->rtc.h = 0;
+    mbc->mbc3.rtc.h = 0;
 
-    word_t d = ((mmu->rtc.dh & 0x01) << 8) | mmu->rtc.dl;
+    word_t d = ((mbc->mbc3.rtc.dh & 0x01) << 8) | mbc->mbc3.rtc.dl;
     d++;
-    mmu->rtc.dl = d & 0x00FF;
+    mbc->mbc3.rtc.dl = d & 0x00FF;
     if (CHECK_BIT(d, 8))
-        SET_BIT(mmu->rtc.dh, 0);
+        SET_BIT(mbc->mbc3.rtc.dh, 0);
     else
-        RESET_BIT(mmu->rtc.dh, 0);
+        RESET_BIT(mbc->mbc3.rtc.dh, 0);
     if (d < 512)
         return;
 
-    mmu->rtc.dl = 0;
-    RESET_BIT(mmu->rtc.dh, 0);
-    SET_BIT(mmu->rtc.dh, 7); // set overflow bit
+    mbc->mbc3.rtc.dl = 0;
+    RESET_BIT(mbc->mbc3.rtc.dh, 0);
+    SET_BIT(mbc->mbc3.rtc.dh, 7); // set overflow bit
 }

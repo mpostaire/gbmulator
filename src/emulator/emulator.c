@@ -438,16 +438,16 @@ byte_t *emulator_get_save(emulator_t *emu, size_t *save_length) {
         memcpy(save_data, emu->mmu->eram, eram_len);
 
     if (rtc_timestamp) {
-        memcpy(&save_data[eram_len], &emu->mmu->rtc.s, 1);
-        memcpy(&save_data[eram_len + 1], &emu->mmu->rtc.m, 1);
-        memcpy(&save_data[eram_len + 2], &emu->mmu->rtc.h, 1);
-        memcpy(&save_data[eram_len + 3], &emu->mmu->rtc.dl, 1);
-        memcpy(&save_data[eram_len + 4], &emu->mmu->rtc.dh, 1);
-        memcpy(&save_data[eram_len + 5], &emu->mmu->rtc.latched_s, 1);
-        memcpy(&save_data[eram_len + 6], &emu->mmu->rtc.latched_m, 1);
-        memcpy(&save_data[eram_len + 7], &emu->mmu->rtc.latched_h, 1);
-        memcpy(&save_data[eram_len + 8], &emu->mmu->rtc.latched_dl, 1);
-        memcpy(&save_data[eram_len + 9], &emu->mmu->rtc.latched_dh, 1);
+        memcpy(&save_data[eram_len], &emu->mmu->mbc.mbc3.rtc.s, 1);
+        memcpy(&save_data[eram_len + 1], &emu->mmu->mbc.mbc3.rtc.m, 1);
+        memcpy(&save_data[eram_len + 2], &emu->mmu->mbc.mbc3.rtc.h, 1);
+        memcpy(&save_data[eram_len + 3], &emu->mmu->mbc.mbc3.rtc.dl, 1);
+        memcpy(&save_data[eram_len + 4], &emu->mmu->mbc.mbc3.rtc.dh, 1);
+        memcpy(&save_data[eram_len + 5], &emu->mmu->mbc.mbc3.rtc.latched_s, 1);
+        memcpy(&save_data[eram_len + 6], &emu->mmu->mbc.mbc3.rtc.latched_m, 1);
+        memcpy(&save_data[eram_len + 7], &emu->mmu->mbc.mbc3.rtc.latched_h, 1);
+        memcpy(&save_data[eram_len + 8], &emu->mmu->mbc.mbc3.rtc.latched_dl, 1);
+        memcpy(&save_data[eram_len + 9], &emu->mmu->mbc.mbc3.rtc.latched_dh, 1);
 
         memcpy(&save_data[eram_len + 10], rtc_timestamp, rtc_timestamp_len);
         free(rtc_timestamp);
@@ -490,11 +490,11 @@ int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
         byte_t h = save_data[eram_len + 2];
         byte_t dl = save_data[eram_len + 3];
         byte_t dh = save_data[eram_len + 4];
-        emu->mmu->rtc.latched_s = save_data[eram_len + 5];
-        emu->mmu->rtc.latched_m = save_data[eram_len + 6];
-        emu->mmu->rtc.latched_h = save_data[eram_len + 7];
-        emu->mmu->rtc.latched_dl = save_data[eram_len + 8];
-        emu->mmu->rtc.latched_dh = save_data[eram_len + 9];
+        emu->mmu->mbc.mbc3.rtc.latched_s = save_data[eram_len + 5];
+        emu->mmu->mbc.mbc3.rtc.latched_m = save_data[eram_len + 6];
+        emu->mmu->mbc.mbc3.rtc.latched_h = save_data[eram_len + 7];
+        emu->mmu->mbc.mbc3.rtc.latched_dl = save_data[eram_len + 8];
+        emu->mmu->mbc.mbc3.rtc.latched_dh = save_data[eram_len + 9];
 
         time_t rtc_timestamp = string_to_time((char *) &save_data[eram_len + 10]);
 
@@ -508,20 +508,20 @@ int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
 
         // day overflow
         if (d >= 0x0200) {
-            SET_BIT(emu->mmu->rtc.dh, 7);
+            SET_BIT(emu->mmu->mbc.mbc3.rtc.dh, 7);
             d %= 0x0200;
         }
 
-        emu->mmu->rtc.dh |= (d & 0x100) >> 8;
-        emu->mmu->rtc.dl = d & 0xFF;
+        emu->mmu->mbc.mbc3.rtc.dh |= (d & 0x100) >> 8;
+        emu->mmu->mbc.mbc3.rtc.dl = d & 0xFF;
 
-        emu->mmu->rtc.h = rtc_registers_time / 3600;
+        emu->mmu->mbc.mbc3.rtc.h = rtc_registers_time / 3600;
         rtc_registers_time %= 3600;
 
-        emu->mmu->rtc.m = rtc_registers_time / 60;
+        emu->mmu->mbc.mbc3.rtc.m = rtc_registers_time / 60;
         rtc_registers_time %= 60;
 
-        emu->mmu->rtc.s = rtc_registers_time;
+        emu->mmu->mbc.mbc3.rtc.s = rtc_registers_time;
     }
 
     return 1;
