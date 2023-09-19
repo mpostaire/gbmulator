@@ -847,10 +847,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(rlc(cpu, &cpu->registers.l); END_OPCODE;);
     case 0x06: // RLC (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            rlc(cpu, (byte_t *) &cpu->opcode_cache_variable);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            rlc(cpu, (byte_t *) &cpu->accumulator);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0x07: // RLC A (4 cycles)
         CLOCK(rlc(cpu, &cpu->registers.a); END_OPCODE;);
@@ -868,10 +868,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(rrc(cpu, &cpu->registers.l); END_OPCODE);
     case 0x0E: // RRC (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            rrc(cpu, (byte_t *) &cpu->opcode_cache_variable);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            rrc(cpu, (byte_t *) &cpu->accumulator);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0x0F: // RRC A (4 cycles)
         CLOCK(rrc(cpu, &cpu->registers.a); END_OPCODE);
@@ -889,10 +889,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(rl(cpu, &cpu->registers.l); END_OPCODE;);
     case 0x16: // RL (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            rl(cpu, (byte_t *) &cpu->opcode_cache_variable);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            rl(cpu, (byte_t *) &cpu->accumulator);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0x17: // RL A (4 cycles)
         CLOCK(rl(cpu, &cpu->registers.a); END_OPCODE;);
@@ -910,10 +910,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(rr(cpu, &cpu->registers.l); END_OPCODE;);
     case 0x1E: // RR (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            rr(cpu, (byte_t *) &cpu->opcode_cache_variable);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            rr(cpu, (byte_t *) &cpu->accumulator);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0x1F: // RR A (4 cycles)
         CLOCK(rr(cpu, &cpu->registers.a); END_OPCODE;);
@@ -931,10 +931,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(sla(cpu, &cpu->registers.l); END_OPCODE;);
     case 0x26: // SLA (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            sla(cpu, (byte_t *) &cpu->opcode_cache_variable);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            sla(cpu, (byte_t *) &cpu->accumulator);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0x27: // SLA A (4 cycles)
         CLOCK(sla(cpu, &cpu->registers.a); END_OPCODE;);
@@ -952,10 +952,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(sra(cpu, &cpu->registers.l); END_OPCODE;);
     case 0x2E: // SRA (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            sra(cpu, (byte_t *) &cpu->opcode_cache_variable);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            sra(cpu, (byte_t *) &cpu->accumulator);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0x2F: // SRA A (4 cycles)
         CLOCK(sra(cpu, &cpu->registers.a); END_OPCODE;);
@@ -973,10 +973,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(swap(cpu, &cpu->registers.l); END_OPCODE;);
     case 0x36: // SWAP (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            swap(cpu, (byte_t *) &cpu->opcode_cache_variable);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            swap(cpu, (byte_t *) &cpu->accumulator);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0x37: // SWAP A (4 cycles)
         CLOCK(swap(cpu, &cpu->registers.a); END_OPCODE;);
@@ -994,10 +994,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(srl(cpu, &cpu->registers.l); END_OPCODE;);
     case 0x3E: // SRL (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            srl(cpu, (byte_t *) &cpu->opcode_cache_variable);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            srl(cpu, (byte_t *) &cpu->accumulator);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0x3F: // SRL A (4 cycles)
         CLOCK(srl(cpu, &cpu->registers.a); END_OPCODE;);
@@ -1014,8 +1014,8 @@ static void exec_extended_opcode(emulator_t *emu) {
     case 0x45: // BIT 0, L (4 cycles)
         CLOCK(bit(cpu, cpu->registers.l, 0); END_OPCODE);
     case 0x46: // BIT 0, (HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(bit(cpu, cpu->opcode_cache_variable, 0); END_OPCODE);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(bit(cpu, cpu->accumulator, 0); END_OPCODE);
     case 0x47: // BIT 0, A (4 cycles)
         CLOCK(bit(cpu, cpu->registers.a, 0); END_OPCODE);
     case 0x48: // BIT 1, B (4 cycles)
@@ -1031,8 +1031,8 @@ static void exec_extended_opcode(emulator_t *emu) {
     case 0x4D: // BIT 1, L (4 cycles)
         CLOCK(bit(cpu, cpu->registers.l, 1); END_OPCODE;);
     case 0x4E: // BIT 1, (HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(bit(cpu, cpu->opcode_cache_variable, 1); END_OPCODE);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(bit(cpu, cpu->accumulator, 1); END_OPCODE);
     case 0x4F: // BIT 1, A (4 cycles)
         CLOCK(bit(cpu, cpu->registers.a, 1); END_OPCODE;);
     case 0x50: // BIT 2, B (4 cycles)
@@ -1048,8 +1048,8 @@ static void exec_extended_opcode(emulator_t *emu) {
     case 0x55: // BIT 2, L (4 cycles)
         CLOCK(bit(cpu, cpu->registers.l, 2); END_OPCODE;);
     case 0x56: // BIT 2, (HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(bit(cpu, cpu->opcode_cache_variable, 2); END_OPCODE);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(bit(cpu, cpu->accumulator, 2); END_OPCODE);
     case 0x57: // BIT 2, A (4 cycles)
         CLOCK(bit(cpu, cpu->registers.a, 2); END_OPCODE;);
     case 0x58: // BIT 3, B (4 cycles)
@@ -1065,8 +1065,8 @@ static void exec_extended_opcode(emulator_t *emu) {
     case 0x5D: // BIT 3, L (4 cycles)
         CLOCK(bit(cpu, cpu->registers.l, 3); END_OPCODE;);
     case 0x5E: // BIT 3, (HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(bit(cpu, cpu->opcode_cache_variable, 3); END_OPCODE);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(bit(cpu, cpu->accumulator, 3); END_OPCODE);
     case 0x5F: // BIT 3, A (4 cycles)
         CLOCK(bit(cpu, cpu->registers.a, 3); END_OPCODE;);
     case 0x60: // BIT 4, B (4 cycles)
@@ -1082,8 +1082,8 @@ static void exec_extended_opcode(emulator_t *emu) {
     case 0x65: // BIT 4, L (4 cycles)
         CLOCK(bit(cpu, cpu->registers.l, 4); END_OPCODE;);
     case 0x66: // BIT 4, (HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(bit(cpu, cpu->opcode_cache_variable, 4); END_OPCODE);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(bit(cpu, cpu->accumulator, 4); END_OPCODE);
     case 0x67: // BIT 4, A (4 cycles)
         CLOCK(bit(cpu, cpu->registers.a, 4); END_OPCODE;);
     case 0x68: // BIT 5, B (4 cycles)
@@ -1099,8 +1099,8 @@ static void exec_extended_opcode(emulator_t *emu) {
     case 0x6D: // BIT 5, L (4 cycles)
         CLOCK(bit(cpu, cpu->registers.l, 5); END_OPCODE;);
     case 0x6E: // BIT 5, (HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(bit(cpu, cpu->opcode_cache_variable, 5); END_OPCODE);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(bit(cpu, cpu->accumulator, 5); END_OPCODE);
     case 0x6F: // BIT 5, A (4 cycles)
         CLOCK(bit(cpu, cpu->registers.a, 5); END_OPCODE;);
     case 0x70: // BIT 6, B (4 cycles)
@@ -1116,8 +1116,8 @@ static void exec_extended_opcode(emulator_t *emu) {
     case 0x75: // BIT 6, L (4 cycles)
         CLOCK(bit(cpu, cpu->registers.l, 6); END_OPCODE;);
     case 0x76: // BIT 6, (HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(bit(cpu, cpu->opcode_cache_variable, 6); END_OPCODE);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(bit(cpu, cpu->accumulator, 6); END_OPCODE);
     case 0x77: // BIT 6, A (4 cycles)
         CLOCK(bit(cpu, cpu->registers.a, 6); END_OPCODE;);
     case 0x78: // BIT 7, B (4 cycles)
@@ -1133,8 +1133,8 @@ static void exec_extended_opcode(emulator_t *emu) {
     case 0x7D: // BIT 7, L (4 cycles)
         CLOCK(bit(cpu, cpu->registers.l, 7); END_OPCODE;);
     case 0x7E: // BIT 7, (HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(bit(cpu, cpu->opcode_cache_variable, 7); END_OPCODE);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(bit(cpu, cpu->accumulator, 7); END_OPCODE);
     case 0x7F: // BIT 7, A (4 cycles)
         CLOCK(bit(cpu, cpu->registers.a, 7); END_OPCODE;);
     case 0x80: // RES 0, B (4 cycles)
@@ -1151,10 +1151,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(RESET_BIT(cpu->registers.l, 0); END_OPCODE;);
     case 0x86: // RES 0, (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            RESET_BIT(cpu->opcode_cache_variable, 0);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            RESET_BIT(cpu->accumulator, 0);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0x87: // RES 0, A (4 cycles)
         CLOCK(RESET_BIT(cpu->registers.a, 0); END_OPCODE;);
@@ -1172,10 +1172,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(RESET_BIT(cpu->registers.l, 1); END_OPCODE;);
     case 0x8E: // RES 1, (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            RESET_BIT(cpu->opcode_cache_variable, 1);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            RESET_BIT(cpu->accumulator, 1);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0x8F: // RES 1, A (4 cycles)
         CLOCK(RESET_BIT(cpu->registers.a, 1); END_OPCODE;);
@@ -1193,10 +1193,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(RESET_BIT(cpu->registers.l, 2); END_OPCODE;);
     case 0x96: // RES 2, (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            RESET_BIT(cpu->opcode_cache_variable, 2);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            RESET_BIT(cpu->accumulator, 2);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0x97: // RES 2, A (4 cycles)
         CLOCK(RESET_BIT(cpu->registers.a, 2); END_OPCODE;);
@@ -1214,10 +1214,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(RESET_BIT(cpu->registers.l, 3); END_OPCODE;);
     case 0x9E: // RES 3, (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            RESET_BIT(cpu->opcode_cache_variable, 3);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            RESET_BIT(cpu->accumulator, 3);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0x9F: // RES 3, A (4 cycles)
         CLOCK(RESET_BIT(cpu->registers.a, 3); END_OPCODE;);
@@ -1235,10 +1235,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(RESET_BIT(cpu->registers.l, 4); END_OPCODE;);
     case 0xA6: // RES 4, (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            RESET_BIT(cpu->opcode_cache_variable, 4);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            RESET_BIT(cpu->accumulator, 4);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0xA7: // RES 4, A (4 cycles)
         CLOCK(RESET_BIT(cpu->registers.a, 4); END_OPCODE;);
@@ -1256,10 +1256,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(RESET_BIT(cpu->registers.l, 5); END_OPCODE;);
     case 0xAE: // RES 5, (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            RESET_BIT(cpu->opcode_cache_variable, 5);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            RESET_BIT(cpu->accumulator, 5);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0xAF: // RES 5, A (4 cycles)
         CLOCK(RESET_BIT(cpu->registers.a, 5); END_OPCODE;);
@@ -1277,10 +1277,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(RESET_BIT(cpu->registers.l, 6); END_OPCODE;);
     case 0xB6: // RES 6, (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            RESET_BIT(cpu->opcode_cache_variable, 6);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            RESET_BIT(cpu->accumulator, 6);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0xB7: // RES 6, A (4 cycles)
         CLOCK(RESET_BIT(cpu->registers.a, 6); END_OPCODE;);
@@ -1298,10 +1298,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(RESET_BIT(cpu->registers.l, 7); END_OPCODE;);
     case 0xBE: // RES 7, (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            RESET_BIT(cpu->opcode_cache_variable, 7);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            RESET_BIT(cpu->accumulator, 7);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0xBF: // RES 7, A (4 cycles)
         CLOCK(RESET_BIT(cpu->registers.a, 7); END_OPCODE;);
@@ -1319,10 +1319,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(SET_BIT(cpu->registers.l, 0); END_OPCODE;);
     case 0xC6: // SET 0, (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            SET_BIT(cpu->opcode_cache_variable, 0);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            SET_BIT(cpu->accumulator, 0);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0xC7: // SET 0, A (4 cycles)
         CLOCK(SET_BIT(cpu->registers.a, 0); END_OPCODE;);
@@ -1340,10 +1340,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(SET_BIT(cpu->registers.l, 1); END_OPCODE;);
     case 0xCE: // SET 1, (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            SET_BIT(cpu->opcode_cache_variable, 1);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            SET_BIT(cpu->accumulator, 1);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0xCF: // SET 1, A (4 cycles)
         CLOCK(SET_BIT(cpu->registers.a, 1); END_OPCODE;);
@@ -1361,10 +1361,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(SET_BIT(cpu->registers.l, 2); END_OPCODE;);
     case 0xD6: // SET 2, (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            SET_BIT(cpu->opcode_cache_variable, 2);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            SET_BIT(cpu->accumulator, 2);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0xD7: // SET 2, A (4 cycles)
         CLOCK(SET_BIT(cpu->registers.a, 2); END_OPCODE;);
@@ -1382,10 +1382,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(SET_BIT(cpu->registers.l, 3); END_OPCODE;);
     case 0xDE: // SET 3, (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            SET_BIT(cpu->opcode_cache_variable, 3);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            SET_BIT(cpu->accumulator, 3);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0xDF: // SET 3, A (4 cycles)
         CLOCK(SET_BIT(cpu->registers.a, 3); END_OPCODE;);
@@ -1403,10 +1403,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(SET_BIT(cpu->registers.l, 4); END_OPCODE;);
     case 0xE6: // SET 4, (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            SET_BIT(cpu->opcode_cache_variable, 4);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            SET_BIT(cpu->accumulator, 4);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0xE7: // SET 4, A (4 cycles)
         CLOCK(SET_BIT(cpu->registers.a, 4); END_OPCODE;);
@@ -1424,10 +1424,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(SET_BIT(cpu->registers.l, 5); END_OPCODE;);
     case 0xEE: // SET 5, (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            SET_BIT(cpu->opcode_cache_variable, 5);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            SET_BIT(cpu->accumulator, 5);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0xEF: // SET 5, A (4 cycles)
         CLOCK(SET_BIT(cpu->registers.a, 5); END_OPCODE;);
@@ -1445,10 +1445,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(SET_BIT(cpu->registers.l, 6); END_OPCODE;);
     case 0xF6: // SET 6, (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            SET_BIT(cpu->opcode_cache_variable, 6);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            SET_BIT(cpu->accumulator, 6);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0xF7: // SET 6, A (4 cycles)
         CLOCK(SET_BIT(cpu->registers.a, 6); END_OPCODE;);
@@ -1466,10 +1466,10 @@ static void exec_extended_opcode(emulator_t *emu) {
         CLOCK(SET_BIT(cpu->registers.l, 7); END_OPCODE;);
     case 0xFE: // SET 7, (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            SET_BIT(cpu->opcode_cache_variable, 7)
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            SET_BIT(cpu->accumulator, 7)
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0xFF: // SET 7, A (4 cycles)
         CLOCK(SET_BIT(cpu->registers.a, 7); END_OPCODE;);
@@ -1516,8 +1516,8 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(add16(cpu, cpu->registers.bc));
         CLOCK(END_OPCODE);
     case 0x0A: // LD A,(BC) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.bc));
-        CLOCK(cpu->registers.a = cpu->opcode_cache_variable; END_OPCODE;);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.bc));
+        CLOCK(cpu->registers.a = cpu->accumulator; END_OPCODE;);
     case 0x0B: // DEC BC (8 cycles)
         CLOCK(cpu->registers.bc--);
         CLOCK(END_OPCODE);
@@ -1558,8 +1558,8 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(mmu_write(emu, cpu->registers.de, cpu->registers.a));
         CLOCK(END_OPCODE);
     case 0x13: // INC DE (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = cpu->registers.de);
-        CLOCK(cpu->registers.de = cpu->opcode_cache_variable + 1; END_OPCODE;);
+        CLOCK(cpu->accumulator = cpu->registers.de);
+        CLOCK(cpu->registers.de = cpu->accumulator + 1; END_OPCODE;);
     case 0x14: // INC D (4 cycles)
         CLOCK(inc(cpu, &cpu->registers.d); END_OPCODE;);
     case 0x15: // DEC D (4 cycles)
@@ -1581,8 +1581,8 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(add16(cpu, cpu->registers.de));
         CLOCK(END_OPCODE);
     case 0x1A: // LD A,(DE) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.de));
-        CLOCK(cpu->registers.a = cpu->opcode_cache_variable; END_OPCODE;);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.de));
+        CLOCK(cpu->registers.a = cpu->accumulator; END_OPCODE;);
     case 0x1B: // DEC DE (8 cycles)
         CLOCK(cpu->registers.de--);
         CLOCK(END_OPCODE);        
@@ -1654,9 +1654,9 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(add16(cpu, cpu->registers.hl));
         CLOCK(END_OPCODE);
     case 0x2A: // LDI A, (HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
         CLOCK(
-            cpu->registers.a = cpu->opcode_cache_variable;
+            cpu->registers.a = cpu->accumulator;
             cpu->registers.hl++;
             END_OPCODE;
         );
@@ -1694,17 +1694,17 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(END_OPCODE);
     case 0x34: // INC (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            inc(cpu, (byte_t *) &cpu->opcode_cache_variable);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            inc(cpu, (byte_t *) &cpu->accumulator);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0x35: // DEC (HL) (12 cycles)
         CLOCK(
-            cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl);
-            dec(cpu, (byte_t *) &cpu->opcode_cache_variable);
+            cpu->accumulator = mmu_read(emu, cpu->registers.hl);
+            dec(cpu, (byte_t *) &cpu->accumulator);
         );
-        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->opcode_cache_variable));
+        CLOCK(mmu_write(emu, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0x36: // LD (HL),n (12 cycles)
         GET_OPERAND_8();
@@ -1758,8 +1758,8 @@ static void exec_opcode(emulator_t *emu) {
     case 0x45: // LD B,L (4 cycles)
         CLOCK(cpu->registers.b = cpu->registers.l; END_OPCODE;);
     case 0x46: // LD B,(HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(cpu->registers.b = cpu->opcode_cache_variable; END_OPCODE);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(cpu->registers.b = cpu->accumulator; END_OPCODE);
     case 0x47: // LD B,A (4 cycles)
         CLOCK(cpu->registers.b = cpu->registers.a; END_OPCODE;);
     case 0x48: // LD C,B (4 cycles)
@@ -1775,8 +1775,8 @@ static void exec_opcode(emulator_t *emu) {
     case 0x4D: // LD C,L (4 cycles)
         CLOCK(cpu->registers.c = cpu->registers.l; END_OPCODE;);
     case 0x4E: // LD C,(HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(cpu->registers.c = cpu->opcode_cache_variable; END_OPCODE;);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(cpu->registers.c = cpu->accumulator; END_OPCODE;);
     case 0x4F: // LD C,A (4 cycles)
         CLOCK(cpu->registers.c = cpu->registers.a; END_OPCODE;);
     case 0x50: // LD D,B (4 cycles)
@@ -1792,8 +1792,8 @@ static void exec_opcode(emulator_t *emu) {
     case 0x55: // LD D,L (4 cycles)
         CLOCK(cpu->registers.d = cpu->registers.l; END_OPCODE;);
     case 0x56: // LD D,(HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(cpu->registers.d = cpu->opcode_cache_variable; END_OPCODE;);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(cpu->registers.d = cpu->accumulator; END_OPCODE;);
     case 0x57: // LD D,A (4 cycles)
         CLOCK(cpu->registers.d = cpu->registers.a; END_OPCODE;);
     case 0x58: // LD E,B (4 cycles)
@@ -1809,8 +1809,8 @@ static void exec_opcode(emulator_t *emu) {
     case 0x5D: // LD E,L (4 cycles)
         CLOCK(cpu->registers.e = cpu->registers.l; END_OPCODE;);
     case 0x5E: // LD E,(HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(cpu->registers.e = cpu->opcode_cache_variable; END_OPCODE;);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(cpu->registers.e = cpu->accumulator; END_OPCODE;);
     case 0x5F: // LD E,A (4 cycles)
         CLOCK(cpu->registers.e = cpu->registers.a; END_OPCODE;);
     case 0x60: // LD H,B (4 cycles)
@@ -1826,8 +1826,8 @@ static void exec_opcode(emulator_t *emu) {
     case 0x65: // LD H,L (4 cycles)
         CLOCK(cpu->registers.h = cpu->registers.l; END_OPCODE;);
     case 0x66: // LD H,(HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(cpu->registers.h = cpu->opcode_cache_variable; END_OPCODE;);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(cpu->registers.h = cpu->accumulator; END_OPCODE;);
     case 0x67: // LD H,A (4 cycles)
         CLOCK(cpu->registers.h = cpu->registers.a; END_OPCODE;);
     case 0x68: // LD L,B (4 cycles)
@@ -1843,8 +1843,8 @@ static void exec_opcode(emulator_t *emu) {
     case 0x6D: // LD L,L (4 cycles)
         CLOCK(/*cpu->registers.l = cpu->registers.l;*/ END_OPCODE;);
     case 0x6E: // LD L,(HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(cpu->registers.l = cpu->opcode_cache_variable; END_OPCODE;);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(cpu->registers.l = cpu->accumulator; END_OPCODE;);
     case 0x6F: // LD L,A (4 cycles)
         CLOCK(cpu->registers.l = cpu->registers.a; END_OPCODE;);
     case 0x70: // LD (HL),B (8 cycles)
@@ -1889,8 +1889,8 @@ static void exec_opcode(emulator_t *emu) {
     case 0x7D: // LD A,L (4 cycles)
         CLOCK(cpu->registers.a = cpu->registers.l; END_OPCODE;);
     case 0x7E: // LD A,(HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(cpu->registers.a = cpu->opcode_cache_variable; END_OPCODE;);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(cpu->registers.a = cpu->accumulator; END_OPCODE;);
     case 0x7F: // LD A,A (4 cycles)
         CLOCK(/*cpu->registers.a = cpu->registers.a;*/ END_OPCODE;);
     case 0x80: // ADD A, B (4 cycles)
@@ -1906,8 +1906,8 @@ static void exec_opcode(emulator_t *emu) {
     case 0x85: // ADD A, L (4 cycles)
         CLOCK(add8(cpu, cpu->registers.l); END_OPCODE;);
     case 0x86: // ADD A, (HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(add8(cpu, cpu->opcode_cache_variable); END_OPCODE;);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(add8(cpu, cpu->accumulator); END_OPCODE;);
     case 0x87: // ADD A, A (4 cycles)
         CLOCK(add8(cpu, cpu->registers.a); END_OPCODE;);
     case 0x88: // ADC A, B (4 cycles)
@@ -1923,8 +1923,8 @@ static void exec_opcode(emulator_t *emu) {
     case 0x8D: // ADC A, L (4 cycles)
         CLOCK(adc(cpu, cpu->registers.l); END_OPCODE;);
     case 0x8E: // ADC A, (HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(adc(cpu, cpu->opcode_cache_variable); END_OPCODE;);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(adc(cpu, cpu->accumulator); END_OPCODE;);
     case 0x8F: // ADC A, A (4 cycles)
         CLOCK(adc(cpu, cpu->registers.a); END_OPCODE;);
     case 0x90: // SUB A, B (4 cycles)
@@ -1940,8 +1940,8 @@ static void exec_opcode(emulator_t *emu) {
     case 0x95: // SUB A, L (4 cycles)
         CLOCK(sub8(cpu, cpu->registers.l); END_OPCODE;);
     case 0x96: // SUB A, (HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(sub8(cpu, cpu->opcode_cache_variable); END_OPCODE);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(sub8(cpu, cpu->accumulator); END_OPCODE);
     case 0x97: // SUB A, A (4 cycles)
         CLOCK(sub8(cpu, cpu->registers.a); END_OPCODE;);
     case 0x98: // SBC A, B (4 cycles)
@@ -1957,8 +1957,8 @@ static void exec_opcode(emulator_t *emu) {
     case 0x9D: // SBC A, L (4 cycles)
         CLOCK(sbc(cpu, cpu->registers.l); END_OPCODE;);
     case 0x9E: // SBC A, (HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(sbc(cpu, cpu->opcode_cache_variable); END_OPCODE;);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(sbc(cpu, cpu->accumulator); END_OPCODE;);
     case 0x9F: // SBC A, A (4 cycles)
         CLOCK(sbc(cpu, cpu->registers.a); END_OPCODE;);
     case 0xA0: // AND B (4 cycles)
@@ -1974,8 +1974,8 @@ static void exec_opcode(emulator_t *emu) {
     case 0xA5: // AND L (4 cycles)
         CLOCK(and(cpu, cpu->registers.l); END_OPCODE;);
     case 0xA6: // AND (HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(and(cpu, cpu->opcode_cache_variable); END_OPCODE;);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(and(cpu, cpu->accumulator); END_OPCODE;);
     case 0xA7: // AND A (4 cycles)
         CLOCK(and(cpu, cpu->registers.a); END_OPCODE;);
     case 0xA8: // XOR B (4 cycles)
@@ -1991,8 +1991,8 @@ static void exec_opcode(emulator_t *emu) {
     case 0xAD: // XOR L (4 cycles)
         CLOCK(xor(cpu, cpu->registers.l); END_OPCODE;);
     case 0xAE: // XOR (HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(xor(cpu, cpu->opcode_cache_variable); END_OPCODE;);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(xor(cpu, cpu->accumulator); END_OPCODE;);
     case 0xAF: // XOR A (4 cycles)
         CLOCK(xor(cpu, cpu->registers.a); END_OPCODE;);
     case 0xB0: // OR B (4 cycles)
@@ -2008,8 +2008,8 @@ static void exec_opcode(emulator_t *emu) {
     case 0xB5: // OR L (4 cycles)
         CLOCK(or(cpu, cpu->registers.l); END_OPCODE;);
     case 0xB6: // OR (HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(or(cpu, cpu->opcode_cache_variable); END_OPCODE;);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(or(cpu, cpu->accumulator); END_OPCODE;);
     case 0xB7: // OR A (4 cycles)
         CLOCK(or(cpu, cpu->registers.a); END_OPCODE;);
     case 0xB8: // CP B (4 cycles)
@@ -2025,8 +2025,8 @@ static void exec_opcode(emulator_t *emu) {
     case 0xBD: // CP L (4 cycles)
         CLOCK(cp(cpu, cpu->registers.l); END_OPCODE;);
     case 0xBE: // CP (HL) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->registers.hl));
-        CLOCK(cp(cpu, cpu->opcode_cache_variable); END_OPCODE;);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->registers.hl));
+        CLOCK(cp(cpu, cpu->accumulator); END_OPCODE;);
     case 0xBF: // CP A (4 cycles)
         CLOCK(cp(cpu, cpu->registers.a); END_OPCODE;);
     case 0xC0: // RET NZ (8 or 20 cycles)
@@ -2157,13 +2157,13 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(cpu->registers.pc = 0x0020; END_OPCODE;);
     case 0xE8: // ADD SP, n (16 cycles)
         GET_OPERAND_8();
-        CLOCK(cpu->opcode_cache_variable = cpu->registers.sp + (s_byte_t) cpu->operand);
+        CLOCK(cpu->accumulator = cpu->registers.sp + (s_byte_t) cpu->operand);
         CLOCK(
             (((cpu->registers.sp & 0xFF) + ((s_byte_t) cpu->operand & 0xFF)) & 0x100) == 0x100 ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
             (((cpu->registers.sp & 0x0F) + ((s_byte_t) cpu->operand & 0x0F)) & 0x10) == 0x10 ? SET_FLAG(cpu, FLAG_H) : RESET_FLAG(cpu, FLAG_H);
         );
         CLOCK(
-            cpu->registers.sp = cpu->opcode_cache_variable & 0xFFFF;
+            cpu->registers.sp = cpu->accumulator & 0xFFFF;
             RESET_FLAG(cpu, FLAG_N | FLAG_Z);
             END_OPCODE;
         );
@@ -2182,15 +2182,15 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(cpu->registers.pc = 0x0028; END_OPCODE;);
     case 0xF0: // LD A, (0xFF00 + n) (12 cycles)
         GET_OPERAND_8();
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, IO + cpu->operand));
-        CLOCK(cpu->registers.a = cpu->opcode_cache_variable; END_OPCODE;);
+        CLOCK(cpu->accumulator = mmu_read(emu, IO + cpu->operand));
+        CLOCK(cpu->registers.a = cpu->accumulator; END_OPCODE;);
     case 0xF1: // POP AF (12 cycles)
         // also clear lower nibble of cpu->registers.f because it can only retreive its flags (most significant nibble)
         POP(&cpu->registers.af);
         CLOCK(cpu->registers.f &= 0xF0; END_OPCODE;);
     case 0xF2: // LD A,(0xFF00 + C) (8 cycles)
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, IO + cpu->registers.c););
-        CLOCK(cpu->registers.a = cpu->opcode_cache_variable; END_OPCODE;);
+        CLOCK(cpu->accumulator = mmu_read(emu, IO + cpu->registers.c););
+        CLOCK(cpu->registers.a = cpu->accumulator; END_OPCODE;);
     case 0xF3: // DI (4 cycles)
         CLOCK(cpu->ime = IME_DISABLED; END_OPCODE;);
     case 0xF5: // PUSH AF (16 cycles)
@@ -2207,12 +2207,12 @@ static void exec_opcode(emulator_t *emu) {
     case 0xF8: // LD HL, SP+n (12 cycles)
         GET_OPERAND_8();
         CLOCK(
-            cpu->opcode_cache_variable = cpu->registers.sp + (s_byte_t) cpu->operand;
+            cpu->accumulator = cpu->registers.sp + (s_byte_t) cpu->operand;
             (((cpu->registers.sp & 0xFF) + ((s_byte_t) cpu->operand & 0xFF)) & 0x100) == 0x100 ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
             (((cpu->registers.sp & 0x0F) + ((s_byte_t) cpu->operand & 0x0F)) & 0x10) == 0x10 ? SET_FLAG(cpu, FLAG_H) : RESET_FLAG(cpu, FLAG_H);
         );
         CLOCK(
-            cpu->registers.hl = cpu->opcode_cache_variable & 0xFFFF;
+            cpu->registers.hl = cpu->accumulator & 0xFFFF;
             RESET_FLAG(cpu, FLAG_N | FLAG_Z);
             END_OPCODE;
         );
@@ -2221,8 +2221,8 @@ static void exec_opcode(emulator_t *emu) {
         CLOCK(END_OPCODE);
     case 0xFA: // LD A, (nn) (16 cycles)
         GET_OPERAND_16();
-        CLOCK(cpu->opcode_cache_variable = mmu_read(emu, cpu->operand));
-        CLOCK(cpu->registers.a = cpu->opcode_cache_variable; END_OPCODE;);
+        CLOCK(cpu->accumulator = mmu_read(emu, cpu->operand));
+        CLOCK(cpu->registers.a = cpu->accumulator; END_OPCODE;);
     case 0xFB: // EI (4 cycles)
         CLOCK(
             // If cpu->ime is not IME_DISABLED, either interrupts are in the process of being enabled, or they are already enabled.
@@ -2384,7 +2384,7 @@ void cpu_quit(emulator_t *emu) {
     X(opcode)              \
     X(opcode_state)        \
     X(operand)             \
-    X(opcode_cache_variable)
+    X(accumulator)
 
 #define X(value) SERIALIZED_LENGTH(value);
 SERIALIZED_SIZE_FUNCTION(cpu_t, cpu,

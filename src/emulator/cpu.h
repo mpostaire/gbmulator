@@ -57,7 +57,7 @@ typedef struct {
     byte_t opcode; // current opcode
     s_word_t opcode_state; // current opcode or current microcode inside the opcode (< 0 --> request new instruction fetch)
     word_t operand; // operand for the current opcode
-    word_t opcode_cache_variable; // storage used for an easier implementation of some opcodes
+    word_t accumulator; // storage used for an easier implementation of some opcodes
 } cpu_t;
 
 #define CPU_REQUEST_INTERRUPT(emu, irq) SET_BIT((emu)->mmu->io_registers[IF - IO], (irq))
