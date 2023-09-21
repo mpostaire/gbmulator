@@ -5,9 +5,8 @@
 
     <object class="AdwWindow" id="window">
         <property name="content">
-            <object class="GtkBox">
-                <property name="orientation">vertical</property>
-                <child>
+            <object class="AdwToolbarView" id="toolbarview">
+                <child type="top">
                     <object class="AdwHeaderBar">
                         <property name="title-widget">
                             <object class="AdwWindowTitle" id="window_title">
@@ -37,7 +36,7 @@
                     </object>
                 </child>
 
-                <child>
+                <property name="content">
                     <object class="GtkAspectFrame">
                         <property name="ratio">1.111111</property>
                         <property name="xalign">0.5</property>
@@ -72,7 +71,7 @@
                             </object>
                         </child>
                     </object>
-                </child>
+                </property>
             </object>
         </property>
     </object>

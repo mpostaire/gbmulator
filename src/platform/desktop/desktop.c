@@ -126,7 +126,7 @@ int gamepad_state = GAMEPAD_DISABLED;
 AdwApplication *app;
 GtkWidget *main_window, *preferences_window, *window_title, *toast_overlay, *emu_gl_area, *printer_gl_area, *keybind_dialog, *bind_value, *mode_setter;
 GtkWidget *joypad_name, *restart_dialog, *link_emu_dialog, *printer_window, *status, *link_mode_setter_server, *link_host, *link_host_revealer;
-GtkWidget *printer_save_btn, *printer_clear_btn, *printer_scroll_adj, *printer_quit_dialog;
+GtkWidget *printer_save_btn, *printer_clear_btn, *printer_scroll_adj, *printer_quit_dialog, *main_window_view;
 GtkEventController *motion_event_controller;
 glong motion_event_handler = 0;
 GtkFileDialog *open_rom_dialog, *save_printer_image_dialog;
@@ -1057,6 +1057,12 @@ static void keybind_dialog_hide_cb(GtkWidget *self, gpointer user_data) {
     gamepad_state = GAMEPAD_DISABLED;
 }
 
+static void main_window_fullscreen_notify(GObject *self, GParamSpec *pspec, gpointer user_data) {
+    gboolean is_fullscreen = gtk_window_is_fullscreen(GTK_WINDOW(main_window));
+    adw_toolbar_view_set_extend_content_to_top_edge(ADW_TOOLBAR_VIEW(main_window_view), is_fullscreen);
+    adw_toolbar_view_set_reveal_top_bars(ADW_TOOLBAR_VIEW(main_window_view), !is_fullscreen);
+}
+
 static void activate_cb(GtkApplication *app) {
     // Load config
     config_path = get_config_path();
@@ -1065,6 +1071,9 @@ static void activate_cb(GtkApplication *app) {
     // Main window
     GtkBuilder *builder = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/main.ui");
     main_window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
+    g_signal_connect(main_window, "notify::fullscreened", G_CALLBACK(main_window_fullscreen_notify), NULL);
+
+    main_window_view = GTK_WIDGET(gtk_builder_get_object(builder, "toolbarview"));
 
     status = GTK_WIDGET(gtk_builder_get_object(builder, "status"));
 

@@ -6,9 +6,8 @@
     <object class="AdwWindow" id="window">
         <property name="hide-on-close">true</property>
         <property name="content">
-            <object class="GtkBox">
-                <property name="orientation">vertical</property>
-                <child>
+            <object class="AdwToolbarView">
+                <child type="top">
                     <object class="AdwHeaderBar">
                         <property name="title-widget">
                             <object class="AdwWindowTitle" id="window_title">
@@ -43,7 +42,7 @@
                     </object>
                 </child>
 
-                <child>
+                <property name="content">
                     <object class="GtkScrolledWindow" id="printer_scroll">
                         <property name="min-content-width">320</property>
                         <property name="min-content-height">288</property>
@@ -69,7 +68,7 @@
                             </object>
                         </child>
                     </object>
-                </child>
+                </property>
             </object>
         </property>
     </object>
