@@ -18,6 +18,7 @@ You can compile and run it on your linux machine or use it in your browser [here
 - Wireless link cable
 - Support for MBC1, MBC1M, MBC2, MBC3, MBC30, MBC5, MBC7 and HuC1 cartridges
 - Battery saves and savestates
+- Game Boy Printer emulation
 - Supports keyboard and gamepad controllers
 
 ## Installation
@@ -83,7 +84,7 @@ There is also support for gamepad controllers.
 
 - implement other MBCs
 - implement printer
-- implement GBC and HuC1/HuC3 IR
+- implement GBC and HuC1 IR
 - find out what are the accurate timings for the ppu pixel fifo/fetcher (especially for corner cases)
 - better audio/video sync
 - android link cable via bluetooth + cross platform link cable

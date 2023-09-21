@@ -386,13 +386,30 @@ void emulator_print_status(emulator_t *emu) {
 }
 
 void emulator_link_connect(emulator_t *emu, emulator_t *other_emu) {
+    // disconnect any device that may have been connected before
+    emulator_link_disconnect(emu);
+    emulator_link_disconnect_printer(emu);
+
     emu->link->other_emu = other_emu;
     other_emu->link->other_emu = emu;
 }
 
 void emulator_link_disconnect(emulator_t *emu) {
-    emu->link->other_emu->link->other_emu = NULL;
+    if (emu->link->other_emu)
+        emu->link->other_emu->link->other_emu = NULL;
     emu->link->other_emu = NULL;
+}
+
+void emulator_link_connect_printer(emulator_t *emu, gb_printer_t *printer) {
+    // disconnect any device that may have been connected before
+    emulator_link_disconnect(emu);
+    emulator_link_disconnect_printer(emu);
+
+    emu->link->printer = printer;
+}
+
+void emulator_link_disconnect_printer(emulator_t *emu) {
+    emu->link->printer = NULL;
 }
 
 void emulator_joypad_press(emulator_t *emu, joypad_button_t key) {

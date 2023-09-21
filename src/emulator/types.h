@@ -9,6 +9,7 @@ typedef unsigned short word_t;
 typedef signed short s_word_t;
 
 typedef struct emulator_t emulator_t;
+typedef struct gb_printer_t gb_printer_t;
 
 typedef enum {
     DMG_WHITE,
@@ -45,8 +46,12 @@ typedef enum {
 } apu_audio_format_t;
 
 typedef void (*on_new_frame_t)(const byte_t *pixels);
-typedef void (*on_apu_samples_ready_t)(const void *audio_buffer, int audio_buffer_size);
+typedef void (*on_apu_samples_ready_t)(const void *audio_buffer, size_t audio_buffer_size);
 typedef void (*on_accelerometer_request_t)(double *x, double *y);
+
+typedef void (*on_new_printer_line_t)(const byte_t *pixels, size_t height);
+typedef void (*on_start_printing_t)(const byte_t *pixels, size_t height);
+typedef void (*on_finish_printing_t)(const byte_t *pixels, size_t height);
 
 typedef struct {
     emulator_mode_t mode; // either `DMG` for original game boy emulation or `CGB` for game boy color emulation

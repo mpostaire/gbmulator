@@ -233,12 +233,12 @@ static inline byte_t read_io_register(emulator_t *emu, word_t address) {
     case IF: return mmu->io_registers[io_reg_addr] | 0xE0;
     case NR10: return mmu->io_registers[io_reg_addr] | 0x80;
     case NR11: return mmu->io_registers[io_reg_addr] | 0x3F;
-    case NR12: return mmu->io_registers[io_reg_addr] | 0x00; // useless bitwise or
+    case NR12: return mmu->io_registers[io_reg_addr];
     case NR13: return 0xFF;
     case NR14: return mmu->io_registers[io_reg_addr] | 0xBF;
     case NR20: return 0xFF;
     case NR21: return mmu->io_registers[io_reg_addr] | 0x3F;
-    case NR22: return mmu->io_registers[io_reg_addr] | 0x00; // useless bitwise or
+    case NR22: return mmu->io_registers[io_reg_addr];
     case NR23: return 0xFF;
     case NR24: return mmu->io_registers[io_reg_addr] | 0xBF;
     case NR30: return mmu->io_registers[io_reg_addr] | 0x7F;
@@ -248,11 +248,11 @@ static inline byte_t read_io_register(emulator_t *emu, word_t address) {
     case NR34: return mmu->io_registers[io_reg_addr] | 0xBF;
     case NR40: return 0xFF;
     case NR41: return 0xFF;
-    case NR42: return mmu->io_registers[io_reg_addr] | 0x00; // useless bitwise or
-    case NR43: return mmu->io_registers[io_reg_addr] | 0x00; // useless bitwise or
+    case NR42: return mmu->io_registers[io_reg_addr];
+    case NR43: return mmu->io_registers[io_reg_addr];
     case NR44: return mmu->io_registers[io_reg_addr] | 0xBF;
-    case NR50: return mmu->io_registers[io_reg_addr] | 0x00; // useless bitwise or
-    case NR51: return mmu->io_registers[io_reg_addr] | 0x00; // useless bitwise or
+    case NR50: return mmu->io_registers[io_reg_addr];
+    case NR51: return mmu->io_registers[io_reg_addr];
     case NR52: return mmu->io_registers[io_reg_addr] | 0x70;
     case 0xFF27 ... WAVE_RAM - 1: return 0xFF;
     case WAVE_RAM ... LCDC - 1: return mmu->io_registers[io_reg_addr];

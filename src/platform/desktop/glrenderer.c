@@ -5,6 +5,8 @@
 #include <GL/glew.h>
 #include <GL/gl.h>
 
+#include "glrenderer.h"
+
 // Vertices coordinates
 GLfloat vertices[] = {
     //     COORDINATES   /  TexCoord (vertically flipped)
@@ -20,12 +22,14 @@ GLuint indices[] = {
     0, 3, 2 // Lower triangle
 };
 
-GLuint screen_texture;
-GLuint shader_program;
-// Reference containers for the Vertex Array Object, the Vertex Buffer Object, and the Element Buffer Object
-GLuint VAO, VBO, EBO;
+struct glrenderer_t {
+    GLuint texture;
+    GLuint VAO; // Vertex Array Object
+    GLuint VBO; // Vertex Buffer Object
+    GLuint EBO; // Element Buffer Object
+};
 
-GLsizei screen_width, screen_height;
+GLuint shader_program;
 
 static GLuint create_shader_program(const char *vertex_source_path, const char *fragment_source_path) {
     GBytes *vertex_shader_data = g_resources_lookup_data(vertex_source_path, 0, NULL);
@@ -65,7 +69,7 @@ static GLuint create_shader_program(const char *vertex_source_path, const char *
     return program;
 }
 
-static GLuint create_screen_texture(GLsizei width, GLsizei height, const GLvoid *pixels) {
+static GLuint create_texture(GLsizei width, GLsizei height, const GLvoid *pixels) {
     // Create one OpenGL texture
     GLuint textureID;
     glGenTextures(1, &textureID);
@@ -84,24 +88,21 @@ static GLuint create_screen_texture(GLsizei width, GLsizei height, const GLvoid 
     glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, color);
 
     // Give the image to OpenGL
-    char *placeholder = NULL;
+    void *placeholder = NULL;
     if (!pixels)
-        placeholder = xcalloc(1, width * height * 3);
+        placeholder = xcalloc(1, width * height * 4);
 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_BGR, GL_UNSIGNED_BYTE, pixels ? pixels : placeholder);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels ? pixels : placeholder);
 
     if (placeholder)
         free(placeholder);
 
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    screen_height = height;
-    screen_width = width;
-
     return textureID;
 }
 
-void glrenderer_init(GLsizei width, GLsizei height, const GLvoid *pixels) {
+glrenderer_t *glrenderer_init(GLsizei width, GLsizei height, const GLvoid *pixels) {
     // printf("Renderer: %s\n", glGetString(GL_RENDERER));
     // printf("OpenGL version supported %s\n", glGetString(GL_VERSION));
 
@@ -112,25 +113,29 @@ void glrenderer_init(GLsizei width, GLsizei height, const GLvoid *pixels) {
     }
 
     // Create and load shader
-    shader_program = create_shader_program(
-        "/io/github/mpostaire/gbmulator/src/platform/desktop/ui/default.vs.glsl",
-        "/io/github/mpostaire/gbmulator/src/platform/desktop/ui/default.fs.glsl");
+    if (!shader_program) {
+        shader_program = create_shader_program(
+            "/io/github/mpostaire/gbmulator/src/platform/desktop/ui/default.vs.glsl",
+            "/io/github/mpostaire/gbmulator/src/platform/desktop/ui/default.fs.glsl");
+    }
+
+    glrenderer_t *renderer = xcalloc(1, sizeof(glrenderer_t));
 
     // Generate the VAO, VBO, and EBO with only 1 object each
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
+    glGenVertexArrays(1, &renderer->VAO);
+    glGenBuffers(1, &renderer->VBO);
+    glGenBuffers(1, &renderer->EBO);
 
     // Make the VAO the current Vertex Array Object by binding it
-    glBindVertexArray(VAO);
+    glBindVertexArray(renderer->VAO);
 
     // Bind the VBO specifying it's a GL_ARRAY_BUFFER
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, renderer->VBO);
     // Introduce the vertices into the VBO
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
     // Bind the EBO specifying it's a GL_ELEMENT_ARRAY_BUFFER
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, renderer->EBO);
     // Introduce the indices into the EBO
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
@@ -149,7 +154,7 @@ void glrenderer_init(GLsizei width, GLsizei height, const GLvoid *pixels) {
     // This does not apply to the VBO because the VBO is already linked to the VAO during glVertexAttribPointer
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-    screen_texture = create_screen_texture(width, height, pixels);
+    renderer->texture = create_texture(width, height, pixels);
 
     // Tell OpenGL which Shader Program we want to use
     glUseProgram(shader_program);
@@ -158,21 +163,29 @@ void glrenderer_init(GLsizei width, GLsizei height, const GLvoid *pixels) {
     glUniform1i(tex0_uniform_id, 0);
 
     // Specify the color of the background
-    glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+
+    return renderer;
 }
 
-void glrenderer_render(void) {
+void glrenderer_render(glrenderer_t *renderer) {
     // Clean the back buffer and assign the new color to it
     glClear(GL_COLOR_BUFFER_BIT);
 
-    glBindTexture(GL_TEXTURE_2D, screen_texture);
+    glBindTexture(GL_TEXTURE_2D, renderer->texture);
     // Bind the VAO so OpenGL knows to use it
-    glBindVertexArray(VAO);
+    glBindVertexArray(renderer->VAO);
     // Draw primitives, number of indices, datatype of indices, index of indices
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
-void glrenderer_update_screen_texture(GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, const GLvoid *pixels) {
-    glBindTexture(GL_TEXTURE_2D, screen_texture);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, xoffset, yoffset, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+void glrenderer_update_texture(glrenderer_t *renderer, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, const GLvoid *pixels) {
+    glBindTexture(GL_TEXTURE_2D, renderer->texture);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, xoffset, yoffset, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+}
+
+void glrenderer_resize_texture(glrenderer_t *renderer, GLsizei width, GLsizei height) {
+    glBindTexture(GL_TEXTURE_2D, renderer->texture);
+    // NULL as pixel data: opengl allocates texture but doesn't copy any pixel data 
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 }

@@ -8,6 +8,7 @@ typedef struct {
     word_t max_clock_cycles;
     byte_t bit_counter;
     emulator_t *other_emu;
+    gb_printer_t *printer;
 } link_t;
 
 void link_set_clock(emulator_t *emu);

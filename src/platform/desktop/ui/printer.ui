@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+    <requires lib="gtk" version="4.0"/>
+    <requires lib="libadwaita" version="1.2"/>
+
+    <object class="AdwWindow" id="window">
+        <property name="hide-on-close">true</property>
+        <property name="content">
+            <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <child>
+                    <object class="AdwHeaderBar">
+                        <property name="title-widget">
+                            <object class="AdwWindowTitle" id="window_title">
+                                <property name="title">GBmulator</property>
+                                <property name="subtitle">Game Boy Printer</property>
+                            </object>
+                        </property>
+
+                        <child type="start">
+                            <object class="GtkButton" id="save_btn">
+                                <property name="sensitive">false</property>
+                                <property name="child">
+                                    <object class="AdwButtonContent">
+                                        <property name="icon-name">document-save-symbolic</property>
+                                    </object>
+                                </property>
+                                <property name="tooltip-text">Save image</property>
+                            </object>
+                        </child>
+
+                        <child type="start">
+                            <object class="GtkButton" id="clear_btn">
+                                <property name="sensitive">false</property>
+                                <property name="child">
+                                    <object class="AdwButtonContent">
+                                        <property name="icon-name">user-trash-symbolic</property>
+                                    </object>
+                                </property>
+                                <property name="tooltip-text">Clear</property>
+                            </object>
+                        </child>
+                    </object>
+                </child>
+
+                <child>
+                    <object class="GtkScrolledWindow" id="printer_scroll">
+                        <property name="min-content-width">320</property>
+                        <property name="min-content-height">288</property>
+                        <child>
+                            <object class="GtkAspectFrame">
+                                <property name="ratio">1.111111</property>
+                                <property name="xalign">0.5</property>
+                                <property name="yalign">1.0</property>
+                                <child>
+                                    <object class="GtkBox">
+                                        <child>
+                                            <object class="GtkGlArea" id="printer_gl_area">
+                                                <property name="visible">true</property>
+                                                <property name="vexpand">true</property>
+                                                <property name="hexpand">true</property>
+                                                <property name="width-request">320</property>
+                                                <property name="height-request">288</property>
+                                                <property name="focusable">true</property>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                    </object>
+                </child>
+            </object>
+        </property>
+    </object>
+</interface>

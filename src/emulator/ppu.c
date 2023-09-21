@@ -23,18 +23,20 @@
 
 #define IS_CGB_COMPAT_MODE(mmu_ptr) ((((mmu_ptr)->io_registers[KEY0 - IO] >> 2) & 0x03) == 1)
 
-#define SET_PIXEL_DMG(emu_ptr, x, y, color)                                                                                       \
-    do {                                                                                                                          \
-        *((emu_ptr)->ppu->pixels + ((y) *GB_SCREEN_WIDTH * 3) + ((x) *3)) = dmg_palettes[(emu_ptr)->dmg_palette][(color)][0];     \
-        *((emu_ptr)->ppu->pixels + ((y) *GB_SCREEN_WIDTH * 3) + ((x) *3) + 1) = dmg_palettes[(emu_ptr)->dmg_palette][(color)][1]; \
-        *((emu_ptr)->ppu->pixels + ((y) *GB_SCREEN_WIDTH * 3) + ((x) *3) + 2) = dmg_palettes[(emu_ptr)->dmg_palette][(color)][2]; \
+#define SET_PIXEL_DMG(emu_ptr, x, y, color)                                                                                     \
+    do {                                                                                                                        \
+        (emu_ptr)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)] = dmg_palettes[(emu_ptr)->dmg_palette][(color)][0];     \
+        (emu_ptr)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1] = dmg_palettes[(emu_ptr)->dmg_palette][(color)][1]; \
+        (emu_ptr)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2] = dmg_palettes[(emu_ptr)->dmg_palette][(color)][2]; \
+        (emu_ptr)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 3] = 0xFF;                                             \
     } while (0)
 
-#define SET_PIXEL_CGB(emu_ptr, x, y, r, g, b)                                        \
-    do {                                                                             \
-        *((emu_ptr)->ppu->pixels + ((y) *GB_SCREEN_WIDTH * 3) + ((x) *3)) = (r);     \
-        *((emu_ptr)->ppu->pixels + ((y) *GB_SCREEN_WIDTH * 3) + ((x) *3) + 1) = (g); \
-        *((emu_ptr)->ppu->pixels + ((y) *GB_SCREEN_WIDTH * 3) + ((x) *3) + 2) = (b); \
+#define SET_PIXEL_CGB(emu_ptr, x, y, r, g, b)                                       \
+    do {                                                                            \
+        (emu_ptr)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)] = (r);      \
+        (emu_ptr)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1] = (g);  \
+        (emu_ptr)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2] = (b);  \
+        (emu_ptr)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 3] = 0xFF; \
     } while (0)
 
 byte_t dmg_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
@@ -705,11 +707,9 @@ void ppu_init(emulator_t *emu) {
     emu->ppu = xcalloc(1, sizeof(ppu_t));
     emu->ppu->wly = -1;
     // PPU_SET_MODE(emu->mmu, PPU_MODE_OAM); // TODO start in OAM mode?
-    emu->ppu->pixels = xmalloc(GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 4);
 }
 
 void ppu_quit(emulator_t *emu) {
-    free(emu->ppu->pixels);
     free(emu->ppu);
 }
 

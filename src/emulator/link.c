@@ -22,14 +22,26 @@ void link_quit(emulator_t *emu) {
     free(emu->link);
 }
 
+static inline void emulator_data_received(emulator_t *emu) {
+    RESET_BIT(emu->mmu->io_registers[SC - IO], 7);
+    CPU_REQUEST_INTERRUPT(emu, IRQ_SERIAL);
+}
+
 void link_step(emulator_t *emu) {
     link_t *link = emu->link;
     mmu_t *mmu = emu->mmu;
 
     link->cycles += 4; // 4 cycles per step
 
+    if (link->printer)
+        gb_printer_step(link->printer);
+
     if (link->cycles >= link->max_clock_cycles) {
         link->cycles -= link->max_clock_cycles; // keep leftover cycles (if any)
+
+        // TODO instead of link->other_emu and link->printer pointers, on connection, take a pointer to the link data register of the device
+        //      and to tranfer to this pointer dereferenced. Allow callback once transfer of the byte is finished
+        //      to request interrupt in slave gameboy or do whatever is needed in slave printer
 
         // transfer requested / in progress with internal clock (this emu is the master of the connection)
         // --> the master emulator also does the work for the slave so we don't have to handle the case
@@ -38,15 +50,21 @@ void link_step(emulator_t *emu) {
             if (link->bit_counter < 8) { // emulate 8 bit shifting
                 link->bit_counter++;
 
-                byte_t other_bit = 0xFF; // this is 0xFF if no other_emu connected
+                byte_t other_bit = 0xFF; // this is 0xFF if no device is connected
 
-                if (link->other_emu) {
-                    other_bit = GET_BIT(link->other_emu->mmu->io_registers[SB - IO], 7);
+                byte_t *other_data_register = NULL;
+                if (link->other_emu)
+                    other_data_register = &link->other_emu->mmu->io_registers[SB - IO];
+                else if (link->printer)
+                    other_data_register = &link->printer->sb;
+
+                if (other_data_register) {
+                    other_bit = GET_BIT(*other_data_register, 7);
                     byte_t this_bit = GET_BIT(mmu->io_registers[SB - IO], 7);
 
-                    // transfer this emu bit to other_emu
-                    link->other_emu->mmu->io_registers[SB - IO] <<= 1;
-                    CHANGE_BIT(link->other_emu->mmu->io_registers[SB - IO], 0, this_bit);
+                    // transfer this emu bit to linked device
+                    *other_data_register <<= 1;
+                    CHANGE_BIT(*other_data_register, 0, this_bit);
                 }
 
                 // transfer other_emu bit to this emu
@@ -55,13 +73,12 @@ void link_step(emulator_t *emu) {
             } else { // transfer is done (all bits were shifted)
                 link->bit_counter = 0;
 
-                RESET_BIT(mmu->io_registers[SC - IO], 7);
-                CPU_REQUEST_INTERRUPT(emu, IRQ_SERIAL);
+                emulator_data_received(emu);
 
-                if (link->other_emu) {
-                    RESET_BIT(link->other_emu->mmu->io_registers[SC - IO], 7);
-                    CPU_REQUEST_INTERRUPT(link->other_emu, IRQ_SERIAL);
-                }
+                if (link->other_emu)
+                    emulator_data_received(link->other_emu);
+                else if (link->printer)
+                    gb_printer_data_received(link->printer);
             }
         }
     }

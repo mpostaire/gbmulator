@@ -58,7 +58,7 @@
                                         </child>
 
                                         <child>
-                                            <object class="GtkGlArea" id="gl_area">
+                                            <object class="GtkGlArea" id="emu_gl_area">
                                                 <property name="visible">false</property>
                                                 <property name="vexpand">true</property>
                                                 <property name="hexpand">true</property>
@@ -90,9 +90,13 @@
                 <attribute name="accel">&lt;Ctrl&gt;r</attribute>
             </item>
             <item>
-                <attribute name="label">Link cable</attribute>
-                <attribute name="action">app.link_cable</attribute>
+                <attribute name="label">Link emulator</attribute>
+                <attribute name="action">app.link_emulator</attribute>
                 <attribute name="accel">&lt;Ctrl&gt;l</attribute>
+            </item>
+            <item>
+                <attribute name="label">Link printer</attribute>
+                <attribute name="action">app.link_printer</attribute>
             </item>
         </section>
         <section>

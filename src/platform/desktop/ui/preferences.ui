@@ -12,6 +12,8 @@
                 <property name="title">General</property>
                 <child>
                     <object class="AdwPreferencesGroup">
+                        <!-- <property name="title">General</property> -->
+
                         <child>
                             <object class="AdwActionRow">
                                 <property name="activatable">false</property>
@@ -77,6 +79,25 @@
                         </child>
                     </object>
                 </child>
+
+                <!-- <child>
+                    <object class="AdwPreferencesGroup">
+                        <property name="title">Game Boy Printer</property>
+
+                        <child>
+                            <object class="AdwActionRow" id="pref_print_margins">
+                                <property name="title">Enable Game Boy Printer margins</property>
+                                <property name="subtitle">The Game Boy Printer emulation adds margins between printed pictures.</property>
+                                <child>
+                                    <object class="GtkSwitch">
+                                        <property name="valign">center</property>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                    </object>
+                </child> -->
+
             </object>
         </child>
 

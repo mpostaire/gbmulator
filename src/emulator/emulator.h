@@ -2,6 +2,7 @@
 
 #include "types.h"
 #include "utils.h"
+#include "printer.h"
 
 #define EMULATOR_NAME "GBmulator"
 
@@ -53,7 +54,7 @@ static inline void emulator_run_cycles(emulator_t *emu, long cycles_limit) {
 
 /**
  * Runs both the emulator and the linked emulator in parallel for the given amount of cpu steps.
- * @param steps_limit the amount of steps both emulators will run for
+ * @param steps_limit the amount of steps both emulators will run for.
  */
 static inline void emulator_linked_run_steps(emulator_t *emu, emulator_t *linked_emu, long steps_limit) {
     // TODO investigate link cable behaviour when double speed is on
@@ -65,7 +66,7 @@ static inline void emulator_linked_run_steps(emulator_t *emu, emulator_t *linked
 
 /**
  * Runs both the emulator and the linked emulator in parallel for the given amount of frames.
- * @param frames_limit the amount of frames both emulators will run for
+ * @param frames_limit the amount of frames both emulators will run for.
  */
 static inline void emulator_linked_run_frames(emulator_t *emu, emulator_t *linked_emu, long frames_limit) {
     emulator_linked_run_steps(emu, linked_emu, frames_limit * GB_CPU_STEPS_PER_FRAME);
@@ -73,8 +74,8 @@ static inline void emulator_linked_run_frames(emulator_t *emu, emulator_t *linke
 
 /**
  * Inits the emulator.
- * @param rom_data a buffer containing the rom the emulator will play
- * @param rom_size the size of the `rom_data`
+ * @param rom_data a buffer containing the rom the emulator will play.
+ * @param rom_size the size of the `rom_data`.
  * @param opts the initialization options of the emulator or NULL for defaults.
  */
 emulator_t *emulator_init(const byte_t *rom_data, size_t rom_size, emulator_options_t *opts);
@@ -88,9 +89,27 @@ void emulator_reset(emulator_t *emu, emulator_mode_t mode);
 
 void emulator_print_status(emulator_t *emu);
 
+/**
+ * Connects 2 emulators through the link cable.
+ * This automatically disconnects a previous link cable connection. 
+ * Freeing the previously linked device is the responsibility of the caller.
+ * @param emu the fist emulator.
+ * @param other_emu the second emulator.
+*/
 void emulator_link_connect(emulator_t *emu, emulator_t *other_emu);
 
 void emulator_link_disconnect(emulator_t *emu);
+
+/**
+ * Connects an emulator and a printer through the link cable.
+ * This automatically disconnects a previous link cable connection.
+ * Freeing the previously linked device is the responsibility of the caller.
+ * @param emu the emulator.
+ * @param printer the printer.
+*/
+void emulator_link_connect_printer(emulator_t *emu, gb_printer_t *printer);
+
+void emulator_link_disconnect_printer(emulator_t *emu);
 
 void emulator_joypad_press(emulator_t *emu, joypad_button_t key);
 

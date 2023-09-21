@@ -89,7 +89,7 @@ typedef struct {
         byte_t x; // x position of the fetcher on the scanline
     } pixel_fetcher;
 
-    byte_t *pixels;
+    byte_t pixels[GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 4];
 } ppu_t;
 
 extern byte_t dmg_palettes[PPU_COLOR_PALETTE_MAX][4][3];

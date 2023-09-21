@@ -21,6 +21,11 @@
 #define CASE_THEN_STRING(x) case x: return #x
 #define STRING(x) #x
 
+#define XPM_WHITE " "
+#define XPM_LIGHT_GRAY "."
+#define XPM_DARK_GRAY "+"
+#define XPM_BLACK "-"
+
 static gboolean keycode_filter(guint keyval);
 const char *gamepad_gamepad_button_parser(guint16 button);
 int gamepad_button_name_parser(const char *button_name);
@@ -119,23 +124,30 @@ int binding_setter_handler = -1;
 int gamepad_state = GAMEPAD_DISABLED;
 
 AdwApplication *app;
-GtkWidget *main_window, *preferences_window, *window_title, *toast_overlay, *gl_area, *keybind_dialog, *bind_value, *mode_setter;
-GtkWidget *joypad_name, *restart_dialog, *link_dialog, *status, *link_mode_setter_server, *link_host, *link_host_revealer;
+GtkWidget *main_window, *preferences_window, *window_title, *toast_overlay, *emu_gl_area, *printer_gl_area, *keybind_dialog, *bind_value, *mode_setter;
+GtkWidget *joypad_name, *restart_dialog, *link_emu_dialog, *printer_window, *status, *link_mode_setter_server, *link_host, *link_host_revealer;
+GtkWidget *printer_save_btn, *printer_clear_btn, *printer_scroll_adj, *printer_quit_dialog;
 GtkEventController *motion_event_controller;
 glong motion_event_handler = 0;
-GtkFileDialog *file_dialog;
+GtkFileDialog *open_rom_dialog, *save_printer_image_dialog;
 guint loop_source;
 
 GSocketService *socket_service = NULL;
 gboolean is_connected = FALSE;
 
+gsize printer_gl_area_height = GB_SCREEN_HEIGHT;
+gboolean printer_window_allowed_to_close = FALSE;
+gboolean printer_save_dialog_resume_loop = FALSE;
 gboolean is_paused = TRUE, link_is_server = TRUE;
 int steps_per_frame, sfd;
 emulator_t *emu;
 byte_t joypad_state = 0xFF;
 double accel_x, accel_y;
+gb_printer_t *printer;
 
 char *rom_path, *forced_save_path, *config_path;
+
+glrenderer_t *emu_renderer, *printer_renderer;
 
 static gboolean keycode_filter(guint keyval) {
     switch (keyval) {
@@ -251,37 +263,62 @@ static gboolean loop(gpointer user_data) {
     else
         emulator_run_steps(emu, steps_per_frame);
 
-    gtk_gl_area_queue_render(GTK_GL_AREA(gl_area));
+    gtk_gl_area_queue_render(GTK_GL_AREA(emu_gl_area));
 
     return G_SOURCE_CONTINUE;
 }
 
-static void on_realize(GtkGLArea *area, gpointer user_data) {
+static void on_emu_realize(GtkGLArea *area, gpointer user_data) {
     gtk_gl_area_make_current(area);
     if (gtk_gl_area_get_error(area) != NULL) {
         fprintf(stderr, "Unknown error\n");
         return;
     }
 
-    glrenderer_init(160, 144, NULL);
+    emu_renderer = glrenderer_init(GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, NULL);
 }
 
-static void on_unrealize(GtkGLArea *area, gpointer user_data) {
+static void on_emu_unrealize(GtkGLArea *area, gpointer user_data) {
     if (!is_paused)
         stop_loop();
 }
 
-static gboolean on_render(GtkGLArea *area, GdkGLContext *context) {
+static gboolean on_emu_render(GtkGLArea *area, GdkGLContext *context, gpointer user_data) {
     // inside this function it's safe to use GL; the given
     // GdkGLContext has been made current to the drawable
     // surface used by the `GtkGLArea` and the viewport has
     // already been set to be the size of the allocation
 
-    glrenderer_render();
+    glrenderer_render(emu_renderer);
 
     // we completed our drawing; the draw commands will be
     // flushed at the end of the signal emission chain, and
     // the buffers will be drawn on the window
+    return TRUE;
+}
+
+static void on_printer_realize(GtkGLArea *area, gpointer user_data) {
+    gtk_gl_area_make_current(area);
+    if (gtk_gl_area_get_error(area) != NULL) {
+        fprintf(stderr, "Unknown error\n");
+        return;
+    }
+
+    printer_renderer = glrenderer_init(GB_PRINTER_IMG_WIDTH, printer_gl_area_height, NULL);
+}
+
+static void on_printer_unrealize(GtkGLArea *area, gpointer user_data) {
+
+}
+
+static gboolean on_printer_render(GtkGLArea *area, GdkGLContext *context, gpointer user_data) {
+    glrenderer_render(printer_renderer);
+    return TRUE;
+}
+
+static gboolean on_printer_resize(GtkGLArea *area, GdkGLContext *context) {
+    double adj_upper = gtk_adjustment_get_upper(GTK_ADJUSTMENT(printer_scroll_adj));
+    gtk_adjustment_set_value(GTK_ADJUSTMENT(printer_scroll_adj), adj_upper);
     return TRUE;
 }
 
@@ -292,7 +329,34 @@ static void show_toast(const char *text) {
 }
 
 static void ppu_vblank_cb(const byte_t *pixels) {
-    glrenderer_update_screen_texture(0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, pixels);
+    glrenderer_update_texture(emu_renderer, 0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, pixels);
+}
+
+static void printer_new_line_cb(const byte_t *pixels, size_t height) {
+    if (!printer_renderer)
+        return; // segfault if printer gl area was not realized (printer window not shown at least once before printing)
+
+    int height_offset = printer_gl_area_height - height;
+    if (height_offset < 0) {
+        printer_gl_area_height++;
+        height_offset = printer_gl_area_height - height;
+
+        glrenderer_resize_texture(printer_renderer, GB_SCREEN_WIDTH, printer_gl_area_height);
+        gtk_widget_set_size_request(GTK_WIDGET(printer_gl_area), GB_SCREEN_WIDTH * 2, printer_gl_area_height * 2);
+    }
+
+    glrenderer_update_texture(printer_renderer, 0, height_offset, GB_SCREEN_WIDTH, height, pixels);
+    gtk_gl_area_queue_render(GTK_GL_AREA(printer_gl_area));
+}
+
+static void printer_start_cb(const byte_t *pixels, size_t height) {
+    gtk_widget_set_sensitive(GTK_WIDGET(printer_save_btn), FALSE);
+    gtk_widget_set_sensitive(GTK_WIDGET(printer_clear_btn), FALSE);
+}
+
+static void printer_finish_cb(const byte_t *pixels, size_t height) {
+    gtk_widget_set_sensitive(GTK_WIDGET(printer_save_btn), TRUE);
+    gtk_widget_set_sensitive(GTK_WIDGET(printer_clear_btn), TRUE);
 }
 
 static void set_accelerometer_data(double *x, double *y) {
@@ -440,9 +504,17 @@ static void link_dialog_response(GtkDialog *self, gint response_id, gpointer use
         start_link();
 }
 
-static void show_link_dialog(GSimpleAction *action, GVariant *parameter, gpointer app) {
+static void show_link_emu_dialog(GSimpleAction *action, GVariant *parameter, gpointer app) {
     gamepad_state = GAMEPAD_DISABLED;
-    gtk_window_present(GTK_WINDOW(link_dialog));
+    gtk_window_present(GTK_WINDOW(link_emu_dialog));
+}
+
+static void show_printer_window(GSimpleAction *action, GVariant *parameter, gpointer app) {
+    printer = gb_printer_init(printer_new_line_cb, printer_start_cb, printer_finish_cb);
+    emulator_link_connect_printer(emu, printer);
+
+    gamepad_state = GAMEPAD_DISABLED;
+    gtk_window_present(GTK_WINDOW(printer_window));
 }
 
 static gboolean mouse_motion(GtkEventControllerMotion *self, gdouble x, gdouble y, gpointer user_data) {
@@ -517,7 +589,8 @@ static int load_cartridge(char *path) {
     const GActionEntry app_entries[] = {
         { "play_pause", toggle_pause, NULL, NULL, NULL },
         { "restart", ask_restart_emulator, NULL, NULL, NULL },
-        { "link_cable", show_link_dialog, NULL, NULL, NULL },
+        { "link_emulator", show_link_emu_dialog, NULL, NULL, NULL },
+        { "link_printer", show_printer_window, NULL, NULL, NULL },
     };
     g_action_map_add_action_entries(G_ACTION_MAP(app), app_entries, G_N_ELEMENTS(app_entries), app);
 
@@ -676,7 +749,7 @@ static void show_about(GSimpleAction *action, GVariant *parameter, gpointer app)
                           NULL);
 }
 
-void file_dialog_callback(GObject *dialog, GAsyncResult *res, gpointer user_data) {
+static void open_rom_dialog_cb(GObject *dialog, GAsyncResult *res, gpointer user_data) {
     g_autoptr(GFile) file = gtk_file_dialog_open_finish(GTK_FILE_DIALOG(dialog), res, NULL);
     if (!file)
         return;
@@ -684,8 +757,8 @@ void file_dialog_callback(GObject *dialog, GAsyncResult *res, gpointer user_data
     char *file_path = g_file_get_path(file);
     if (load_cartridge(file_path)) {
         gtk_widget_set_visible(status, FALSE);
-        gtk_widget_set_visible(gl_area, TRUE);
-        gtk_widget_grab_focus(gl_area);
+        gtk_widget_set_visible(emu_gl_area, TRUE);
+        gtk_widget_grab_focus(emu_gl_area);
     } else {
         show_toast("Invalid ROM");
     }
@@ -694,9 +767,9 @@ void file_dialog_callback(GObject *dialog, GAsyncResult *res, gpointer user_data
 }
 
 static void open_btn_clicked(AdwActionRow *self, gpointer user_data) {
-    if (!file_dialog) {
-        file_dialog = gtk_file_dialog_new();
-        gtk_file_dialog_set_title(file_dialog, "Pick a ROM file");
+    if (!open_rom_dialog) {
+        open_rom_dialog = gtk_file_dialog_new();
+        gtk_file_dialog_set_title(open_rom_dialog, "Pick a ROM file");
 
         g_autoptr(GtkFileFilter) filter = gtk_file_filter_new();
         // add basic extension pattern in case the mime type is not available
@@ -709,10 +782,104 @@ static void open_btn_clicked(AdwActionRow *self, gpointer user_data) {
         g_autoptr(GListStore) list = g_list_store_new(GTK_TYPE_FILE_FILTER);
         g_list_store_append(list, filter);
 
-        gtk_file_dialog_set_filters(file_dialog, G_LIST_MODEL(list));
+        gtk_file_dialog_set_filters(open_rom_dialog, G_LIST_MODEL(list));
     }
 
-    gtk_file_dialog_open(file_dialog, GTK_WINDOW(main_window), NULL, file_dialog_callback, NULL);
+    gtk_file_dialog_open(open_rom_dialog, GTK_WINDOW(main_window), NULL, open_rom_dialog_cb, NULL);
+}
+
+static void printer_save_as_xpm(gb_printer_t *printer, char *file_path) {
+    size_t height;
+    byte_t *image_data = gb_printer_get_image(printer, &height);
+
+    FILE *f = fopen(file_path, "w+");
+
+    fprintf(f, "/* XPM */\nstatic char *image = {\n");
+    fprintf(f, "\"%d %ld 4 1\",\n", GB_PRINTER_IMG_WIDTH, height);
+    fprintf(f, "\""XPM_WHITE" c #FFFFFF\",\n\""XPM_LIGHT_GRAY" c #AAAAAA\",\n\""XPM_DARK_GRAY" c #555555\",\n\""XPM_BLACK" c #000000\",\n");
+
+    for (size_t i = 0; i < height; i++) {
+        fprintf(f, "\"");
+        for (int j = 0; j < GB_PRINTER_IMG_WIDTH; j++) {
+            int image_data_index = (i * GB_PRINTER_IMG_WIDTH * 4) + (j * 4);
+            char c = *XPM_BLACK;
+            switch (image_data[image_data_index]) {
+            case 0xFF: c = *XPM_WHITE; break;
+            case 0xAA: c = *XPM_LIGHT_GRAY; break;
+            case 0x55: c = *XPM_DARK_GRAY; break;
+            case 0x00: c = *XPM_BLACK; break;
+            default: eprintf("invalid color data\n"); break;
+            }
+            fprintf(f, "%c", c);
+        }
+        fprintf(f, "\"%s", i == height - 1 ? "};\n" : ",\n");
+    }
+
+    fclose(f);
+}
+
+static void printer_save_dialog_cb(GObject *dialog, GAsyncResult *res, gpointer user_data) {
+    if (printer_save_dialog_resume_loop) {
+        start_loop();
+        printer_save_dialog_resume_loop = FALSE;
+    }
+
+    g_autoptr(GFile) file = gtk_file_dialog_save_finish(GTK_FILE_DIALOG(dialog), res, NULL);
+    if (!file)
+        return;
+
+    char *file_path = g_file_get_path(file);
+    printer_save_as_xpm(printer, file_path);
+    free(file_path);
+}
+
+static void printer_save_btn_clicked(AdwActionRow *self, gpointer user_data) {
+    if (!save_printer_image_dialog) {
+        save_printer_image_dialog = gtk_file_dialog_new();
+        gtk_file_dialog_set_title(save_printer_image_dialog, "Pick a ROM file");
+        g_autoptr(GFile) file = g_file_new_for_path("image.xpm");
+        gtk_file_dialog_set_initial_file(save_printer_image_dialog, file);
+
+        g_autoptr(GtkFileFilter) filter = gtk_file_filter_new();
+        // add basic extension pattern in case the mime type is not available
+        gtk_file_filter_add_pattern(filter, "*.xpm");
+        gtk_file_filter_add_mime_type(filter, "image/x-xpixmap");
+        gtk_file_filter_set_name(filter, "Image XPM");
+
+        g_autoptr(GListStore) list = g_list_store_new(GTK_TYPE_FILE_FILTER);
+        g_list_store_append(list, filter);
+
+        gtk_file_dialog_set_filters(save_printer_image_dialog, G_LIST_MODEL(list));
+    }
+
+    if (!is_paused) {
+        stop_loop();
+        printer_save_dialog_resume_loop = TRUE;
+    }
+    gtk_file_dialog_save(save_printer_image_dialog, GTK_WINDOW(printer_window), NULL, printer_save_dialog_cb, NULL);
+}
+
+static void clear_printer_gl_area(void) {
+    glrenderer_resize_texture(printer_renderer, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    gtk_widget_set_size_request(GTK_WIDGET(printer_gl_area), GB_SCREEN_WIDTH * 2, GB_SCREEN_HEIGHT * 2);
+    printer_gl_area_height = GB_SCREEN_HEIGHT;
+
+    void *pixels = xcalloc(1, GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 4);
+    glrenderer_update_texture(printer_renderer, 0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, pixels);
+    free(pixels);
+
+    gtk_gl_area_queue_render(GTK_GL_AREA(printer_gl_area));
+}
+
+static void printer_clear_btn_clicked(AdwActionRow *self, gpointer user_data) {
+    gb_printer_clear_image(printer);
+    if (!printer_renderer)
+        return; // segfault if printer gl area was not realized (printer window not shown at least once before printing)
+
+    clear_printer_gl_area();
+
+    gtk_widget_set_sensitive(GTK_WIDGET(printer_save_btn), FALSE);
+    gtk_widget_set_sensitive(GTK_WIDGET(printer_clear_btn), FALSE);
 }
 
 static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guint keycode, GdkModifierType state, gpointer user_data) {
@@ -725,7 +892,7 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
             ask_restart_emulator(NULL, NULL, NULL);
             break;
         case GDK_KEY_l:
-            show_link_dialog(NULL, NULL, NULL);
+            show_link_emu_dialog(NULL, NULL, NULL);
             break;
         }
         return TRUE;
@@ -784,7 +951,7 @@ static gboolean key_pressed_keybind(GtkEventControllerKey *self, guint keyval, g
 }
 
 static void popover_closed(GtkPopover *self, gpointer user_data) {
-    gtk_widget_grab_focus(gl_area);
+    gtk_widget_grab_focus(emu_gl_area);
 }
 
 static gboolean on_drop(GtkDropTarget *target, const GValue *value, double x, double y, gpointer data) {
@@ -795,8 +962,8 @@ static gboolean on_drop(GtkDropTarget *target, const GValue *value, double x, do
 
     if (load_cartridge(g_file_get_path(file))) {
         gtk_widget_set_visible(status, FALSE);
-        gtk_widget_set_visible(gl_area, TRUE);
-        gtk_widget_grab_focus(gl_area);
+        gtk_widget_set_visible(emu_gl_area, TRUE);
+        gtk_widget_grab_focus(emu_gl_area);
     } else {
         show_toast("Invalid ROM");
     }
@@ -862,20 +1029,32 @@ static void gamepad_connected_cb(ManetteMonitor *emitter, ManetteDevice *device,
     g_signal_connect_object(G_OBJECT(device), "button-release-event", (GCallback) gamepad_button_release_event_cb, NULL, 0);
 }
 
-static void preferences_window_hide_cb(GtkWidget *self, gpointer user_data) {
+static void secondary_window_hide_cb(GtkWidget *self, gpointer user_data) {
     gamepad_state = (!emu || is_paused) ? GAMEPAD_DISABLED : GAMEPAD_PLAYING;
+}
+
+static gboolean printer_window_close_request_cb(GtkWidget *self, gpointer user_data) {
+    if (printer_window_allowed_to_close) {
+        printer_window_allowed_to_close = FALSE;
+        return FALSE;
+    }
+    gtk_window_present(GTK_WINDOW(printer_quit_dialog));
+    return TRUE;
+}
+
+static void printer_quit_dialog_response_cb(AdwMessageDialog *self, gchar *response, gpointer user_data) {
+    if (!strncmp(response, "disconnect", 11)) {
+        emulator_link_disconnect_printer(emu);
+        gb_printer_quit(printer);
+        printer = NULL;
+        clear_printer_gl_area();
+        printer_window_allowed_to_close = TRUE;
+        gtk_window_close(GTK_WINDOW(printer_window));
+    }
 }
 
 static void keybind_dialog_hide_cb(GtkWidget *self, gpointer user_data) {
     gamepad_state = GAMEPAD_DISABLED;
-}
-
-static void restart_dialog_hide_cb(GtkWidget *self, gpointer user_data) {
-    gamepad_state = (!emu || is_paused) ? GAMEPAD_DISABLED : GAMEPAD_PLAYING;
-}
-
-static void link_dialog_hide_cb(GtkWidget *self, gpointer user_data) {
-    gamepad_state = (!emu || is_paused) ? GAMEPAD_DISABLED : GAMEPAD_PLAYING;
 }
 
 static void activate_cb(GtkApplication *app) {
@@ -889,10 +1068,10 @@ static void activate_cb(GtkApplication *app) {
 
     status = GTK_WIDGET(gtk_builder_get_object(builder, "status"));
 
-    gl_area = GTK_WIDGET(gtk_builder_get_object(builder, "gl_area"));
-    g_signal_connect(gl_area, "realize", G_CALLBACK(on_realize), NULL);
-    g_signal_connect(gl_area, "unrealize", G_CALLBACK(on_unrealize), NULL); // call stop_loop() on unrealize to avoid annoying warnings when app is quitting
-    g_signal_connect(gl_area, "render", G_CALLBACK(on_render), NULL);
+    emu_gl_area = GTK_WIDGET(gtk_builder_get_object(builder, "emu_gl_area"));
+    g_signal_connect(emu_gl_area, "realize", G_CALLBACK(on_emu_realize), NULL);
+    g_signal_connect(emu_gl_area, "unrealize", G_CALLBACK(on_emu_unrealize), NULL); // call stop_loop() on unrealize to avoid annoying warnings when app is quitting
+    g_signal_connect(emu_gl_area, "render", G_CALLBACK(on_emu_render), NULL);
 
     GtkWidget *open_btn = GTK_WIDGET(gtk_builder_get_object(builder, "open_btn"));
     g_signal_connect(open_btn, "clicked", G_CALLBACK(open_btn_clicked), NULL);
@@ -918,7 +1097,7 @@ static void activate_cb(GtkApplication *app) {
     // Preferences window
     builder = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/preferences.ui");
     preferences_window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
-    g_signal_connect(preferences_window, "hide", G_CALLBACK(preferences_window_hide_cb), NULL);
+    g_signal_connect(preferences_window, "hide", G_CALLBACK(secondary_window_hide_cb), NULL);
 
     gtk_window_set_application(GTK_WINDOW(preferences_window), GTK_APPLICATION(app));
     gtk_window_set_transient_for(GTK_WINDOW(preferences_window), GTK_WINDOW(main_window));
@@ -973,21 +1152,21 @@ static void activate_cb(GtkApplication *app) {
 
     // Restart dialog
     restart_dialog = adw_message_dialog_new(GTK_WINDOW(main_window), "Restart emulator?", NULL);
-    g_signal_connect(preferences_window, "hide", G_CALLBACK(restart_dialog_hide_cb), NULL);
     adw_message_dialog_format_body(ADW_MESSAGE_DIALOG(restart_dialog), "This will restart the emulator and any unsaved progress will be lost.");
     adw_message_dialog_add_responses(ADW_MESSAGE_DIALOG(restart_dialog), "cancel", "Cancel", "restart", "Restart", NULL);
     adw_message_dialog_set_response_appearance(ADW_MESSAGE_DIALOG(restart_dialog), "restart", ADW_RESPONSE_DESTRUCTIVE);
     adw_message_dialog_set_default_response(ADW_MESSAGE_DIALOG(restart_dialog), "cancel");
     adw_message_dialog_set_close_response(ADW_MESSAGE_DIALOG(restart_dialog), "cancel");
     gtk_window_set_hide_on_close(GTK_WINDOW(restart_dialog), TRUE);
+    g_signal_connect(restart_dialog, "hide", G_CALLBACK(secondary_window_hide_cb), NULL);
     g_signal_connect(restart_dialog, "response", G_CALLBACK(restart_emulator), NULL);
 
     // Link dialog
     builder = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/link.ui");
-    g_signal_connect(preferences_window, "hide", G_CALLBACK(link_dialog_hide_cb), NULL);
-    link_dialog = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
-    gtk_window_set_transient_for(GTK_WINDOW(link_dialog), GTK_WINDOW(main_window));
-    g_signal_connect(link_dialog, "response", G_CALLBACK(link_dialog_response), NULL);
+    link_emu_dialog = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
+    gtk_window_set_transient_for(GTK_WINDOW(link_emu_dialog), GTK_WINDOW(main_window));
+    g_signal_connect(link_emu_dialog, "hide", G_CALLBACK(secondary_window_hide_cb), NULL);
+    g_signal_connect(link_emu_dialog, "response", G_CALLBACK(link_dialog_response), NULL);
 
     link_host_revealer = GTK_WIDGET(gtk_builder_get_object(builder, "link_host_revealer"));
 
@@ -1010,9 +1189,42 @@ static void activate_cb(GtkApplication *app) {
 
     g_object_unref(builder);
 
+    // Printer window
+    builder = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/printer.ui");
+    printer_window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
+    g_signal_connect(printer_window, "hide", G_CALLBACK(secondary_window_hide_cb), NULL);
+    g_signal_connect(printer_window, "close-request", G_CALLBACK(printer_window_close_request_cb), NULL);
+
+    printer_gl_area = GTK_WIDGET(gtk_builder_get_object(builder, "printer_gl_area"));
+    g_signal_connect(printer_gl_area, "realize", G_CALLBACK(on_printer_realize), NULL);
+    g_signal_connect(printer_gl_area, "unrealize", G_CALLBACK(on_printer_unrealize), NULL);
+    g_signal_connect(printer_gl_area, "render", G_CALLBACK(on_printer_render), NULL);
+    g_signal_connect(printer_gl_area, "resize", G_CALLBACK(on_printer_resize), NULL);
+
+    printer_save_btn = GTK_WIDGET(gtk_builder_get_object(builder, "save_btn"));
+    g_signal_connect(printer_save_btn, "clicked", G_CALLBACK(printer_save_btn_clicked), NULL);
+
+    printer_clear_btn = GTK_WIDGET(gtk_builder_get_object(builder, "clear_btn"));
+    g_signal_connect(printer_clear_btn, "clicked", G_CALLBACK(printer_clear_btn_clicked), NULL);
+
+    GtkScrolledWindow *printer_scroll = GTK_SCROLLED_WINDOW(gtk_builder_get_object(builder, "printer_scroll"));
+    printer_scroll_adj = GTK_WIDGET(gtk_scrolled_window_get_vadjustment(printer_scroll));
+
+    // Printer quit dialog
+    printer_quit_dialog = adw_message_dialog_new(GTK_WINDOW(printer_window), "Disconnect printer?", NULL);
+    g_signal_connect(printer_quit_dialog, "response", G_CALLBACK(printer_quit_dialog_response_cb), NULL);
+    adw_message_dialog_format_body(ADW_MESSAGE_DIALOG(printer_quit_dialog), "This will disconnect the Game Boy Printer from the emulator.");
+    adw_message_dialog_add_responses(ADW_MESSAGE_DIALOG(printer_quit_dialog), "cancel", "Cancel", "disconnect", "Disconnect", NULL);
+    adw_message_dialog_set_response_appearance(ADW_MESSAGE_DIALOG(printer_quit_dialog), "disconnect", ADW_RESPONSE_DESTRUCTIVE);
+    adw_message_dialog_set_default_response(ADW_MESSAGE_DIALOG(printer_quit_dialog), "cancel");
+    adw_message_dialog_set_close_response(ADW_MESSAGE_DIALOG(printer_quit_dialog), "cancel");
+    gtk_window_set_hide_on_close(GTK_WINDOW(printer_quit_dialog), TRUE);
+
+    g_object_unref(builder);
+
     // Mouse motion
     motion_event_controller = gtk_event_controller_motion_new();
-    gtk_widget_add_controller(GTK_WIDGET(gl_area), GTK_EVENT_CONTROLLER(motion_event_controller));
+    gtk_widget_add_controller(GTK_WIDGET(emu_gl_area), GTK_EVENT_CONTROLLER(motion_event_controller));
 
     // Keyboard input (main)
     GtkEventController *key_event_controller = gtk_event_controller_key_new();
@@ -1037,8 +1249,8 @@ static void activate_cb(GtkApplication *app) {
             forced_save_path = argv[2];
         if (load_cartridge(argv[1])) {
             gtk_widget_set_visible(status, FALSE);
-            gtk_widget_set_visible(gl_area, TRUE);
-            gtk_widget_grab_focus(gl_area);
+            gtk_widget_set_visible(emu_gl_area, TRUE);
+            gtk_widget_grab_focus(emu_gl_area);
         } else {
             show_toast("Invalid ROM");
         }
@@ -1049,7 +1261,7 @@ static void activate_cb(GtkApplication *app) {
     // show main_window
     gtk_window_present(GTK_WINDOW(main_window));
     // set window min size to scale == 2x
-    gtk_widget_set_size_request(gl_area, GB_SCREEN_WIDTH * 2, GB_SCREEN_HEIGHT * 2);
+    gtk_widget_set_size_request(emu_gl_area, GB_SCREEN_WIDTH * 2, GB_SCREEN_HEIGHT * 2);
 }
 
 static void shutdown_cb(GtkApplication *app) {

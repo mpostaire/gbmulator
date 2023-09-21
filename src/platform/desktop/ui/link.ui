@@ -8,7 +8,7 @@
         <property name="modal">true</property>
         <property name="hide-on-close">true</property>
         <property name="use-header-bar">1</property>
-        <property name="title">Link cable</property>
+        <property name="title">Link emulator</property>
 
         <child internal-child="content_area">
             <object class="GtkBox">
