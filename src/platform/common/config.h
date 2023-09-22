@@ -3,15 +3,15 @@
 #include <stddef.h>
 #include <arpa/inet.h>
 
-#include "../../emulator/emulator.h"
+#include "../../core/gb.h"
 
 typedef int (*keycode_filter_t)(unsigned int keycode);
 typedef const char *(*keycode_parser_t)(unsigned int keycode);
 typedef unsigned int (*keyname_parser_t)(const char *keyname);
 
 typedef struct {
-    emulator_mode_t mode;
-    color_palette_t color_palette;
+    gb_mode_t mode;
+    gb_color_palette_t color_palette;
     byte_t scale;
     float speed;
     float sound;

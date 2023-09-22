@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include "../../emulator/emulator.h"
+#include "../../core/gb.h"
 
 char *get_xdg_path(const char *xdg_variable, const char *fallback) {
     char *xdg = getenv(xdg_variable);

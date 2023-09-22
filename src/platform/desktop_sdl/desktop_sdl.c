@@ -6,11 +6,11 @@
 #include "../common/link.h"
 #include "../common/config.h"
 #include "../common/utils.h"
-#include "../../emulator/emulator.h"
-#include "../../emulator/emulator_priv.h"
+#include "../../core/gb.h"
+#include "../../core/gb_priv.h"
 
 static int keycode_filter(SDL_Keycode key);
-static void on_link_connect(emulator_t *new_linked_emu);
+static void on_link_connect(gb_t *new_linked_gb);
 static void on_link_disconnect(void);
 
 // config struct initialized to defaults
@@ -72,8 +72,8 @@ int steps_per_frame = GB_CPU_STEPS_PER_FRAME;
 
 int sfd;
 
-emulator_t *emu;
-emulator_t *linked_emu;
+gb_t *gb;
+gb_t *linked_gb;
 
 static int keycode_filter(SDL_Keycode key) {
     switch (key) {
@@ -95,7 +95,7 @@ static void gbmulator_exit(menu_entry_t *entry) {
 }
 
 static void gbmulator_unpause(menu_entry_t *entry) {
-    if (emu)
+    if (gb)
         is_paused = SDL_FALSE;
 }
 
@@ -103,8 +103,8 @@ static void ppu_vblank_cb(const byte_t *pixels) {
     SDL_UpdateTexture(ppu_texture, NULL, pixels, ppu_texture_pitch);
 }
 
-static void apu_samples_ready_cb(const void *audio_buffer, int audio_buffer_size) {
-    while (SDL_GetQueuedAudioSize(audio_device) > (unsigned int) (audio_buffer_size * 8))
+static void apu_samples_ready_cb(const void *audio_buffer, size_t audio_buffer_size) {
+    while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 8)
         SDL_Delay(1);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
@@ -192,11 +192,11 @@ static char *get_savestate_path(const char *rom_filepath, int slot) {
 }
 
 static void load_cartridge(char *path) {
-    if (!emu && !path) return;
+    if (!gb && !path) return;
 
-    if (emu) {
+    if (gb) {
         char *save_path = get_save_path(rom_path);
-        save_battery_to_file(emu, forced_save_path ? forced_save_path : save_path);
+        save_battery_to_file(gb, forced_save_path ? forced_save_path : save_path);
         free(save_path);
     }
 
@@ -214,12 +214,12 @@ static void load_cartridge(char *path) {
             return;
         }
     } else {
-        byte_t *data = emulator_get_rom(emu, &rom_size);
+        byte_t *data = gb_get_rom(gb, &rom_size);
         rom_data = xmalloc(rom_size);
         memcpy(rom_data, data, rom_size);
     }
 
-    emulator_options_t opts = {
+    gb_options_t opts = {
         .mode = config.mode,
         .on_apu_samples_ready = apu_samples_ready_cb,
         .on_new_frame = ppu_vblank_cb,
@@ -227,7 +227,7 @@ static void load_cartridge(char *path) {
         .apu_sound_level = config.sound,
         .palette = config.color_palette
     };
-    emulator_t *new_emu = emulator_init(rom_data, rom_size, &opts);
+    gb_t *new_emu = gb_init(rom_data, rom_size, &opts);
     free(rom_data);
     if (!new_emu) return;
 
@@ -235,18 +235,18 @@ static void load_cartridge(char *path) {
     load_battery_from_file(new_emu, forced_save_path ? forced_save_path : save_path);
     free(save_path);
 
-    if (emu) {
-        if (linked_emu) {
-            emulator_link_disconnect(emu);
-            emulator_quit(linked_emu);
+    if (gb) {
+        if (linked_gb) {
+            gb_link_disconnect(gb);
+            gb_quit(linked_gb);
             on_link_disconnect();
         }
-        emulator_quit(emu);
+        gb_quit(gb);
     }
-    emu = new_emu;
-    emulator_print_status(emu);
+    gb = new_emu;
+    gb_print_status(gb);
 
-    snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", emulator_get_rom_title(emu));
+    snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", gb_get_rom_title(gb));
     SDL_SetWindowTitle(window, window_title);
 
     ui->root_menu->entries[0].disabled = 0; // enable resume menu entry
@@ -271,20 +271,20 @@ static void choose_scale(menu_entry_t *entry) {
 static void choose_speed(menu_entry_t *entry) {
     config.speed = (entry->choices.position * 0.5f) + 1;
     steps_per_frame = GB_CPU_STEPS_PER_FRAME * config.speed;
-    if (emu)
-        emulator_set_apu_speed(emu, config.speed);
+    if (gb)
+        gb_set_apu_speed(gb, config.speed);
 }
 
 static void choose_sound(menu_entry_t *entry) {
     config.sound = entry->choices.position * 0.25f;
-    if (emu)
-        emulator_set_apu_sound_level(emu, config.sound);
+    if (gb)
+        gb_set_apu_sound_level(gb, config.sound);
 }
 
 static void choose_color(menu_entry_t *entry) {
     config.color_palette = entry->choices.position;
-    if (emu)
-        emulator_set_palette(emu, config.color_palette);
+    if (gb)
+        gb_set_palette(gb, config.color_palette);
 }
 
 static void choose_mode(menu_entry_t *entry) {
@@ -306,16 +306,16 @@ static void on_input_link_port(menu_entry_t *entry) {
 }
 
 static void start_link(menu_entry_t *entry) {
-    if (!emu) return;
+    if (!gb) return;
 
     if (entry->parent->entries[0].choices.position)
         sfd = link_connect_to_server(ui->config->link_host, ui->config->link_port);
     else
         sfd = link_start_server(ui->config->link_port);
 
-    emulator_t *new_linked_emu;
-    if (sfd > 0 && link_init_transfer(sfd, emu, &new_linked_emu))
-        on_link_connect(new_linked_emu);
+    gb_t *new_linked_gb;
+    if (sfd > 0 && link_init_transfer(sfd, gb, &new_linked_gb))
+        on_link_connect(new_linked_gb);
 }
 
 static void open_rom(menu_entry_t *entry) {
@@ -333,15 +333,15 @@ static void open_rom(menu_entry_t *entry) {
 }
 
 static void reset_rom(menu_entry_t *entry) {
-    if (!emu)
+    if (!gb)
         return;
-    if (linked_emu) {
-        emulator_link_disconnect(emu);
-        emulator_quit(linked_emu);
+    if (linked_gb) {
+        gb_link_disconnect(gb);
+        gb_quit(linked_gb);
         on_link_disconnect();
     }
-    emulator_reset(emu, config.mode);
-    emulator_print_status(emu);
+    gb_reset(gb, config.mode);
+    gb_print_status(gb);
     is_paused = SDL_FALSE;
 }
 
@@ -404,8 +404,8 @@ menu_t main_menu = {
 
 
 
-static void on_link_connect(emulator_t *new_linked_emu) {
-    linked_emu = new_linked_emu;
+static void on_link_connect(gb_t *new_linked_gb) {
+    linked_gb = new_linked_gb;
     is_paused = SDL_FALSE;
     config.speed = 1.0f;
 
@@ -418,7 +418,7 @@ static void on_link_connect(emulator_t *new_linked_emu) {
 }
 
 static void on_link_disconnect(void) {
-    linked_emu = NULL;
+    linked_gb = NULL;
 
     link_menu.entries[0].disabled = 0;
     link_menu.entries[1].disabled = 0;
@@ -436,7 +436,7 @@ static void handle_input(void) {
         case SDL_TEXTINPUT:
             if (is_paused) {
                 if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
-                    if (emu)
+                    if (gb)
                         is_paused = SDL_FALSE;
                     else
                         ui_back_to_root_menu(ui);
@@ -448,7 +448,7 @@ static void handle_input(void) {
         case SDL_KEYDOWN:
             if (is_paused) {
                 if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
-                    if (emu)
+                    if (gb)
                         is_paused = SDL_FALSE;
                     else
                         ui_back_to_root_menu(ui);
@@ -469,13 +469,13 @@ static void handle_input(void) {
             case SDLK_F3: case SDLK_F4:
             case SDLK_F5: case SDLK_F6:
             case SDLK_F7: case SDLK_F8:
-                if (!emu)
+                if (!gb)
                     break;
                 savestate_path = get_savestate_path(rom_path, event.key.keysym.sym - SDLK_F1);
                 if (event.key.keysym.mod & KMOD_SHIFT) {
-                    save_state_to_file(emu, savestate_path, 1);
+                    save_state_to_file(gb, savestate_path, 1);
                 } else {
-                    int ret = load_state_from_file(emu, savestate_path);
+                    int ret = load_state_from_file(gb, savestate_path);
                     if (ret > 0) {
                         config.mode = ret;
                         options_menu.entries[4].choices.position = config.mode - 1;
@@ -485,16 +485,16 @@ static void handle_input(void) {
                 break;
             }
             if (!is_paused)
-                emulator_joypad_press(emu, keycode_to_joypad(&config, event.key.keysym.sym));
+                gb_joypad_press(gb, keycode_to_joypad(&config, event.key.keysym.sym));
             break;
         case SDL_KEYUP:
             if (!event.key.repeat && !is_paused)
-                emulator_joypad_release(emu, keycode_to_joypad(&config, event.key.keysym.sym));
+                gb_joypad_release(gb, keycode_to_joypad(&config, event.key.keysym.sym));
             break;
         case SDL_CONTROLLERBUTTONDOWN:
             if (is_paused) {
                 if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
-                    if (emu)
+                    if (gb)
                         is_paused = SDL_FALSE;
                     else
                         ui_back_to_root_menu(ui);
@@ -509,11 +509,11 @@ static void handle_input(void) {
                 break;
             }
             if (!is_paused)
-                emulator_joypad_press(emu, button_to_joypad(&config, event.cbutton.button));
+                gb_joypad_press(gb, button_to_joypad(&config, event.cbutton.button));
             break;
         case SDL_CONTROLLERBUTTONUP:
             if (!is_paused)
-                emulator_joypad_release(emu, button_to_joypad(&config, event.cbutton.button));
+                gb_joypad_release(gb, button_to_joypad(&config, event.cbutton.button));
             break;
         case SDL_CONTROLLERDEVICEADDED:
             if (!is_controller_present) {
@@ -538,9 +538,9 @@ static void handle_input(void) {
 
 int main(int argc, char **argv) {
     char *config_path = get_config_path();
-    // must be called before emulator_init() and ui_init()
+    // must be called before gb_init() and ui_init()
     config_load_from_file(&config, config_path);
-    emu = NULL;
+    gb = NULL;
     steps_per_frame = GB_CPU_STEPS_PER_FRAME * config.speed;
 
 
@@ -608,8 +608,8 @@ int main(int argc, char **argv) {
 
     SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
 
-    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 3;
+    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
     SDL_Texture *ui_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
     int ui_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
     SDL_SetTextureBlendMode(ui_texture, SDL_BLENDMODE_BLEND);
@@ -653,8 +653,8 @@ int main(int argc, char **argv) {
             SDL_RenderClear(renderer);
 
             // update ppu_texture to show color palette changes behind the menu
-            if (emu) {
-                SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(emu), ppu_texture_pitch);
+            if (gb) {
+                SDL_UpdateTexture(ppu_texture, NULL, gb_get_pixels(gb), ppu_texture_pitch);
                 SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
             }
 
@@ -676,26 +676,26 @@ int main(int argc, char **argv) {
             // TODO??? SDL_Delay((1.0f / 60.0f) - last_frame_time); // even with SDL waiting for vsync, delay here for monitors with different refresh rates than 60Hz
             SDL_RenderPresent(renderer);
 
-            // keep this the closest possible before emulator_step() to reduce input inaccuracies
+            // keep this the closest possible before gb_step() to reduce input inaccuracies
             handle_input();
-            if (linked_emu && !link_exchange_joypad(sfd, emu, linked_emu))
+            if (linked_gb && !link_exchange_joypad(sfd, gb, linked_gb))
                 on_link_disconnect();
         }
 
         // run one step of the emulator
-        emulator_step(emu);
-        if (linked_emu)
-            emulator_step(linked_emu);
+        gb_step(gb);
+        if (linked_gb)
+            gb_step(linked_gb);
         steps++;
 
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).
     }
 
-    if (emu) {
+    if (gb) {
         char *save_path = get_save_path(rom_path);
-        save_battery_to_file(emu, forced_save_path ? forced_save_path : save_path);
+        save_battery_to_file(gb, forced_save_path ? forced_save_path : save_path);
         free(save_path);
-        emulator_quit(emu);
+        gb_quit(gb);
     }
 
     config_save_to_file(&config, config_path);

@@ -107,13 +107,13 @@ typedef enum {
 
     HRAM = 0xFF80,
     IE = 0xFFFF // Interrupt Enable
-} mem_map_t;
+} gb_memory_map_t;
 
 typedef enum {
     IO_SRC_CPU,
     IO_SRC_OAM_DMA,
     IO_SRC_GDMA_HDMA
-} io_source_t;
+} gb_io_source_t;
 
 typedef struct {
     size_t rom_size;
@@ -169,16 +169,16 @@ typedef struct {
     byte_t has_rumble;
     byte_t has_rtc;
 
-    mbc_t mbc;
-} mmu_t;
+    gb_mbc_t mbc;
+} gb_mmu_t;
 
-int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size);
+int mmu_init(gb_t *gb, const byte_t *rom_data, size_t rom_size);
 
-void mmu_quit(emulator_t *emu);
+void mmu_quit(gb_t *gb);
 
-byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_t io_src);
+byte_t mmu_read_io_src(gb_t *gb, word_t address, gb_io_source_t io_src);
 
-void mmu_write_io_src(emulator_t *emu, word_t address, byte_t data, io_source_t io_src);
+void mmu_write_io_src(gb_t *gb, word_t address, byte_t data, gb_io_source_t io_src);
 
 /**
  * like mmu_read_io_src but using IO_SRC_CPU as io_src

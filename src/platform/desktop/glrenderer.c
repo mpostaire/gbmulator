@@ -1,4 +1,4 @@
-#include "../../emulator/emulator.h"
+#include "../../core/gb.h"
 
 #include <stdlib.h>
 #include <adwaita.h>

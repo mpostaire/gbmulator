@@ -18,7 +18,7 @@ typedef enum {
     HuC3,
     CAMERA,
     TAMA5
-} mbc_type_t;
+} gb_mbc_type_t;
 
 typedef struct {
     byte_t type;
@@ -92,15 +92,15 @@ typedef struct {
             byte_t eram_bank;
         } huc1;
     };
-} mbc_t;
+} gb_mbc_t;
 
-void mbc_write_registers(emulator_t *emu, word_t address, byte_t data);
+void mbc_write_registers(gb_t *gb, word_t address, byte_t data);
 
-byte_t mbc_read_eram(emulator_t *emu, word_t address);
+byte_t mbc_read_eram(gb_t *gb, word_t address);
 
-void mbc_write_eram(emulator_t *emu, word_t address, byte_t data);
+void mbc_write_eram(gb_t *gb, word_t address, byte_t data);
 
-void rtc_step(emulator_t *emu);
+void rtc_step(gb_t *gb);
 
 #define MBC_COMMON_MEMBERS \
     X(type)                \

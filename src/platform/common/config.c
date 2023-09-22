@@ -3,7 +3,7 @@
 
 #include "config.h"
 #include "utils.h"
-#include "../../emulator/emulator.h"
+#include "../../core/gb.h"
 
 static void parse_config_line(config_t *config, const char *line) {
     byte_t scale, color_palette;

@@ -6,16 +6,16 @@
 typedef enum {
     GDMA,
     HDMA
-} hdma_type_t;
+} gb_hdma_type_t;
 
 typedef enum {
     OAM_DMA_NO_INIT,
     OAM_DMA_INIT_BEGIN,
     OAM_DMA_INIT_PENDING,
     OAM_DMA_STARTING
-} oam_dma_starting_state;
+} gb_oam_dma_starting_state_t;
 
 #define IS_OAM_DMA_RUNNING(mmu) ((mmu)->oam_dma.progress >= 0 && (mmu)->oam_dma.progress < 0xA0)
 #define GBC_GDMA_HDMA_LENGTH(mmu) ((mmu)->io_registers[HDMA5 - IO] & 0x7F)
 
-void dma_step(emulator_t *emu);
+void dma_step(gb_t *gb);

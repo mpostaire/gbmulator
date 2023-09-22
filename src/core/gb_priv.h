@@ -1,6 +1,6 @@
 #pragma once
 
-#include "emulator.h"
+#include "gb.h"
 #include "cpu.h"
 #include "mmu.h"
 #include "dma.h"
@@ -11,8 +11,8 @@
 #include "link.h"
 #include "printer.h"
 
-struct emulator_t {
-    emulator_mode_t mode;
+struct gb_t {
+    gb_mode_t mode;
     byte_t disable_cgb_color_correction;
     byte_t exit_on_invalid_opcode;
     float apu_sound_level;
@@ -20,19 +20,19 @@ struct emulator_t {
     int apu_sample_count;
     apu_audio_format_t apu_format;
     byte_t dmg_palette;
-    on_new_frame_t on_new_frame;
-    on_apu_samples_ready_t on_apu_samples_ready;
-    on_accelerometer_request_t on_accelerometer_request;
+    gb_new_frame_cb_t on_new_frame;
+    gb_apu_samples_ready_cb_t on_apu_samples_ready;
+    gb_accelerometer_request_cb_t on_accelerometer_request;
 
     char rom_title[17];
 
-    cpu_t *cpu;
-    mmu_t *mmu;
-    ppu_t *ppu;
+    gb_cpu_t *cpu;
+    gb_mmu_t *mmu;
+    gb_ppu_t *ppu;
     apu_t *apu;
-    gbtimer_t *timer;
-    joypad_t *joypad;
-    link_t *link;
+    gb_timer_t *timer;
+    gb_joypad_t *joypad;
+    gb_link_t *link;
 };
 
 struct gb_printer_t {
@@ -59,7 +59,7 @@ struct gb_printer_t {
         size_t allocated_height; // allocated height of data (this is also the total height of the image once it has finished printing)
     } image;
 
-    on_new_printer_line_t on_new_line; // the function called whenever the printer finished printing a line
-    on_start_printing_t on_start_printing;
-    on_finish_printing_t on_finish_printing;
+    gb_new_printer_line_cb_t on_new_line; // the function called whenever the printer finished printing a line
+    gb_start_printing_cb_t on_start_printing;
+    gb_finish_printing_cb_t on_finish_printing;
 };

@@ -1,4 +1,4 @@
-#include "emulator_priv.h"
+#include "gb_priv.h"
 #include "serialize.h"
 
 #define IS_RTC_HALTED(mbc) ((mbc)->mbc3.rtc.dh & 0x40)
@@ -8,7 +8,7 @@
 #define EEPROM_CLK(pins) ((pins) & 0x40) // MBC7 EEPROM CLK pin
 #define EEPROM_CS(pins) ((pins) & 0x80) // MBC7 EEPROM CS pin
 
-static inline void write_mbc7_eeprom(mbc_t *mbc, byte_t data) {
+static inline void write_mbc7_eeprom(gb_mbc_t *mbc, byte_t data) {
     if (!EEPROM_CS(data)) { // if CS (Chip Select) not set, only update pins
         byte_t bit_do = mbc->mbc7.eeprom.output_bits >> 15;
         mbc->mbc7.eeprom.pins = (data & 0xC2) | bit_do;
@@ -95,8 +95,8 @@ static inline void write_mbc7_eeprom(mbc_t *mbc, byte_t data) {
     mbc->mbc7.eeprom.pins = (data & 0xC2) | bit_do;
 }
 
-static inline void mbc1_set_bank_addrs(mmu_t *mmu, byte_t bank1_size) {
-    mbc_t *mbc = &mmu->mbc;
+static inline void mbc1_set_bank_addrs(gb_mmu_t *mmu, byte_t bank1_size) {
+    gb_mbc_t *mbc = &mmu->mbc;
 
     if (mbc->mbc1.mode) { // ERAM mode
         byte_t current_rom_bank0 = (mbc->mbc1.bank_hi << bank1_size) & (mmu->rom_banks - 1);
@@ -117,9 +117,9 @@ static inline void mbc1_set_bank_addrs(mmu_t *mmu, byte_t bank1_size) {
     mmu->rom_bankn_addr = (current_rom_bankn - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
 }
 
-void mbc_write_registers(emulator_t *emu, word_t address, byte_t data) {
-    mmu_t *mmu = emu->mmu;
-    mbc_t *mbc = &mmu->mbc;
+void mbc_write_registers(gb_t *gb, word_t address, byte_t data) {
+    gb_mmu_t *mmu = gb->mmu;
+    gb_mbc_t *mbc = &mmu->mbc;
 
     switch (mbc->type) {
     case ROM_ONLY:
@@ -283,9 +283,9 @@ void mbc_write_registers(emulator_t *emu, word_t address, byte_t data) {
     }
 }
 
-byte_t mbc_read_eram(emulator_t *emu, word_t address) {
-    mmu_t *mmu = emu->mmu;
-    mbc_t *mbc = &mmu->mbc;
+byte_t mbc_read_eram(gb_t *gb, word_t address) {
+    gb_mmu_t *mmu = gb->mmu;
+    gb_mbc_t *mbc = &mmu->mbc;
 
     if (mbc->type == MBC7) {
         // both mbc7 ram enable registers must be set and everything from ERAM + 0x1000 is unused (always reads 0xFF)
@@ -342,9 +342,9 @@ byte_t mbc_read_eram(emulator_t *emu, word_t address) {
     return 0xFF;
 }
 
-void mbc_write_eram(emulator_t *emu, word_t address, byte_t data) {
-    mmu_t *mmu = emu->mmu;
-    mbc_t *mbc = &mmu->mbc;
+void mbc_write_eram(gb_t *gb, word_t address, byte_t data) {
+    gb_mmu_t *mmu = gb->mmu;
+    gb_mbc_t *mbc = &mmu->mbc;
 
     if (mbc->type == MBC7) {
         // both mbc7 ram enable registers must be set and everything from ERAM + 0x1000 is unused
@@ -364,8 +364,8 @@ void mbc_write_eram(emulator_t *emu, word_t address, byte_t data) {
                 // TODO accelerometer is buggy (see kirby tilt n tumble)
                 double x = 0.0f;
                 double y = 0.0f;
-                if (emu->on_accelerometer_request)
-                    emu->on_accelerometer_request(&x, &y);
+                if (gb->on_accelerometer_request)
+                    gb->on_accelerometer_request(&x, &y);
                 mbc->mbc7.accelerometer.latched_x = 0x81D0 + (0x70 * x); // accelerometer_center + gravity * x
                 mbc->mbc7.accelerometer.latched_y = 0x81D0 + (0x70 * y); // accelerometer_center + gravity * y
                 mbc->mbc7.accelerometer.latch_ready = 0;
@@ -402,8 +402,8 @@ void mbc_write_eram(emulator_t *emu, word_t address, byte_t data) {
     }
 }
 
-void rtc_step(emulator_t *emu) {
-    mbc_t *mbc = &emu->mmu->mbc;
+void rtc_step(gb_t *gb) {
+    gb_mbc_t *mbc = &gb->mmu->mbc;
 
     if (IS_RTC_HALTED(mbc))
         return;

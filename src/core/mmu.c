@@ -4,15 +4,15 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "emulator_priv.h"
+#include "gb_priv.h"
 #include "boot.h"
 #include "mbc.h"
 
 #define GBC_CURRENT_VRAM_BANK(mmu) ((mmu)->io_registers[VBK - IO] & 0x01)
 #define GBC_CURRENT_WRAM_BANK(mmu) (((mmu)->io_registers[SVBK - IO] & 0x07) == 0 ? 1 : ((mmu)->io_registers[SVBK - IO] & 0x07))
 
-static int parse_cartridge(emulator_t *emu) {
-    mmu_t *mmu = emu->mmu;
+static int parse_cartridge(gb_t *gb) {
+    gb_mmu_t *mmu = gb->mmu;
 
     byte_t has_eram = 0;
     switch (mmu->rom[0x0147]) {
@@ -154,22 +154,22 @@ static int parse_cartridge(emulator_t *emu) {
             mmu->mbc.type = MBC30;
 
     // get rom title
-    memcpy(emu->rom_title, (char *) &mmu->rom[0x0134], 16);
-    emu->rom_title[16] = '\0';
+    memcpy(gb->rom_title, (char *) &mmu->rom[0x0134], 16);
+    gb->rom_title[16] = '\0';
     byte_t cgb_flag = mmu->rom[0x0143] == 0xC0 || mmu->rom[0x0143] == 0x80;
     if (cgb_flag)
-        emu->rom_title[15] = '\0';
+        gb->rom_title[15] = '\0';
 
     // remove trailing non alphanumeric characters from the rom title
-    for (char *c = &emu->rom_title[16]; c >= emu->rom_title; c--) {
+    for (char *c = &gb->rom_title[16]; c >= gb->rom_title; c--) {
         if (isalnum(*c))
             break;
         *c = '\0';
     }
 
     // TODO better understand and implement CGB's DMG compatbility mode
-    // byte_t cgb_dmg_compat = emu->mode == CGB && !cgb_flag;
-    // byte_t cgb_mode_enabled = emu->mode == CGB && cgb_flag;
+    // byte_t cgb_dmg_compat = gb->mode == CGB && !cgb_flag;
+    // byte_t cgb_mode_enabled = gb->mode == CGB && cgb_flag;
 
     // 8-bit cartridge header checksum validation
     byte_t checksum = 0;
@@ -183,8 +183,8 @@ static int parse_cartridge(emulator_t *emu) {
     return 1;
 }
 
-int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size) {
-    mmu_t *mmu = xcalloc(1, sizeof(mmu_t));
+int mmu_init(gb_t *gb, const byte_t *rom_data, size_t rom_size) {
+    gb_mmu_t *mmu = xcalloc(1, sizeof(gb_mmu_t));
     mmu->rom = xcalloc(1, rom_size);
 
     mmu->mbc.mbc1.bank_lo = 1;
@@ -200,30 +200,30 @@ int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size) {
 
     mmu->rom_size = rom_size;
     memcpy(mmu->rom, rom_data, mmu->rom_size);
-    emu->mmu = mmu;
+    gb->mmu = mmu;
 
-    if (parse_cartridge(emu))
+    if (parse_cartridge(gb))
         return 1;
 
-    mmu_quit(emu);
+    mmu_quit(gb);
     return 0;
 }
 
-void mmu_quit(emulator_t *emu) {
-    free(emu->mmu->rom);
-    free(emu->mmu);
+void mmu_quit(gb_t *gb) {
+    free(gb->mmu->rom);
+    free(gb->mmu);
 }
 
-static inline byte_t read_io_register(emulator_t *emu, word_t address) {
-    mmu_t *mmu = emu->mmu;
+static inline byte_t read_io_register(gb_t *gb, word_t address) {
+    gb_mmu_t *mmu = gb->mmu;
     word_t io_reg_addr = address - IO;
 
     switch (address) {
     case P1:
         // Reading from P1 register returns joypad input state according to its current bit 4 or 5 value
-        return joypad_get_input(emu);
+        return joypad_get_input(gb);
     case SB: return mmu->io_registers[io_reg_addr];
-    case SC: return mmu->io_registers[io_reg_addr] | (emu->mode == CGB ? 0x7C : 0x7E);
+    case SC: return mmu->io_registers[io_reg_addr] | (gb->mode == CGB ? 0x7C : 0x7E);
     case DIV_LSB: return 0xFF;
     case DIV: return mmu->io_registers[io_reg_addr];
     case TIMA: return mmu->io_registers[io_reg_addr];
@@ -268,35 +268,35 @@ static inline byte_t read_io_register(emulator_t *emu, word_t address) {
     case OBP1: return mmu->io_registers[io_reg_addr];
     case WY: return mmu->io_registers[io_reg_addr];
     case WX: return mmu->io_registers[io_reg_addr];
-    case KEY0: return emu->mode == CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
-    case KEY1: return emu->mode == CGB ? (mmu->io_registers[io_reg_addr] | 0x7E) : 0xFF;
+    case KEY0: return gb->mode == CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
+    case KEY1: return gb->mode == CGB ? (mmu->io_registers[io_reg_addr] | 0x7E) : 0xFF;
     case 0xFF4E: return 0xFF;
-    case VBK: return emu->mode == CGB ? 0xFE | (mmu->io_registers[io_reg_addr] & 0x01) : 0xFF;
+    case VBK: return gb->mode == CGB ? 0xFE | (mmu->io_registers[io_reg_addr] & 0x01) : 0xFF;
     case BANK: return 0xFF;
     case HDMA1 ... HDMA4: return 0xFF;
-    case HDMA5: return emu->mode == CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
-    case RP: return emu->mode == CGB ? 0x3E : 0xFF; // TODO GBC infrared LED
+    case HDMA5: return gb->mode == CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
+    case RP: return gb->mode == CGB ? 0x3E : 0xFF; // TODO GBC infrared LED
     case 0xFF57 ... 0xFF67: return 0xFF;
-    case BGPI: return emu->mode == CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
+    case BGPI: return gb->mode == CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
     case BGPD: {
-        if (emu->mode == DMG || PPU_IS_MODE(emu, PPU_MODE_DRAWING))
+        if (gb->mode == DMG || PPU_IS_MODE(gb, PPU_MODE_DRAWING))
             return 0xFF;
 
         byte_t cram_address = mmu->io_registers[BGPI - IO] & 0x3F;
         return mmu->cram_bg[cram_address];
     }
-    case OBPI: return emu->mode == CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
+    case OBPI: return gb->mode == CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
     case OBPD: {
-        if (emu->mode == DMG || PPU_IS_MODE(emu, PPU_MODE_DRAWING))
+        if (gb->mode == DMG || PPU_IS_MODE(gb, PPU_MODE_DRAWING))
             return 0xFF;
 
         byte_t cram_address = mmu->io_registers[OBPI - IO] & 0x3F;
         return mmu->cram_obj[cram_address];
     }
     case 0xFF6C ... 0xFF6F: return 0xFF;
-    case SVBK: return emu->mode == CGB ? 0xF8 | (mmu->io_registers[io_reg_addr] & 0x07) : 0xFF;
+    case SVBK: return gb->mode == CGB ? 0xF8 | (mmu->io_registers[io_reg_addr] & 0x07) : 0xFF;
     case 0xFF71 ... 0xFF74: return 0xFF;
-    case 0xFF75: return emu->mode == CGB ? mmu->io_registers[io_reg_addr] & 0x70 : 0xFF;
+    case 0xFF75: return gb->mode == CGB ? mmu->io_registers[io_reg_addr] & 0x70 : 0xFF;
     case 0xFF76 ... 0xFF7F: return 0xFF;
     default:
         eprintf("invalid read at 0x%04X\n", address);
@@ -304,8 +304,8 @@ static inline byte_t read_io_register(emulator_t *emu, word_t address) {
     }
 }
 
-static inline void write_io_register(emulator_t *emu, word_t address, byte_t data) {
-    mmu_t *mmu = emu->mmu;
+static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
+    gb_mmu_t *mmu = gb->mmu;
     word_t io_reg_addr = address - IO;
 
     switch (address) {
@@ -316,7 +316,7 @@ static inline void write_io_register(emulator_t *emu, word_t address, byte_t dat
     case SC:
         if (CHECK_BIT(mmu->io_registers[io_reg_addr], 1) != CHECK_BIT(data, 1)) {
             mmu->io_registers[io_reg_addr] = data & 0x83;
-            link_set_clock(emu);
+            link_set_clock(gb);
         } else {
             mmu->io_registers[io_reg_addr] = data & 0x83;
         }
@@ -329,159 +329,159 @@ static inline void write_io_register(emulator_t *emu, word_t address, byte_t dat
         mmu->io_registers[TIMA - IO] = mmu->io_registers[TMA - IO];
         break;
     case TIMA:
-        if (emu->timer->tima_loading_value == -1)
+        if (gb->timer->tima_loading_value == -1)
             mmu->io_registers[io_reg_addr] = mmu->io_registers[TMA - IO];
         else
             mmu->io_registers[io_reg_addr] = data;
         break;
     case TMA:
-        if (emu->timer->tima_loading_value == -1)
+        if (gb->timer->tima_loading_value == -1)
             mmu->io_registers[TIMA - IO] = data;
-        emu->timer->old_tma = mmu->io_registers[io_reg_addr];
+        gb->timer->old_tma = mmu->io_registers[io_reg_addr];
         mmu->io_registers[io_reg_addr] = data;
         break;
     case TAC:
         mmu->io_registers[io_reg_addr] = data;
         switch (data & 0x03) {
-        case 0x00: emu->timer->tima_increase_div_bit = 9; break;
-        case 0x01: emu->timer->tima_increase_div_bit = 3; break;
-        case 0x02: emu->timer->tima_increase_div_bit = 5; break;
-        case 0x03: emu->timer->tima_increase_div_bit = 7; break;
+        case 0x00: gb->timer->tima_increase_div_bit = 9; break;
+        case 0x01: gb->timer->tima_increase_div_bit = 3; break;
+        case 0x02: gb->timer->tima_increase_div_bit = 5; break;
+        case 0x03: gb->timer->tima_increase_div_bit = 7; break;
         }
         break;
     case NR10:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
     case NR11:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
-        emu->apu->channel1.length_counter = 64 - (data & 0x3F);
+        gb->apu->channel1.length_counter = 64 - (data & 0x3F);
         break;
     case NR12:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         if (!(data >> 3)) // if dac disabled
-            APU_DISABLE_CHANNEL(emu, APU_CHANNEL_1);
+            APU_DISABLE_CHANNEL(gb, APU_CHANNEL_1);
         break;
     case NR13:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
     case NR14:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         if (CHECK_BIT(data, 7) && (data >> 3)) // if trigger requested and dac enabled
-            apu_channel_trigger(emu, &emu->apu->channel1);
+            apu_channel_trigger(gb, &gb->apu->channel1);
         break;
     case NR20:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
     case NR21:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
-        emu->apu->channel2.length_counter = 64 - (data & 0x3F);
+        gb->apu->channel2.length_counter = 64 - (data & 0x3F);
         break;
     case NR22:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         if (!(data >> 3)) // if dac disabled
-            APU_DISABLE_CHANNEL(emu, APU_CHANNEL_2);
+            APU_DISABLE_CHANNEL(gb, APU_CHANNEL_2);
         break;
     case NR23:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
     case NR24:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         if (CHECK_BIT(data, 7) && (data >> 3)) // if trigger requested and dac enabled
-            apu_channel_trigger(emu, &emu->apu->channel2);
+            apu_channel_trigger(gb, &gb->apu->channel2);
         break;
     case NR30:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         if (!(data >> 7)) // if dac disabled
-            APU_DISABLE_CHANNEL(emu, APU_CHANNEL_3);
+            APU_DISABLE_CHANNEL(gb, APU_CHANNEL_3);
         break;
     case NR31:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
-        emu->apu->channel3.length_counter = 256 - data;
+        gb->apu->channel3.length_counter = 256 - data;
         break;
     case NR32:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
     case NR33:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
     case NR34:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         if (CHECK_BIT(data, 7) && (data >> 7)) // if trigger requested and dac enabled
-            apu_channel_trigger(emu, &emu->apu->channel3);
+            apu_channel_trigger(gb, &gb->apu->channel3);
         break;
     case NR40:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
     case NR41:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
-        emu->apu->channel4.length_counter = 64 - (data & 0x3F);
+        gb->apu->channel4.length_counter = 64 - (data & 0x3F);
         break;
     case NR42:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         if (!(data >> 3)) // if dac disabled
-            APU_DISABLE_CHANNEL(emu, APU_CHANNEL_4);
+            APU_DISABLE_CHANNEL(gb, APU_CHANNEL_4);
         break;
     case NR43:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
     case NR44:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         if (CHECK_BIT(data, 7) && (data >> 3)) // if trigger requested and dac enabled
-            apu_channel_trigger(emu, &emu->apu->channel4);
+            apu_channel_trigger(gb, &gb->apu->channel4);
         break;
     case NR50:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
     case NR51:
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
     case NR52:
         CHANGE_BIT(mmu->io_registers[NR52 - IO], 7, data >> 7);
-        if (!IS_APU_ENABLED(emu))
+        if (!IS_APU_ENABLED(gb))
             memset(&mmu->io_registers[NR10 - IO], 0x00, 32 * sizeof(byte_t)); // clear all registers
         break;
     case WAVE_RAM ... LCDC - 1:
@@ -495,7 +495,7 @@ static inline void write_io_register(emulator_t *emu, word_t address, byte_t dat
     case LYC:
         // a write to LYC triggers an immediate LY=LYC comparison
         mmu->io_registers[io_reg_addr] = data;
-        ppu_ly_lyc_compare(emu);
+        ppu_ly_lyc_compare(gb);
         break;
     case DMA:
         // writing to this register starts an OAM DMA transfer
@@ -512,19 +512,19 @@ static inline void write_io_register(emulator_t *emu, word_t address, byte_t dat
         mmu->io_registers[io_reg_addr] |= data & 0x01;
         break;
     case VBK:
-        if (emu->mode == CGB) {
+        if (gb->mode == CGB) {
             mmu->io_registers[io_reg_addr] = data & 0x01;
             mmu->vram_bank_addr_offset = (GBC_CURRENT_VRAM_BANK(mmu) * VRAM_BANK_SIZE) - VRAM;
         }
         break;
     case BANK:
         // disable boot rom
-        if ((emu->mode == DMG && data == 0x01) || (emu->mode == CGB && data == 0x11))
+        if ((gb->mode == DMG && data == 0x01) || (gb->mode == CGB && data == 0x11))
             mmu->boot_finished = 1;
         mmu->io_registers[io_reg_addr] = data;
         break;
     case HDMA5:
-        if (emu->mode == DMG)
+        if (gb->mode == DMG)
             break;
 
         // writing to this register starts a VRAM DMA transfer
@@ -549,7 +549,7 @@ static inline void write_io_register(emulator_t *emu, word_t address, byte_t dat
         } else { // HDMA
             // Start HDMA now if we are in ppu HBLANK mode or if LCD is disabled.
             // In the latter case, only the first 0x10 bytes block are copied, the rest are done at HBLANK once LCD turns on.
-            mmu->hdma.allow_hdma_block = PPU_IS_MODE(emu, PPU_MODE_HBLANK) || !IS_LCD_ENABLED(emu);
+            mmu->hdma.allow_hdma_block = PPU_IS_MODE(gb, PPU_MODE_HBLANK) || !IS_LCD_ENABLED(gb);
         }
 
         mmu->hdma.src_address = ((mmu->io_registers[HDMA1 - IO] << 8) | mmu->io_registers[HDMA2 - IO]) & 0xFFF0;
@@ -563,10 +563,10 @@ static inline void write_io_register(emulator_t *emu, word_t address, byte_t dat
         //     printf("GDMA size=%d (%d blocs), vram bank=%d, wram bank n=%d, src=%x, dest=%x\n", (mmu->io_registers[io_reg_addr] + 1) * 0x10, mmu->io_registers[io_reg_addr] + 1, GBC_CURRENT_VRAM_BANK(mmu), GBC_CURRENT_WRAM_BANK(mmu), mmu->hdma.src_address, mmu->hdma.dest_address);
         break;
     case BGPD:
-        if (emu->mode == DMG)
+        if (gb->mode == DMG)
             break;
 
-        if (!PPU_IS_MODE(emu, PPU_MODE_DRAWING)) {
+        if (!PPU_IS_MODE(gb, PPU_MODE_DRAWING)) {
             byte_t cram_address = mmu->io_registers[BGPI - IO] & 0x3F;
             mmu->cram_bg[cram_address] = data;
             // printf("write %d in cram_bg %d\n", data, cram_address);
@@ -582,10 +582,10 @@ static inline void write_io_register(emulator_t *emu, word_t address, byte_t dat
         }
         break;
     case OBPD:
-        if (emu->mode == DMG)
+        if (gb->mode == DMG)
             break;
 
-        if (!PPU_IS_MODE(emu, PPU_MODE_DRAWING)) {
+        if (!PPU_IS_MODE(gb, PPU_MODE_DRAWING)) {
             byte_t cram_address = mmu->io_registers[OBPI - IO] & 0x3F;
             mmu->cram_obj[cram_address] = data;
             // printf("write %d in cram_obj %d\n", data, cram_address);
@@ -601,24 +601,24 @@ static inline void write_io_register(emulator_t *emu, word_t address, byte_t dat
         }
         break;
     case SVBK:
-        if (emu->mode == CGB) {
+        if (gb->mode == CGB) {
             mmu->io_registers[io_reg_addr] = data & 0x07;
             mmu->wram_bankn_addr_offset = ((GBC_CURRENT_WRAM_BANK(mmu) - 1) * WRAM_BANK_SIZE) - WRAM_BANK0;
         }
         break;
     case 0xFF74:
-        if (emu->mode == CGB)
+        if (gb->mode == CGB)
             mmu->io_registers[io_reg_addr] = data; // only writable in CGB mode
         break;
     case 0xFF75:
-        mmu->io_registers[io_reg_addr] = emu->mode == CGB ? data & 0x70 : data;
+        mmu->io_registers[io_reg_addr] = gb->mode == CGB ? data & 0x70 : data;
         break;
     case 0xFF76:
-        if (emu->mode == DMG)
+        if (gb->mode == DMG)
             mmu->io_registers[io_reg_addr] = data; // only writable in DMG mode
         break;
     case 0xFF77:
-        if (emu->mode == DMG)
+        if (gb->mode == DMG)
             mmu->io_registers[io_reg_addr] = data; // only writable in DMG mode
         break;
     default:
@@ -627,15 +627,15 @@ static inline void write_io_register(emulator_t *emu, word_t address, byte_t dat
     }
 }
 
-byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_t io_src) {
-    mmu_t *mmu = emu->mmu;
+byte_t mmu_read_io_src(gb_t *gb, word_t address, gb_io_source_t io_src) {
+    gb_mmu_t *mmu = gb->mmu;
 
     switch (address & 0xF000) {
     case ROM_BANK0:
         if (!mmu->boot_finished) {
-            if (emu->mode == DMG && address < 0x100)
+            if (gb->mode == DMG && address < 0x100)
                 return dmg_boot[address];
-            if (emu->mode == CGB && (address < 0x100 || (address >= 0x200 && address < sizeof(cgb_boot))))
+            if (gb->mode == CGB && (address < 0x100 || (address >= 0x200 && address < sizeof(cgb_boot))))
                 return cgb_boot[address];
         }
         // fallthrough
@@ -652,12 +652,12 @@ byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_t io_src) {
     case VRAM + 0x1000:
         if (io_src == IO_SRC_GDMA_HDMA)
             return 0xFF; // src can be inside vram but it reads incorrect data: see TCAGBD.pdf for more details
-        if (io_src == IO_SRC_CPU && IS_LCD_ENABLED(emu) && PPU_IS_MODE(emu, PPU_MODE_DRAWING))
+        if (io_src == IO_SRC_CPU && IS_LCD_ENABLED(gb) && PPU_IS_MODE(gb, PPU_MODE_DRAWING))
             return 0xFF; // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
         return mmu->vram[mmu->vram_bank_addr_offset + address];
     case ERAM:
     case ERAM + 0x1000:
-        return mbc_read_eram(emu, address);
+        return mbc_read_eram(gb, address);
     case WRAM_BANK0:
         return mmu->wram[address - WRAM_BANK0];
     case WRAM_BANKN:
@@ -674,7 +674,7 @@ byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_t io_src) {
 
         if (address < UNUSABLE) { // we are in OAM
             // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
-            if (io_src == IO_SRC_CPU && IS_LCD_ENABLED(emu) && ((PPU_IS_MODE(emu, PPU_MODE_OAM) || PPU_IS_MODE(emu, PPU_MODE_DRAWING))))
+            if (io_src == IO_SRC_CPU && IS_LCD_ENABLED(gb) && ((PPU_IS_MODE(gb, PPU_MODE_OAM) || PPU_IS_MODE(gb, PPU_MODE_DRAWING))))
                 return 0xFF;
 
             // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
@@ -691,7 +691,7 @@ byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_t io_src) {
             return 0xFF;
 
         if (address < HRAM)
-            return read_io_register(emu, address);
+            return read_io_register(gb, address);
 
         if (address < IE)
             return mmu->hram[address - HRAM];
@@ -703,8 +703,8 @@ byte_t mmu_read_io_src(emulator_t *emu, word_t address, io_source_t io_src) {
     }
 }
 
-void mmu_write_io_src(emulator_t *emu, word_t address, byte_t data, io_source_t io_src) {
-    mmu_t *mmu = emu->mmu;
+void mmu_write_io_src(gb_t *gb, word_t address, byte_t data, gb_io_source_t io_src) {
+    gb_mmu_t *mmu = gb->mmu;
 
     switch (address & 0xF000) {
     case ROM_BANK0:
@@ -715,18 +715,18 @@ void mmu_write_io_src(emulator_t *emu, word_t address, byte_t data, io_source_t 
     case ROM_BANKN + 0x1000:
     case ROM_BANKN + 0x2000:
     case ROM_BANKN + 0x3000:
-        mbc_write_registers(emu, address, data);
+        mbc_write_registers(gb, address, data);
         break;
     case VRAM:
     case VRAM + 0x1000:
         // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
-        if (io_src == IO_SRC_CPU && IS_LCD_ENABLED(emu) && PPU_IS_MODE(emu, PPU_MODE_DRAWING))
+        if (io_src == IO_SRC_CPU && IS_LCD_ENABLED(gb) && PPU_IS_MODE(gb, PPU_MODE_DRAWING))
             return;
         mmu->vram[mmu->vram_bank_addr_offset + address] = data;
         break;
     case ERAM:
     case ERAM + 0x1000:
-        mbc_write_eram(emu, address, data);
+        mbc_write_eram(gb, address, data);
         break;
     case WRAM_BANK0:
         mmu->wram[address - WRAM_BANK0] = data;
@@ -742,7 +742,7 @@ void mmu_write_io_src(emulator_t *emu, word_t address, byte_t data, io_source_t 
             mmu->wram[(mmu->wram_bankn_addr_offset - (ECHO - WRAM_BANK0)) + address] = data;
         } else if (address < UNUSABLE) {
             // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
-            if (io_src == IO_SRC_CPU && IS_LCD_ENABLED(emu) && ((PPU_IS_MODE(emu, PPU_MODE_OAM) || PPU_IS_MODE(emu, PPU_MODE_DRAWING))))
+            if (io_src == IO_SRC_CPU && IS_LCD_ENABLED(gb) && ((PPU_IS_MODE(gb, PPU_MODE_OAM) || PPU_IS_MODE(gb, PPU_MODE_DRAWING))))
                 break;
 
             // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
@@ -756,7 +756,7 @@ void mmu_write_io_src(emulator_t *emu, word_t address, byte_t data, io_source_t 
         } else if (address < IO) {
             // UNUSABLE memory is unusable
         } else if (address < HRAM) {
-            write_io_register(emu, address, data);
+            write_io_register(gb, address, data);
         } else if (address < IE) {
             mmu->hram[address - HRAM] = data;
         } else {
@@ -772,9 +772,9 @@ void mmu_write_io_src(emulator_t *emu, word_t address, byte_t data, io_source_t 
 // serialize everything except rom
 #define SERIALIZED_MEMBERS                                            \
     X(rom_size)                                                       \
-    Y(vram, emu->mode == CGB, 2 * VRAM_BANK_SIZE, VRAM_BANK_SIZE)     \
+    Y(vram, gb->mode == CGB, 2 * VRAM_BANK_SIZE, VRAM_BANK_SIZE)     \
     Z(eram, eram_banks, ERAM_BANK_SIZE)                               \
-    Y(wram, emu->mode == CGB, 8 * WRAM_BANK_SIZE, 2 * WRAM_BANK_SIZE) \
+    Y(wram, gb->mode == CGB, 8 * WRAM_BANK_SIZE, 2 * WRAM_BANK_SIZE) \
     X(oam)                                                            \
     X(io_registers)                                                   \
     X(hram)                                                           \
@@ -808,10 +808,10 @@ void mmu_write_io_src(emulator_t *emu, word_t address, byte_t data, io_source_t 
 #define Y(...) SERIALIZED_LENGTH_COND_LITERAL(__VA_ARGS__);
 #define Z(...) SERIALIZED_LENGTH_FROM_MEMBER(__VA_ARGS__);
 #define W(...) SERIALIZED_LENGTH_IF_CGB(__VA_ARGS__);
-SERIALIZED_SIZE_FUNCTION(mmu_t, mmu,
+SERIALIZED_SIZE_FUNCTION(gb_mmu_t, mmu,
     SERIALIZED_MEMBERS
     {
-        mbc_t *tmp = &emu->mmu->mbc;
+        gb_mbc_t *tmp = &gb->mmu->mbc;
         MBC_SERIALIZED_MEMBERS
     }
 )
@@ -824,10 +824,10 @@ SERIALIZED_SIZE_FUNCTION(mmu_t, mmu,
 #define Y(...) SERIALIZE_COND_LITERAL(__VA_ARGS__);
 #define Z(...) SERIALIZE_FROM_MEMBER(__VA_ARGS__);
 #define W(...) SERIALIZE_IF_CGB(__VA_ARGS__);
-SERIALIZER_FUNCTION(mmu_t, mmu,
+SERIALIZER_FUNCTION(gb_mmu_t, mmu,
     SERIALIZED_MEMBERS
     {
-        mbc_t *tmp = &emu->mmu->mbc;
+        gb_mbc_t *tmp = &gb->mmu->mbc;
         MBC_SERIALIZED_MEMBERS
     }
 )
@@ -840,10 +840,10 @@ SERIALIZER_FUNCTION(mmu_t, mmu,
 #define Y(...) UNSERIALIZE_COND_LITERAL(__VA_ARGS__);
 #define Z(...) UNSERIALIZE_FROM_MEMBER(__VA_ARGS__);
 #define W(...) UNSERIALIZE_IF_CGB(__VA_ARGS__);
-UNSERIALIZER_FUNCTION(mmu_t, mmu,
+UNSERIALIZER_FUNCTION(gb_mmu_t, mmu,
     SERIALIZED_MEMBERS
     {
-        mbc_t *tmp = &emu->mmu->mbc;
+        gb_mbc_t *tmp = &gb->mmu->mbc;
         MBC_SERIALIZED_MEMBERS
     }
 )

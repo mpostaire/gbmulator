@@ -6,7 +6,7 @@
 #include <zlib.h>
 #endif
 
-#include "emulator_priv.h"
+#include "gb_priv.h"
 
 #define SAVESTATE_STRING EMULATOR_NAME"-sav"
 
@@ -17,7 +17,7 @@ typedef struct __attribute__((packed)) {
 } savestate_header_t;
 
 // TODO fix the weird options getter/setters and default values implementation
-emulator_options_t defaults_opts = {
+gb_options_t defaults_opts = {
     .mode = DMG,
     .disable_cgb_color_correction = 0,
     .palette = PPU_COLOR_PALETTE_ORIG,
@@ -48,96 +48,96 @@ const char *mbc_names[] = {
     STRINGIFY(TAMA5)
 };
 
-int emulator_step(emulator_t *emu) {
-    byte_t double_speed = IS_DOUBLE_SPEED(emu);
+int gb_step(gb_t *gb) {
+    byte_t double_speed = IS_DOUBLE_SPEED(gb);
     for (int i = double_speed + 1; i; i--) {
         // stop execution of the program while a GDMA or HDMA is active
-        if (!emu->mmu->hdma.lock_cpu)
-            cpu_step(emu);
-        dma_step(emu);
-        timer_step(emu);
-        link_step(emu);
+        if (!gb->mmu->hdma.lock_cpu)
+            cpu_step(gb);
+        dma_step(gb);
+        timer_step(gb);
+        link_step(gb);
     }
 
-    if (emu->mmu->has_rtc)
-        rtc_step(emu);
+    if (gb->mmu->has_rtc)
+        rtc_step(gb);
 
     // TODO during the time the cpu is blocked after a STOP opcode triggering a speed switch, the ppu and apu
     //      behave in a weird way: https://gbdev.io/pandocs/CGB_Registers.html?highlight=key1#ff4d--key1-cgb-mode-only-prepare-speed-switch
-    ppu_step(emu);
-    apu_step(emu);
+    ppu_step(gb);
+    apu_step(gb);
 
     return double_speed ? 8 : 4;
 }
 
-emulator_t *emulator_init(const byte_t *rom_data, size_t rom_size, emulator_options_t *opts) {
-    emulator_t *emu = xcalloc(1, sizeof(emulator_t));
-    emu->exit_on_invalid_opcode = 1;
-    emulator_set_options(emu, opts);
+gb_t *gb_init(const byte_t *rom_data, size_t rom_size, gb_options_t *opts) {
+    gb_t *gb = xcalloc(1, sizeof(gb_t));
+    gb->exit_on_invalid_opcode = 1;
+    gb_set_options(gb, opts);
 
-    if (!mmu_init(emu, rom_data, rom_size)) {
-        free(emu);
+    if (!mmu_init(gb, rom_data, rom_size)) {
+        free(gb);
         return NULL;
     }
-    cpu_init(emu);
-    apu_init(emu);
-    ppu_init(emu);
-    timer_init(emu);
-    link_init(emu);
-    joypad_init(emu);
+    cpu_init(gb);
+    apu_init(gb);
+    ppu_init(gb);
+    timer_init(gb);
+    link_init(gb);
+    joypad_init(gb);
 
-    return emu;
+    return gb;
 }
 
-void emulator_quit(emulator_t *emu) {
-    cpu_quit(emu);
-    apu_quit(emu);
-    mmu_quit(emu);
-    ppu_quit(emu);
-    timer_quit(emu);
-    link_quit(emu);
-    joypad_quit(emu);
-    free(emu);
+void gb_quit(gb_t *gb) {
+    cpu_quit(gb);
+    apu_quit(gb);
+    mmu_quit(gb);
+    ppu_quit(gb);
+    timer_quit(gb);
+    link_quit(gb);
+    joypad_quit(gb);
+    free(gb);
 }
 
-void emulator_reset(emulator_t *emu, emulator_mode_t mode) {
-    size_t rom_size = emu->mmu->rom_size;
+void gb_reset(gb_t *gb, gb_mode_t mode) {
+    size_t rom_size = gb->mmu->rom_size;
     byte_t *rom_data = xmalloc(rom_size);
-    memcpy(rom_data, emu->mmu->rom, rom_size);
+    memcpy(rom_data, gb->mmu->rom, rom_size);
 
-    emu->mode = 0;
-    emulator_options_t opts;
-    emulator_get_options(emu, &opts);
+    gb->mode = 0;
+    gb_options_t opts;
+    gb_get_options(gb, &opts);
     opts.mode = mode;
-    emulator_set_options(emu, &opts);
+    gb_set_options(gb, &opts);
 
     size_t save_len;
-    byte_t *save_data = emulator_get_save(emu, &save_len);
+    byte_t *save_data = gb_get_save(gb, &save_len);
 
-    cpu_quit(emu);
-    apu_quit(emu);
-    mmu_quit(emu);
-    ppu_quit(emu);
-    timer_quit(emu);
-    link_quit(emu);
-    joypad_quit(emu);
+    cpu_quit(gb);
+    apu_quit(gb);
+    mmu_quit(gb);
+    ppu_quit(gb);
+    timer_quit(gb);
+    link_quit(gb);
+    joypad_quit(gb);
 
-    mmu_init(emu, rom_data, rom_size);
-    cpu_init(emu);
-    apu_init(emu);
-    ppu_init(emu);
-    timer_init(emu);
-    link_init(emu);
-    joypad_init(emu);
+    mmu_init(gb, rom_data, rom_size);
+    cpu_init(gb);
+    apu_init(gb);
+    ppu_init(gb);
+    timer_init(gb);
+    link_init(gb);
+    joypad_init(gb);
 
     if (save_data)
-        emulator_load_save(emu, save_data, save_len);
+        gb_load_save(gb, save_data, save_len);
 
     free(rom_data);
 }
 
-static const char *get_new_licensee(emulator_t *emu) {
-    byte_t code = ((emu->mmu->rom[0x0144] - 0x30) * 10) + (emu->mmu->rom[0x0145]) - 0x30;
+static const char *get_new_licensee(gb_t *gb) {
+    byte_t code = ((gb->mmu->rom[0x0144] - 0x30) * 10) + (gb->mmu->rom[0x0145]) - 0x30;
 
     switch (code) {
     case 0: return "None";
@@ -205,8 +205,8 @@ static const char *get_new_licensee(emulator_t *emu) {
     }
 }
 
-static const char *get_licensee(emulator_t *emu) {
-    switch (emu->mmu->rom[0x014B]) {
+static const char *get_licensee(gb_t *gb) {
+    switch (gb->mmu->rom[0x014B]) {
     case 0x00: return "None";
     case 0x01: return "Nintendo";
     case 0x08: return "Capcom";
@@ -227,7 +227,7 @@ static const char *get_licensee(emulator_t *emu) {
     case 0x30: return "Infogrames";
     case 0x31: return "Nintendo";
     case 0x32: return "Bandai";
-    case 0x33: return get_new_licensee(emu);
+    case 0x33: return get_new_licensee(gb);
     case 0x34: return "Konami";
     case 0x35: return "HectorSoft";
     case 0x38: return "Capcom";
@@ -358,14 +358,14 @@ static const char *get_licensee(emulator_t *emu) {
     }
 }
 
-void emulator_print_status(emulator_t *emu) {
-    mmu_t *mmu = emu->mmu;
+void gb_print_status(gb_t *gb) {
+    gb_mmu_t *mmu = gb->mmu;
 
     printf("[%s] Playing %s (v%d) by %s\n",
-            emu->mode == DMG ? "DMG" : "CGB",
-            emu->rom_title,
+            gb->mode == DMG ? "DMG" : "CGB",
+            gb->rom_title,
             mmu->rom[0x014C],
-            get_licensee(emu)
+            get_licensee(gb)
     );
 
     char *ram_str = NULL;
@@ -385,50 +385,50 @@ void emulator_print_status(emulator_t *emu) {
     free(ram_str);
 }
 
-void emulator_link_connect(emulator_t *emu, emulator_t *other_emu) {
+void gb_link_connect(gb_t *gb, gb_t *other_emu) {
     // disconnect any device that may have been connected before
-    emulator_link_disconnect(emu);
-    emulator_link_disconnect_printer(emu);
+    gb_link_disconnect(gb);
+    gb_link_disconnect_printer(gb);
 
-    emu->link->other_emu = other_emu;
-    other_emu->link->other_emu = emu;
+    gb->link->other_emu = other_emu;
+    other_emu->link->other_emu = gb;
 }
 
-void emulator_link_disconnect(emulator_t *emu) {
-    if (emu->link->other_emu)
-        emu->link->other_emu->link->other_emu = NULL;
-    emu->link->other_emu = NULL;
+void gb_link_disconnect(gb_t *gb) {
+    if (gb->link->other_emu)
+        gb->link->other_emu->link->other_emu = NULL;
+    gb->link->other_emu = NULL;
 }
 
-void emulator_link_connect_printer(emulator_t *emu, gb_printer_t *printer) {
+void gb_link_connect_printer(gb_t *gb, gb_printer_t *printer) {
     // disconnect any device that may have been connected before
-    emulator_link_disconnect(emu);
-    emulator_link_disconnect_printer(emu);
+    gb_link_disconnect(gb);
+    gb_link_disconnect_printer(gb);
 
-    emu->link->printer = printer;
+    gb->link->printer = printer;
 }
 
-void emulator_link_disconnect_printer(emulator_t *emu) {
-    emu->link->printer = NULL;
+void gb_link_disconnect_printer(gb_t *gb) {
+    gb->link->printer = NULL;
 }
 
-void emulator_joypad_press(emulator_t *emu, joypad_button_t key) {
-    joypad_press(emu, key);
+void gb_joypad_press(gb_t *gb, gb_joypad_button_t key) {
+    joypad_press(gb, key);
 }
 
-void emulator_joypad_release(emulator_t *emu, joypad_button_t key) {
-    joypad_release(emu, key);
+void gb_joypad_release(gb_t *gb, gb_joypad_button_t key) {
+    joypad_release(gb, key);
 }
 
-byte_t *emulator_get_save(emulator_t *emu, size_t *save_length) {
-    if (emu->mmu->mbc.type == MBC7) {
-        *save_length = sizeof(emu->mmu->mbc.mbc7.eeprom.data);
+byte_t *gb_get_save(gb_t *gb, size_t *save_length) {
+    if (gb->mmu->mbc.type == MBC7) {
+        *save_length = sizeof(gb->mmu->mbc.mbc7.eeprom.data);
         byte_t *save_data = xmalloc(*save_length);
-        memcpy(save_data, emu->mmu->mbc.mbc7.eeprom.data, *save_length);
+        memcpy(save_data, gb->mmu->mbc.mbc7.eeprom.data, *save_length);
         return save_data;
     }
 
-    if (!emu->mmu->has_battery || (!emu->mmu->has_rtc && emu->mmu->eram_banks == 0)) {
+    if (!gb->mmu->has_battery || (!gb->mmu->has_rtc && gb->mmu->eram_banks == 0)) {
         *save_length = 0;
         return NULL;
     }
@@ -436,12 +436,12 @@ byte_t *emulator_get_save(emulator_t *emu, size_t *save_length) {
     size_t rtc_timestamp_len = 0;
     size_t rtc_len = 0;
     char *rtc_timestamp = NULL;
-    if (emu->mmu->has_rtc) {
+    if (gb->mmu->has_rtc) {
         rtc_timestamp = time_to_string(time(NULL), &rtc_timestamp_len);
         rtc_len = 10 + rtc_timestamp_len;
     }
 
-    size_t eram_len = 0x2000 * emu->mmu->eram_banks;
+    size_t eram_len = 0x2000 * gb->mmu->eram_banks;
     size_t total_len = eram_len + rtc_len;
     if (save_length)
         *save_length = total_len;
@@ -452,19 +452,19 @@ byte_t *emulator_get_save(emulator_t *emu, size_t *save_length) {
     byte_t *save_data = xmalloc(total_len);
 
     if (eram_len > 0)
-        memcpy(save_data, emu->mmu->eram, eram_len);
+        memcpy(save_data, gb->mmu->eram, eram_len);
 
     if (rtc_timestamp) {
-        memcpy(&save_data[eram_len], &emu->mmu->mbc.mbc3.rtc.s, 1);
-        memcpy(&save_data[eram_len + 1], &emu->mmu->mbc.mbc3.rtc.m, 1);
-        memcpy(&save_data[eram_len + 2], &emu->mmu->mbc.mbc3.rtc.h, 1);
-        memcpy(&save_data[eram_len + 3], &emu->mmu->mbc.mbc3.rtc.dl, 1);
-        memcpy(&save_data[eram_len + 4], &emu->mmu->mbc.mbc3.rtc.dh, 1);
-        memcpy(&save_data[eram_len + 5], &emu->mmu->mbc.mbc3.rtc.latched_s, 1);
-        memcpy(&save_data[eram_len + 6], &emu->mmu->mbc.mbc3.rtc.latched_m, 1);
-        memcpy(&save_data[eram_len + 7], &emu->mmu->mbc.mbc3.rtc.latched_h, 1);
-        memcpy(&save_data[eram_len + 8], &emu->mmu->mbc.mbc3.rtc.latched_dl, 1);
-        memcpy(&save_data[eram_len + 9], &emu->mmu->mbc.mbc3.rtc.latched_dh, 1);
+        memcpy(&save_data[eram_len], &gb->mmu->mbc.mbc3.rtc.s, 1);
+        memcpy(&save_data[eram_len + 1], &gb->mmu->mbc.mbc3.rtc.m, 1);
+        memcpy(&save_data[eram_len + 2], &gb->mmu->mbc.mbc3.rtc.h, 1);
+        memcpy(&save_data[eram_len + 3], &gb->mmu->mbc.mbc3.rtc.dl, 1);
+        memcpy(&save_data[eram_len + 4], &gb->mmu->mbc.mbc3.rtc.dh, 1);
+        memcpy(&save_data[eram_len + 5], &gb->mmu->mbc.mbc3.rtc.latched_s, 1);
+        memcpy(&save_data[eram_len + 6], &gb->mmu->mbc.mbc3.rtc.latched_m, 1);
+        memcpy(&save_data[eram_len + 7], &gb->mmu->mbc.mbc3.rtc.latched_h, 1);
+        memcpy(&save_data[eram_len + 8], &gb->mmu->mbc.mbc3.rtc.latched_dl, 1);
+        memcpy(&save_data[eram_len + 9], &gb->mmu->mbc.mbc3.rtc.latched_dh, 1);
 
         memcpy(&save_data[eram_len + 10], rtc_timestamp, rtc_timestamp_len);
         free(rtc_timestamp);
@@ -473,22 +473,22 @@ byte_t *emulator_get_save(emulator_t *emu, size_t *save_length) {
     return save_data;
 }
 
-int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
-    if (emu->mmu->mbc.type == MBC7) {
-        if (save_length != sizeof(emu->mmu->mbc.mbc7.eeprom.data))
+int gb_load_save(gb_t *gb, byte_t *save_data, size_t save_length) {
+    if (gb->mmu->mbc.type == MBC7) {
+        if (save_length != sizeof(gb->mmu->mbc.mbc7.eeprom.data))
             return 0;
-        memcpy(emu->mmu->mbc.mbc7.eeprom.data, save_data, save_length);
+        memcpy(gb->mmu->mbc.mbc7.eeprom.data, save_data, save_length);
         return 1;
     }
 
     // don't load save if the cartridge has no battery or there is no rtc and no eram banks
-    if (!emu->mmu->has_battery || (!emu->mmu->has_rtc && emu->mmu->eram_banks == 0))
+    if (!gb->mmu->has_battery || (!gb->mmu->has_rtc && gb->mmu->eram_banks == 0))
         return 0;
 
-    size_t eram_len = emu->mmu->eram_banks * VRAM_BANK_SIZE;
+    size_t eram_len = gb->mmu->eram_banks * VRAM_BANK_SIZE;
 
     size_t rtc_len = 0;
-    if (emu->mmu->has_rtc) {
+    if (gb->mmu->has_rtc) {
         size_t rtc_timestamp_len = strlen((char *) &save_data[eram_len + 10]) + 1;
         rtc_len = 10 + rtc_timestamp_len;
     }
@@ -498,7 +498,7 @@ int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
         return 0;
 
     if (eram_len > 0)
-        memcpy(emu->mmu->eram, save_data, eram_len);
+        memcpy(gb->mmu->eram, save_data, eram_len);
 
     if (rtc_len > 0) {
         // get saved rtc registers and timestamp
@@ -507,11 +507,11 @@ int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
         byte_t h = save_data[eram_len + 2];
         byte_t dl = save_data[eram_len + 3];
         byte_t dh = save_data[eram_len + 4];
-        emu->mmu->mbc.mbc3.rtc.latched_s = save_data[eram_len + 5];
-        emu->mmu->mbc.mbc3.rtc.latched_m = save_data[eram_len + 6];
-        emu->mmu->mbc.mbc3.rtc.latched_h = save_data[eram_len + 7];
-        emu->mmu->mbc.mbc3.rtc.latched_dl = save_data[eram_len + 8];
-        emu->mmu->mbc.mbc3.rtc.latched_dh = save_data[eram_len + 9];
+        gb->mmu->mbc.mbc3.rtc.latched_s = save_data[eram_len + 5];
+        gb->mmu->mbc.mbc3.rtc.latched_m = save_data[eram_len + 6];
+        gb->mmu->mbc.mbc3.rtc.latched_h = save_data[eram_len + 7];
+        gb->mmu->mbc.mbc3.rtc.latched_dl = save_data[eram_len + 8];
+        gb->mmu->mbc.mbc3.rtc.latched_dh = save_data[eram_len + 9];
 
         time_t rtc_timestamp = string_to_time((char *) &save_data[eram_len + 10]);
 
@@ -525,47 +525,47 @@ int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length) {
 
         // day overflow
         if (d >= 0x0200) {
-            SET_BIT(emu->mmu->mbc.mbc3.rtc.dh, 7);
+            SET_BIT(gb->mmu->mbc.mbc3.rtc.dh, 7);
             d %= 0x0200;
         }
 
-        emu->mmu->mbc.mbc3.rtc.dh |= (d & 0x100) >> 8;
-        emu->mmu->mbc.mbc3.rtc.dl = d & 0xFF;
+        gb->mmu->mbc.mbc3.rtc.dh |= (d & 0x100) >> 8;
+        gb->mmu->mbc.mbc3.rtc.dl = d & 0xFF;
 
-        emu->mmu->mbc.mbc3.rtc.h = rtc_registers_time / 3600;
+        gb->mmu->mbc.mbc3.rtc.h = rtc_registers_time / 3600;
         rtc_registers_time %= 3600;
 
-        emu->mmu->mbc.mbc3.rtc.m = rtc_registers_time / 60;
+        gb->mmu->mbc.mbc3.rtc.m = rtc_registers_time / 60;
         rtc_registers_time %= 60;
 
-        emu->mmu->mbc.mbc3.rtc.s = rtc_registers_time;
+        gb->mmu->mbc.mbc3.rtc.s = rtc_registers_time;
     }
 
     return 1;
 }
 
 #ifdef __HAVE_ZLIB__
-byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, byte_t compressed) {
+byte_t *gb_get_savestate(gb_t *gb, size_t *length, byte_t compressed) {
 #else
-byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, UNUSED byte_t compressed) {
+byte_t *gb_get_savestate(gb_t *gb, size_t *length, UNUSED byte_t compressed) {
 #endif
     // make savestate header
     savestate_header_t *savestate_header = xmalloc(sizeof(savestate_header_t));
-    savestate_header->mode = emu->mode;
+    savestate_header->mode = gb->mode;
     memcpy(savestate_header->identifier, SAVESTATE_STRING, sizeof(savestate_header->identifier));
-    memcpy(savestate_header->rom_title, emu->rom_title, sizeof(savestate_header->rom_title));
+    memcpy(savestate_header->rom_title, gb->rom_title, sizeof(savestate_header->rom_title));
 
     // make savestate data
     size_t cpu_len;
-    byte_t *cpu = cpu_serialize(emu, &cpu_len);
+    byte_t *cpu = cpu_serialize(gb, &cpu_len);
     size_t timer_len;
-    byte_t *timer = timer_serialize(emu, &timer_len);
+    byte_t *timer = timer_serialize(gb, &timer_len);
     size_t link_len;
-    byte_t *link = link_serialize(emu, &link_len);
+    byte_t *link = link_serialize(gb, &link_len);
     size_t ppu_len;
-    byte_t *ppu = ppu_serialize(emu, &ppu_len);
+    byte_t *ppu = ppu_serialize(gb, &ppu_len);
     size_t mmu_len;
-    byte_t *mmu = mmu_serialize(emu, &mmu_len);
+    byte_t *mmu = mmu_serialize(gb, &mmu_len);
 
     // don't write each component length into the savestate as the only variable length is the mmu which is written
     // last and it's length can be computed using the eram_banks number and the mode (both in the header)
@@ -616,7 +616,7 @@ byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, UNUSED byte_t co
     return (byte_t *) savestate;
 }
 
-int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) {
+int gb_load_savestate(gb_t *gb, const byte_t *data, size_t length) {
     if (length <= sizeof(savestate_header_t)) {
         eprintf("invalid savestate length (%zu)\n", length);
         return 0;
@@ -630,24 +630,24 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
         free(savestate_header);
         return 0;
     }
-    if (strncmp(savestate_header->rom_title, emu->rom_title, sizeof(savestate_header->rom_title))) {
-        eprintf("rom title mismatch (expected: '%.16s'; got: '%.16s')\n", emu->rom_title, savestate_header->rom_title);
+    if (strncmp(savestate_header->rom_title, gb->rom_title, sizeof(savestate_header->rom_title))) {
+        eprintf("rom title mismatch (expected: '%.16s'; got: '%.16s')\n", gb->rom_title, savestate_header->rom_title);
         free(savestate_header);
         return 0;
     }
 
-    if ((savestate_header->mode & 0x03) != emu->mode)
-        emulator_reset(emu, savestate_header->mode & 0x03);
+    if ((savestate_header->mode & 0x03) != gb->mode)
+        gb_reset(gb, savestate_header->mode & 0x03);
 
     size_t savestate_data_len = length - sizeof(savestate_header_t);
     byte_t *savestate_data = xmalloc(savestate_data_len);
     memcpy(savestate_data, data + sizeof(savestate_header_t), savestate_data_len);
 
-    size_t cpu_len = cpu_serialized_length(emu);
-    size_t timer_len = timer_serialized_length(emu);
-    size_t link_len = link_serialized_length(emu);
-    size_t ppu_len = ppu_serialized_length(emu);
-    size_t mmu_len = mmu_serialized_length(emu);
+    size_t cpu_len = cpu_serialized_length(gb);
+    size_t timer_len = timer_serialized_length(gb);
+    size_t link_len = link_serialized_length(gb);
+    size_t ppu_len = ppu_serialized_length(gb);
+    size_t mmu_len = mmu_serialized_length(gb);
     size_t expected_len = cpu_len + timer_len + link_len + ppu_len + mmu_len;
 
     if (CHECK_BIT(savestate_header->mode, 7)) {
@@ -675,49 +675,49 @@ int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length) 
     }
 
     size_t offset = 0;
-    cpu_unserialize(emu, savestate_data);
+    cpu_unserialize(gb, savestate_data);
     offset += cpu_len;
-    timer_unserialize(emu, &savestate_data[offset]);
+    timer_unserialize(gb, &savestate_data[offset]);
     offset += timer_len;
-    link_unserialize(emu, &savestate_data[offset]);
+    link_unserialize(gb, &savestate_data[offset]);
     offset += link_len;
-    ppu_unserialize(emu, &savestate_data[offset]);
+    ppu_unserialize(gb, &savestate_data[offset]);
     offset += ppu_len;
-    mmu_unserialize(emu, &savestate_data[offset]);
+    mmu_unserialize(gb, &savestate_data[offset]);
 
     free(savestate_header);
     free(savestate_data);
 
     // resets apu's internal state to prevent glitchy audio if resuming from state without sound playing from state with sound playing
-    apu_quit(emu);
-    apu_init(emu);
+    apu_quit(gb);
+    apu_init(gb);
 
-    return emu->mode;
+    return gb->mode;
 }
 
-byte_t emulator_get_joypad_state(emulator_t *emu) {
-    return (emu->joypad->action & 0x0F) << 4 | (emu->joypad->direction & 0x0F);
+byte_t gb_get_joypad_state(gb_t *gb) {
+    return (gb->joypad->action & 0x0F) << 4 | (gb->joypad->direction & 0x0F);
 }
 
-void emulator_set_joypad_state(emulator_t *emu, byte_t state) {
-    emu->joypad->action = (state >> 4) & 0x0F;
-    emu->joypad->direction = state & 0x0F;
+void gb_set_joypad_state(gb_t *gb, byte_t state) {
+    gb->joypad->action = (state >> 4) & 0x0F;
+    gb->joypad->direction = state & 0x0F;
 
-    if (!CHECK_BIT(emu->mmu->io_registers[P1 - IO], 4) || !CHECK_BIT(emu->mmu->io_registers[P1 - IO], 5))
-        CPU_REQUEST_INTERRUPT(emu, IRQ_JOYPAD);
+    if (!CHECK_BIT(gb->mmu->io_registers[P1 - IO], 4) || !CHECK_BIT(gb->mmu->io_registers[P1 - IO], 5))
+        CPU_REQUEST_INTERRUPT(gb, IRQ_JOYPAD);
 }
 
-char *emulator_get_rom_title(emulator_t *emu) {
-    return emu->rom_title;
+char *gb_get_rom_title(gb_t *gb) {
+    return gb->rom_title;
 }
 
-byte_t *emulator_get_rom(emulator_t *emu, size_t *rom_size) {
+byte_t *gb_get_rom(gb_t *gb, size_t *rom_size) {
     if (rom_size)
-        *rom_size = emu->mmu->rom_size;
-    return emu->mmu->rom;
+        *rom_size = gb->mmu->rom_size;
+    return gb->mmu->rom;
 }
 
-char *emulator_get_rom_title_from_data(byte_t *rom_data, size_t size) {
+char *gb_get_rom_title_from_data(byte_t *rom_data, size_t size) {
     if (size < 0x144)
         return NULL;
     char *rom_title = xmalloc(17);
@@ -728,19 +728,19 @@ char *emulator_get_rom_title_from_data(byte_t *rom_data, size_t size) {
     return rom_title;
 }
 
-void emulator_update_pixels_with_palette(emulator_t *emu, byte_t new_palette) {
+void gb_update_pixels_with_palette(gb_t *gb, byte_t new_palette) {
     // replace old color values of the pixels with the new ones according to the new palette
     for (int i = 0; i < GB_SCREEN_WIDTH; i++) {
         for (int j = 0; j < GB_SCREEN_HEIGHT; j++) {
-            byte_t *R = (emu->ppu->pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3)) ;
-            byte_t *G = (emu->ppu->pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3) + 1);
-            byte_t *B = (emu->ppu->pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3) + 2);
+            byte_t *R = (gb->ppu->pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3)) ;
+            byte_t *G = (gb->ppu->pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3) + 1);
+            byte_t *B = (gb->ppu->pixels + ((j) * GB_SCREEN_WIDTH * 3) + ((i) * 3) + 2);
 
             // find which color is at pixel (i,j)
-            for (dmg_color_t c = DMG_WHITE; c <= DMG_BLACK; c++) {
-                if (*R == dmg_palettes[emu->dmg_palette][c][0] &&
-                    *G == dmg_palettes[emu->dmg_palette][c][1] &&
-                    *B == dmg_palettes[emu->dmg_palette][c][2]) {
+            for (gb_dmg_color_t c = DMG_WHITE; c <= DMG_BLACK; c++) {
+                if (*R == dmg_palettes[gb->dmg_palette][c][0] &&
+                    *G == dmg_palettes[gb->dmg_palette][c][1] &&
+                    *B == dmg_palettes[gb->dmg_palette][c][2]) {
 
                     // replace old color value by the new one according to the new palette
                     *R = dmg_palettes[new_palette][c][0];
@@ -753,83 +753,83 @@ void emulator_update_pixels_with_palette(emulator_t *emu, byte_t new_palette) {
     }
 }
 
-void emulator_get_options(emulator_t *emu, emulator_options_t *opts) {
-    opts->mode = emu->mode;
-    opts->disable_cgb_color_correction = emu->disable_cgb_color_correction;
-    opts->apu_sample_count = emu->apu_sample_count;
-    opts->apu_speed = emu->apu_speed;
-    opts->apu_sound_level = emu->apu_sound_level;
-    opts->apu_format = emu->apu_format;
-    opts->palette = emu->dmg_palette;
-    opts->on_apu_samples_ready = emu->on_apu_samples_ready;
-    opts->on_new_frame = emu->on_new_frame;
-    opts->on_accelerometer_request = emu->on_accelerometer_request;
+void gb_get_options(gb_t *gb, gb_options_t *opts) {
+    opts->mode = gb->mode;
+    opts->disable_cgb_color_correction = gb->disable_cgb_color_correction;
+    opts->apu_sample_count = gb->apu_sample_count;
+    opts->apu_speed = gb->apu_speed;
+    opts->apu_sound_level = gb->apu_sound_level;
+    opts->apu_format = gb->apu_format;
+    opts->palette = gb->dmg_palette;
+    opts->on_apu_samples_ready = gb->on_apu_samples_ready;
+    opts->on_new_frame = gb->on_new_frame;
+    opts->on_accelerometer_request = gb->on_accelerometer_request;
 }
 
-void emulator_set_options(emulator_t *emu, emulator_options_t *opts) {
+void gb_set_options(gb_t *gb, gb_options_t *opts) {
     if (!opts)
         opts = &defaults_opts;
 
-    // allow changes of mode, apu_sample_count and apu_format only once (inside emulator_init())
-    if (!emu->mode) {
-        emu->mode = opts->mode >= DMG && opts->mode <= CGB ? opts->mode : defaults_opts.mode;
-        emu->apu_sample_count = opts->apu_sample_count >= 128 ? opts->apu_sample_count : defaults_opts.apu_sample_count;
-        emu->apu_format = opts->apu_format >= APU_FORMAT_F32 && opts->apu_format <= APU_FORMAT_U8 ? opts->apu_format : defaults_opts.apu_format;
+    // allow changes of mode, apu_sample_count and apu_format only once (inside gb_init())
+    if (!gb->mode) {
+        gb->mode = opts->mode >= DMG && opts->mode <= CGB ? opts->mode : defaults_opts.mode;
+        gb->apu_sample_count = opts->apu_sample_count >= 128 ? opts->apu_sample_count : defaults_opts.apu_sample_count;
+        gb->apu_format = opts->apu_format >= APU_FORMAT_F32 && opts->apu_format <= APU_FORMAT_U8 ? opts->apu_format : defaults_opts.apu_format;
     }
 
-    emu->disable_cgb_color_correction = opts->disable_cgb_color_correction;
-    emu->apu_speed = opts->apu_speed < 1.0f ? defaults_opts.apu_speed : opts->apu_speed;
-    emu->apu_sound_level = opts->apu_sound_level > 1.0f ? defaults_opts.apu_sound_level : opts->apu_sound_level;
-    emu->dmg_palette = opts->palette >= 0 && opts->palette < PPU_COLOR_PALETTE_MAX ? opts->palette : defaults_opts.palette;
-    emu->on_new_frame = opts->on_new_frame;
-    emu->on_apu_samples_ready = opts->on_apu_samples_ready;
-    emu->on_accelerometer_request = opts->on_accelerometer_request;
+    gb->disable_cgb_color_correction = opts->disable_cgb_color_correction;
+    gb->apu_speed = opts->apu_speed < 1.0f ? defaults_opts.apu_speed : opts->apu_speed;
+    gb->apu_sound_level = opts->apu_sound_level > 1.0f ? defaults_opts.apu_sound_level : opts->apu_sound_level;
+    gb->dmg_palette = opts->palette >= 0 && opts->palette < PPU_COLOR_PALETTE_MAX ? opts->palette : defaults_opts.palette;
+    gb->on_new_frame = opts->on_new_frame;
+    gb->on_apu_samples_ready = opts->on_apu_samples_ready;
+    gb->on_accelerometer_request = opts->on_accelerometer_request;
 }
 
-byte_t *emulator_get_color_values(emulator_t *emu, dmg_color_t color) {
-    return dmg_palettes[emu->dmg_palette][color];
+byte_t *gb_get_color_values(gb_t *gb, gb_dmg_color_t color) {
+    return dmg_palettes[gb->dmg_palette][color];
 }
 
-byte_t *emulator_get_color_values_from_palette(color_palette_t palette, dmg_color_t color) {
+byte_t *gb_get_color_values_from_palette(gb_color_palette_t palette, gb_dmg_color_t color) {
     return dmg_palettes[palette][color];
 }
 
-byte_t *emulator_get_pixels(emulator_t *emu) {
-    return emu->ppu->pixels;
+byte_t *gb_get_pixels(gb_t *gb) {
+    return gb->ppu->pixels;
 }
 
-emulator_mode_t emulator_get_mode(emulator_t *emu) {
-    return emu->mode;
+gb_mode_t gb_get_mode(gb_t *gb) {
+    return gb->mode;
 }
 
-word_t emulator_get_cartridge_checksum(emulator_t *emu) {
+word_t gb_get_cartridge_checksum(gb_t *gb) {
     word_t checksum = 0;
-    for (unsigned int i = 0; i < sizeof(emu->mmu->rom); i += 2)
-        checksum = checksum - (emu->mmu->rom[i] + emu->mmu->rom[i + 1]) - 1;
+    for (unsigned int i = 0; i < sizeof(gb->mmu->rom); i += 2)
+        checksum = checksum - (gb->mmu->rom[i] + gb->mmu->rom[i + 1]) - 1;
     return checksum;
 }
 
-void emulator_set_apu_speed(emulator_t *emu, float speed) {
-    emulator_options_t opts;
-    emulator_get_options(emu, &opts);
+void gb_set_apu_speed(gb_t *gb, float speed) {
+    gb_options_t opts;
+    gb_get_options(gb, &opts);
     opts.apu_speed = speed;
-    emulator_set_options(emu, &opts);
+    gb_set_options(gb, &opts);
 }
 
-void emulator_set_apu_sound_level(emulator_t *emu, float level) {
-    emulator_options_t opts;
-    emulator_get_options(emu, &opts);
+void gb_set_apu_sound_level(gb_t *gb, float level) {
+    gb_options_t opts;
+    gb_get_options(gb, &opts);
     opts.apu_sound_level = level;
-    emulator_set_options(emu, &opts);
+    gb_set_options(gb, &opts);
 }
 
-void emulator_set_palette(emulator_t *emu, color_palette_t palette) {
-    emulator_options_t opts;
-    emulator_get_options(emu, &opts);
+void gb_set_palette(gb_t *gb, gb_color_palette_t palette) {
+    gb_options_t opts;
+    gb_get_options(gb, &opts);
     opts.palette = palette;
-    emulator_set_options(emu, &opts);
+    gb_set_options(gb, &opts);
 }
 
-byte_t emulator_has_accelerometer(emulator_t *emu) {
-    return emu->mmu->mbc.type == MBC7;
+byte_t gb_has_accelerometer(gb_t *gb) {
+    return gb->mmu->mbc.type == MBC7;
 }

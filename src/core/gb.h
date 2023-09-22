@@ -25,42 +25,42 @@
  * Runs the emulator for one cpu step.
  * @returns the amount of cycles the emulator has run for
  */
-int emulator_step(emulator_t *emu);
+int gb_step(gb_t *gb);
 
 /**
  * Runs the emulator for the given amount of cpu steps.
  * @param steps_limit the amount of steps the emulator will run for
  */
-static inline void emulator_run_steps(emulator_t *emu, long steps_limit) {
+static inline void gb_run_steps(gb_t *gb, long steps_limit) {
     for (long steps_count = 0; steps_count < steps_limit; steps_count++)
-        emulator_step(emu);
+        gb_step(gb);
 }
 
 /**
  * Runs the emulator for the given amount of frames.
  * @param frames_limit the amount of frames the emulator will run for
  */
-static inline void emulator_run_frames(emulator_t *emu, long frames_limit) {
-    emulator_run_steps(emu, frames_limit * GB_CPU_STEPS_PER_FRAME);
+static inline void gb_run_frames(gb_t *gb, long frames_limit) {
+    gb_run_steps(gb, frames_limit * GB_CPU_STEPS_PER_FRAME);
 }
 
 /**
  * Runs the emulator for the given amount of cpu cycles.
  * @param cycles_limit the amount of cycles the emulator will run for
  */
-static inline void emulator_run_cycles(emulator_t *emu, long cycles_limit) {
-    for (long cycles_count = 0; cycles_count < cycles_limit; cycles_count += emulator_step(emu));
+static inline void gb_run_cycles(gb_t *gb, long cycles_limit) {
+    for (long cycles_count = 0; cycles_count < cycles_limit; cycles_count += gb_step(gb));
 }
 
 /**
  * Runs both the emulator and the linked emulator in parallel for the given amount of cpu steps.
  * @param steps_limit the amount of steps both emulators will run for.
  */
-static inline void emulator_linked_run_steps(emulator_t *emu, emulator_t *linked_emu, long steps_limit) {
+static inline void gb_linked_run_steps(gb_t *gb, gb_t *linked_gb, long steps_limit) {
     // TODO investigate link cable behaviour when double speed is on
     for (long steps_count = 0; steps_count < steps_limit; steps_count++) {
-        emulator_step(emu);
-        emulator_step(linked_emu);
+        gb_step(gb);
+        gb_step(linked_gb);
     }
 }
 
@@ -68,8 +68,8 @@ static inline void emulator_linked_run_steps(emulator_t *emu, emulator_t *linked
  * Runs both the emulator and the linked emulator in parallel for the given amount of frames.
  * @param frames_limit the amount of frames both emulators will run for.
  */
-static inline void emulator_linked_run_frames(emulator_t *emu, emulator_t *linked_emu, long frames_limit) {
-    emulator_linked_run_steps(emu, linked_emu, frames_limit * GB_CPU_STEPS_PER_FRAME);
+static inline void gb_linked_run_frames(gb_t *gb, gb_t *linked_gb, long frames_limit) {
+    gb_linked_run_steps(gb, linked_gb, frames_limit * GB_CPU_STEPS_PER_FRAME);
 }
 
 /**
@@ -78,90 +78,90 @@ static inline void emulator_linked_run_frames(emulator_t *emu, emulator_t *linke
  * @param rom_size the size of the `rom_data`.
  * @param opts the initialization options of the emulator or NULL for defaults.
  */
-emulator_t *emulator_init(const byte_t *rom_data, size_t rom_size, emulator_options_t *opts);
+gb_t *gb_init(const byte_t *rom_data, size_t rom_size, gb_options_t *opts);
 
 /**
  * Quits the emulator gracefully (save eram into a '.sav' file, ...).
  */
-void emulator_quit(emulator_t *emu);
+void gb_quit(gb_t *gb);
 
-void emulator_reset(emulator_t *emu, emulator_mode_t mode);
+void gb_reset(gb_t *gb, gb_mode_t mode);
 
-void emulator_print_status(emulator_t *emu);
+void gb_print_status(gb_t *gb);
 
 /**
  * Connects 2 emulators through the link cable.
  * This automatically disconnects a previous link cable connection. 
  * Freeing the previously linked device is the responsibility of the caller.
- * @param emu the fist emulator.
+ * @param gb the fist emulator.
  * @param other_emu the second emulator.
 */
-void emulator_link_connect(emulator_t *emu, emulator_t *other_emu);
+void gb_link_connect(gb_t *gb, gb_t *other_emu);
 
-void emulator_link_disconnect(emulator_t *emu);
+void gb_link_disconnect(gb_t *gb);
 
 /**
  * Connects an emulator and a printer through the link cable.
  * This automatically disconnects a previous link cable connection.
  * Freeing the previously linked device is the responsibility of the caller.
- * @param emu the emulator.
+ * @param gb the emulator.
  * @param printer the printer.
 */
-void emulator_link_connect_printer(emulator_t *emu, gb_printer_t *printer);
+void gb_link_connect_printer(gb_t *gb, gb_printer_t *printer);
 
-void emulator_link_disconnect_printer(emulator_t *emu);
+void gb_link_disconnect_printer(gb_t *gb);
 
-void emulator_joypad_press(emulator_t *emu, joypad_button_t key);
+void gb_joypad_press(gb_t *gb, gb_joypad_button_t key);
 
-void emulator_joypad_release(emulator_t *emu, joypad_button_t key);
+void gb_joypad_release(gb_t *gb, gb_joypad_button_t key);
 
-byte_t *emulator_get_save(emulator_t *emu, size_t *save_length);
+byte_t *gb_get_save(gb_t *gb, size_t *save_length);
 
-int emulator_load_save(emulator_t *emu, byte_t *save_data, size_t save_length);
+int gb_load_save(gb_t *gb, byte_t *save_data, size_t save_length);
 
-byte_t *emulator_get_savestate(emulator_t *emu, size_t *length, byte_t compressed);
+byte_t *gb_get_savestate(gb_t *gb, size_t *length, byte_t compressed);
 
-int emulator_load_savestate(emulator_t *emu, const byte_t *data, size_t length);
+int gb_load_savestate(gb_t *gb, const byte_t *data, size_t length);
 
-byte_t emulator_get_joypad_state(emulator_t *emu);
+byte_t gb_get_joypad_state(gb_t *gb);
 
-void emulator_set_joypad_state(emulator_t *emu, byte_t state);
+void gb_set_joypad_state(gb_t *gb, byte_t state);
 
 /**
  * @returns the ROM title (you must not free the returned pointer).
  */
-char *emulator_get_rom_title(emulator_t *emu);
+char *gb_get_rom_title(gb_t *gb);
 
-char *emulator_get_rom_title_from_data(byte_t *rom_data, size_t size);
+char *gb_get_rom_title_from_data(byte_t *rom_data, size_t size);
 
 /**
  * @returns a pointer to the ROM (you must not free the returned pointer).
  */
-byte_t *emulator_get_rom(emulator_t *emu, size_t *rom_size);
+byte_t *gb_get_rom(gb_t *gb, size_t *rom_size);
 
 /**
  * convert the pixels buffer from the color values of the old emulation palette to the new color values of the new palette
  */
-void emulator_update_pixels_with_palette(emulator_t *emu, byte_t new_palette);
+void gb_update_pixels_with_palette(gb_t *gb, byte_t new_palette);
 
-void emulator_get_options(emulator_t *emu, emulator_options_t *opts);
+void gb_get_options(gb_t *gb, gb_options_t *opts);
 
-void emulator_set_options(emulator_t *emu, emulator_options_t *opts);
+void gb_set_options(gb_t *gb, gb_options_t *opts);
 
-byte_t *emulator_get_color_values(emulator_t *emu, dmg_color_t color);
+byte_t *gb_get_color_values(gb_t *gb, gb_dmg_color_t color);
 
-byte_t *emulator_get_color_values_from_palette(color_palette_t palette, dmg_color_t color);
+byte_t *gb_get_color_values_from_palette(gb_color_palette_t palette, gb_dmg_color_t color);
 
-byte_t *emulator_get_pixels(emulator_t *emu);
+byte_t *gb_get_pixels(gb_t *gb);
 
-emulator_mode_t emulator_get_mode(emulator_t *emu);
+gb_mode_t gb_get_mode(gb_t *gb);
 
-word_t emulator_get_cartridge_checksum(emulator_t *emu);
+word_t gb_get_cartridge_checksum(gb_t *gb);
 
-void emulator_set_apu_speed(emulator_t *emu, float speed);
+void gb_set_apu_speed(gb_t *gb, float speed);
 
-void emulator_set_apu_sound_level(emulator_t *emu, float level);
+void gb_set_apu_sound_level(gb_t *gb, float level);
 
-void emulator_set_palette(emulator_t *emu, color_palette_t palette);
+void gb_set_palette(gb_t *gb, gb_color_palette_t palette);
 
-byte_t emulator_has_accelerometer(emulator_t *emu);
+byte_t gb_has_accelerometer(gb_t *gb);

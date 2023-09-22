@@ -13,7 +13,7 @@ typedef enum {
     APU_CHANNEL_2,
     APU_CHANNEL_3,
     APU_CHANNEL_4
-} channel_id_t;
+} gb_channel_id_t;
 
 typedef struct {
     byte_t wave_position;
@@ -35,8 +35,8 @@ typedef struct {
     byte_t *NRx4;
     word_t LFSR;
 
-    channel_id_t id;
-} channel_t;
+    gb_channel_id_t id;
+} gb_channel_t;
 
 typedef struct {
     int take_sample_cycles_count;
@@ -48,22 +48,22 @@ typedef struct {
     byte_t frame_sequencer;
     int frame_sequencer_cycles_count;
 
-    channel_t channel1;
-    channel_t channel2;
-    channel_t channel3;
-    channel_t channel4;
+    gb_channel_t channel1;
+    gb_channel_t channel2;
+    gb_channel_t channel3;
+    gb_channel_t channel4;
 } apu_t;
 
-void apu_channel_trigger(emulator_t *emu, channel_t *c);
+void apu_channel_trigger(gb_t *gb, gb_channel_t *c);
 
 /**
  * Calls samples_ready_callback given in the apu_init() function whenever there is audio to be played.
  */
-void apu_step(emulator_t *emu);
+void apu_step(gb_t *gb);
 
 /**
  * Initializes the internal state of the ppu.
  */
-void apu_init(emulator_t *emu);
+void apu_init(gb_t *gb);
 
-void apu_quit(emulator_t *emu);
+void apu_quit(gb_t *gb);

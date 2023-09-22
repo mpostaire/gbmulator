@@ -5,7 +5,7 @@
 
 #include "../common/config.h"
 #include "../common/utils.h"
-#include "../../emulator/emulator.h"
+#include "../../core/gb.h"
 #include "base64.h"
 
 static int keycode_filter(SDL_Keycode key);
@@ -65,7 +65,7 @@ int editing_keybind = -1;
 
 char window_title[sizeof(EMULATOR_NAME) + 19];
 
-emulator_t *emu;
+gb_t *gb;
 
 static int keycode_filter(SDL_Keycode key) {
     switch (key) {
@@ -86,14 +86,14 @@ static void ppu_vblank_cb(const byte_t *pixels) {
     SDL_UpdateTexture(ppu_texture, NULL, pixels, ppu_texture_pitch);
 }
 
-static void apu_samples_ready_cb(const void *audio_buffer, int audio_buffer_size) {
-    while (SDL_GetQueuedAudioSize(audio_device) > (unsigned int) (audio_buffer_size * 8))
+static void apu_samples_ready_cb(const void *audio_buffer, size_t audio_buffer_size) {
+    while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 8)
         emscripten_sleep(1);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
 
 EMSCRIPTEN_KEEPALIVE void set_pause(uint8_t value) {
-    if (!emu) return;
+    if (!gb) return;
     is_paused = value;
     EM_ASM({
         setMenuVisibility($0);
@@ -160,14 +160,14 @@ static void save_config(const char *path) {
 
 static void save(void) {
     size_t save_length;
-    byte_t *save_data = emulator_get_save(emu, &save_length);
+    byte_t *save_data = gb_get_save(gb, &save_length);
     if (!save_data) return;
-    local_storage_set_item(emulator_get_rom_title(emu), save_data, 1, save_length);
+    local_storage_set_item(gb_get_rom_title(gb), save_data, 1, save_length);
     free(save_data);
 }
 
 void load_cartridge(const byte_t *rom_data, size_t rom_size) {
-    emulator_options_t opts = {
+    gb_options_t opts = {
         .mode = config.mode,
         .on_apu_samples_ready = apu_samples_ready_cb,
         .on_new_frame = ppu_vblank_cb,
@@ -175,20 +175,20 @@ void load_cartridge(const byte_t *rom_data, size_t rom_size) {
         .apu_sound_level = config.sound,
         .palette = config.color_palette
     };
-    emulator_t *new_emu = emulator_init(rom_data, rom_size, &opts);
+    gb_t *new_emu = gb_init(rom_data, rom_size, &opts);
     if (!new_emu) return;
 
-    if (emu) {
+    if (gb) {
         save();
-        emulator_quit(emu);
+        gb_quit(gb);
     }
-    emu = new_emu;
-    char *rom_title = emulator_get_rom_title(emu);
+    gb = new_emu;
+    char *rom_title = gb_get_rom_title(gb);
 
     size_t save_length;
     unsigned char *save = local_storage_get_item(rom_title, &save_length, 1);
     if (save) {
-        emulator_load_save(emu, save, save_length);
+        gb_load_save(gb, save, save_length);
         free(save);
     }
 
@@ -208,9 +208,9 @@ void load_cartridge(const byte_t *rom_data, size_t rom_size) {
 }
 
 EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
-    if (emu) {
+    if (gb) {
         save();
-        emulator_quit(emu);
+        gb_quit(gb);
     }
 
     // save config
@@ -228,14 +228,14 @@ EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
     SDL_Quit();
 }
 
-EMSCRIPTEN_KEEPALIVE void on_gui_button_down(joypad_button_t button) {
+EMSCRIPTEN_KEEPALIVE void on_gui_button_down(gb_joypad_button_t button) {
     if (!is_paused)
-        emulator_joypad_press(emu, button);
+        gb_joypad_press(gb, button);
 }
 
-EMSCRIPTEN_KEEPALIVE void on_gui_button_up(joypad_button_t button) {
+EMSCRIPTEN_KEEPALIVE void on_gui_button_up(gb_joypad_button_t button) {
     if (!is_paused)
-        emulator_joypad_release(emu, button);
+        gb_joypad_release(gb, button);
 }
 
 EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {
@@ -244,8 +244,8 @@ EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {
 }
 
 EMSCRIPTEN_KEEPALIVE void reset_rom(void) {
-    if (!emu) return;
-    emulator_reset(emu, config.mode);
+    if (!gb) return;
+    gb_reset(gb, config.mode);
     set_pause(SDL_FALSE);
     EM_ASM({
         setTheme($0);
@@ -262,27 +262,27 @@ EMSCRIPTEN_KEEPALIVE void set_scale(uint8_t value) {
 
 EMSCRIPTEN_KEEPALIVE void set_speed(float value) {
     config.speed = value;
-    if (emu)
-        emulator_set_apu_speed(emu, config.speed);
+    if (gb)
+        gb_set_apu_speed(gb, config.speed);
 }
 
 EMSCRIPTEN_KEEPALIVE void set_sound(float value) {
     config.sound = value;
-    if (emu)
-        emulator_set_apu_sound_level(emu, config.sound);
+    if (gb)
+        gb_set_apu_sound_level(gb, config.sound);
 }
 
 EMSCRIPTEN_KEEPALIVE void set_color(uint8_t value) {
     config.color_palette = value;
-    if (emu) {
-        emulator_update_pixels_with_palette(emu, config.color_palette);
-        emulator_set_palette(emu, config.color_palette);
+    if (gb) {
+        gb_update_pixels_with_palette(gb, config.color_palette);
+        gb_set_palette(gb, config.color_palette);
     }
 }
 
 EMSCRIPTEN_KEEPALIVE void set_mode(float value) {
     config.mode = value;
-    if (!emu) {
+    if (!gb) {
         EM_ASM({
             setTheme($0);
         }, config.mode);
@@ -344,21 +344,21 @@ static void handle_input(void) {
             case SDLK_F3: case SDLK_F4:
             case SDLK_F5: case SDLK_F6:
             case SDLK_F7: case SDLK_F8:
-                if (!emu)
+                if (!gb)
                     break;
-                rom_title = emulator_get_rom_title(emu);
+                rom_title = gb_get_rom_title(gb);
                 len = strlen(rom_title);
                 savestate_path = xmalloc(len + 10);
                 snprintf(savestate_path, len + 9, "%s-state-%d", rom_title, event.key.keysym.sym - SDLK_F1);
                 if (event.key.keysym.mod & KMOD_SHIFT) {
                     size_t savestate_length;
-                    byte_t *savestate = emulator_get_savestate(emu, &savestate_length, 1);
+                    byte_t *savestate = gb_get_savestate(gb, &savestate_length, 1);
                     local_storage_set_item(savestate_path, savestate, 1, savestate_length);
                     free(savestate);
                 } else {
                     size_t savestate_length;
                     byte_t *savestate = local_storage_get_item(savestate_path, &savestate_length, 1);
-                    int ret = emulator_load_savestate(emu, savestate, savestate_length);
+                    int ret = gb_load_savestate(gb, savestate, savestate_length);
                     if (ret > 0) {
                         config.mode = ret;
                         EM_ASM({
@@ -371,11 +371,11 @@ static void handle_input(void) {
                 break;
             }
             if (!is_paused)
-                emulator_joypad_press(emu, keycode_to_joypad(&config, event.key.keysym.sym));
+                gb_joypad_press(gb, keycode_to_joypad(&config, event.key.keysym.sym));
             break;
         case SDL_KEYUP:
             if (!event.key.repeat && !is_paused)
-                emulator_joypad_release(emu, keycode_to_joypad(&config, event.key.keysym.sym));
+                gb_joypad_release(gb, keycode_to_joypad(&config, event.key.keysym.sym));
             break;
         case SDL_CONTROLLERBUTTONDOWN:
             if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
@@ -390,11 +390,11 @@ static void handle_input(void) {
                 break;
             }
             if (!is_paused)
-                emulator_joypad_press(emu, button_to_joypad(&config, event.cbutton.button));
+                gb_joypad_press(gb, button_to_joypad(&config, event.cbutton.button));
             break;
         case SDL_CONTROLLERBUTTONUP:
             if (!is_paused)
-                emulator_joypad_release(emu, button_to_joypad(&config, event.cbutton.button));
+                gb_joypad_release(gb, button_to_joypad(&config, event.cbutton.button));
             break;
         case SDL_CONTROLLERDEVICEADDED:
             if (!is_controller_present) {
@@ -423,8 +423,8 @@ static void paused_loop(void) {
     }
 
     // update ppu_texture to show color palette changes behind the menu
-    if (emu) {
-        SDL_UpdateTexture(ppu_texture, NULL, emulator_get_pixels(emu), ppu_texture_pitch);
+    if (gb) {
+        SDL_UpdateTexture(ppu_texture, NULL, gb_get_pixels(gb), ppu_texture_pitch);
         SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
     }
 
@@ -439,17 +439,17 @@ static void loop(void) {
 
     SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
     SDL_RenderPresent(renderer);
-    handle_input(); // keep this the closest possible before emulator_run_steps() to reduce input inaccuracies
+    handle_input(); // keep this the closest possible before gb_run_steps() to reduce input inaccuracies
 
     // run the emulator for the approximate number of steps it takes for the ppu to render a frame
-    emulator_run_steps(emu, GB_CPU_STEPS_PER_FRAME * config.speed);
+    gb_run_steps(gb, GB_CPU_STEPS_PER_FRAME * config.speed);
 }
 
 int main(int argc, char **argv) {
-    // load_config() must be called before emulator_init()
+    // load_config() must be called before gb_init()
     config.keybindings[JOYPAD_B] = SDLK_PERIOD; // change default B key to SDLK_PERIOD as SDLK_KP_PERIOD doesn't work for web
     load_config("config");
-    emu = NULL;
+    gb = NULL;
 
     EM_ASM({
         document.getElementById("speed-slider").value = $0;
@@ -483,8 +483,8 @@ int main(int argc, char **argv) {
     SDL_RenderClear(renderer);
     SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
 
-    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 3;
+    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
 
     SDL_AudioSpec audio_settings = {
         .freq = GB_APU_SAMPLE_RATE,

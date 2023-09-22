@@ -1,4 +1,4 @@
-#include "../../emulator/emulator.h"
+#include "../../core/gb.h"
 
 #include <adwaita.h>
 #include <libmanette.h>
@@ -140,7 +140,7 @@ gboolean printer_window_allowed_to_close = FALSE;
 gboolean printer_save_dialog_resume_loop = FALSE;
 gboolean is_paused = TRUE, link_is_server = TRUE;
 int steps_per_frame, sfd;
-emulator_t *emu;
+gb_t *gb;
 byte_t joypad_state = 0xFF;
 double accel_x, accel_y;
 gb_printer_t *printer;
@@ -254,14 +254,14 @@ static void toggle_loop(void) {
 //      adwaita - adwaita works if joypad exchange is done synchronously
 
 static gboolean loop(gpointer user_data) {
-    emulator_set_joypad_state(emu, joypad_state);
+    gb_set_joypad_state(gb, joypad_state);
 
     // run the emulator for the approximate number of cycles it takes for the ppu to render a frame
-    emulator_t *linked_emu = link_communicate();
-    if (linked_emu)
-        emulator_linked_run_frames(emu, linked_emu, 1);
+    gb_t *linked_gb = link_communicate();
+    if (linked_gb)
+        gb_linked_run_frames(gb, linked_gb, 1);
     else
-        emulator_run_steps(emu, steps_per_frame);
+        gb_run_steps(gb, steps_per_frame);
 
     gtk_gl_area_queue_render(GTK_GL_AREA(emu_gl_area));
 
@@ -403,15 +403,15 @@ static void toggle_pause(GSimpleAction *action, GVariant *parameter, gpointer ap
 static void restart_emulator(AdwMessageDialog *self, gchar *response, gpointer user_data) {
     if (!strncmp(response, "restart", 8)) {
         // TODO what to do if there is an active link cable connection
-        // if (linked_emu)
+        // if (linked_gb)
         //     on_link_disconnect();
-        emulator_reset(emu, config.mode);
-        emulator_print_status(emu);
+        gb_reset(gb, config.mode);
+        gb_print_status(gb);
     }
 }
 
 static void ask_restart_emulator(GSimpleAction *action, GVariant *parameter, gpointer app) {
-    if (emu) {
+    if (gb) {
         gamepad_state = GAMEPAD_DISABLED;
         gtk_window_present(GTK_WINDOW(restart_dialog));
     }
@@ -422,7 +422,7 @@ gboolean link_server_incoming(GSocketService *service, GSocketConnection *connec
     g_socket_service_stop(service); // TODO useless? this works stopping this signal but the print Hurray client still works and new file descriptor are still created...
 
     g_object_ref(connection); // don't close connection at the end of this handler
-    link_setup_connection(connection, emu);
+    link_setup_connection(connection, gb);
     show_toast("Link cable connected");
     is_connected = TRUE;
 
@@ -439,7 +439,7 @@ void link_client_connected(GObject *client, GAsyncResult *res, gpointer user_dat
     if (connection) {
         printf("Hurray! %d\n", g_socket_get_fd(g_socket_connection_get_socket(connection)));
         // g_object_ref(connection); // useless?
-        link_setup_connection(connection, emu);
+        link_setup_connection(connection, gb);
         is_connected = TRUE;
         show_toast("Link cable connected");
     } else {
@@ -450,7 +450,7 @@ void link_client_connected(GObject *client, GAsyncResult *res, gpointer user_dat
 }
 
 static void start_link(void) {
-    if (!emu) return;
+    if (!gb) return;
 
     if (link_is_server) {
         struct addrinfo hints = {
@@ -511,7 +511,7 @@ static void show_link_emu_dialog(GSimpleAction *action, GVariant *parameter, gpo
 
 static void show_printer_window(GSimpleAction *action, GVariant *parameter, gpointer app) {
     printer = gb_printer_init(printer_new_line_cb, printer_start_cb, printer_finish_cb);
-    emulator_link_connect_printer(emu, printer);
+    gb_link_connect_printer(gb, printer);
 
     gamepad_state = GAMEPAD_DISABLED;
     gtk_window_present(GTK_WINDOW(printer_window));
@@ -527,12 +527,12 @@ static gboolean mouse_motion(GtkEventControllerMotion *self, gdouble x, gdouble 
 }
 
 static int load_cartridge(char *path) {
-    if (!emu && !path) return 0;
+    if (!gb && !path) return 0;
 
-    if (emu) {
+    if (gb) {
         stop_loop();
         char *save_path = get_save_path(rom_path);
-        save_battery_to_file(emu, forced_save_path ? forced_save_path : save_path);
+        save_battery_to_file(gb, forced_save_path ? forced_save_path : save_path);
         free(save_path);
     }
 
@@ -550,14 +550,14 @@ static int load_cartridge(char *path) {
             return 0;
         }
     } else {
-        byte_t *data = emulator_get_rom(emu, &rom_size);
+        byte_t *data = gb_get_rom(gb, &rom_size);
         rom_data = xmalloc(rom_size);
         memcpy(rom_data, data, rom_size);
     }
 
-    emulator_options_t opts = {
+    gb_options_t opts = {
         .mode = config.mode,
-        .on_apu_samples_ready = (on_apu_samples_ready_t) alrenderer_queue_audio,
+        .on_apu_samples_ready = (gb_apu_samples_ready_cb_t) alrenderer_queue_audio,
         .on_new_frame = ppu_vblank_cb,
         .on_accelerometer_request = set_accelerometer_data,
         .apu_speed = config.speed,
@@ -565,7 +565,7 @@ static int load_cartridge(char *path) {
         .apu_format = APU_FORMAT_U8,
         .palette = config.color_palette
     };
-    emulator_t *new_emu = emulator_init(rom_data, rom_size, &opts);
+    gb_t *new_emu = gb_init(rom_data, rom_size, &opts);
     free(rom_data);
     if (!new_emu) return 0;
 
@@ -573,16 +573,16 @@ static int load_cartridge(char *path) {
     load_battery_from_file(new_emu, forced_save_path ? forced_save_path : save_path);
     free(save_path);
 
-    if (emu) {
-        // if (linked_emu)
+    if (gb) {
+        // if (linked_gb)
         //     on_link_disconnect();
-        emulator_quit(emu);
+        gb_quit(gb);
     } else {
         // init audio at the first successful call to load_cartridge to avoid opening audio device when there is no rom loaded
         alrenderer_init(GB_APU_SAMPLE_RATE);
     }
-    emu = new_emu;
-    emulator_print_status(emu);
+    gb = new_emu;
+    gb_print_status(gb);
 
     steps_per_frame = GB_CPU_STEPS_PER_FRAME * config.speed;
 
@@ -594,9 +594,9 @@ static int load_cartridge(char *path) {
     };
     g_action_map_add_action_entries(G_ACTION_MAP(app), app_entries, G_N_ELEMENTS(app_entries), app);
 
-    adw_window_title_set_subtitle(ADW_WINDOW_TITLE(window_title), emulator_get_rom_title(emu));
+    adw_window_title_set_subtitle(ADW_WINDOW_TITLE(window_title), gb_get_rom_title(gb));
 
-    if (emulator_has_accelerometer(emu)) {
+    if (gb_has_accelerometer(gb)) {
         motion_event_handler = g_signal_connect(motion_event_controller, "motion", G_CALLBACK(mouse_motion), NULL);
     } else if (motion_event_handler) {
         g_signal_handler_disconnect(motion_event_controller, motion_event_handler);
@@ -612,20 +612,20 @@ static int load_cartridge(char *path) {
 static void set_speed(GtkRange* self, gpointer user_data) {
     config.speed = gtk_range_get_value(self);
     steps_per_frame = GB_CPU_STEPS_PER_FRAME * config.speed;
-    if (emu)
-        emulator_set_apu_speed(emu, config.speed);
+    if (gb)
+        gb_set_apu_speed(gb, config.speed);
 }
 
 static void set_sound(GtkRange* self, gpointer user_data) {
     config.sound = gtk_range_get_value(self);
-    if (emu)
-        emulator_set_apu_sound_level(emu, config.sound);
+    if (gb)
+        gb_set_apu_sound_level(gb, config.sound);
 }
 
 static void set_palette(AdwComboRow *self, GParamSpec *pspec, gpointer user_data) {
     config.color_palette = adw_combo_row_get_selected(self);
-    if (emu)
-        emulator_set_palette(emu, config.color_palette);
+    if (gb)
+        gb_set_palette(gb, config.color_palette);
 }
 
 static void set_keybinding(GtkDialog *self, gint response_id, gpointer user_data) {
@@ -898,7 +898,7 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
         return TRUE;
     }
 
-    if (!emu || is_paused) return FALSE;
+    if (!gb || is_paused) return FALSE;
 
     switch (keyval) {
     case GDK_KEY_F11:
@@ -913,9 +913,9 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
     case GDK_KEY_F7: case GDK_KEY_F8:
         char *savestate_path = get_savestate_path(rom_path, keyval - GDK_KEY_F1);
         if (state & GDK_SHIFT_MASK) {
-            save_state_to_file(emu, savestate_path, 1);
+            save_state_to_file(gb, savestate_path, 1);
         } else {
-            int ret = load_state_from_file(emu, savestate_path);
+            int ret = load_state_from_file(gb, savestate_path);
             if (ret > 0) {
                 config.mode = ret;
                 adw_combo_row_set_selected(ADW_COMBO_ROW(mode_setter), config.mode - 1);
@@ -925,7 +925,7 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
         return TRUE;
     }
 
-    // don't use emulator_joypad_press() here as we want to keep track of the joypad state and set it once per loop for link cable synchronization
+    // don't use gb_joypad_press() here as we want to keep track of the joypad state and set it once per loop for link cable synchronization
     int joypad = keycode_to_joypad(&config, keyval);
     if (joypad < 0) return TRUE;
     RESET_BIT(joypad_state, joypad);
@@ -933,9 +933,9 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
 }
 
 static gboolean key_released_main(GtkEventControllerKey *self, guint keyval, guint keycode, GdkModifierType state, gpointer user_data) {
-    if (!emu || is_paused) return FALSE;
+    if (!gb || is_paused) return FALSE;
 
-    // don't use emulator_joypad_release() here as we want to keep track of the joypad state and set it once per loop for link cable synchronization
+    // don't use gb_joypad_release() here as we want to keep track of the joypad state and set it once per loop for link cable synchronization
     int joypad = keycode_to_joypad(&config, keyval);
     if (joypad < 0) return TRUE;
     SET_BIT(joypad_state, joypad);
@@ -985,7 +985,7 @@ static void gamepad_button_press_event_cb(ManetteDevice *emitter, ManetteEvent *
     case GAMEPAD_DISABLED:
         break;
     case GAMEPAD_PLAYING:;
-        if (!emu || is_paused) return;
+        if (!gb || is_paused) return;
         if (manette_event_get_button(event, &button)) {
             int joypad = button_to_joypad(&config, button);
             if (joypad < 0) return;
@@ -1004,7 +1004,7 @@ static void gamepad_button_release_event_cb(ManetteDevice *emitter, ManetteEvent
     case GAMEPAD_DISABLED:
         break;
     case GAMEPAD_PLAYING:
-        if (!emu || is_paused) return;
+        if (!gb || is_paused) return;
         guint16 button;
         if (manette_event_get_button(event, &button)) {
             int joypad = button_to_joypad(&config, button);
@@ -1030,7 +1030,7 @@ static void gamepad_connected_cb(ManetteMonitor *emitter, ManetteDevice *device,
 }
 
 static void secondary_window_hide_cb(GtkWidget *self, gpointer user_data) {
-    gamepad_state = (!emu || is_paused) ? GAMEPAD_DISABLED : GAMEPAD_PLAYING;
+    gamepad_state = (!gb || is_paused) ? GAMEPAD_DISABLED : GAMEPAD_PLAYING;
 }
 
 static gboolean printer_window_close_request_cb(GtkWidget *self, gpointer user_data) {
@@ -1044,7 +1044,7 @@ static gboolean printer_window_close_request_cb(GtkWidget *self, gpointer user_d
 
 static void printer_quit_dialog_response_cb(AdwMessageDialog *self, gchar *response, gpointer user_data) {
     if (!strncmp(response, "disconnect", 11)) {
-        emulator_link_disconnect_printer(emu);
+        gb_link_disconnect_printer(gb);
         gb_printer_quit(printer);
         printer = NULL;
         clear_printer_gl_area();
@@ -1274,9 +1274,9 @@ static void activate_cb(GtkApplication *app) {
 }
 
 static void shutdown_cb(GtkApplication *app) {
-    if (emu) {
+    if (gb) {
         char *save_path = get_save_path(rom_path);
-        save_battery_to_file(emu, forced_save_path ? forced_save_path : save_path);
+        save_battery_to_file(gb, forced_save_path ? forced_save_path : save_path);
         free(save_path);
     }
     config_save_to_file(&config, config_path);

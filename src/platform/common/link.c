@@ -5,7 +5,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 
-#include "../../emulator/emulator.h"
+#include "../../core/gb.h"
 
 typedef enum {
     PKT_INFO,
@@ -132,14 +132,14 @@ static inline int receive(int fd, void *buf, size_t n, int flags) {
     return 1;
 }
 
-static int exchange_info(int sfd, emulator_t *emu, emulator_mode_t *mode, int *can_compress) {
+static int exchange_info(int sfd, gb_t *gb, gb_mode_t *mode, int *can_compress) {
     // --- SEND PKT_INFO ---
 
-    word_t checksum = emulator_get_cartridge_checksum(emu);
+    word_t checksum = gb_get_cartridge_checksum(gb);
 
     byte_t pkt[4] = { 0 };
     pkt[0] = PKT_INFO;
-    pkt[1] = emulator_get_mode(emu);
+    pkt[1] = gb_get_mode(gb);
     #ifdef __HAVE_ZLIB__
     SET_BIT(pkt[1], 7);
     #endif
@@ -171,11 +171,11 @@ static int exchange_info(int sfd, emulator_t *emu, emulator_mode_t *mode, int *c
     }
 }
 
-static int exchange_rom(int sfd, emulator_t *emu, byte_t **rom_data, size_t *rom_len) {
+static int exchange_rom(int sfd, gb_t *gb, byte_t **rom_data, size_t *rom_len) {
     // --- SEND PKT_ROM ---
 
     // TODO compression
-    byte_t *rom = emulator_get_rom(emu, rom_len);
+    byte_t *rom = gb_get_rom(gb, rom_len);
 
     byte_t *pkt = xcalloc(1, *rom_len + 9);
     pkt[0] = PKT_ROM;
@@ -204,10 +204,10 @@ static int exchange_rom(int sfd, emulator_t *emu, byte_t **rom_data, size_t *rom
     return 1;
 }
 
-static int exchange_savestate(int sfd, emulator_t *emu, int can_compress, byte_t **savestate_data, size_t *savestate_len) {
+static int exchange_savestate(int sfd, gb_t *gb, int can_compress, byte_t **savestate_data, size_t *savestate_len) {
     // --- SEND PKT_STATE ---
 
-    byte_t *local_savestate_data = emulator_get_savestate(emu, savestate_len, can_compress);
+    byte_t *local_savestate_data = gb_get_savestate(gb, savestate_len, can_compress);
 
     byte_t *pkt = xcalloc(1, *savestate_len + 9);
     pkt[0] = PKT_STATE;
@@ -237,10 +237,10 @@ static int exchange_savestate(int sfd, emulator_t *emu, int can_compress, byte_t
     return 1;
 }
 
-int link_init_transfer(int sfd, emulator_t *emu, emulator_t **linked_emu) {
+int link_init_transfer(int sfd, gb_t *gb, gb_t **linked_gb) {
     // TODO connection lost detection (return -1)
-    *linked_emu = NULL;
-    emulator_mode_t mode = 0;
+    *linked_gb = NULL;
+    gb_mode_t mode = 0;
     int can_compress = 0;
     size_t rom_len;
     byte_t *rom_data = NULL;
@@ -248,50 +248,50 @@ int link_init_transfer(int sfd, emulator_t *emu, emulator_t **linked_emu) {
     byte_t *savestate_data = NULL;
 
     // TODO handle wrong packet type received
-    int ret = exchange_info(sfd, emu, &mode, &can_compress);
+    int ret = exchange_info(sfd, gb, &mode, &can_compress);
     if (ret == 0) {
-        exchange_rom(sfd, emu, &rom_data, &rom_len);
+        exchange_rom(sfd, gb, &rom_data, &rom_len);
     }
-    exchange_savestate(sfd, emu, can_compress, &savestate_data, &savestate_len);
+    exchange_savestate(sfd, gb, can_compress, &savestate_data, &savestate_len);
 
     // --- LINK BACKGROUND EMULATOR ---
 
-    emulator_options_t opts = { .mode = mode };
+    gb_options_t opts = { .mode = mode };
     if (rom_data) {
-        *linked_emu = emulator_init(rom_data, rom_len, &opts);
-        if (!*linked_emu) {
+        *linked_gb = gb_init(rom_data, rom_len, &opts);
+        if (!*linked_gb) {
             eprintf("received invalid or corrupted PKT_ROM\n");
             free(rom_data);
             return 0;
         }
         free(rom_data);
     } else {
-        rom_data = emulator_get_rom(emu, &rom_len);
-        *linked_emu = emulator_init(rom_data, rom_len, &opts);
+        rom_data = gb_get_rom(gb, &rom_len);
+        *linked_gb = gb_init(rom_data, rom_len, &opts);
     }
 
-    if (!emulator_load_savestate(*linked_emu, savestate_data, savestate_len)) {
+    if (!gb_load_savestate(*linked_gb, savestate_data, savestate_len)) {
         eprintf("received invalid or corrupted savestate\n");
         return 0;
     }
 
-    emulator_link_connect(emu, *linked_emu);
+    gb_link_connect(gb, *linked_gb);
 
     free(savestate_data);
     return 1;
 }
 
-int link_exchange_joypad(int sfd, emulator_t *emu, emulator_t *linked_emu) {
+int link_exchange_joypad(int sfd, gb_t *gb, gb_t *linked_gb) {
     char buf[2];
     buf[0] = PKT_JOYPAD;
-    buf[1] = emulator_get_joypad_state(emu);
+    buf[1] = gb_get_joypad_state(gb);
     send(sfd, buf, 2, 0);
 
     do {
         if (!receive(sfd, buf, 2, 0)) {
             printf("Link cable disconnected\n");
-            emulator_link_disconnect(emu);
-            emulator_quit(linked_emu);
+            gb_link_disconnect(gb);
+            gb_quit(linked_gb);
             close(sfd);
             return 0;
         }
@@ -299,6 +299,6 @@ int link_exchange_joypad(int sfd, emulator_t *emu, emulator_t *linked_emu) {
             eprintf("received packet type %d but expected %d (ignored)\n", buf[0], PKT_JOYPAD);
     } while (buf[0] != PKT_JOYPAD);
 
-    emulator_set_joypad_state(linked_emu, buf[1]);
+    gb_set_joypad_state(linked_gb, buf[1]);
     return 1;
 }

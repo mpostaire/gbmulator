@@ -1,6 +1,6 @@
 #include <stdlib.h>
 
-#include "emulator_priv.h"
+#include "gb_priv.h"
 
 // Because the documentation is incomplete and sources contradict each other, the implementation is based on SameBoy:
 // https://github.com/LIJI32/SameBoy/blob/master/Core/printer.c 
@@ -41,9 +41,8 @@ typedef enum {
 } printer_cmd_t;
 
 // TODO serialize??
-// TODO rename all structs of the emulator to add the 'gb_' prefix, rename 'emulator_t' into 'gb_t'
 
-gb_printer_t *gb_printer_init(on_new_printer_line_t new_line_cb, on_start_printing_t start_printing_cb, on_finish_printing_t finish_printing_cb) {
+gb_printer_t *gb_printer_init(gb_new_printer_line_cb_t new_line_cb, gb_start_printing_cb_t start_printing_cb, gb_finish_printing_cb_t finish_printing_cb) {
     gb_printer_t *printer = xcalloc(1, sizeof(gb_printer_t));
     printer->on_new_line = new_line_cb;
     printer->on_start_printing = start_printing_cb;

@@ -1,6 +1,6 @@
 #include <stdlib.h>
 
-#include "emulator_priv.h"
+#include "gb_priv.h"
 #include "serialize.h"
 
 // timer behavior is subtle: https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html
@@ -10,15 +10,15 @@
 // https://gbdev.io/pandocs/Timer_and_Divider_Registers.html
 // https://www.reddit.com/r/EmuDev/comments/acsu62/question_regarding_rapid_togglegb_test_rom_game/
 
-static inline byte_t falling_edge_detector(gbtimer_t *timer, byte_t tima_signal) {
+static inline byte_t falling_edge_detector(gb_timer_t *timer, byte_t tima_signal) {
     byte_t out = !tima_signal && timer->falling_edge_detector_delay;
     timer->falling_edge_detector_delay = tima_signal;
     return out;
 }
 
-void timer_step(emulator_t *emu) {
-    gbtimer_t *timer = emu->timer;
-    mmu_t *mmu = emu->mmu;
+void timer_step(gb_t *gb) {
+    gb_timer_t *timer = gb->timer;
+    gb_mmu_t *mmu = gb->mmu;
 
     if (timer->tima_loading_value == -1) {
         timer->tima_loading_value = -2;
@@ -26,7 +26,7 @@ void timer_step(emulator_t *emu) {
         // finish TIMA loading if TIMA was being loaded
         mmu->io_registers[TIMA - IO] = timer->tima_loading_value;
         timer->tima_loading_value = -1;
-        CPU_REQUEST_INTERRUPT(emu, IRQ_TIMER);
+        CPU_REQUEST_INTERRUPT(gb, IRQ_TIMER);
     }
 
     // DIV register incremented at 16384 Hz (every 256 cycles)
@@ -55,14 +55,14 @@ void timer_step(emulator_t *emu) {
     timer->old_tma = -1;
 }
 
-void timer_init(emulator_t *emu) {
-    emu->timer = xcalloc(1, sizeof(gbtimer_t));
-    emu->timer->tima_loading_value = -2;
-    emu->timer->old_tma = -1;
+void timer_init(gb_t *gb) {
+    gb->timer = xcalloc(1, sizeof(gb_timer_t));
+    gb->timer->tima_loading_value = -2;
+    gb->timer->old_tma = -1;
 }
 
-void timer_quit(emulator_t *emu) {
-    free(emu->timer);
+void timer_quit(gb_t *gb) {
+    free(gb->timer);
 }
 
 #define SERIALIZED_MEMBERS         \
@@ -72,19 +72,19 @@ void timer_quit(emulator_t *emu) {
     X(old_tma)
 
 #define X(value) SERIALIZED_LENGTH(value);
-SERIALIZED_SIZE_FUNCTION(gbtimer_t, timer,
+SERIALIZED_SIZE_FUNCTION(gb_timer_t, timer,
     SERIALIZED_MEMBERS
 )
 #undef X
 
 #define X(value) SERIALIZE(value);
-SERIALIZER_FUNCTION(gbtimer_t, timer,
+SERIALIZER_FUNCTION(gb_timer_t, timer,
     SERIALIZED_MEMBERS
 )
 #undef X
 
 #define X(value) UNSERIALIZE(value);
-UNSERIALIZER_FUNCTION(gbtimer_t, timer,
+UNSERIALIZER_FUNCTION(gb_timer_t, timer,
     SERIALIZED_MEMBERS
 )
 #undef X

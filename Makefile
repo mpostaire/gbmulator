@@ -68,7 +68,7 @@ profile: run
 	gprof ./$(BIN) gmon.out > prof_output
 
 # TODO this should also make a gbmulator.apk file in this project root dir (next do the gbmulator desktop binary) 
-android: $(SDIR)/emulator/boot.c
+android: $(SDIR)/core/boot.c
 	cd $(SDIR)/platform/android/android-project && ./gradlew assemble
 
 debug_android: android
@@ -107,8 +107,8 @@ $(PLATFORM_ODIR_STRUCTURE):
 	mkdir -p $@
 
 # Build boot roms (taken and modified from SameBoy emulator)
-$(SDIR)/emulator/boot.c: $(ODIR)/bootroms/dmg_boot $(ODIR)/bootroms/cgb_boot
-	cd $(ODIR)/bootroms && xxd -i dmg_boot > ../../$(SDIR)/emulator/boot.c && xxd -i cgb_boot >> ../../$(SDIR)/emulator/boot.c
+$(SDIR)/core/boot.c: $(ODIR)/bootroms/dmg_boot $(ODIR)/bootroms/cgb_boot
+	cd $(ODIR)/bootroms && xxd -i dmg_boot > ../../$(SDIR)/core/boot.c && xxd -i cgb_boot >> ../../$(SDIR)/core/boot.c
 
 $(ODIR)/bootroms/gbmulator_logo.1bpp: $(SDIR)/bootroms/gbmulator_logo.png
 	-@mkdir -p $(dir $@)

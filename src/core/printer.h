@@ -4,7 +4,7 @@
 
 #define GB_PRINTER_IMG_WIDTH 160
 
-gb_printer_t *gb_printer_init(on_new_printer_line_t new_line_cb, on_start_printing_t start_printing_cb, on_finish_printing_t finish_printing_cb);
+gb_printer_t *gb_printer_init(gb_new_printer_line_cb_t new_line_cb, gb_start_printing_cb_t start_printing_cb, gb_finish_printing_cb_t finish_printing_cb);
 
 void gb_printer_quit(gb_printer_t *printer);
 
