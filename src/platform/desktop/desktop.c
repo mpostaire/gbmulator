@@ -426,6 +426,7 @@ gboolean link_server_incoming(GSocketService *service, GSocketConnection *connec
     return TRUE;
 }
 
+// TODO handle link disconnection
 void link_client_connected(GObject *client, GAsyncResult *res, gpointer user_data) {
     GError *err = NULL;
     GSocketConnection *connection = g_socket_client_connect_finish(G_SOCKET_CLIENT(client), res, &err);
@@ -497,8 +498,11 @@ static void start_link(void) {
 
 static void link_dialog_response(GtkDialog *self, gint response_id, gpointer user_data) {
     gtk_window_close(GTK_WINDOW(self));
-    if (response_id == GTK_RESPONSE_OK)
+    if (response_id == GTK_RESPONSE_OK) {
         start_link();
+        g_action_map_remove_action(G_ACTION_MAP(app), "link_emulator");
+        g_action_map_remove_action(G_ACTION_MAP(app), "link_printer");
+    }
 }
 
 static void show_link_emu_dialog(GSimpleAction *action, GVariant *parameter, gpointer app) {
@@ -509,6 +513,8 @@ static void show_link_emu_dialog(GSimpleAction *action, GVariant *parameter, gpo
 static void show_printer_window(GSimpleAction *action, GVariant *parameter, gpointer app) {
     printer = gb_printer_init(printer_new_line_cb, printer_start_cb, printer_finish_cb);
     gb_link_connect_printer(gb, printer);
+    g_action_map_remove_action(G_ACTION_MAP(app), "link_emulator");
+    g_action_map_remove_action(G_ACTION_MAP(app), "link_printer");
 
     gamepad_state = GAMEPAD_DISABLED;
     gtk_window_present(GTK_WINDOW(printer_window));
@@ -1045,6 +1051,13 @@ static void printer_quit_dialog_response_cb(AdwMessageDialog *self, gchar *respo
         gb_printer_quit(printer);
         printer = NULL;
         clear_printer_gl_area();
+
+        const GActionEntry app_entries[] = {
+            { "link_emulator", show_link_emu_dialog, NULL, NULL, NULL },
+            { "link_printer", show_printer_window, NULL, NULL, NULL },
+        };
+        g_action_map_add_action_entries(G_ACTION_MAP(app), app_entries, G_N_ELEMENTS(app_entries), app);
+
         printer_window_allowed_to_close = TRUE;
         gtk_window_close(GTK_WINDOW(printer_window));
     }
