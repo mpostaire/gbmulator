@@ -275,7 +275,7 @@ int link_init_transfer(int sfd, gb_t *gb, gb_t **linked_gb) {
         return 0;
     }
 
-    gb_link_connect(gb, *linked_gb);
+    gb_link_connect_gb(gb, *linked_gb);
 
     free(savestate_data);
     return 1;

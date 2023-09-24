@@ -53,6 +53,9 @@ typedef void (*gb_new_printer_line_cb_t)(const byte_t *pixels, size_t height);
 typedef void (*gb_start_printing_cb_t)(const byte_t *pixels, size_t height);
 typedef void (*gb_finish_printing_cb_t)(const byte_t *pixels, size_t height);
 
+typedef byte_t (*linked_device_shift_bit_cb_t)(void *device, byte_t in_bit);
+typedef void (*linked_device_data_received_cb_t)(void *device);
+
 typedef struct {
     gb_mode_t mode; // either `DMG` for original game boy emulation or `CGB` for game boy color emulation
     byte_t disable_cgb_color_correction;

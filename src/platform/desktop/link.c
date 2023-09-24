@@ -101,7 +101,7 @@ static void exchange_state_done(void) {
         return; // TODO cancel exchange on error
     }
 
-    gb_link_connect(local_emu, linked_gb);
+    gb_link_connect_gb(local_emu, linked_gb);
 
     // allocate joypad pkts once here so we don't have to do it at every joypad exchange.
     out_pkt = xrealloc(out_pkt, 2);

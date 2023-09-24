@@ -258,10 +258,7 @@ static gboolean loop(gpointer user_data) {
 
     // run the emulator for the approximate number of cycles it takes for the ppu to render a frame
     gb_t *linked_gb = link_communicate();
-    if (linked_gb)
-        gb_linked_run_frames(gb, linked_gb, 1);
-    else
-        gb_run_steps(gb, steps_per_frame);
+    gb_run_steps(gb, linked_gb ? GB_CPU_STEPS_PER_FRAME : steps_per_frame);
 
     gtk_gl_area_queue_render(GTK_GL_AREA(emu_gl_area));
 
@@ -1044,7 +1041,7 @@ static gboolean printer_window_close_request_cb(GtkWidget *self, gpointer user_d
 
 static void printer_quit_dialog_response_cb(AdwMessageDialog *self, gchar *response, gpointer user_data) {
     if (!strncmp(response, "disconnect", 11)) {
-        gb_link_disconnect_printer(gb);
+        gb_link_disconnect(gb);
         gb_printer_quit(printer);
         printer = NULL;
         clear_printer_gl_area();
@@ -1170,7 +1167,7 @@ static void activate_cb(GtkApplication *app) {
     g_signal_connect(restart_dialog, "hide", G_CALLBACK(secondary_window_hide_cb), NULL);
     g_signal_connect(restart_dialog, "response", G_CALLBACK(restart_emulator), NULL);
 
-    // Link dialog
+    // Link with another emulator dialog
     builder = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/link.ui");
     link_emu_dialog = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
     gtk_window_set_transient_for(GTK_WINDOW(link_emu_dialog), GTK_WINDOW(main_window));

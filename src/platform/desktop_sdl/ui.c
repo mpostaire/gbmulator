@@ -10,12 +10,20 @@
 
 #include "font/font.h"
 
-#define SET_PIXEL_RGBA(buf, config, x, y, color, alpha) \
-    { byte_t *_tmp_color_values = gb_get_color_values_from_palette((config)->color_palette, (color)); \
-    *(buf + ((y) * ui->w * 4) + ((x) * 4)) = _tmp_color_values[0]; \
-    *(buf + ((y) * ui->w * 4) + ((x) * 4) + 1) = _tmp_color_values[1]; \
-    *(buf + ((y) * ui->w * 4) + ((x) * 4) + 2) = _tmp_color_values[2]; \
-    *(buf + ((y) * ui->w * 4) + ((x) * 4) + 3) = (alpha); }
+byte_t ui_colors[4][3] = {
+    {0xFF, 0xFF, 0xFF},
+    {0xAA, 0xAA, 0xAA},
+    {0x55, 0x55, 0x55},
+    {0x00, 0x00, 0x00}
+};
+
+#define SET_PIXEL_RGBA(buf, x, y, color, alpha)                           \
+    do {                                                                  \
+        (buf)[((y) * ui->w * 4) + ((x) * 4)] = ui_colors[(color)][0];     \
+        (buf)[((y) * ui->w * 4) + ((x) * 4) + 1] = ui_colors[(color)][1]; \
+        (buf)[((y) * ui->w * 4) + ((x) * 4) + 2] = ui_colors[(color)][2]; \
+        (buf)[((y) * ui->w * 4) + ((x) * 4) + 3] = (alpha);               \
+    } while (0)
 
 static void key_setter_set_key(menu_entry_t *entry, SDL_Keycode key, config_t *config) {
     for (int i = 0; i < entry->parent->length - 1; i++) {
@@ -132,7 +140,7 @@ void ui_free(ui_t *ui) {
 
 static void print_cursor(ui_t *ui, int x, int y, gb_dmg_color_t color) {
     for (int i = 0; i < 8; i++)
-        SET_PIXEL_RGBA(ui->pixels, ui->config, x, y + i, color, 0xFF);
+        SET_PIXEL_RGBA(ui->pixels, x, y + i, color, 0xFF);
 }
 
 static void print_char(ui_t *ui, const char c, int x, int y, gb_dmg_color_t color) {
@@ -143,7 +151,7 @@ static void print_char(ui_t *ui, const char c, int x, int y, gb_dmg_color_t colo
     for (int i = 0; i < 8; i++)
         for (int j = 0; j < 8; j++)
             if (GET_BIT(char_data[j], SDL_abs(i - 7)))
-                SET_PIXEL_RGBA(ui->pixels, ui->config, x + i, y + j, color, 0xFF);
+                SET_PIXEL_RGBA(ui->pixels, x + i, y + j, color, 0xFF);
 }
 
 static void print_text(ui_t *ui, const char *text, int x, int y, gb_dmg_color_t color) {
@@ -157,7 +165,7 @@ static void print_text(ui_t *ui, const char *text, int x, int y, gb_dmg_color_t 
 static void ui_clear(ui_t *ui) {
     for (int i = 0; i < ui->w; i++)
         for (int j = 0; j < ui->h; j++)
-            SET_PIXEL_RGBA(ui->pixels, ui->config, i, j, DMG_BLACK, 0xD5);
+            SET_PIXEL_RGBA(ui->pixels, i, j, DMG_BLACK, 0xD5);
 }
 
 static void print_choice(ui_t *ui, const char *choices, int x, int y, int n, gb_dmg_color_t text_color, gb_dmg_color_t arrow_color) {

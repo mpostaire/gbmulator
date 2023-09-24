@@ -500,8 +500,6 @@ static void start_emulation_loop(void) {
 
         // run one step of the emulator
         gb_step(gb);
-        if (linked_gb)
-            gb_step(linked_gb);
         steps++;
 
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).

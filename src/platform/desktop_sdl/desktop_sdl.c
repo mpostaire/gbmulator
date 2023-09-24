@@ -652,12 +652,6 @@ int main(int argc, char **argv) {
 
             SDL_RenderClear(renderer);
 
-            // update ppu_texture to show color palette changes behind the menu
-            if (gb) {
-                SDL_UpdateTexture(ppu_texture, NULL, gb_get_pixels(gb), ppu_texture_pitch);
-                SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
-            }
-
             SDL_UpdateTexture(ui_texture, NULL, ui->pixels, ui_texture_pitch);
             SDL_RenderCopy(renderer, ui_texture, NULL, NULL);
 
@@ -684,8 +678,6 @@ int main(int argc, char **argv) {
 
         // run one step of the emulator
         gb_step(gb);
-        if (linked_gb)
-            gb_step(linked_gb);
         steps++;
 
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).

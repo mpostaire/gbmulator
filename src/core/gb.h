@@ -22,13 +22,13 @@
 #define GB_APU_DEFAULT_SAMPLE_COUNT 512
 
 /**
- * Runs the emulator for one cpu step.
+ * Runs the emulator for one cpu step. If `gb` is linked to another device, it is also run for one step.
  * @returns the amount of cycles the emulator has run for
  */
 int gb_step(gb_t *gb);
 
 /**
- * Runs the emulator for the given amount of cpu steps.
+ * Runs the emulator for the given amount of cpu steps (1 step == 4 cycles).
  * @param steps_limit the amount of steps the emulator will run for
  */
 static inline void gb_run_steps(gb_t *gb, long steps_limit) {
@@ -42,34 +42,6 @@ static inline void gb_run_steps(gb_t *gb, long steps_limit) {
  */
 static inline void gb_run_frames(gb_t *gb, long frames_limit) {
     gb_run_steps(gb, frames_limit * GB_CPU_STEPS_PER_FRAME);
-}
-
-/**
- * Runs the emulator for the given amount of cpu cycles.
- * @param cycles_limit the amount of cycles the emulator will run for
- */
-static inline void gb_run_cycles(gb_t *gb, long cycles_limit) {
-    for (long cycles_count = 0; cycles_count < cycles_limit; cycles_count += gb_step(gb));
-}
-
-/**
- * Runs both the emulator and the linked emulator in parallel for the given amount of cpu steps.
- * @param steps_limit the amount of steps both emulators will run for.
- */
-static inline void gb_linked_run_steps(gb_t *gb, gb_t *linked_gb, long steps_limit) {
-    // TODO investigate link cable behaviour when double speed is on
-    for (long steps_count = 0; steps_count < steps_limit; steps_count++) {
-        gb_step(gb);
-        gb_step(linked_gb);
-    }
-}
-
-/**
- * Runs both the emulator and the linked emulator in parallel for the given amount of frames.
- * @param frames_limit the amount of frames both emulators will run for.
- */
-static inline void gb_linked_run_frames(gb_t *gb, gb_t *linked_gb, long frames_limit) {
-    gb_linked_run_steps(gb, linked_gb, frames_limit * GB_CPU_STEPS_PER_FRAME);
 }
 
 /**
@@ -94,11 +66,9 @@ void gb_print_status(gb_t *gb);
  * This automatically disconnects a previous link cable connection. 
  * Freeing the previously linked device is the responsibility of the caller.
  * @param gb the fist emulator.
- * @param other_emu the second emulator.
+ * @param other_gb the second emulator.
 */
-void gb_link_connect(gb_t *gb, gb_t *other_emu);
-
-void gb_link_disconnect(gb_t *gb);
+void gb_link_connect_gb(gb_t *gb, gb_t *other_gb);
 
 /**
  * Connects an emulator and a printer through the link cable.
@@ -109,11 +79,20 @@ void gb_link_disconnect(gb_t *gb);
 */
 void gb_link_connect_printer(gb_t *gb, gb_printer_t *printer);
 
-void gb_link_disconnect_printer(gb_t *gb);
+/**
+ * Disconnects any device linked to `gb`.
+ * Freeing the previously linked device is the responsibility of the caller.
+ * @param gb the emulator.
+*/
+void gb_link_disconnect(gb_t *gb);
 
 void gb_joypad_press(gb_t *gb, gb_joypad_button_t key);
 
 void gb_joypad_release(gb_t *gb, gb_joypad_button_t key);
+
+byte_t gb_get_joypad_state(gb_t *gb);
+
+void gb_set_joypad_state(gb_t *gb, byte_t state);
 
 byte_t *gb_get_save(gb_t *gb, size_t *save_length);
 
@@ -123,36 +102,19 @@ byte_t *gb_get_savestate(gb_t *gb, size_t *length, byte_t compressed);
 
 int gb_load_savestate(gb_t *gb, const byte_t *data, size_t length);
 
-byte_t gb_get_joypad_state(gb_t *gb);
-
-void gb_set_joypad_state(gb_t *gb, byte_t state);
-
 /**
  * @returns the ROM title (you must not free the returned pointer).
  */
 char *gb_get_rom_title(gb_t *gb);
-
-char *gb_get_rom_title_from_data(byte_t *rom_data, size_t size);
 
 /**
  * @returns a pointer to the ROM (you must not free the returned pointer).
  */
 byte_t *gb_get_rom(gb_t *gb, size_t *rom_size);
 
-/**
- * convert the pixels buffer from the color values of the old emulation palette to the new color values of the new palette
- */
-void gb_update_pixels_with_palette(gb_t *gb, byte_t new_palette);
-
 void gb_get_options(gb_t *gb, gb_options_t *opts);
 
 void gb_set_options(gb_t *gb, gb_options_t *opts);
-
-byte_t *gb_get_color_values(gb_t *gb, gb_dmg_color_t color);
-
-byte_t *gb_get_color_values_from_palette(gb_color_palette_t palette, gb_dmg_color_t color);
-
-byte_t *gb_get_pixels(gb_t *gb);
 
 gb_mode_t gb_get_mode(gb_t *gb);
 

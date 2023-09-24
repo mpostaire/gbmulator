@@ -1,7 +1,6 @@
 #include <stdlib.h>
 
 #include "gb_priv.h"
-#include "serialize.h"
 
 void link_set_clock(gb_t *gb) {
     // double speed is handled by the gb_step() function
@@ -17,12 +16,21 @@ void link_init(gb_t *gb) {
 }
 
 void link_quit(gb_t *gb) {
-    if (gb->link->other_emu)
+    if (gb->link->linked_device.type != LINK_TYPE_NONE)
         gb_link_disconnect(gb);
     free(gb->link);
 }
 
-static inline void gb_data_received(gb_t *gb) {
+byte_t gb_linked_shift_bit(void *device, byte_t in_bit) {
+    gb_t *gb = device;
+    byte_t out_bit = GET_BIT(gb->mmu->io_registers[SB - IO], 7);
+    gb->mmu->io_registers[SB - IO] <<= 1;
+    CHANGE_BIT(gb->mmu->io_registers[SB - IO], 0, in_bit);
+    return out_bit;
+}
+
+void gb_linked_data_received(void *device) {
+    gb_t *gb = device;
     RESET_BIT(gb->mmu->io_registers[SC - IO], 7);
     CPU_REQUEST_INTERRUPT(gb, IRQ_SERIAL);
 }
@@ -32,77 +40,38 @@ void link_step(gb_t *gb) {
     gb_mmu_t *mmu = gb->mmu;
 
     link->cycles += 4; // 4 cycles per step
+    if (link->cycles < link->max_clock_cycles)
+        return;
 
-    if (link->printer)
-        gb_printer_step(link->printer);
+    // transfer requested / in progress with internal clock (this gb is the master of the connection)
+    // --> the master emulator also does the work for the slave so we don't have to handle the case
+    //     where this gb is the slave
+    byte_t master_transfer_request = CHECK_BIT(mmu->io_registers[SC - IO], 7) && CHECK_BIT(mmu->io_registers[SC - IO], 0);
+    if (!master_transfer_request)
+        return;
 
-    if (link->cycles >= link->max_clock_cycles) {
-        link->cycles -= link->max_clock_cycles; // keep leftover cycles (if any)
+    // TODO instead of link->linked_device and link->printer pointers, on connection, take a pointer to the link data register of the device
+    //      and to tranfer to this pointer dereferenced. Allow callback once transfer of the byte is finished
+    //      to request interrupt in slave gameboy or do whatever is needed in slave printer
 
-        // TODO instead of link->other_emu and link->printer pointers, on connection, take a pointer to the link data register of the device
-        //      and to tranfer to this pointer dereferenced. Allow callback once transfer of the byte is finished
-        //      to request interrupt in slave gameboy or do whatever is needed in slave printer
+    if (link->bit_shift_counter < 8) { // emulate 8 bit shifting
+        link->bit_shift_counter++;
 
-        // transfer requested / in progress with internal clock (this gb is the master of the connection)
-        // --> the master emulator also does the work for the slave so we don't have to handle the case
-        //     where this gb is the slave
-        if (CHECK_BIT(mmu->io_registers[SC - IO], 7) && CHECK_BIT(mmu->io_registers[SC - IO], 0)) {
-            if (link->bit_counter < 8) { // emulate 8 bit shifting
-                link->bit_counter++;
-
-                byte_t other_bit = 0xFF; // this is 0xFF if no device is connected
-
-                byte_t *other_data_register = NULL;
-                if (link->other_emu)
-                    other_data_register = &link->other_emu->mmu->io_registers[SB - IO];
-                else if (link->printer)
-                    other_data_register = &link->printer->sb;
-
-                if (other_data_register) {
-                    other_bit = GET_BIT(*other_data_register, 7);
-                    byte_t this_bit = GET_BIT(mmu->io_registers[SB - IO], 7);
-
-                    // transfer this gb bit to linked device
-                    *other_data_register <<= 1;
-                    CHANGE_BIT(*other_data_register, 0, this_bit);
-                }
-
-                // transfer other_emu bit to this gb
-                mmu->io_registers[SB - IO] <<= 1;
-                CHANGE_BIT(mmu->io_registers[SB - IO], 0, other_bit);
-            } else { // transfer is done (all bits were shifted)
-                link->bit_counter = 0;
-
-                gb_data_received(gb);
-
-                if (link->other_emu)
-                    gb_data_received(link->other_emu);
-                else if (link->printer)
-                    gb_printer_data_received(link->printer);
-            }
+        byte_t other_bit = 1; // this is 1 if no device is connected
+        if (link->linked_device.type != LINK_TYPE_NONE) {
+            byte_t this_bit = GET_BIT(mmu->io_registers[SB - IO], 7);
+            // transfer this gb bit to linked device
+            other_bit = link->linked_device.shift_bit(link->linked_device.device, this_bit);
         }
+
+        // transfer linked_device bit (other bit) to this gb
+        gb_linked_shift_bit(gb, other_bit);
+    } else { // transfer is done (all bits were shifted)
+        link->bit_shift_counter = 0;
+
+        if (link->linked_device.type != LINK_TYPE_NONE)
+            link->linked_device.data_received(link->linked_device.device);
+
+        gb_linked_data_received(gb);
     }
 }
-
-#define SERIALIZED_MEMBERS \
-    X(cycles)              \
-    X(max_clock_cycles)    \
-    X(bit_counter)
-
-#define X(value) SERIALIZED_LENGTH(value);
-SERIALIZED_SIZE_FUNCTION(gb_link_t, link,
-    SERIALIZED_MEMBERS
-)
-#undef X
-
-#define X(value) SERIALIZE(value);
-SERIALIZER_FUNCTION(gb_link_t, link,
-    SERIALIZED_MEMBERS
-)
-#undef X
-
-#define X(value) UNSERIALIZE(value);
-UNSERIALIZER_FUNCTION(gb_link_t, link,
-    SERIALIZED_MEMBERS
-)
-#undef X

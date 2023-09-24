@@ -10,7 +10,9 @@ void gb_printer_quit(gb_printer_t *printer);
 
 void gb_printer_step(gb_printer_t *printer);
 
-void gb_printer_data_received(gb_printer_t *printer);
+byte_t gb_printer_linked_shift_bit(void *device, byte_t in_bit);
+
+void gb_printer_linked_data_received(void *device);
 
 byte_t *gb_printer_get_image(gb_printer_t *printer, size_t *height);
 

@@ -274,10 +274,8 @@ EMSCRIPTEN_KEEPALIVE void set_sound(float value) {
 
 EMSCRIPTEN_KEEPALIVE void set_color(uint8_t value) {
     config.color_palette = value;
-    if (gb) {
-        gb_update_pixels_with_palette(gb, config.color_palette);
+    if (gb)
         gb_set_palette(gb, config.color_palette);
-    }
 }
 
 EMSCRIPTEN_KEEPALIVE void set_mode(float value) {
@@ -420,12 +418,6 @@ static void paused_loop(void) {
     if (!is_paused) {
         emscripten_cancel_main_loop();
         emscripten_set_main_loop(loop, 60, 1);
-    }
-
-    // update ppu_texture to show color palette changes behind the menu
-    if (gb) {
-        SDL_UpdateTexture(ppu_texture, NULL, gb_get_pixels(gb), ppu_texture_pitch);
-        SDL_RenderCopy(renderer, ppu_texture, NULL, NULL);
     }
 
     SDL_RenderPresent(renderer);

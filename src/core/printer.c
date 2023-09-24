@@ -210,7 +210,17 @@ static void exec_command(gb_printer_t *printer) {
     // printf("status=0x%02X\n", printer->status);
 }
 
-void gb_printer_data_received(gb_printer_t *printer) {
+byte_t gb_printer_linked_shift_bit(void *device, byte_t in_bit) {
+    gb_printer_t *printer = device;
+    byte_t out_bit = GET_BIT(printer->sb, 7);
+    printer->sb <<= 1;
+    CHANGE_BIT(printer->sb, 0, in_bit);
+    return out_bit;
+}
+
+void gb_printer_linked_data_received(void *device) {
+    gb_printer_t *printer = device;
+
     switch (printer->state) {
     case WAIT_MAGIC_1:
         if (printer->sb == MAGIC_1)
