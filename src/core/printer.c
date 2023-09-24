@@ -5,9 +5,6 @@
 // Because the documentation is incomplete and sources contradict each other, the implementation is based on SameBoy:
 // https://github.com/LIJI32/SameBoy/blob/master/Core/printer.c 
 
-// TODO FIXED? pokemon crystal print pokedex entry shows a link cable connection error 2 between the 2 printed pages
-// TODO check that printing multiple consecutive pages work (e.g: printing multiple pokedex pages)
-
 #define MAGIC_1 0x88
 #define MAGIC_2 0x33
 
@@ -39,8 +36,6 @@ typedef enum {
     FILL = 0x04,
     STATUS = 0x0F
 } printer_cmd_t;
-
-// TODO serialize??
 
 gb_printer_t *gb_printer_init(gb_new_printer_line_cb_t new_line_cb, gb_start_printing_cb_t start_printing_cb, gb_finish_printing_cb_t finish_printing_cb) {
     gb_printer_t *printer = xcalloc(1, sizeof(gb_printer_t));
