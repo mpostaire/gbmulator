@@ -92,6 +92,7 @@ There is also support for gamepad controllers.
 - rewrite Makefile (it's a mess) maybe use CMake instead
 
 ## Resources used
+
 - https://gbdev.io/pandocs/
 - http://marc.rawer.de/Gameboy/Docs/GBCPUman.pdf
 - https://gekkio.fi/files/gb-docs/gbctr.pdf
@@ -100,3 +101,4 @@ There is also support for gamepad controllers.
 - https://www.youtube.com/watch?v=HyzD8pNlpwI
 - https://github.com/AntonioND/giibiiadvance/blob/master/docs/TCAGBD.pdf
 - https://pixelbits.16-b.it/GBEDG/ppu/
+- https://shonumi.github.io/articles/art2.html
