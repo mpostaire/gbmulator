@@ -1052,6 +1052,9 @@ static void printer_quit_dialog_response_cb(AdwMessageDialog *self, gchar *respo
         printer = NULL;
         clear_printer_gl_area();
 
+        gtk_widget_set_sensitive(GTK_WIDGET(printer_save_btn), FALSE);
+        gtk_widget_set_sensitive(GTK_WIDGET(printer_clear_btn), FALSE);
+
         const GActionEntry app_entries[] = {
             { "link_emulator", show_link_emu_dialog, NULL, NULL, NULL },
             { "link_printer", show_printer_window, NULL, NULL, NULL },
