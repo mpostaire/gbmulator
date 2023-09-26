@@ -11,6 +11,8 @@
 #include "link.h"
 #include "printer.h"
 
+#define PRINTER_CHUNK_SIZE 0x280
+
 struct gb_t {
     gb_mode_t mode;
     byte_t disable_cgb_color_correction;
@@ -45,7 +47,7 @@ struct gb_printer_t {
     byte_t compress_flag;
     word_t cmd_data_len;
     word_t cmd_data_recv_index;
-    byte_t cmd_data[0x280]; // max data_len is 0x280
+    byte_t cmd_data[PRINTER_CHUNK_SIZE]; // max data_len is 0x280
     word_t checksum;
     byte_t status;
     byte_t delayed_status;

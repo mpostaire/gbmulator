@@ -122,10 +122,6 @@ void gb_printer_step(gb_printer_t *printer) {
     if (printer->printing_line_time_remaining > 0)
         return;
 
-    // int n_chunks = printer->ram_len / sizeof(printer->cmd_data);
-    // int n_printed_chunks = printer->image.height / 16; // how many chunks were previously printed
-    // int n_printed_lines = printer->image.height; // how many lines were previously printed
-
     render_line(printer);
 
     if (printer->image.height == printer->image.allocated_height) {
@@ -137,58 +133,78 @@ void gb_printer_step(gb_printer_t *printer) {
     }
 }
 
+static inline byte_t check_ram_len(gb_printer_t *printer) {
+    if (printer->ram_len >= sizeof(printer->ram)) {
+        // not sure about this...
+        SET_BIT(printer->status, 4); // bit 4: packet error
+        SET_BIT(printer->status, 2); // bit 2: image data full (ram full)
+        return 0;
+    }
+    return 1;
+}
+
 static void exec_command(gb_printer_t *printer) {
-    // TODO can't INIT or FILL while PRINTing??
     switch (printer->cmd) {
     case INIT:
-        // TODO don't need to memset to 0, setting the ram_len to 0 is equivalent as it will overwrite everything.
-        memset(printer->ram, 0, sizeof(printer->ram));
         printer->status = STATUS_IDLE;
         printer->ram_len = 0;
         printer->ram_printing_line_index = 0;
+        printer->got_eof = 0;
         break;
     case PRINT:
-        if (!printer->got_eof)
-            break; // TODO set some status bit here?
-        if (printer->cmd_data_len != 4)
-            break; // TODO set some status bit here?
-        // TODO only print if printer->status == STATUS_READY??
+        if (!printer->got_eof || printer->cmd_data_len != 4) {
+            SET_BIT(printer->status, 4); // bit 4: packet error
+            break;
+        }
+
+        printer->got_eof = 0;
+        // Pokemon tcg sometimes sends an INIT, FILL eof and PRINT.
+        // There are no documentation for a PRINT of size < PRINTER_CHUNK_SIZE so we just allow it but we don't actually print anyting.
+        if (printer->ram_len < PRINTER_CHUNK_SIZE)
+            break;
 
         // printer->cmd_data[0] is always 0x01 and has unknown purpose
-        byte_t margins = printer->cmd_data[1];
-        byte_t exposure = printer->cmd_data[3] & 0x7F; // 0x00 -> -25% darkness, 0x7F -> +25% darkness
+        // byte_t margins = printer->cmd_data[1];
+        // byte_t exposure = printer->cmd_data[3] & 0x7F; // 0x00 -> -25% darkness, 0x7F -> +25% darkness
 
         printer->image.allocated_height = printer->image.height + N_LINES_TO_PRINT(printer);
         printer->image.data = xrealloc(printer->image.data, printer->image.allocated_height * GB_PRINTER_IMG_WIDTH * 4);
 
         printer->printing_line_time_remaining = LINE_PRINTING_TIME;
         printer->delayed_status = STATUS_PRINTING;
-        printer->ram_printing_line_index = 0; // TODO here?
-
-        eprintf("TODO printing request margins=0x%02X (%d), exposure=0x%02X (%d)\n", margins, margins, exposure, exposure);
 
         if (printer->on_start_printing)
             printer->on_start_printing(printer->image.data, printer->image.height);
         break;
     case FILL:
-        if (printer->cmd_data_len == 0) {
-            printer->got_eof = 1;
-        } else {
+        printer->got_eof = printer->cmd_data_len == 0;
+        if (!printer->got_eof) {
             for (word_t i = 0; i < printer->cmd_data_len; i++) {
-                if (printer->ram_len >= sizeof(printer->ram)) {
-                    // TODO? SET_BIT(printer->status, 4); // bit 4: packet error // TODO macro
-                    // SET_BIT(printer->status, 2); // bit 2: image data full (ram full) // TODO macro
-                    // TODO rename ram_len into ram_len
-                    eprintf("ram_len %d\n", printer->ram_len);
-                    break;
+                if (printer->compress_flag) {
+                    byte_t is_compressed_run = GET_BIT(printer->cmd_data[i], 7);
+                    word_t run_length = (printer->cmd_data[i] & 0x7F) + 1 + is_compressed_run;
+                    if (is_compressed_run) {
+                        i++;
+                        for (word_t j = 0; j < run_length; j++) {
+                            if (!check_ram_len(printer)) break;
+                            printer->ram[printer->ram_len++] = printer->cmd_data[i];
+                        }
+                    } else {
+                        for (word_t j = 0; j < run_length; j++) {
+                            if (!check_ram_len(printer)) break;
+                            printer->ram[printer->ram_len++] = printer->cmd_data[++i];
+                        }
+                    }
+                } else {
+                    if (!check_ram_len(printer)) break;
+                    printer->ram[printer->ram_len++] = printer->cmd_data[i];
                 }
-                printer->ram[printer->ram_len++] = printer->cmd_data[i];
             }
         }
 
-        if ((printer->status /*& 0xF0*/) || CHECK_BIT(printer->status, 0)) {
+        if (printer->status & 0xF1) {
             // error or invalid checksum
-        } else if (printer->ram_len >= sizeof(printer->cmd_data)) {
+        } else if (printer->ram_len >= PRINTER_CHUNK_SIZE) {
             printer->status = STATUS_READY; // bit 3: unprocessed data in memory (ready to print)
         }
         break;
@@ -199,10 +215,8 @@ static void exec_command(gb_printer_t *printer) {
         break;
     }
 
-    if (printer->status == STATUS_DONE) // TODO is this right?
+    if (printer->status == STATUS_DONE)
         printer->status = STATUS_IDLE;
-
-    // printf("status=0x%02X\n", printer->status);
 }
 
 byte_t gb_printer_linked_shift_bit(void *device, byte_t in_bit) {
@@ -240,7 +254,6 @@ void gb_printer_linked_data_received(void *device) {
         printer->state = WAIT_COMPRESS_FLAG;
         break;
     case WAIT_COMPRESS_FLAG:
-        // TODO
         printer->compress_flag = printer->sb & 0x01;
         printer->checksum += printer->sb;
         printer->sb = 0x00;
@@ -254,7 +267,7 @@ void gb_printer_linked_data_received(void *device) {
         break;
     case WAIT_DATA_LEN_HI:
         printer->cmd_data_len |= printer->sb << 8;
-        printer->cmd_data_len = MIN(printer->cmd_data_len, sizeof(printer->cmd_data));
+        printer->cmd_data_len = MIN(printer->cmd_data_len, PRINTER_CHUNK_SIZE);
         printer->cmd_data_recv_index = 0;
         printer->checksum += printer->sb;
         printer->sb = 0x00;
