@@ -5,9 +5,8 @@
 
     <object class="AdwWindow" id="window">
         <property name="content">
-            <object class="GtkBox">
-                <property name="orientation">vertical</property>
-                <child>
+            <object class="AdwToolbarView" id="toolbarview">
+                <child type="top">
                     <object class="AdwHeaderBar">
                         <property name="title-widget">
                             <object class="AdwWindowTitle" id="window_title">
@@ -20,9 +19,9 @@
                                 <property name="child">
                                     <object class="AdwButtonContent">
                                         <property name="icon-name">document-open-symbolic</property>
-                                        <property name="label">Open</property>
                                     </object>
                                 </property>
+                                <property name="tooltip-text">Open</property>
                             </object>
                         </child>
 
@@ -31,12 +30,13 @@
                                 <property name="menu-model">app_menu</property>
                                 <property name="icon-name">open-menu-symbolic</property>
                                 <property name="primary">true</property>
+                                <property name="tooltip-text">Menu</property>
                             </object>
                         </child>
                     </object>
                 </child>
 
-                <child>
+                <property name="content">
                     <object class="GtkAspectFrame">
                         <property name="ratio">1.111111</property>
                         <property name="xalign">0.5</property>
@@ -57,7 +57,7 @@
                                         </child>
 
                                         <child>
-                                            <object class="GtkGlArea" id="gl_area">
+                                            <object class="GtkGlArea" id="emu_gl_area">
                                                 <property name="visible">false</property>
                                                 <property name="vexpand">true</property>
                                                 <property name="hexpand">true</property>
@@ -71,7 +71,7 @@
                             </object>
                         </child>
                     </object>
-                </child>
+                </property>
             </object>
         </property>
     </object>
@@ -89,9 +89,13 @@
                 <attribute name="accel">&lt;Ctrl&gt;r</attribute>
             </item>
             <item>
-                <attribute name="label">Link cable</attribute>
-                <attribute name="action">app.link_cable</attribute>
+                <attribute name="label">Link emulator</attribute>
+                <attribute name="action">app.link_emulator</attribute>
                 <attribute name="accel">&lt;Ctrl&gt;l</attribute>
+            </item>
+            <item>
+                <attribute name="label">Link printer</attribute>
+                <attribute name="action">app.link_printer</attribute>
             </item>
         </section>
         <section>

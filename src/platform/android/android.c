@@ -7,7 +7,7 @@
 #include "../common/utils.h"
 #include "../common/link.h"
 #include "layout_editor.h"
-#include "../../emulator/emulator.h"
+#include "../../core/gb.h"
 
 #define log(...) __android_log_print(ANDROID_LOG_WARN, "GBmulator", __VA_ARGS__)
 
@@ -36,8 +36,8 @@ SDL_AudioDeviceID audio_device;
 
 int link_sfd;
 
-emulator_t *emu;
-emulator_t *linked_emu;
+gb_t *gb;
+gb_t *linked_gb;
 
 SDL_Rect gb_screen_rect;
 
@@ -227,29 +227,29 @@ static inline s_byte_t is_finger_over_button(float x, float y) {
     return -1;
 }
 
-static void button_press(emulator_t *emu, joypad_button_t button) {
+static void button_press(gb_t *gb, gb_joypad_button_t button) {
     switch ((int) button) { // cast to int to shut compiler warnings
     case JOYPAD_START + 1:
-        emulator_joypad_press(emu, JOYPAD_UP);
-        emulator_joypad_press(emu, JOYPAD_LEFT);
+        gb_joypad_press(gb, JOYPAD_UP);
+        gb_joypad_press(gb, JOYPAD_LEFT);
         break;
     case JOYPAD_START + 2:
-        emulator_joypad_press(emu, JOYPAD_UP);
-        emulator_joypad_press(emu, JOYPAD_RIGHT);
+        gb_joypad_press(gb, JOYPAD_UP);
+        gb_joypad_press(gb, JOYPAD_RIGHT);
         break;
     case JOYPAD_START + 3:
-        emulator_joypad_press(emu, JOYPAD_DOWN);
-        emulator_joypad_press(emu, JOYPAD_LEFT);
+        gb_joypad_press(gb, JOYPAD_DOWN);
+        gb_joypad_press(gb, JOYPAD_LEFT);
         break;
     case JOYPAD_START + 4:
-        emulator_joypad_press(emu, JOYPAD_DOWN);
-        emulator_joypad_press(emu, JOYPAD_RIGHT);
+        gb_joypad_press(gb, JOYPAD_DOWN);
+        gb_joypad_press(gb, JOYPAD_RIGHT);
         break;
     case JOYPAD_START + 5:
         show_link_dialog = SDL_TRUE;
         break;
     default:
-        emulator_joypad_press(emu, button);
+        gb_joypad_press(gb, button);
         break;
     }
 
@@ -298,7 +298,7 @@ static void button_press(emulator_t *emu, joypad_button_t button) {
 
 static void button_release(SDL_TouchID touch_id) {
     for (int i = JOYPAD_RIGHT; i <= JOYPAD_START; i++)
-        emulator_joypad_release(emu, i);
+        gb_joypad_release(gb, i);
     dpad_status = 0;
     buttons[0].texture = dpad_textures[dpad_status];
     buttons[1].texture = a_texture;
@@ -312,7 +312,7 @@ static void button_release(SDL_TouchID touch_id) {
         if (!f) continue;
         s_byte_t hovered = is_finger_over_button(f->x, f->y);
         if (hovered >= 0)
-            button_press(emu, hovered);
+            button_press(gb, hovered);
     }
 
     if (show_link_dialog) {
@@ -336,7 +336,7 @@ static void button_release(SDL_TouchID touch_id) {
 static inline void touch_press(SDL_TouchFingerEvent *event) {
     s_byte_t hovered = is_finger_over_button(event->x, event->y);
     if (hovered >= 0)
-        button_press(emu, hovered);
+        button_press(gb, hovered);
 }
 
 static inline void touch_release(SDL_TouchFingerEvent *event) {
@@ -356,7 +356,7 @@ static inline void touch_motion(SDL_TouchFingerEvent *event) {
             button_release(event->touchId);
         }
         if (hovered >= 0)
-            button_press(emu, hovered);
+            button_press(gb, hovered);
     }
 }
 
@@ -411,8 +411,8 @@ static void ppu_vblank_cb(const byte_t *pixels) {
     SDL_UpdateTexture(ppu_texture, NULL, pixels, ppu_texture_pitch);
 }
 
-static void apu_samples_ready_cb(const void *audio_buffer, int audio_buffer_size) {
-    while (SDL_GetQueuedAudioSize(audio_device) > (unsigned int) (audio_buffer_size * 4))
+static void apu_samples_ready_cb(const void *audio_buffer, size_t audio_buffer_size) {
+    while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 4)
         SDL_Delay(1);
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
@@ -487,36 +487,34 @@ static void start_emulation_loop(void) {
             }
             frame_count++;
             // handle_input is a slow function: don't call it every step
-            handle_input(); // keep this the closest possible before emulator_step() to reduce input inaccuracies
+            handle_input(); // keep this the closest possible before gb_step() to reduce input inaccuracies
             if (init_handshake) {
                 init_handshake = SDL_FALSE;
-                emulator_t *new_linked_emu;
-                if (link_init_transfer(link_sfd, emu, &new_linked_emu))
-                    linked_emu = new_linked_emu;
+                gb_t *new_linked_gb;
+                if (link_init_transfer(link_sfd, gb, &new_linked_gb))
+                    linked_gb = new_linked_gb;
             }
-            if (linked_emu && !link_exchange_joypad(link_sfd, emu, linked_emu))
-                linked_emu = NULL;
+            if (linked_gb && !link_exchange_joypad(link_sfd, gb, linked_gb))
+                linked_gb = NULL;
         }
 
         // run one step of the emulator
-        emulator_step(emu);
-        if (linked_emu)
-            emulator_step(linked_emu);
+        gb_step(gb);
         steps++;
 
         // no delay at the end of the loop because the emulation is audio synced (the audio is what makes the delay).
     }
 
-    if (emu) {
+    if (gb) {
         char buf[512];
 
-        snprintf(buf, sizeof(buf), "%s/%s", SDL_AndroidGetInternalStoragePath(), emulator_get_rom_title(emu));
-        save_battery_to_file(emu, buf);
+        snprintf(buf, sizeof(buf), "%s/%s", SDL_AndroidGetInternalStoragePath(), gb_get_rom_title(gb));
+        save_battery_to_file(gb, buf);
 
         snprintf(buf, sizeof(buf), "%s/resume", SDL_AndroidGetInternalStoragePath());
-        save_state_to_file(emu, buf, 0);
+        save_state_to_file(gb, buf, 0);
 
-        emulator_quit(emu);
+        gb_quit(gb);
     }
 
     SDL_DestroyTexture(ppu_texture);
@@ -524,7 +522,7 @@ static void start_emulation_loop(void) {
 }
 
 static void load_cartridge(const byte_t *rom_data, size_t rom_size, int resume, int emu_mode, int palette, float emu_speed, float sound) {
-    emulator_options_t opts = {
+    gb_options_t opts = {
         .apu_sample_count = APU_SAMPLE_COUNT,
         .mode = emu_mode,
         .on_apu_samples_ready = apu_samples_ready_cb,
@@ -533,17 +531,17 @@ static void load_cartridge(const byte_t *rom_data, size_t rom_size, int resume, 
         .apu_sound_level = sound,
         .palette = palette
     };
-    emu = emulator_init(rom_data, rom_size, &opts);
-    if (!emu) return;
+    gb = gb_init(rom_data, rom_size, &opts);
+    if (!gb) return;
 
     if (resume) {
         char buf[512];
         snprintf(buf, sizeof(buf), "%s/resume", SDL_AndroidGetInternalStoragePath());
-        load_state_from_file(emu, buf);
+        load_state_from_file(gb, buf);
     } else {
         char buf[512];
-        snprintf(buf, sizeof(buf), "%s/%s", SDL_AndroidGetInternalStoragePath(), emulator_get_rom_title(emu));
-        load_battery_from_file(emu, buf);
+        snprintf(buf, sizeof(buf), "%s/%s", SDL_AndroidGetInternalStoragePath(), gb_get_rom_title(gb));
+        load_battery_from_file(gb, buf);
     }
 
     steps_per_frame = GB_CPU_STEPS_PER_FRAME * emu_speed;
@@ -791,8 +789,8 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_tcpLinkReady(
 }
 
 int main(int argc, char **argv) {
-    emu = NULL;
-    linked_emu = NULL;
+    gb = NULL;
+    linked_gb = NULL;
     link_sfd = -1;
     init_handshake = SDL_FALSE;
 

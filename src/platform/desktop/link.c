@@ -1,6 +1,6 @@
 #include <gio/gio.h>
 
-#include "../../emulator/emulator.h"
+#include "../../core/gb.h"
 #include "desktop.h"
 
 typedef enum {
@@ -18,12 +18,12 @@ byte_t *in_pkt = NULL;
 byte_t *out_pkt = NULL;
 
 word_t checksum = 0;
-emulator_mode_t emu_mode = DMG;
+gb_mode_t emu_mode = DMG;
 gboolean can_compress = FALSE;
 byte_t *savestate_data = NULL;
 size_t savestate_len = 0;
-emulator_t *local_emu = NULL;
-emulator_t *linked_emu = NULL;
+gb_t *local_emu = NULL;
+gb_t *linked_gb = NULL;
 
 gboolean write_done = FALSE;
 gboolean read_done = FALSE;
@@ -80,11 +80,11 @@ static void read_cb(GObject *source, GAsyncResult *res, gpointer data) {
 }
 
 static void exchange_state_done(void) {
-    emulator_options_t opts = { .mode = emu_mode };
+    gb_options_t opts = { .mode = emu_mode };
 
     // if (rom_data) { // TODO
-    //     linked_emu = emulator_init(rom_data, rom_len, &opts);
-    //     if (!linked_emu) {
+    //     linked_gb = gb_init(rom_data, rom_len, &opts);
+    //     if (!linked_gb) {
     //         eprintf("received invalid or corrupted PKT_ROM\n");
     //         free(rom_data);
     //         return FALSE;
@@ -92,16 +92,16 @@ static void exchange_state_done(void) {
     //     free(rom_data);
     // } else {
         size_t rom_len;
-        byte_t *rom_data = emulator_get_rom(local_emu, &rom_len);
-        linked_emu = emulator_init(rom_data, rom_len, &opts);
+        byte_t *rom_data = gb_get_rom(local_emu, &rom_len);
+        linked_gb = gb_init(rom_data, rom_len, &opts);
     // }
 
-    if (!emulator_load_savestate(linked_emu, in_pkt, savestate_len)) {
+    if (!gb_load_savestate(linked_gb, in_pkt, savestate_len)) {
         eprintf("received invalid or corrupted savestate\n");
         return; // TODO cancel exchange on error
     }
 
-    emulator_link_connect(local_emu, linked_emu);
+    gb_link_connect_gb(local_emu, linked_gb);
 
     // allocate joypad pkts once here so we don't have to do it at every joypad exchange.
     out_pkt = xrealloc(out_pkt, 2);
@@ -137,7 +137,7 @@ static void receive_state_payload(void) {
 }
 
 static void exchange_state(void) {
-    savestate_data = emulator_get_savestate(local_emu, &savestate_len, can_compress);
+    savestate_data = gb_get_savestate(local_emu, &savestate_len, can_compress);
 
     out_pkt = xrealloc(out_pkt, savestate_len + 9);
     memset(out_pkt, 0, savestate_len + 9);
@@ -184,12 +184,12 @@ static void exchange_info(void) {
     out_pkt = xrealloc(out_pkt, 4);
     memset(out_pkt, 0, 4);
     out_pkt[0] = PKT_INFO;
-    out_pkt[1] = emulator_get_mode(local_emu);
+    out_pkt[1] = gb_get_mode(local_emu);
     #ifdef __HAVE_ZLIB__
     SET_BIT(out_pkt[1], 7);
     #endif
 
-    checksum = emulator_get_cartridge_checksum(local_emu);
+    checksum = gb_get_cartridge_checksum(local_emu);
     memcpy(&out_pkt[2], &checksum, 2);
 
     read_arg = (struct read_cb_arg) {
@@ -211,18 +211,18 @@ static void exchange_joypad_done(void) {
         return; // TODO cancel exchange on error
     }
 
-    emulator_set_joypad_state(linked_emu, in_pkt[1]);
+    gb_set_joypad_state(linked_gb, in_pkt[1]);
 }
 
 // TODO make it work asynchronously OR implement the separate emulation thread
 //      --> making this asynchronous while keeping both emulators in sync is very difficult and
 //          I didn't manage to find a way.
-emulator_t *link_communicate(void) {
-    if (!linked_emu || !local_emu)
+gb_t *link_communicate(void) {
+    if (!linked_gb || !local_emu)
         return NULL;
 
     out_pkt[0] = PKT_JOYPAD;
-    out_pkt[1] = emulator_get_joypad_state(local_emu);
+    out_pkt[1] = gb_get_joypad_state(local_emu);
 
     read_arg = (struct read_cb_arg) {
         .pkt_size = 2,
@@ -243,11 +243,11 @@ emulator_t *link_communicate(void) {
 
     exchange_joypad_done();
 
-    return linked_emu;
+    return linked_gb;
 }
 
-void link_setup_connection(GSocketConnection *conn, emulator_t *emu) {
-    if (!emu || !conn)
+void link_setup_connection(GSocketConnection *conn, gb_t *gb) {
+    if (!gb || !conn)
         return;
 
     stop_loop();
@@ -255,7 +255,7 @@ void link_setup_connection(GSocketConnection *conn, emulator_t *emu) {
     if (connection)
         g_io_stream_close(G_IO_STREAM(conn), NULL, NULL);
     connection = conn;
-    local_emu = emu;
+    local_emu = gb;
 
     // TODO reset everything if a connection was previously established
 

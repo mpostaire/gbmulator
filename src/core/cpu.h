@@ -9,7 +9,7 @@ typedef enum {
 	IRQ_TIMER,
 	IRQ_SERIAL,
 	IRQ_JOYPAD
-} interrupt_t;
+} gb_interrupt_t;
 
 typedef struct {
     union {
@@ -46,10 +46,10 @@ typedef struct {
 
     word_t sp;
     word_t pc;
-} registers_t;
+} gb_registers_t;
 
 typedef struct {
-    registers_t registers;
+    gb_registers_t registers;
     byte_t ime; // interrupt master enable
     byte_t halt;
     byte_t halt_bug;
@@ -57,16 +57,16 @@ typedef struct {
     byte_t opcode; // current opcode
     s_word_t opcode_state; // current opcode or current microcode inside the opcode (< 0 --> request new instruction fetch)
     word_t operand; // operand for the current opcode
-    word_t opcode_cache_variable; // storage used for an easier implementation of some opcodes
-} cpu_t;
+    word_t accumulator; // storage used for an easier implementation of some opcodes
+} gb_cpu_t;
 
 #define CPU_REQUEST_INTERRUPT(emu, irq) SET_BIT((emu)->mmu->io_registers[IF - IO], (irq))
-#define IS_DOUBLE_SPEED(emu) (((emu)->mmu->io_registers[KEY1 - IO] & 0x80) >> 7)
+#define IS_DOUBLE_SPEED(emu) ((emu)->mmu->io_registers[KEY1 - IO] >> 7)
 
-void cpu_step(emulator_t *emu);
+void cpu_step(gb_t *gb);
 
-void cpu_init(emulator_t *emu);
+void cpu_init(gb_t *gb);
 
-void cpu_quit(emulator_t *emu);
+void cpu_quit(gb_t *gb);
 
 SERIALIZE_FUNCTION_DECLS(cpu);

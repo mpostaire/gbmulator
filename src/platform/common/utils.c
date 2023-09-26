@@ -3,7 +3,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 
-#include "../../emulator/emulator.h"
+#include "../../core/gb.h"
 #include "config.h"
 
 static long fsize(FILE *f) {
@@ -94,9 +94,9 @@ void make_parent_dirs(const char *filepath) {
     }
 }
 
-void save_battery_to_file(emulator_t *emu, const char *path) {
+void save_battery_to_file(gb_t *gb, const char *path) {
     size_t save_length;
-    byte_t *save_data = emulator_get_save(emu, &save_length);
+    byte_t *save_data = gb_get_save(gb, &save_length);
     if (!save_data) return;
 
     make_parent_dirs(path);
@@ -111,7 +111,7 @@ void save_battery_to_file(emulator_t *emu, const char *path) {
     free(save_data);
 }
 
-void load_battery_from_file(emulator_t *emu, const char *path) {
+void load_battery_from_file(gb_t *gb, const char *path) {
     FILE *f = fopen(path, "r");
     if (!f) return;
 
@@ -121,16 +121,16 @@ void load_battery_from_file(emulator_t *emu, const char *path) {
 
     byte_t *save_data = xmalloc(save_length);
     fread(save_data, save_length, 1, f);
-    emulator_load_save(emu, save_data, save_length);
+    gb_load_save(gb, save_data, save_length);
     fclose(f);
     free(save_data);
 }
 
-int save_state_to_file(emulator_t *emu, const char *path, int compressed) {
+int save_state_to_file(gb_t *gb, const char *path, int compressed) {
     make_parent_dirs(path);
 
     size_t len;
-    byte_t *buf = emulator_get_savestate(emu, &len, compressed);
+    byte_t *buf = gb_get_savestate(gb, &len, compressed);
 
     FILE *f = fopen(path, "wb");
     if (!f) {
@@ -150,7 +150,7 @@ int save_state_to_file(emulator_t *emu, const char *path, int compressed) {
     return 1;
 }
 
-int load_state_from_file(emulator_t *emu, const char *path) {
+int load_state_from_file(gb_t *gb, const char *path) {
     FILE *f = fopen(path, "rb");
     if (!f) {
         errnoprintf("opening %s", path);
@@ -169,7 +169,7 @@ int load_state_from_file(emulator_t *emu, const char *path) {
         return 0;
     }
 
-    int ret = emulator_load_savestate(emu, buf, len);
+    int ret = gb_load_savestate(gb, buf, len);
     fclose(f);
     free(buf);
     return ret;

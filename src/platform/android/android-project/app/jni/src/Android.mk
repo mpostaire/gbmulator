@@ -12,7 +12,7 @@ LOCAL_C_INCLUDES := $(LOCAL_PATH)/$(SDL_PATH)/include \
 					$(LOCAL_PATH)/$(SRC_PATH)
 
 # Add your application source files here...
-LOCAL_SRC_FILES := $(wildcard $(LOCAL_PATH)/$(SRC_PATH)/emulator/*.c) \
+LOCAL_SRC_FILES := $(wildcard $(LOCAL_PATH)/$(SRC_PATH)/core/*.c) \
 				   $(wildcard $(LOCAL_PATH)/$(SRC_PATH)/platform/common/*.c) \
 				   $(wildcard $(LOCAL_PATH)/$(SRC_PATH)/platform/android/*.c)
 

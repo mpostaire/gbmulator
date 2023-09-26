@@ -16,8 +16,9 @@ You can compile and run it on your linux machine or use it in your browser [here
 - PPU implements fifo rendering
 - Audio
 - Wireless link cable
-- Support for MBC1, MBC1M, MBC2, MBC3, MBC30 and MBC5 cartridges
+- Support for MBC1, MBC1M, MBC2, MBC3, MBC30, MBC5, MBC7 and HuC1 cartridges
 - Battery saves and savestates
+- Game Boy Printer emulation
 - Supports keyboard and gamepad controllers
 
 ## Installation
@@ -29,7 +30,7 @@ Various dependencies are needed to build the desktop app:
 - opengl
 - glew
 - openal
-- libx11
+- zlib (optional: enables compressed savestates)
 
 In addition to these dependencies, the following tools are needed to build the desktop app:
 
@@ -81,7 +82,9 @@ There is also support for gamepad controllers.
 
 ### TODO
 
-- implement MBC6, MBC7, HuC1 and multicart MBCs
+- implement other MBCs
+- implement printer
+- implement GBC and HuC1 IR
 - find out what are the accurate timings for the ppu pixel fifo/fetcher (especially for corner cases)
 - better audio/video sync
 - android link cable via bluetooth + cross platform link cable
@@ -89,6 +92,7 @@ There is also support for gamepad controllers.
 - rewrite Makefile (it's a mess) maybe use CMake instead
 
 ## Resources used
+
 - https://gbdev.io/pandocs/
 - http://marc.rawer.de/Gameboy/Docs/GBCPUman.pdf
 - https://gekkio.fi/files/gb-docs/gbctr.pdf
@@ -97,3 +101,4 @@ There is also support for gamepad controllers.
 - https://www.youtube.com/watch?v=HyzD8pNlpwI
 - https://github.com/AntonioND/giibiiadvance/blob/master/docs/TCAGBD.pdf
 - https://pixelbits.16-b.it/GBEDG/ppu/
+- https://shonumi.github.io/articles/art2.html

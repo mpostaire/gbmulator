@@ -2,6 +2,7 @@
 
 #include "types.h"
 #include "serialize.h"
+#include "mbc.h"
 
 #define ROM_BANK_SIZE 0x4000
 #define VRAM_BANK_SIZE 0x2000
@@ -106,44 +107,13 @@ typedef enum {
 
     HRAM = 0xFF80,
     IE = 0xFFFF // Interrupt Enable
-} mem_map_t;
+} gb_memory_map_t;
 
 typedef enum {
-    ROM_ONLY,
-    MBC1,
-    MBC1M,
-    MBC2,
-    MBC3,
-    MBC30,
-    MBC5,
-    MBC6,
-    MBC7,
-    HuC1
-} mbc_type_t;
-
-typedef enum {
-    GDMA,
-    HDMA
-} hdma_type_t;
-
-typedef struct {
-    byte_t latched_s;
-    byte_t latched_m;
-    byte_t latched_h;
-    byte_t latched_dl;
-    byte_t latched_dh;
-
-    byte_t s;
-    byte_t m;
-    byte_t h;
-    byte_t dl;
-    byte_t dh;
-
-    byte_t enabled;
-    byte_t reg; // rtc register
-    byte_t latch;
-    uint32_t rtc_cycles;
-} rtc_t;
+    IO_SRC_CPU,
+    IO_SRC_OAM_DMA,
+    IO_SRC_GDMA_HDMA
+} gb_io_source_t;
 
 typedef struct {
     size_t rom_size;
@@ -185,7 +155,6 @@ typedef struct {
     // offset to add to address in wram when accessing the 0xD000-0xDFFF range (signed because it can be negative)
     int32_t wram_bankn_addr_offset;
 
-    byte_t mbc;
     word_t rom_banks; // number of rom banks
     byte_t eram_banks; // number of eram banks
     // address in rom that is the start of the current ROM bank when accessing the 0x0000-0x3FFF range
@@ -196,43 +165,29 @@ typedef struct {
     // address in eram that is the start of the current ERAM bank when accessing the 0x8000-0x9FFF range
     uint32_t eram_bank_addr;
 
-    // MBC registers
-    byte_t ramg_reg; // 1 if eram is enabled, else 0
-    // MBC1/MBC1M: bits 7-5: unused, bits 4-0 (MBC1M: bits 3-0): lower 5 (MBC1M: 4) bits of the ROM_BANKN number
-    // (also used as a convenience variable in other MBCs to store the ROM_BANKN number)
-    byte_t bank1_reg;
-    // bits 7-2: unused, bits 1-0: upper 2 bits (bits 6-5) of the ROM_BANKN number
-    // (also used as a convenience variable in other MBCs to store the ERAM_BANK number)
-    byte_t bank2_reg;
-    byte_t mode_reg; // bits 7-1: unused, bit 0: BANK2 mode
-    byte_t rtc_mapped; // MBC3
-    byte_t romb0_reg; // MBC5: lower ROM BANK register
-    byte_t romb1_reg; // MBC5: upper ROM BANK register
-    // MBC5: RAMB register is stored in bank2_reg
-
     byte_t has_battery;
     byte_t has_rumble;
     byte_t has_rtc;
 
-    rtc_t rtc;
-} mmu_t;
+    gb_mbc_t mbc;
+} gb_mmu_t;
 
-int mmu_init(emulator_t *emu, const byte_t *rom_data, size_t rom_size);
+int mmu_init(gb_t *gb, const byte_t *rom_data, size_t rom_size);
 
-void mmu_quit(emulator_t *emu);
+void mmu_quit(gb_t *gb);
 
-void dma_step(emulator_t *emu);
+byte_t mmu_read_io_src(gb_t *gb, word_t address, gb_io_source_t io_src);
 
-void rtc_step(emulator_t *emu);
-
-/**
- * only used in cpu instructions (opcode execution)
- */
-byte_t mmu_read(emulator_t *emu, word_t address);
+void mmu_write_io_src(gb_t *gb, word_t address, byte_t data, gb_io_source_t io_src);
 
 /**
- * only used in cpu instructions (opcode execution)
+ * like mmu_read_io_src but using IO_SRC_CPU as io_src
  */
-void mmu_write(emulator_t *emu, word_t address, byte_t data);
+#define mmu_read(emu, address) mmu_read_io_src((emu), (address), IO_SRC_CPU)
+
+/**
+ * like mmu_write_io_src but using IO_SRC_CPU as io_src
+ */
+#define mmu_write(emu, address, data) mmu_write_io_src((emu), (address), (data), IO_SRC_CPU)
 
 SERIALIZE_FUNCTION_DECLS(mmu);

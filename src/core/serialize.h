@@ -1,8 +1,8 @@
 #pragma once
 
-#define SERIALIZED_SIZE_FUNCTION_DECL(name) size_t name##_serialized_length(emulator_t *emu)
-#define SERIALIZER_FUNCTION_DECL(name) byte_t *name##_serialize(emulator_t *emu, size_t *size)
-#define UNSERIALIZER_FUNCTION_DECL(name) void name##_unserialize(emulator_t *emu, byte_t *buf)
+#define SERIALIZED_SIZE_FUNCTION_DECL(name) size_t name##_serialized_length(gb_t *gb)
+#define SERIALIZER_FUNCTION_DECL(name) byte_t *name##_serialize(gb_t *gb, size_t *size)
+#define UNSERIALIZER_FUNCTION_DECL(name) void name##_unserialize(gb_t *gb, byte_t *buf)
 
 #define SERIALIZE_FUNCTION_DECLS(name)   \
     SERIALIZED_SIZE_FUNCTION_DECL(name); \
@@ -12,24 +12,24 @@
 #define SERIALIZED_SIZE_FUNCTION(type, name, ...) \
     SERIALIZED_SIZE_FUNCTION_DECL(name) {         \
         size_t length = 0;                        \
-        type *tmp = emu->name;                    \
+        type *tmp = gb->name;                    \
         __VA_ARGS__;                              \
         return length;                            \
     }
 
 #define SERIALIZER_FUNCTION(type, name, ...)   \
     SERIALIZER_FUNCTION_DECL(name) {           \
-        *size = name##_serialized_length(emu); \
+        *size = name##_serialized_length(gb); \
         byte_t *buf = xmalloc(*size);          \
         size_t offset = 0;                     \
-        type *tmp = emu->name;                 \
+        type *tmp = gb->name;                 \
         __VA_ARGS__;                           \
         return buf;                            \
     }
 
 #define UNSERIALIZER_FUNCTION(type, name, ...) \
     UNSERIALIZER_FUNCTION_DECL(name) {         \
-        type *tmp = emu->name;                 \
+        type *tmp = gb->name;                 \
         size_t offset = 0;                     \
         __VA_ARGS__;                           \
     }
@@ -68,47 +68,48 @@
 #define SERIALIZED_LENGTH_COND_LITERAL(member, cond, size_literal_true, size_literal_else) \
     length += cond ? size_literal_true : size_literal_else
 
-#define SERIALIZE_LENGTH_COND_LITERAL(member, cond, size_literal_true, size_literal_else) \
-    do {                                                                                  \
-        size_t sz = cond ? size_literal_true : size_literal_else;                         \
-        memcpy(buf + offset, &(tmp->member), sz);                                         \
-        offset += sz;                                                                     \
+#define SERIALIZE_COND_LITERAL(member, cond, size_literal_true, size_literal_else) \
+    do {                                                                           \
+        size_t sz = cond ? size_literal_true : size_literal_else;                  \
+        memcpy(buf + offset, &(tmp->member), sz);                                  \
+        offset += sz;                                                              \
     } while (0)
 
-#define UNSERIALIZE_LENGTH_COND_LITERAL(member, cond, size_literal_true, size_literal_else) \
-    do {                                                                                    \
-        size_t sz = cond ? size_literal_true : size_literal_else;                           \
-        memcpy(&(tmp->member), buf + offset, sz);                                           \
-        offset += sz;                                                                       \
+#define UNSERIALIZE_COND_LITERAL(member, cond, size_literal_true, size_literal_else) \
+    do {                                                                             \
+        size_t sz = cond ? size_literal_true : size_literal_else;                    \
+        memcpy(&(tmp->member), buf + offset, sz);                                    \
+        offset += sz;                                                                \
     } while (0)
 
 #define SERIALIZED_LENGTH_FROM_MEMBER(member, size_member, multiplier) \
     length += tmp->size_member * (multiplier)
 
-#define SERIALIZE_LENGTH_FROM_MEMBER(member, size_member, multiplier) \
-    do {                                                              \
-        size_t sz = tmp->size_member * (multiplier);                  \
-        memcpy(buf + offset, &(tmp->member), sz);                     \
-        offset += sz;                                                 \
+#define SERIALIZE_FROM_MEMBER(member, size_member, multiplier) \
+    do {                                                       \
+        size_t sz = tmp->size_member * (multiplier);           \
+        memcpy(buf + offset, &(tmp->member), sz);              \
+        offset += sz;                                          \
     } while (0)
 
-#define UNSERIALIZE_LENGTH_FROM_MEMBER(member, size_member, multiplier) \
-    do {                                                                \
-        size_t sz = tmp->size_member * (multiplier);                    \
-        memcpy(&(tmp->member), buf + offset, sz);                       \
-        offset += sz;                                                   \
+#define UNSERIALIZE_FROM_MEMBER(member, size_member, multiplier) \
+    do {                                                         \
+        size_t sz = tmp->size_member * (multiplier);             \
+        memcpy(&(tmp->member), buf + offset, sz);                \
+        offset += sz;                                            \
     } while (0)
 
 #define SERIALIZED_LENGTH_IF_CGB(member) \
-    length += emu->mode == CGB ? sizeof(tmp->member) : 0
-#define SERIALIZE_LENGTH_IF_CGB(member) \
-    do {                                \
-        if (emu->mode == CGB)           \
-            SERIALIZE(member);          \
+    length += gb->mode == CGB ? sizeof(tmp->member) : 0
+
+#define SERIALIZE_IF_CGB(member) \
+    do {                         \
+        if (gb->mode == CGB)    \
+            SERIALIZE(member);   \
     } while (0)
 
-#define UNSERIALIZE_LENGTH_IF_CGB(member) \
-    do {                                  \
-        if (emu->mode == CGB)             \
-            UNSERIALIZE(member);          \
+#define UNSERIALIZE_IF_CGB(member) \
+    do {                           \
+        if (gb->mode == CGB)      \
+            UNSERIALIZE(member);   \
     } while (0)

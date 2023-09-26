@@ -6,7 +6,7 @@
 #include <SDL2/SDL.h>
 #endif
 
-#include "../../emulator/emulator.h"
+#include "../../core/gb.h"
 #include "../common/config.h"
 
 typedef struct menu_t menu_t;
@@ -47,7 +47,7 @@ struct menu_entry_t {
         struct {
             byte_t editing;
             char *key_name;
-            joypad_button_t button;
+            gb_joypad_button_t button;
         } setter;
     };
 };
@@ -80,7 +80,7 @@ void ui_back_to_root_menu(ui_t *ui);
 
 void ui_set_position(ui_t *ui, int pos, int go_up);
 
-void ui_press_joypad(ui_t *ui, joypad_button_t key);
+void ui_press_joypad(ui_t *ui, gb_joypad_button_t key);
 
 void ui_keyboard_press(ui_t *ui, SDL_KeyboardEvent *keyevent);
 

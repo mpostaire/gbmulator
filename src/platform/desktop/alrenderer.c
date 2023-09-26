@@ -2,7 +2,7 @@
 #include <AL/al.h>
 #include <AL/alc.h>
 
-#include "../../emulator/emulator.h"
+#include "../../core/gb.h"
 
 #define N_BUFFERS 16
 
@@ -49,7 +49,6 @@ ALboolean alrenderer_init(ALsizei sampling_freq) {
     return AL_TRUE;
 }
 
-// TODO maybe this does not do exactlty what I think
 ALint alrenderer_get_queue_size(void) {
     ALint queued;
     alGetSourcei(source, AL_BUFFERS_QUEUED, &queued);

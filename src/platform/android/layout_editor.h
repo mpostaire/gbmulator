@@ -4,7 +4,7 @@
 
 typedef struct {
     SDL_Rect shape;
-    joypad_button_t button;
+    gb_joypad_button_t button;
     SDL_Texture *texture;
 } button_t;
 

@@ -9,7 +9,7 @@
 #include <dirent.h>
 #include <MagickWand/MagickWand.h>
 
-#include "../emulator/emulator_priv.h"
+#include "../core/gb_priv.h"
 
 #define BOLD "\033[1m"
 #define COLOR_OFF "\033[0m"
@@ -26,7 +26,7 @@ typedef struct {
     char *rom_path;                 // relative the the root_path given in the program's argument
     char *reference_image_filename; // relative to the dir of the rom_path
     char *result_diff_image_suffix;
-    emulator_mode_t mode;
+    gb_mode_t mode;
     int running_frames;
     byte_t exit_opcode;
     char *input_sequence;
@@ -125,7 +125,7 @@ static void magick_wand_error(MagickWand *wand) {
     exit(EXIT_FAILURE);
 }
 
-static int save_and_check_result(test_t *test, emulator_t *emu, char *rom_path) {
+static int save_and_check_result(test_t *test, gb_t *gb, char *rom_path) {
     // get paths
 
     char *path_from_category = strchr(rom_path, '/') + 1;
@@ -168,7 +168,7 @@ static int save_and_check_result(test_t *test, emulator_t *emu, char *rom_path) 
     if (!MagickNewImage(result_wand, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, pixel_wand))
         magick_wand_error(result_wand);
 
-    if (!MagickImportImagePixels(result_wand, 0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, "RGB", CharPixel, emu->ppu->pixels))
+    if (!MagickImportImagePixels(result_wand, 0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, "RGBA", CharPixel, gb->ppu->pixels))
         magick_wand_error(result_wand);
 
     if (!MagickWriteImage(result_wand, result_path))
@@ -211,13 +211,13 @@ static int save_and_check_result(test_t *test, emulator_t *emu, char *rom_path) 
     }
 
     if (test->is_gbmicrotest)
-        return emu->mmu->io_registers[0xFF82 - HRAM] == 0x01;
+        return gb->mmu->io_registers[0xFF82 - HRAM] == 0x01;
 
-    registers_t regs = emu->cpu->registers;
+    gb_registers_t regs = gb->cpu->registers;
     return regs.bc == 0x0305 && regs.de == 0x080D && regs.hl == 0x1522;
 }
 
-static joypad_button_t str_to_joypad(char *str) {
+static gb_joypad_button_t str_to_joypad(char *str) {
     if (!strncmp(str, "right", 7))
         return JOYPAD_RIGHT;
     if (!strncmp(str, "left", 7))
@@ -237,19 +237,19 @@ static joypad_button_t str_to_joypad(char *str) {
     exit(EXIT_FAILURE);
 }
 
-static void exec_input_sequence(emulator_t *emu, char *input_sequence) {
+static void exec_input_sequence(gb_t *gb, char *input_sequence) {
     char cpy[BUF_SIZE];
     strncpy(cpy, input_sequence, sizeof(cpy) - 1);
     char *delay_str = strtok(cpy, ":");
     char *input_str = strtok(NULL, ",");
     while (delay_str && input_str) {
         int delay = atoi(delay_str);
-        joypad_button_t input = str_to_joypad(input_str);
+        gb_joypad_button_t input = str_to_joypad(input_str);
 
-        emulator_run_frames(emu, delay * GB_CPU_FRAMES_PER_SECONDS);
-        emulator_joypad_press(emu, input);
-        emulator_run_frames(emu, 1);
-        emulator_joypad_release(emu, input);
+        gb_run_frames(gb, delay * GB_CPU_FRAMES_PER_SECONDS);
+        gb_joypad_press(gb, input);
+        gb_run_frames(gb, 1);
+        gb_joypad_release(gb, input);
 
         delay_str = strtok(NULL, ":");
         input_str = strtok(NULL, ",");
@@ -267,44 +267,44 @@ static int run_test(test_t *test) {
     if (!rom_data)
         return 0;
 
-    emulator_options_t opts = {
+    gb_options_t opts = {
         .mode = test->mode,
         .palette = PPU_COLOR_PALETTE_GRAY,
         .disable_cgb_color_correction = 1
     };
-    emulator_t *emu = emulator_init(rom_data, rom_size, &opts);
+    gb_t *gb = gb_init(rom_data, rom_size, &opts);
     free(rom_data);
-    if (!emu)
+    if (!gb)
         return 0;
 
-    emu->exit_on_invalid_opcode = 0;
+    gb->exit_on_invalid_opcode = 0;
 
     // TODO GBmulator's boot roms aren't the same as the original DMG and CGB. This may cause problems in some test roms
     //      like timer based test roms
     // run until the boot sequence is done
-    while (emu->cpu->registers.pc != 0x100)
-        emulator_step(emu);
+    while (gb->cpu->registers.pc != 0x100)
+        gb_step(gb);
 
     if (test->input_sequence) {
-        emulator_run_frames(emu, 8); // run for some frames to let the test rom some time to setup itself
-        exec_input_sequence(emu, test->input_sequence);
+        gb_run_frames(gb, 8); // run for some frames to let the test rom some time to setup itself
+        exec_input_sequence(gb, test->input_sequence);
     }
 
     // the maximum time a test can take to run is 120 emulated seconds:
     // the timeout is a little higher than this value to be safe
     long timeout_cycles = 128 * GB_CPU_FREQ;
     if (test->exit_opcode) {
-        while (emu->cpu->opcode != test->exit_opcode && timeout_cycles > 0) {
-            emulator_step(emu); // don't take returned cycles to ignore double speed
+        while (gb->cpu->opcode != test->exit_opcode && timeout_cycles > 0) {
+            gb_step(gb); // don't take returned cycles to ignore double speed
             timeout_cycles -= 4;
         }
     }
     if (timeout_cycles > 0)
-        emulator_run_frames(emu, test->running_frames);
+        gb_run_frames(gb, test->running_frames);
 
     // take screenshot, save it and compare to the reference
-    int ret = save_and_check_result(test, emu, rom_path);
-    emulator_quit(emu);
+    int ret = save_and_check_result(test, gb, rom_path);
+    gb_quit(gb);
 
     MagickWandTerminus();
 
