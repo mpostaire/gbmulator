@@ -35,6 +35,7 @@ struct gb_t {
     gb_timer_t *timer;
     gb_joypad_t *joypad;
     gb_link_t *link;
+    gb_t *ir_gb; // this is a pointer to an IR-linked emulator or NULL
 };
 
 struct gb_printer_t {

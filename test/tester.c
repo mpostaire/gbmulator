@@ -139,7 +139,7 @@ static int save_and_check_result(test_t *test, gb_t *gb, char *rom_path) {
     char *diff_path = NULL;
 
     char result_path[BUF_SIZE];
-    char *label = test->mode == CGB ? "cgb" : "dmg";
+    char *label = test->mode == GB_MODE_CGB ? "cgb" : "dmg";
     char *suffix = test->result_diff_image_suffix ? test->result_diff_image_suffix : "";
     snprintf(result_path, sizeof(result_path), "results/%.*s-%s%s.result.png", path_until_extension_len, path_from_category, suffix, label);
 
@@ -324,7 +324,7 @@ static void run_tests() {
 
     for (size_t i = 0; i < num_tests; i++) {
         test_t test = tests[i];
-        char *label = test.mode == CGB ? "CGB" : "DMG";
+        char *label = test.mode == GB_MODE_CGB ? "CGB" : "DMG";
         char *suffix = test.result_diff_image_suffix ? test.result_diff_image_suffix : "";
         printf(COLOR_BLUE "[TEST %ld/%ld]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s" COLOR_OFF, i + 1, num_tests, label, test.rom_path, suffix);
         fflush(stdout);

@@ -223,7 +223,7 @@ static inline byte_t read_io_register(gb_t *gb, word_t address) {
         // Reading from P1 register returns joypad input state according to its current bit 4 or 5 value
         return joypad_get_input(gb);
     case SB: return mmu->io_registers[io_reg_addr];
-    case SC: return mmu->io_registers[io_reg_addr] | (gb->mode == CGB ? 0x7C : 0x7E);
+    case SC: return mmu->io_registers[io_reg_addr] | (gb->mode == GB_MODE_CGB ? 0x7C : 0x7E);
     case DIV_LSB: return 0xFF;
     case DIV: return mmu->io_registers[io_reg_addr];
     case TIMA: return mmu->io_registers[io_reg_addr];
@@ -268,35 +268,45 @@ static inline byte_t read_io_register(gb_t *gb, word_t address) {
     case OBP1: return mmu->io_registers[io_reg_addr];
     case WY: return mmu->io_registers[io_reg_addr];
     case WX: return mmu->io_registers[io_reg_addr];
-    case KEY0: return gb->mode == CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
-    case KEY1: return gb->mode == CGB ? (mmu->io_registers[io_reg_addr] | 0x7E) : 0xFF;
+    case KEY0: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
+    case KEY1: return gb->mode == GB_MODE_CGB ? (mmu->io_registers[io_reg_addr] | 0x7E) : 0xFF;
     case 0xFF4E: return 0xFF;
-    case VBK: return gb->mode == CGB ? 0xFE | (mmu->io_registers[io_reg_addr] & 0x01) : 0xFF;
+    case VBK: return gb->mode == GB_MODE_CGB ? 0xFE | (mmu->io_registers[io_reg_addr] & 0x01) : 0xFF;
     case BANK: return 0xFF;
     case HDMA1 ... HDMA4: return 0xFF;
-    case HDMA5: return gb->mode == CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
-    case RP: return gb->mode == CGB ? 0x3E : 0xFF; // TODO GBC infrared LED
+    case HDMA5: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
+    case RP:
+        if (gb->mode == GB_MODE_CGB) {
+            if (!gb->ir_gb)
+                return mmu->io_registers[io_reg_addr] | 0x3E;
+
+            byte_t other_gb_led = gb->ir_gb->mmu->io_registers[RP - IO] & 0x01;
+            byte_t read_bit = (mmu->io_registers[io_reg_addr] & 0xC0) == 0xC0 ? !other_gb_led : 0x01;
+            CHANGE_BIT(mmu->io_registers[io_reg_addr], 1, read_bit);
+            return mmu->io_registers[io_reg_addr] | 0x3C;
+        }
+        return 0xFF;
     case 0xFF57 ... 0xFF67: return 0xFF;
-    case BGPI: return gb->mode == CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
+    case BGPI: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
     case BGPD: {
-        if (gb->mode == DMG || PPU_IS_MODE(gb, PPU_MODE_DRAWING))
+        if (gb->mode == GB_MODE_DMG || PPU_IS_MODE(gb, PPU_MODE_DRAWING))
             return 0xFF;
 
         byte_t cram_address = mmu->io_registers[BGPI - IO] & 0x3F;
         return mmu->cram_bg[cram_address];
     }
-    case OBPI: return gb->mode == CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
+    case OBPI: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
     case OBPD: {
-        if (gb->mode == DMG || PPU_IS_MODE(gb, PPU_MODE_DRAWING))
+        if (gb->mode == GB_MODE_DMG || PPU_IS_MODE(gb, PPU_MODE_DRAWING))
             return 0xFF;
 
         byte_t cram_address = mmu->io_registers[OBPI - IO] & 0x3F;
         return mmu->cram_obj[cram_address];
     }
     case 0xFF6C ... 0xFF6F: return 0xFF;
-    case SVBK: return gb->mode == CGB ? 0xF8 | (mmu->io_registers[io_reg_addr] & 0x07) : 0xFF;
+    case SVBK: return gb->mode == GB_MODE_CGB ? 0xF8 | (mmu->io_registers[io_reg_addr] & 0x07) : 0xFF;
     case 0xFF71 ... 0xFF74: return 0xFF;
-    case 0xFF75: return gb->mode == CGB ? mmu->io_registers[io_reg_addr] & 0x70 : 0xFF;
+    case 0xFF75: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] & 0x70 : 0xFF;
     case 0xFF76 ... 0xFF7F: return 0xFF;
     default:
         eprintf("invalid read at 0x%04X\n", address);
@@ -512,19 +522,19 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
         mmu->io_registers[io_reg_addr] |= data & 0x01;
         break;
     case VBK:
-        if (gb->mode == CGB) {
+        if (gb->mode == GB_MODE_CGB) {
             mmu->io_registers[io_reg_addr] = data & 0x01;
             mmu->vram_bank_addr_offset = (GBC_CURRENT_VRAM_BANK(mmu) * VRAM_BANK_SIZE) - VRAM;
         }
         break;
     case BANK:
         // disable boot rom
-        if ((gb->mode == DMG && data == 0x01) || (gb->mode == CGB && data == 0x11))
+        if ((gb->mode == GB_MODE_DMG && data == 0x01) || (gb->mode == GB_MODE_CGB && data == 0x11))
             mmu->boot_finished = 1;
         mmu->io_registers[io_reg_addr] = data;
         break;
     case HDMA5:
-        if (gb->mode == DMG)
+        if (gb->mode == GB_MODE_DMG)
             break;
 
         // writing to this register starts a VRAM DMA transfer
@@ -562,8 +572,11 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
         // else // General purpose DMA (GDMA)
         //     printf("GDMA size=%d (%d blocs), vram bank=%d, wram bank n=%d, src=%x, dest=%x\n", (mmu->io_registers[io_reg_addr] + 1) * 0x10, mmu->io_registers[io_reg_addr] + 1, GBC_CURRENT_VRAM_BANK(mmu), GBC_CURRENT_WRAM_BANK(mmu), mmu->hdma.src_address, mmu->hdma.dest_address);
         break;
+    case RP:
+        mmu->io_registers[io_reg_addr] = gb->mode == GB_MODE_CGB ? data & 0xC1 : 0xFF;
+        break;
     case BGPD:
-        if (gb->mode == DMG)
+        if (gb->mode == GB_MODE_DMG)
             break;
 
         if (!PPU_IS_MODE(gb, PPU_MODE_DRAWING)) {
@@ -582,7 +595,7 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
         }
         break;
     case OBPD:
-        if (gb->mode == DMG)
+        if (gb->mode == GB_MODE_DMG)
             break;
 
         if (!PPU_IS_MODE(gb, PPU_MODE_DRAWING)) {
@@ -601,24 +614,24 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
         }
         break;
     case SVBK:
-        if (gb->mode == CGB) {
+        if (gb->mode == GB_MODE_CGB) {
             mmu->io_registers[io_reg_addr] = data & 0x07;
             mmu->wram_bankn_addr_offset = ((GBC_CURRENT_WRAM_BANK(mmu) - 1) * WRAM_BANK_SIZE) - WRAM_BANK0;
         }
         break;
     case 0xFF74:
-        if (gb->mode == CGB)
+        if (gb->mode == GB_MODE_CGB)
             mmu->io_registers[io_reg_addr] = data; // only writable in CGB mode
         break;
     case 0xFF75:
-        mmu->io_registers[io_reg_addr] = gb->mode == CGB ? data & 0x70 : data;
+        mmu->io_registers[io_reg_addr] = gb->mode == GB_MODE_CGB ? data & 0x70 : data;
         break;
     case 0xFF76:
-        if (gb->mode == DMG)
+        if (gb->mode == GB_MODE_DMG)
             mmu->io_registers[io_reg_addr] = data; // only writable in DMG mode
         break;
     case 0xFF77:
-        if (gb->mode == DMG)
+        if (gb->mode == GB_MODE_DMG)
             mmu->io_registers[io_reg_addr] = data; // only writable in DMG mode
         break;
     default:
@@ -633,9 +646,9 @@ byte_t mmu_read_io_src(gb_t *gb, word_t address, gb_io_source_t io_src) {
     switch (address & 0xF000) {
     case ROM_BANK0:
         if (!mmu->boot_finished) {
-            if (gb->mode == DMG && address < 0x100)
+            if (gb->mode == GB_MODE_DMG && address < 0x100)
                 return dmg_boot[address];
-            if (gb->mode == CGB && (address < 0x100 || (address >= 0x200 && address < sizeof(cgb_boot))))
+            if (gb->mode == GB_MODE_CGB && (address < 0x100 || (address >= 0x200 && address < sizeof(cgb_boot))))
                 return cgb_boot[address];
         }
         // fallthrough
@@ -770,38 +783,38 @@ void mmu_write_io_src(gb_t *gb, word_t address, byte_t data, gb_io_source_t io_s
 }
 
 // serialize everything except rom
-#define SERIALIZED_MEMBERS                                            \
-    X(rom_size)                                                       \
-    Y(vram, gb->mode == CGB, 2 * VRAM_BANK_SIZE, VRAM_BANK_SIZE)     \
-    Z(eram, eram_banks, ERAM_BANK_SIZE)                               \
-    Y(wram, gb->mode == CGB, 8 * WRAM_BANK_SIZE, 2 * WRAM_BANK_SIZE) \
-    X(oam)                                                            \
-    X(io_registers)                                                   \
-    X(hram)                                                           \
-    X(ie)                                                             \
-    W(cram_bg)                                                        \
-    W(cram_obj)                                                       \
-    X(boot_finished)                                                  \
-    X(hdma.initializing)                                              \
-    X(hdma.allow_hdma_block)                                          \
-    X(hdma.lock_cpu)                                                  \
-    X(hdma.type)                                                      \
-    X(hdma.progress)                                                  \
-    X(hdma.src_address)                                               \
-    X(hdma.dest_address)                                              \
-    X(oam_dma.starting_statuses)                                      \
-    X(oam_dma.starting_count)                                         \
-    X(oam_dma.progress)                                               \
-    X(oam_dma.src_address)                                            \
-    X(vram_bank_addr_offset)                                          \
-    X(wram_bankn_addr_offset)                                         \
-    X(rom_banks)                                                      \
-    X(eram_banks)                                                     \
-    X(rom_bank0_addr)                                                 \
-    X(rom_bankn_addr)                                                 \
-    X(eram_bank_addr)                                                 \
-    X(has_battery)                                                    \
-    X(has_rumble)                                                     \
+#define SERIALIZED_MEMBERS                                                   \
+    X(rom_size)                                                              \
+    Y(vram, gb->mode == GB_MODE_CGB, 2 * VRAM_BANK_SIZE, VRAM_BANK_SIZE)     \
+    Z(eram, eram_banks, ERAM_BANK_SIZE)                                      \
+    Y(wram, gb->mode == GB_MODE_CGB, 8 * WRAM_BANK_SIZE, 2 * WRAM_BANK_SIZE) \
+    X(oam)                                                                   \
+    X(io_registers)                                                          \
+    X(hram)                                                                  \
+    X(ie)                                                                    \
+    W(cram_bg)                                                               \
+    W(cram_obj)                                                              \
+    X(boot_finished)                                                         \
+    X(hdma.initializing)                                                     \
+    X(hdma.allow_hdma_block)                                                 \
+    X(hdma.lock_cpu)                                                         \
+    X(hdma.type)                                                             \
+    X(hdma.progress)                                                         \
+    X(hdma.src_address)                                                      \
+    X(hdma.dest_address)                                                     \
+    X(oam_dma.starting_statuses)                                             \
+    X(oam_dma.starting_count)                                                \
+    X(oam_dma.progress)                                                      \
+    X(oam_dma.src_address)                                                   \
+    X(vram_bank_addr_offset)                                                 \
+    X(wram_bankn_addr_offset)                                                \
+    X(rom_banks)                                                             \
+    X(eram_banks)                                                            \
+    X(rom_bank0_addr)                                                        \
+    X(rom_bankn_addr)                                                        \
+    X(eram_bank_addr)                                                        \
+    X(has_battery)                                                           \
+    X(has_rumble)                                                            \
     X(has_rtc)
 
 #define X(value) SERIALIZED_LENGTH(value);

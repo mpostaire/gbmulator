@@ -73,7 +73,7 @@ void gb_link_connect_gb(gb_t *gb, gb_t *other_gb);
 /**
  * Connects an emulator and a printer through the link cable.
  * This automatically disconnects a previous link cable connection.
- * Freeing the previously linked device is the responsibility of the caller.
+ * Freeing the previously connected device is the responsibility of the caller.
  * @param gb the emulator.
  * @param printer the printer.
 */
@@ -81,10 +81,28 @@ void gb_link_connect_printer(gb_t *gb, gb_printer_t *printer);
 
 /**
  * Disconnects any device linked to `gb`.
- * Freeing the previously linked device is the responsibility of the caller.
+ * Freeing the previously connected device is the responsibility of the caller.
  * @param gb the emulator.
 */
 void gb_link_disconnect(gb_t *gb);
+
+
+/**
+ * Connects 2 emulators through the IR sensor.
+ * This automatically disconnects a previous IR connection. 
+ * Freeing the previously connected device is the responsibility of the caller.
+ * @param gb the fist emulator.
+ * @param other_gb the second emulator.
+ * @returns 1 if success, 0 if failed (`gb` and/or `other_gb` have no IR sensor)
+*/
+byte_t gb_ir_connect(gb_t *gb, gb_t *other_gb);
+
+/**
+ * Disconnects any device connected with IR to `gb`.
+ * Freeing the previously connected device is the responsibility of the caller.
+ * @param gb the emulator.
+*/
+void gb_ir_disconnect(gb_t *gb);
 
 void gb_joypad_press(gb_t *gb, gb_joypad_button_t key);
 
@@ -116,7 +134,7 @@ void gb_get_options(gb_t *gb, gb_options_t *opts);
 
 void gb_set_options(gb_t *gb, gb_options_t *opts);
 
-gb_mode_t gb_get_mode(gb_t *gb);
+gb_mode_t gb_is_cgb(gb_t *gb);
 
 word_t gb_get_cartridge_checksum(gb_t *gb);
 

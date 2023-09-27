@@ -12,7 +12,7 @@ static int keycode_filter(SDL_Keycode key);
 
 // config struct initialized to defaults
 config_t config = {
-    .mode = CGB,
+    .mode = GB_MODE_CGB,
     .color_palette = PPU_COLOR_PALETTE_ORIG,
     .scale = 2,
     .sound = 0.25f,

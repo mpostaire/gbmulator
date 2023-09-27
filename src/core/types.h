@@ -36,8 +36,8 @@ typedef enum {
 } gb_joypad_button_t;
 
 typedef enum {
-    DMG = 1,
-    CGB
+    GB_MODE_DMG = 1,
+    GB_MODE_CGB
 } gb_mode_t;
 
 typedef enum {
@@ -57,7 +57,7 @@ typedef byte_t (*linked_device_shift_bit_cb_t)(void *device, byte_t in_bit);
 typedef void (*linked_device_data_received_cb_t)(void *device);
 
 typedef struct {
-    gb_mode_t mode; // either `DMG` for original game boy emulation or `CGB` for game boy color emulation
+    gb_mode_t mode; // either `GB_MODE_DMG` for original game boy emulation or `GB_MODE_CGB` for game boy color emulation
     byte_t disable_cgb_color_correction;
     gb_color_palette_t palette;
     float apu_speed;

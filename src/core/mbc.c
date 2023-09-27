@@ -312,8 +312,8 @@ byte_t mbc_read_eram(gb_t *gb, word_t address) {
     }
 
     if (mbc->type == HuC1 && mbc->huc1.ir_mode) {
-        // TODO
-        eprintf("TODO read HuC1 IR light register (read 0xC1 --> seen light, 0xC0 --> did not see light)\n");
+        if (gb->ir_gb)
+            return 0xC0 | gb->ir_gb->mmu->mbc.huc1.ir_led;
         return 0xC0;
     }
 
@@ -379,8 +379,9 @@ void mbc_write_eram(gb_t *gb, word_t address, byte_t data) {
     }
 
     if (mbc->type == HuC1 && mbc->huc1.ir_mode) {
-        // TODO
-        eprintf("TODO write 0x%02X in HuC1 IR light register (write 0x01 --> turn on light, 0x00 --> turn off light)\n", data);
+        data &= 0x01;
+        if (mbc->huc1.ir_led != data)
+            mbc->huc1.ir_led = data;
         return;
     }
 

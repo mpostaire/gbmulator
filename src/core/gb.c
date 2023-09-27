@@ -13,12 +13,12 @@
 typedef struct __attribute__((packed)) {
     char identifier[sizeof(SAVESTATE_STRING)];
     char rom_title[16];
-    byte_t mode; // DMG or CGB
+    byte_t mode; // GB_MODE_DMG or GB_MODE_CGB
 } savestate_header_t;
 
 // TODO fix the weird options getter/setters and default values implementation
 gb_options_t defaults_opts = {
-    .mode = DMG,
+    .mode = GB_MODE_DMG,
     .disable_cgb_color_correction = 0,
     .palette = PPU_COLOR_PALETTE_ORIG,
     .apu_speed = 1.0f,
@@ -374,7 +374,7 @@ void gb_print_status(gb_t *gb) {
     gb_mmu_t *mmu = gb->mmu;
 
     printf("[%s] Playing %s (v%d) by %s\n",
-            gb->mode == DMG ? "DMG" : "CGB",
+            gb->mode == GB_MODE_DMG ? "DMG" : "CGB",
             gb->rom_title,
             mmu->rom[0x014C],
             get_licensee(gb)
@@ -433,6 +433,30 @@ void gb_link_disconnect(gb_t *gb) {
     gb->link->linked_device.type = LINK_TYPE_NONE;
     gb->link->linked_device.shift_bit = NULL;
     gb->link->linked_device.data_received = NULL;
+}
+
+byte_t gb_ir_connect(gb_t *gb, gb_t *other_gb) {
+    if (gb->mode == GB_MODE_DMG && gb->mmu->mbc.type != HuC1 && gb->mmu->mbc.type != HuC3)
+        return 0;
+    if (other_gb->mode == GB_MODE_DMG && other_gb->mmu->mbc.type != HuC1 && other_gb->mmu->mbc.type != HuC3)
+        return 0;
+
+    gb_ir_disconnect(gb);
+
+    gb->ir_gb = other_gb;
+    other_gb->ir_gb = gb;
+
+    return 1;
+}
+
+void gb_ir_disconnect(gb_t *gb) {
+    if (gb->mode != GB_MODE_CGB)
+        return;
+
+    if (gb->ir_gb && gb->ir_gb->mode == GB_MODE_CGB)
+        gb->ir_gb->ir_gb = NULL;
+
+    gb->ir_gb = NULL;
 }
 
 void gb_joypad_press(gb_t *gb, gb_joypad_button_t key) {
@@ -758,7 +782,7 @@ void gb_set_options(gb_t *gb, gb_options_t *opts) {
 
     // allow changes of mode, apu_sample_count and apu_format only once (inside gb_init())
     if (!gb->mode) {
-        gb->mode = opts->mode >= DMG && opts->mode <= CGB ? opts->mode : defaults_opts.mode;
+        gb->mode = opts->mode >= GB_MODE_DMG && opts->mode <= GB_MODE_CGB ? opts->mode : defaults_opts.mode;
         gb->apu_sample_count = opts->apu_sample_count >= 128 ? opts->apu_sample_count : defaults_opts.apu_sample_count;
         gb->apu_format = opts->apu_format >= APU_FORMAT_F32 && opts->apu_format <= APU_FORMAT_U8 ? opts->apu_format : defaults_opts.apu_format;
     }
@@ -772,8 +796,8 @@ void gb_set_options(gb_t *gb, gb_options_t *opts) {
     gb->on_accelerometer_request = opts->on_accelerometer_request;
 }
 
-gb_mode_t gb_get_mode(gb_t *gb) {
-    return gb->mode;
+gb_mode_t gb_is_cgb(gb_t *gb) {
+    return gb->mode == GB_MODE_CGB;
 }
 
 word_t gb_get_cartridge_checksum(gb_t *gb) {

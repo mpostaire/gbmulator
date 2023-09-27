@@ -250,7 +250,7 @@ static inline byte_t get_tileslice(gb_t *gb, word_t tiledata_address, byte_t att
     gb_mmu_t *mmu = gb->mmu;
 
     byte_t flip_x = CHECK_BIT(attributes, 5);
-    if (gb->mode == CGB) {
+    if (gb->mode == GB_MODE_CGB) {
         if (CHECK_BIT(attributes, 3)) // tile is in VRAM bank 1
             return flip_x ? reverse_bits_order(mmu->vram[tiledata_address - VRAM + VRAM_BANK_SIZE]) : mmu->vram[tiledata_address - VRAM + VRAM_BANK_SIZE];
         else
@@ -266,13 +266,13 @@ static inline void fetch_tileslice_low(gb_t *gb) {
     byte_t tileslice = 0;
     switch (ppu->pixel_fetcher.mode) {
         case FETCH_BG: {
-            byte_t attributes = gb->mode == CGB ? cgb_get_bg_win_tile_attributes(gb) : 0;
+            byte_t attributes = gb->mode == GB_MODE_CGB ? cgb_get_bg_win_tile_attributes(gb) : 0;
             word_t tiledata_address = get_bg_tiledata_address(gb, 0, CHECK_BIT(attributes, 6));
             tileslice = get_tileslice(gb, tiledata_address, attributes);
             break;
         }
         case FETCH_WIN: {
-            byte_t attributes = gb->mode == CGB ? cgb_get_bg_win_tile_attributes(gb) : 0;
+            byte_t attributes = gb->mode == GB_MODE_CGB ? cgb_get_bg_win_tile_attributes(gb) : 0;
             word_t tiledata_address = get_win_tiledata_address(gb, 0, CHECK_BIT(attributes, 6));
             tileslice = get_tileslice(gb, tiledata_address, attributes);
             break;
@@ -301,7 +301,7 @@ static inline void fetch_tileslice_high(gb_t *gb) {
     // leading to potential bitplane desync
     switch (ppu->pixel_fetcher.mode) {
         case FETCH_BG: {
-            if (gb->mode == CGB) {
+            if (gb->mode == GB_MODE_CGB) {
                 attributes = cgb_get_bg_win_tile_attributes(gb);
                 palette = IS_CGB_COMPAT_MODE(mmu) ? 0 : attributes & 0x07;
             } else {
@@ -312,7 +312,7 @@ static inline void fetch_tileslice_high(gb_t *gb) {
             break;
         }
         case FETCH_WIN: {
-            if (gb->mode == CGB) {
+            if (gb->mode == GB_MODE_CGB) {
                 attributes = cgb_get_bg_win_tile_attributes(gb);
                 palette = IS_CGB_COMPAT_MODE(mmu) ? 0 : attributes & 0x07;
             } else {
@@ -328,7 +328,7 @@ static inline void fetch_tileslice_high(gb_t *gb) {
             tileslice = get_tileslice(gb, tiledata_address, attributes);
             oam_pos = ppu->oam_scan.objs_oam_pos[ppu->pixel_fetcher.curr_oam_index];
 
-            byte_t is_cgb_mode = gb->mode == CGB && !IS_CGB_COMPAT_MODE(mmu);
+            byte_t is_cgb_mode = gb->mode == GB_MODE_CGB && !IS_CGB_COMPAT_MODE(mmu);
             palette = is_cgb_mode ? attributes & 0x07 : GET_BIT(attributes, 4);
             break;
         }
@@ -362,7 +362,7 @@ static inline byte_t push(gb_t *gb) {
             if (ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].x < 8)
                 offset = 8 - ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].x;
 
-            byte_t is_cgb_mode = gb->mode == CGB && !CHECK_BIT(gb->mmu->io_registers[OPRI - IO], 0);
+            byte_t is_cgb_mode = gb->mode == GB_MODE_CGB && !CHECK_BIT(gb->mmu->io_registers[OPRI - IO], 0);
             for (byte_t fetcher_index = offset; fetcher_index < PIXEL_FIFO_SIZE; fetcher_index++) {
                 byte_t fifo_index = ((fetcher_index - offset) + ppu->obj_fifo.head) % PIXEL_FIFO_SIZE;
 
@@ -389,7 +389,7 @@ static inline byte_t push(gb_t *gb) {
 static inline gb_pixel_t *select_pixel(gb_t *gb, gb_pixel_t *bg_win_pixel, gb_pixel_t *obj_pixel) {
     gb_mmu_t *mmu = gb->mmu;
 
-    byte_t is_cgb_mode = gb->mode == CGB && !IS_CGB_COMPAT_MODE(mmu);
+    byte_t is_cgb_mode = gb->mode == GB_MODE_CGB && !IS_CGB_COMPAT_MODE(mmu);
     if (is_cgb_mode) {
         if (!obj_pixel || !IS_PPU_OBJ_ENABLED(mmu) || obj_pixel->color == DMG_WHITE)
             return bg_win_pixel;
@@ -497,7 +497,7 @@ static inline void drawing_step(gb_t *gb) {
     gb_pixel_t *selected_pixel = select_pixel(gb, bg_win_pixel, obj_pixel);
     byte_t selected_is_obj = selected_pixel == obj_pixel;
 
-    if (gb->mode == CGB) {
+    if (gb->mode == GB_MODE_CGB) {
         if (IS_CGB_COMPAT_MODE(mmu))
             selected_pixel->color = dmg_get_color(mmu, selected_pixel, selected_is_obj);
 
@@ -634,7 +634,7 @@ static inline void vblank_step(gb_t *gb) {
 static inline void blank_screen(gb_t *gb) {
     for (int x = 0; x < GB_SCREEN_WIDTH; x++) {
         for (int y = 0; y < GB_SCREEN_HEIGHT; y++) {
-            if (gb->mode == CGB) {
+            if (gb->mode == GB_MODE_CGB) {
                 byte_t r, g, b;
                 cgb_get_color(gb->mmu, NULL, 0, !gb->disable_cgb_color_correction, &r, &g, &b);
                 SET_PIXEL_CGB(gb, x, y, r, g, b);
