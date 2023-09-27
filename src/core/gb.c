@@ -436,9 +436,9 @@ void gb_link_disconnect(gb_t *gb) {
 }
 
 byte_t gb_ir_connect(gb_t *gb, gb_t *other_gb) {
-    if (gb->mode != GB_MODE_CGB && (gb->mmu->mbc.type != HuC1 || gb->mmu->mbc.type != HuC3))
+    if (gb->mode == GB_MODE_DMG && gb->mmu->mbc.type != HuC1 && gb->mmu->mbc.type != HuC3)
         return 0;
-    if (other_gb->mode != GB_MODE_CGB && (other_gb->mmu->mbc.type != HuC1 || other_gb->mmu->mbc.type != HuC3))
+    if (other_gb->mode == GB_MODE_DMG && other_gb->mmu->mbc.type != HuC1 && other_gb->mmu->mbc.type != HuC3)
         return 0;
 
     gb_ir_disconnect(gb);
