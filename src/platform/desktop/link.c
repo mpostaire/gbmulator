@@ -18,11 +18,13 @@ byte_t *in_pkt = NULL;
 byte_t *out_pkt = NULL;
 
 word_t checksum = 0;
-gb_mode_t emu_mode = DMG;
+gb_mode_t emu_mode = GB_MODE_DMG;
+gboolean is_cable_link = FALSE;
+gboolean is_ir_link = FALSE;
 gboolean can_compress = FALSE;
 byte_t *savestate_data = NULL;
 size_t savestate_len = 0;
-gb_t *local_emu = NULL;
+gb_t *local_gb = NULL;
 gb_t *linked_gb = NULL;
 
 gboolean write_done = FALSE;
@@ -92,7 +94,7 @@ static void exchange_state_done(void) {
     //     free(rom_data);
     // } else {
         size_t rom_len;
-        byte_t *rom_data = gb_get_rom(local_emu, &rom_len);
+        byte_t *rom_data = gb_get_rom(local_gb, &rom_len);
         linked_gb = gb_init(rom_data, rom_len, &opts);
     // }
 
@@ -101,7 +103,10 @@ static void exchange_state_done(void) {
         return; // TODO cancel exchange on error
     }
 
-    gb_link_connect_gb(local_emu, linked_gb);
+    if (is_cable_link)
+        gb_link_connect_gb(local_gb, linked_gb);
+    if (is_ir_link)
+        gb_ir_connect(local_gb, linked_gb);
 
     // allocate joypad pkts once here so we don't have to do it at every joypad exchange.
     out_pkt = xrealloc(out_pkt, 2);
@@ -137,7 +142,7 @@ static void receive_state_payload(void) {
 }
 
 static void exchange_state(void) {
-    savestate_data = gb_get_savestate(local_emu, &savestate_len, can_compress);
+    savestate_data = gb_get_savestate(local_gb, &savestate_len, can_compress);
 
     out_pkt = xrealloc(out_pkt, savestate_len + 9);
     memset(out_pkt, 0, savestate_len + 9);
@@ -165,7 +170,9 @@ static void exchange_info_done(void) {
         return; // TODO cancel exchange on error
     }
 
-    emu_mode = in_pkt[1] & 0x03;
+    emu_mode = CHECK_BIT(out_pkt[1], 0) ? GB_MODE_CGB : GB_MODE_DMG;
+    is_cable_link = CHECK_BIT(out_pkt[1], 1); // cable-link
+    is_ir_link = CHECK_BIT(out_pkt[1], 2); // ir-link
     #ifdef __HAVE_ZLIB__
     can_compress = GET_BIT(in_pkt[1], 7);
     #endif
@@ -184,12 +191,14 @@ static void exchange_info(void) {
     out_pkt = xrealloc(out_pkt, 4);
     memset(out_pkt, 0, 4);
     out_pkt[0] = PKT_INFO;
-    out_pkt[1] = gb_get_mode(local_emu);
+    out_pkt[1] = gb_is_cgb(local_gb);
+    SET_BIT(out_pkt[1], 1); // cable-link
+    SET_BIT(out_pkt[1], 2); // ir-link
     #ifdef __HAVE_ZLIB__
     SET_BIT(out_pkt[1], 7);
     #endif
 
-    checksum = gb_get_cartridge_checksum(local_emu);
+    checksum = gb_get_cartridge_checksum(local_gb);
     memcpy(&out_pkt[2], &checksum, 2);
 
     read_arg = (struct read_cb_arg) {
@@ -218,11 +227,11 @@ static void exchange_joypad_done(void) {
 //      --> making this asynchronous while keeping both emulators in sync is very difficult and
 //          I didn't manage to find a way.
 gb_t *link_communicate(void) {
-    if (!linked_gb || !local_emu)
+    if (!linked_gb || !local_gb)
         return NULL;
 
     out_pkt[0] = PKT_JOYPAD;
-    out_pkt[1] = gb_get_joypad_state(local_emu);
+    out_pkt[1] = gb_get_joypad_state(local_gb);
 
     read_arg = (struct read_cb_arg) {
         .pkt_size = 2,
@@ -255,7 +264,7 @@ void link_setup_connection(GSocketConnection *conn, gb_t *gb) {
     if (connection)
         g_io_stream_close(G_IO_STREAM(conn), NULL, NULL);
     connection = conn;
-    local_emu = gb;
+    local_gb = gb;
 
     // TODO reset everything if a connection was previously established
 

@@ -21,7 +21,7 @@ static void parse_config_line(config_t *config, const char *line) {
         return;
     }
     if (sscanf(line, "mode=%hhu", &mode)) {
-        if (mode == CGB || mode == DMG)
+        if (mode == GB_MODE_CGB || mode == GB_MODE_DMG)
             config->mode = mode;
         return;
     }

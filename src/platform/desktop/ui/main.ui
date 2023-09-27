@@ -6,6 +6,7 @@
     <object class="AdwWindow" id="window">
         <property name="content">
             <object class="AdwToolbarView" id="toolbarview">
+                <property name="top-bar-style">ADW_TOOLBAR_RAISED_BORDER</property>
                 <child type="top">
                     <object class="AdwHeaderBar">
                         <property name="title-widget">
@@ -89,12 +90,12 @@
                 <attribute name="accel">&lt;Ctrl&gt;r</attribute>
             </item>
             <item>
-                <attribute name="label">Link emulator</attribute>
+                <attribute name="label">Connect emulator</attribute>
                 <attribute name="action">app.link_emulator</attribute>
                 <attribute name="accel">&lt;Ctrl&gt;l</attribute>
             </item>
             <item>
-                <attribute name="label">Link printer</attribute>
+                <attribute name="label">Connect printer</attribute>
                 <attribute name="action">app.link_printer</attribute>
             </item>
         </section>

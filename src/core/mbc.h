@@ -88,6 +88,7 @@ typedef struct {
 
         struct {
             byte_t ir_mode; // 1 if huc1 eram is in IR mode
+            byte_t ir_led;
             byte_t rom_bank;
             byte_t eram_bank;
         } huc1;
@@ -156,6 +157,7 @@ void rtc_step(gb_t *gb);
 
 #define HuC1_MEMBERS \
     X(huc1.ir_mode)  \
+    X(huc1.ir_led)  \
     X(huc1.rom_bank) \
     X(huc1.eram_bank)
 

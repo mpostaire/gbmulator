@@ -132,14 +132,16 @@ static inline int receive(int fd, void *buf, size_t n, int flags) {
     return 1;
 }
 
-static int exchange_info(int sfd, gb_t *gb, gb_mode_t *mode, int *can_compress) {
+static int exchange_info(int sfd, gb_t *gb, gb_mode_t *mode, int *can_compress, int *is_cable_link, int *is_ir_link) {
     // --- SEND PKT_INFO ---
 
     word_t checksum = gb_get_cartridge_checksum(gb);
 
     byte_t pkt[4] = { 0 };
     pkt[0] = PKT_INFO;
-    pkt[1] = gb_get_mode(gb);
+    pkt[1] = gb_is_cgb(gb);
+    SET_BIT(pkt[1], 1); // cable-link
+    SET_BIT(pkt[1], 2); // ir-link
     #ifdef __HAVE_ZLIB__
     SET_BIT(pkt[1], 7);
     #endif
@@ -156,7 +158,9 @@ static int exchange_info(int sfd, gb_t *gb, gb_mode_t *mode, int *can_compress) 
         return -1;
     }
 
-    *mode = pkt[1] & 0x03;
+    *mode = CHECK_BIT(pkt[1], 0) ? GB_MODE_CGB : GB_MODE_DMG;
+    *is_cable_link = CHECK_BIT(pkt[1], 1); // cable-link
+    *is_ir_link = CHECK_BIT(pkt[1], 2); // ir-link
     #ifdef __HAVE_ZLIB__
     *can_compress = GET_BIT(pkt[1], 7);
     #endif
@@ -242,13 +246,15 @@ int link_init_transfer(int sfd, gb_t *gb, gb_t **linked_gb) {
     *linked_gb = NULL;
     gb_mode_t mode = 0;
     int can_compress = 0;
+    int is_cable_link = 0;
+    int is_ir_link = 0;
     size_t rom_len;
     byte_t *rom_data = NULL;
     size_t savestate_len;
     byte_t *savestate_data = NULL;
 
     // TODO handle wrong packet type received
-    int ret = exchange_info(sfd, gb, &mode, &can_compress);
+    int ret = exchange_info(sfd, gb, &mode, &can_compress, &is_cable_link, &is_ir_link);
     if (ret == 0) {
         exchange_rom(sfd, gb, &rom_data, &rom_len);
     }
@@ -275,7 +281,10 @@ int link_init_transfer(int sfd, gb_t *gb, gb_t **linked_gb) {
         return 0;
     }
 
-    gb_link_connect_gb(gb, *linked_gb);
+    if (is_cable_link)
+        gb_link_connect_gb(gb, *linked_gb);
+    if (is_ir_link)
+        gb_ir_connect(gb, *linked_gb);
 
     free(savestate_data);
     return 1;
