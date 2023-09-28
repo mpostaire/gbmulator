@@ -16,15 +16,15 @@
 
 // TODO savestates ui
 
-SDL_bool is_running;
-SDL_bool is_landscape;
+static SDL_bool is_running;
+static SDL_bool is_landscape;
 SDL_bool show_link_dialog;
 SDL_bool init_handshake;
 
 int frame_skip;
 
-int screen_width;
-int screen_height;
+static int screen_width;
+static int screen_height;
 
 SDL_Renderer *renderer;
 SDL_Window *window;
@@ -84,7 +84,7 @@ SDL_Texture *link_pressed_texture;
 
 int steps_per_frame;
 
-button_t buttons[] = {
+static button_t buttons[] = {
     {
         .shape = {
             .h = 60,
@@ -457,8 +457,8 @@ static void handle_input(void) {
 }
 
 static void start_emulation_loop(void) {
-    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 3;
+    ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
 
     SDL_AudioSpec audio_settings = {
         .freq = GB_APU_SAMPLE_RATE,
