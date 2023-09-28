@@ -492,15 +492,8 @@ byte_t *gb_get_save(gb_t *gb, size_t *save_length) {
         return NULL;
     }
 
-    size_t rtc_timestamp_len = 0;
-    size_t rtc_len = 0;
-    char *rtc_timestamp = NULL;
-    if (gb->mmu->has_rtc) {
-        rtc_timestamp = time_to_string(time(NULL), &rtc_timestamp_len);
-        rtc_len = 10 + rtc_timestamp_len;
-    }
-
-    size_t eram_len = 0x2000 * gb->mmu->eram_banks;
+    size_t rtc_len = gb->mmu->has_rtc ? 48 : 0;
+    size_t eram_len = gb->mmu->eram_banks * ERAM_BANK_SIZE;
     size_t total_len = eram_len + rtc_len;
     if (save_length)
         *save_length = total_len;
@@ -513,20 +506,25 @@ byte_t *gb_get_save(gb_t *gb, size_t *save_length) {
     if (eram_len > 0)
         memcpy(save_data, gb->mmu->eram, eram_len);
 
-    if (rtc_timestamp) {
-        memcpy(&save_data[eram_len], &gb->mmu->mbc.mbc3.rtc.s, 1);
-        memcpy(&save_data[eram_len + 1], &gb->mmu->mbc.mbc3.rtc.m, 1);
-        memcpy(&save_data[eram_len + 2], &gb->mmu->mbc.mbc3.rtc.h, 1);
-        memcpy(&save_data[eram_len + 3], &gb->mmu->mbc.mbc3.rtc.dl, 1);
-        memcpy(&save_data[eram_len + 4], &gb->mmu->mbc.mbc3.rtc.dh, 1);
-        memcpy(&save_data[eram_len + 5], &gb->mmu->mbc.mbc3.rtc.latched_s, 1);
-        memcpy(&save_data[eram_len + 6], &gb->mmu->mbc.mbc3.rtc.latched_m, 1);
-        memcpy(&save_data[eram_len + 7], &gb->mmu->mbc.mbc3.rtc.latched_h, 1);
-        memcpy(&save_data[eram_len + 8], &gb->mmu->mbc.mbc3.rtc.latched_dl, 1);
-        memcpy(&save_data[eram_len + 9], &gb->mmu->mbc.mbc3.rtc.latched_dh, 1);
+    if (rtc_len > 0) {
+        save_data[eram_len] = gb->mmu->mbc.mbc3.rtc.s;
+        save_data[eram_len + 4] = gb->mmu->mbc.mbc3.rtc.m;
+        save_data[eram_len + 8] = gb->mmu->mbc.mbc3.rtc.h;
+        save_data[eram_len + 12] = gb->mmu->mbc.mbc3.rtc.dl;
+        save_data[eram_len + 16] = gb->mmu->mbc.mbc3.rtc.dh;
+        save_data[eram_len + 20] = gb->mmu->mbc.mbc3.rtc.latched_s;
+        save_data[eram_len + 24] = gb->mmu->mbc.mbc3.rtc.latched_m;
+        save_data[eram_len + 28] = gb->mmu->mbc.mbc3.rtc.latched_h;
+        save_data[eram_len + 32] = gb->mmu->mbc.mbc3.rtc.latched_dl;
+        save_data[eram_len + 36] = gb->mmu->mbc.mbc3.rtc.latched_dh;
+        // fill rtc save padding bytes with 0
+        for (size_t i = eram_len; i < eram_len + 40; i++)
+            if (i % 4 != 0)
+                save_data[i] = 0;
 
-        memcpy(&save_data[eram_len + 10], rtc_timestamp, rtc_timestamp_len);
-        free(rtc_timestamp);
+        time_t rtc_timestamp = time(NULL);
+        for (int i = 0; i < 8; i++) // little endian serialization of rtc_timestamp
+            save_data[eram_len + 40 + i] = rtc_timestamp >> (i * 8);
     }
 
     return save_data;
@@ -544,61 +542,59 @@ int gb_load_save(gb_t *gb, byte_t *save_data, size_t save_length) {
     if (!gb->mmu->has_battery || (!gb->mmu->has_rtc && gb->mmu->eram_banks == 0))
         return 0;
 
-    size_t eram_len = gb->mmu->eram_banks * VRAM_BANK_SIZE;
-
-    size_t rtc_len = 0;
-    if (gb->mmu->has_rtc) {
-        size_t rtc_timestamp_len = strlen((char *) &save_data[eram_len + 10]) + 1;
-        rtc_len = 10 + rtc_timestamp_len;
-    }
-
-    size_t total_len = eram_len + rtc_len;
-    if (total_len != save_length || total_len == 0)
+    size_t eram_len = gb->mmu->eram_banks * ERAM_BANK_SIZE;
+    if (save_length < eram_len || save_length == 0)
         return 0;
 
     if (eram_len > 0)
         memcpy(gb->mmu->eram, save_data, eram_len);
 
-    if (rtc_len > 0) {
-        // get saved rtc registers and timestamp
-        byte_t s = save_data[eram_len];
-        byte_t m = save_data[eram_len + 1];
-        byte_t h = save_data[eram_len + 2];
-        byte_t dl = save_data[eram_len + 3];
-        byte_t dh = save_data[eram_len + 4];
-        gb->mmu->mbc.mbc3.rtc.latched_s = save_data[eram_len + 5];
-        gb->mmu->mbc.mbc3.rtc.latched_m = save_data[eram_len + 6];
-        gb->mmu->mbc.mbc3.rtc.latched_h = save_data[eram_len + 7];
-        gb->mmu->mbc.mbc3.rtc.latched_dl = save_data[eram_len + 8];
-        gb->mmu->mbc.mbc3.rtc.latched_dh = save_data[eram_len + 9];
-
-        time_t rtc_timestamp = string_to_time((char *) &save_data[eram_len + 10]);
-
-        // add elapsed time
-        time_t rtc_registers_time = s + m * 60 + h * 3600 + ((dh << 8) | dl) * 86400;
-        rtc_registers_time += time(NULL) - rtc_timestamp;
-
-        // convert elapsed time back into rtc registers
-        word_t d = rtc_registers_time / 86400;
-        rtc_registers_time %= 86400;
-
-        // day overflow
-        if (d >= 0x0200) {
-            SET_BIT(gb->mmu->mbc.mbc3.rtc.dh, 7);
-            d %= 0x0200;
-        }
-
-        gb->mmu->mbc.mbc3.rtc.dh |= (d & 0x100) >> 8;
-        gb->mmu->mbc.mbc3.rtc.dl = d & 0xFF;
-
-        gb->mmu->mbc.mbc3.rtc.h = rtc_registers_time / 3600;
-        rtc_registers_time %= 3600;
-
-        gb->mmu->mbc.mbc3.rtc.m = rtc_registers_time / 60;
-        rtc_registers_time %= 60;
-
-        gb->mmu->mbc.mbc3.rtc.s = rtc_registers_time;
+    size_t rtc_len = gb->mmu->has_rtc ? save_length - eram_len : 0;
+    if (rtc_len != 44 && rtc_len != 48) {
+        eprintf("Invalid rtc format\n");
+        return 1;
     }
+
+    // get saved rtc registers and timestamp
+    byte_t s = save_data[eram_len];
+    byte_t m = save_data[eram_len + 4];
+    byte_t h = save_data[eram_len + 8];
+    byte_t dl = save_data[eram_len + 12];
+    byte_t dh = save_data[eram_len + 16];
+    gb->mmu->mbc.mbc3.rtc.latched_s = save_data[eram_len + 20];
+    gb->mmu->mbc.mbc3.rtc.latched_m = save_data[eram_len + 24];
+    gb->mmu->mbc.mbc3.rtc.latched_h = save_data[eram_len + 28];
+    gb->mmu->mbc.mbc3.rtc.latched_dl = save_data[eram_len + 32];
+    gb->mmu->mbc.mbc3.rtc.latched_dh = save_data[eram_len + 36];
+
+    time_t rtc_timestamp = 0;
+    for (int i = 0; i < (rtc_len == 48 ? 8 : 4); i++) // little endian unserialization of rtc_timestamp
+        rtc_timestamp |= ((time_t) save_data[eram_len + 40 + i]) << (i * 8);
+
+    // add elapsed time
+    time_t rtc_registers_time = s + m * 60 + h * 3600 + ((dh << 8) | dl) * 86400;
+    rtc_registers_time += time(NULL) - rtc_timestamp;
+
+    // convert elapsed time back into rtc registers
+    word_t d = rtc_registers_time / 86400;
+    rtc_registers_time %= 86400;
+
+    // day overflow
+    if (d >= 0x0200) {
+        SET_BIT(gb->mmu->mbc.mbc3.rtc.dh, 7);
+        d %= 0x0200;
+    }
+
+    gb->mmu->mbc.mbc3.rtc.dh |= (d & 0x100) >> 8;
+    gb->mmu->mbc.mbc3.rtc.dl = d & 0xFF;
+
+    gb->mmu->mbc.mbc3.rtc.h = rtc_registers_time / 3600;
+    rtc_registers_time %= 3600;
+
+    gb->mmu->mbc.mbc3.rtc.m = rtc_registers_time / 60;
+    rtc_registers_time %= 60;
+
+    gb->mmu->mbc.mbc3.rtc.s = rtc_registers_time;
 
     return 1;
 }
