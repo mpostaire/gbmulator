@@ -310,7 +310,7 @@
                 const data_ptr = Module._malloc(num_bytes);
                 const data_on_heap = new Uint8Array(Module.HEAPU8.buffer, data_ptr, num_bytes);
                 data_on_heap.set(uint8Arr);
-                Module.ccall('receive_rom_data', 'void', ['number', 'number'], [data_on_heap.byteOffset, uint8Arr.length]);
+                Module.ccall('receive_rom', 'void', ['number', 'number'], [data_on_heap.byteOffset, uint8Arr.length]);
             };
             if (e.target.files.length === 0)
                 return;

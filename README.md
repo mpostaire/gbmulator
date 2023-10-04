@@ -83,8 +83,6 @@ There is also support for gamepad controllers.
 ### TODO
 
 - implement other MBCs
-- implement printer
-- implement GBC and HuC1 IR
 - find out what are the accurate timings for the ppu pixel fifo/fetcher (especially for corner cases)
 - better audio/video sync
 - android link cable via bluetooth + cross platform link cable

@@ -59,6 +59,7 @@ android {
     lint {
         abortOnError false
     }
+    namespace 'io.github.mpostaire.gbmulator'
 
     if (buildAsLibrary) {
         libraryVariants.all { variant ->

@@ -29,3 +29,9 @@ void load_battery_from_file(gb_t *gb, const char *path);
 int save_state_to_file(gb_t *gb, const char *path, int compressed);
 
 int load_state_from_file(gb_t *gb, const char *path);
+
+/**
+ * @returns the contents of the file at `path` or `NULL` if the contents are invalid or an unsupported ROM.
+ *          gb_init() won't fail if the return value is not `NULL`.
+ */
+byte_t *get_rom(const char *path, size_t *rom_size);

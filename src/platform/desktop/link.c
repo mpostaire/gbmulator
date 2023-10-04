@@ -84,18 +84,18 @@ static void read_cb(GObject *source, GAsyncResult *res, gpointer data) {
 static void exchange_state_done(void) {
     gb_options_t opts = { .mode = emu_mode };
 
-    // if (rom_data) { // TODO
-    //     linked_gb = gb_init(rom_data, rom_len, &opts);
+    // if (rom) { // TODO
+    //     linked_gb = gb_init(rom, rom_len, &opts);
     //     if (!linked_gb) {
     //         eprintf("received invalid or corrupted PKT_ROM\n");
-    //         free(rom_data);
+    //         free(rom);
     //         return FALSE;
     //     }
-    //     free(rom_data);
+    //     free(rom);
     // } else {
         size_t rom_len;
-        byte_t *rom_data = gb_get_rom(local_gb, &rom_len);
-        linked_gb = gb_init(rom_data, rom_len, &opts);
+        byte_t *rom = gb_get_rom(local_gb, &rom_len);
+        linked_gb = gb_init(rom, rom_len, &opts);
     // }
 
     if (!gb_load_savestate(linked_gb, in_pkt, savestate_len)) {

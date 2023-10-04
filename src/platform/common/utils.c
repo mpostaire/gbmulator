@@ -174,3 +174,39 @@ int load_state_from_file(gb_t *gb, const char *path) {
     free(buf);
     return ret;
 }
+
+byte_t *get_rom(const char *path, size_t *rom_size) {
+    const char *dot = strrchr(path, '.');
+    if (!dot || (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) && strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))))) {
+        eprintf("%s: wrong file extension (expected .gb or .gbc)\n", path);
+        return NULL;
+    }
+
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        errnoprintf("opening file %s", path);
+        return NULL;
+    }
+
+    fseek(f, 0, SEEK_END);
+    size_t len = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    byte_t *rom = xmalloc(len);
+    if (!fread(rom, len, 1, f)) {
+        errnoprintf("reading %s", path);
+        fclose(f);
+        return NULL;
+    }
+    fclose(f);
+
+    if (!gb_is_rom_valid(rom)) {
+        eprintf("%s: invalid or unsupported rom\n", path);
+        free(rom);
+        return NULL;
+    }
+
+    if (rom_size)
+        *rom_size = len;
+    return rom;
+}

@@ -7,13 +7,13 @@
 
 #define log(...) __android_log_print(ANDROID_LOG_INFO, "GBmulator", __VA_ARGS__)
 
-SDL_bool is_running;
-SDL_bool is_landscape;
+static SDL_bool is_running;
+static SDL_bool is_landscape;
 
-int screen_width;
-int screen_height;
+static int screen_width;
+static int screen_height;
 
-button_t *buttons;
+static button_t *buttons;
 int moving;
 int moving_offset_x;
 int moving_offset_y;

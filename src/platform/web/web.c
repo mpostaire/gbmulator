@@ -166,7 +166,7 @@ static void save(void) {
     free(save_data);
 }
 
-void load_cartridge(const byte_t *rom_data, size_t rom_size) {
+void load_cartridge(const byte_t *rom, size_t rom_size) {
     gb_options_t opts = {
         .mode = config.mode,
         .on_apu_samples_ready = apu_samples_ready_cb,
@@ -175,7 +175,7 @@ void load_cartridge(const byte_t *rom_data, size_t rom_size) {
         .apu_sound_level = config.sound,
         .palette = config.color_palette
     };
-    gb_t *new_emu = gb_init(rom_data, rom_size, &opts);
+    gb_t *new_emu = gb_init(rom, rom_size, &opts);
     if (!new_emu) return;
 
     if (gb) {
@@ -238,9 +238,9 @@ EMSCRIPTEN_KEEPALIVE void on_gui_button_up(gb_joypad_button_t button) {
         gb_joypad_release(gb, button);
 }
 
-EMSCRIPTEN_KEEPALIVE void receive_rom_data(uint8_t *rom_data, size_t rom_size) {
-    load_cartridge(rom_data, rom_size);
-    free(rom_data);
+EMSCRIPTEN_KEEPALIVE void receive_rom(uint8_t *rom, size_t rom_size) {
+    load_cartridge(rom, rom_size);
+    free(rom);
 }
 
 EMSCRIPTEN_KEEPALIVE void reset_rom(void) {
