@@ -247,12 +247,6 @@ static void toggle_loop(void) {
         stop_loop();
 }
 
-// TODO sdl - android link doesn't work
-//      sld - adwaita link doesn't work
-//      sdl - sdl link works
-//      android - android link ????
-//      adwaita - adwaita works if joypad exchange is done synchronously
-
 static gboolean loop(gpointer user_data) {
     gb_set_joypad_state(gb, joypad_state);
 
