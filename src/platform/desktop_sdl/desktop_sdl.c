@@ -109,36 +109,6 @@ static void apu_samples_ready_cb(const void *audio_buffer, size_t audio_buffer_s
     SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
 }
 
-static byte_t *get_rom_data(const char *path, size_t *rom_size) {
-    const char *dot = strrchr(path, '.');
-    if (!dot || (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) && strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))))) {
-        eprintf("%s: wrong file extension (expected .gb or .gbc)\n", path);
-        return NULL;
-    }
-
-    FILE *f = fopen(path, "rb");
-    if (!f) {
-        errnoprintf("opening file %s", path);
-        return NULL;
-    }
-
-    fseek(f, 0, SEEK_END);
-    size_t len = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    byte_t *buf = xmalloc(len);
-    if (!fread(buf, len, 1, f)) {
-        errnoprintf("reading %s", path);
-        fclose(f);
-        return NULL;
-    }
-    fclose(f);
-
-    if (rom_size)
-        *rom_size = len;
-    return buf;
-}
-
 static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
     char *xdg = getenv(xdg_variable);
     if (xdg) return xdg;
@@ -201,22 +171,22 @@ static void load_cartridge(char *path) {
     }
 
     size_t rom_size;
-    byte_t *rom_data;
+    byte_t *rom;
     if (path) {
         size_t len = strlen(path);
         rom_path = xrealloc(rom_path, len + 2);
         snprintf(rom_path, len + 1, "%s", path);
 
-        rom_data = get_rom_data(rom_path, &rom_size);
-        if (!rom_data) {
+        rom = get_rom(rom_path, &rom_size);
+        if (!rom) {
             free(rom_path);
             rom_path = NULL;
             return;
         }
     } else {
         byte_t *data = gb_get_rom(gb, &rom_size);
-        rom_data = xmalloc(rom_size);
-        memcpy(rom_data, data, rom_size);
+        rom = xmalloc(rom_size);
+        memcpy(rom, data, rom_size);
     }
 
     gb_options_t opts = {
@@ -227,8 +197,8 @@ static void load_cartridge(char *path) {
         .apu_sound_level = config.sound,
         .palette = config.color_palette
     };
-    gb_t *new_emu = gb_init(rom_data, rom_size, &opts);
-    free(rom_data);
+    gb_t *new_emu = gb_init(rom, rom_size, &opts);
+    free(rom);
     if (!new_emu) return;
 
     char *save_path = get_save_path(rom_path);

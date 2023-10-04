@@ -11,108 +11,136 @@
 #define GBC_CURRENT_VRAM_BANK(mmu) ((mmu)->io_registers[VBK - IO] & 0x01)
 #define GBC_CURRENT_WRAM_BANK(mmu) (((mmu)->io_registers[SVBK - IO] & 0x07) == 0 ? 1 : ((mmu)->io_registers[SVBK - IO] & 0x07))
 
+int parse_header_mbc_byte(byte_t mbc_byte, byte_t *mbc_type, byte_t *has_eram, byte_t *has_battery, byte_t *has_rtc, byte_t *has_rumble) {
+    byte_t tmp_mbc_type, tmp_has_eram, tmp_has_battery, tmp_has_rtc, tmp_has_rumble;
+
+    switch (mbc_byte) {
+    case 0x00:
+        tmp_mbc_type = ROM_ONLY;
+        break;
+    case 0x01:
+        tmp_mbc_type = MBC1;
+        break;
+    case 0x02:
+        tmp_mbc_type = MBC1;
+        tmp_has_eram = 1;
+        break;
+    case 0x03:
+        tmp_mbc_type = MBC1;
+        tmp_has_eram = 1;
+        tmp_has_battery = 1;
+        break;
+    case 0x05:
+        tmp_mbc_type = MBC2;
+        break;
+    case 0x06:
+        tmp_mbc_type = MBC2;
+        tmp_has_eram = 1;
+        tmp_has_battery = 1;
+        break;
+    case 0x0F:
+        tmp_mbc_type = MBC3;
+        tmp_has_rtc = 1;
+        tmp_has_battery = 1;
+        break;
+    case 0x10:
+        tmp_mbc_type = MBC3;
+        tmp_has_rtc = 1;
+        tmp_has_battery = 1;
+        tmp_has_eram = 1;
+        break;
+    case 0x11:
+        tmp_mbc_type = MBC3;
+        break;
+    case 0x12:
+        tmp_mbc_type = MBC3;
+        tmp_has_eram = 1;
+        break;
+    case 0x13:
+        tmp_mbc_type = MBC3;
+        tmp_has_battery = 1;
+        tmp_has_eram = 1;
+        break;
+    case 0x19:
+        tmp_mbc_type = MBC5;
+        break;
+    case 0x1A:
+        tmp_mbc_type = MBC5;
+        tmp_has_eram = 1;
+        break;
+    case 0x1B:
+        tmp_mbc_type = MBC5;
+        tmp_has_eram = 1;
+        tmp_has_battery = 1;
+        break;
+    case 0x1C:
+        tmp_mbc_type = MBC5;
+        tmp_has_rumble = 1;
+        break;
+    case 0x1D:
+        tmp_mbc_type = MBC5;
+        tmp_has_rumble = 1;
+        tmp_has_eram = 1;
+        break;
+    case 0x1E:
+        tmp_mbc_type = MBC5;
+        tmp_has_rumble = 1;
+        tmp_has_eram = 1;
+        tmp_has_battery = 1;
+        break;
+    // case 0x20:
+    //     tmp_mbc_type = MBC6;
+    //     break;
+    case 0x22:
+        tmp_mbc_type = MBC7;
+        break;
+    // case 0xFC:
+    //     tmp_mbc_type = CAMERA;
+    //     break;
+    // case 0xFD:
+    //     tmp_mbc_type = TAMA5;
+    //     break;
+    // case 0xFE:
+    //     tmp_mbc_type = HuC3;
+    //     tmp_has_rtc = 1;
+    //     tmp_has_eram = 1;
+    //     tmp_has_battery = 1;
+    //     break;
+    case 0xFF:
+        tmp_mbc_type = HuC1;
+        tmp_has_eram = 1;
+        tmp_has_battery = 1;
+        break;
+    default: return 0;
+    }
+
+    if (mbc_type) *mbc_type = tmp_mbc_type;
+    if (has_eram) *has_eram = tmp_has_eram;
+    if (has_battery) *has_battery = tmp_has_battery;
+    if (has_rtc) *has_rtc = tmp_has_rtc;
+    if (has_rumble) *has_rumble = tmp_has_rumble;
+
+    return 1;
+}
+
+int validate_header_checksum(const byte_t *rom) {
+    byte_t checksum = 0;
+    for (int i = 0x0134; i <= 0x014C; i++)
+        checksum = checksum - rom[i] - 1;
+    return checksum == rom[0x014D];
+}
+
 static int parse_cartridge(gb_t *gb) {
     gb_mmu_t *mmu = gb->mmu;
 
+    // 8-bit cartridge header checksum validation
+    if (!validate_header_checksum(mmu->rom)) {
+        eprintf("invalid checksum\n");
+        return 0;
+    }
+
     byte_t has_eram = 0;
-    switch (mmu->rom[0x0147]) {
-    case 0x00:
-        mmu->mbc.type = ROM_ONLY;
-        break;
-    case 0x01:
-        mmu->mbc.type = MBC1;
-        break;
-    case 0x02:
-        mmu->mbc.type = MBC1;
-        has_eram = 1;
-        break;
-    case 0x03:
-        mmu->mbc.type = MBC1;
-        has_eram = 1;
-        mmu->has_battery = 1;
-        break;
-    case 0x05:
-        mmu->mbc.type = MBC2;
-        break;
-    case 0x06:
-        mmu->mbc.type = MBC2;
-        has_eram = 1;
-        mmu->has_battery = 1;
-        break;
-    case 0x0F:
-        mmu->mbc.type = MBC3;
-        mmu->has_rtc = 1;
-        mmu->has_battery = 1;
-        break;
-    case 0x10:
-        mmu->mbc.type = MBC3;
-        mmu->has_rtc = 1;
-        mmu->has_battery = 1;
-        has_eram = 1;
-        break;
-    case 0x11:
-        mmu->mbc.type = MBC3;
-        break;
-    case 0x12:
-        mmu->mbc.type = MBC3;
-        has_eram = 1;
-        break;
-    case 0x13:
-        mmu->mbc.type = MBC3;
-        mmu->has_battery = 1;
-        has_eram = 1;
-        break;
-    case 0x19:
-        mmu->mbc.type = MBC5;
-        break;
-    case 0x1A:
-        mmu->mbc.type = MBC5;
-        has_eram = 1;
-        break;
-    case 0x1B:
-        mmu->mbc.type = MBC5;
-        has_eram = 1;
-        mmu->has_battery = 1;
-        break;
-    case 0x1C:
-        mmu->mbc.type = MBC5;
-        mmu->has_rumble = 1;
-        break;
-    case 0x1D:
-        mmu->mbc.type = MBC5;
-        mmu->has_rumble = 1;
-        has_eram = 1;
-        break;
-    case 0x1E:
-        mmu->mbc.type = MBC5;
-        mmu->has_rumble = 1;
-        has_eram = 1;
-        mmu->has_battery = 1;
-        break;
-    // case 0x20:
-    //     mmu->mbc.type = MBC6;
-    //     break;
-    case 0x22:
-        mmu->mbc.type = MBC7;
-        break;
-    // case 0xFC:
-    //     mmu->mbc.type = CAMERA;
-    //     break;
-    // case 0xFD:
-    //     mmu->mbc.type = TAMA5;
-    //     break;
-    // case 0xFE:
-    //     mmu->mbc.type = HuC3;
-    //     mmu->has_rtc = 1;
-    //     has_eram = 1;
-    //     mmu->has_battery = 1;
-    //     break;
-    case 0xFF:
-        mmu->mbc.type = HuC1;
-        has_eram = 1;
-        mmu->has_battery = 1;
-        break;
-    default:
+    if (!parse_header_mbc_byte(mmu->rom[0x0147], &mmu->mbc.type, &has_eram, &mmu->has_battery, &mmu->has_rtc, &mmu->has_rumble)) {
         eprintf("MBC byte %02X not supported\n", mmu->rom[0x0147]);
         return 0;
     }
@@ -161,29 +189,17 @@ static int parse_cartridge(gb_t *gb) {
         gb->rom_title[15] = '\0';
 
     // remove trailing non alphanumeric characters from the rom title
-    for (char *c = &gb->rom_title[16]; c >= gb->rom_title; c--) {
-        if (isalnum(*c))
-            break;
+    for (char *c = &gb->rom_title[16]; c >= gb->rom_title && !isalnum(*c); c--)
         *c = '\0';
-    }
 
     // TODO better understand and implement CGB's DMG compatbility mode
     // byte_t cgb_dmg_compat = gb->mode == CGB && !cgb_flag;
     // byte_t cgb_mode_enabled = gb->mode == CGB && cgb_flag;
 
-    // 8-bit cartridge header checksum validation
-    byte_t checksum = 0;
-    for (int i = 0x0134; i <= 0x014C; i++)
-        checksum = checksum - mmu->rom[i] - 1;
-    if (checksum != mmu->rom[0x014D]) {
-        eprintf("invalid checksum\n");
-        return 0;
-    }
-
     return 1;
 }
 
-int mmu_init(gb_t *gb, const byte_t *rom_data, size_t rom_size) {
+int mmu_init(gb_t *gb, const byte_t *rom, size_t rom_size) {
     gb_mmu_t *mmu = xcalloc(1, sizeof(gb_mmu_t));
     mmu->rom = xcalloc(1, rom_size);
 
@@ -199,7 +215,7 @@ int mmu_init(gb_t *gb, const byte_t *rom_data, size_t rom_size) {
     // mmu->mbc7.accelerometer.latch_ready = 1;
 
     mmu->rom_size = rom_size;
-    memcpy(mmu->rom, rom_data, mmu->rom_size);
+    memcpy(mmu->rom, rom, mmu->rom_size);
     gb->mmu = mmu;
 
     if (parse_cartridge(gb))

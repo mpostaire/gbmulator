@@ -175,16 +175,16 @@ static int exchange_info(int sfd, gb_t *gb, gb_mode_t *mode, int *can_compress, 
     }
 }
 
-static int exchange_rom(int sfd, gb_t *gb, byte_t **rom_data, size_t *rom_len) {
+static int exchange_rom(int sfd, gb_t *gb, byte_t **other_rom, size_t *rom_len) {
     // --- SEND PKT_ROM ---
 
     // TODO compression
-    byte_t *rom = gb_get_rom(gb, rom_len);
+    byte_t *this_rom = gb_get_rom(gb, rom_len);
 
     byte_t *pkt = xcalloc(1, *rom_len + 9);
     pkt[0] = PKT_ROM;
     memcpy(&pkt[1], rom_len, sizeof(size_t));
-    memcpy(&pkt[9], &rom, *rom_len);
+    memcpy(&pkt[9], &this_rom, *rom_len);
 
     send(sfd, pkt, *rom_len + 9, 0);
     free(pkt);
@@ -201,9 +201,9 @@ static int exchange_rom(int sfd, gb_t *gb, byte_t **rom_data, size_t *rom_len) {
     }
 
     memcpy(rom_len, &pkt_header[1], sizeof(size_t));
-    *rom_data = xcalloc(1, *rom_len);
+    *other_rom = xcalloc(1, *rom_len);
 
-    receive(sfd, *rom_data, *rom_len, 0);
+    receive(sfd, *other_rom, *rom_len, 0);
 
     return 1;
 }
@@ -249,31 +249,30 @@ int link_init_transfer(int sfd, gb_t *gb, gb_t **linked_gb) {
     int is_cable_link = 0;
     int is_ir_link = 0;
     size_t rom_len;
-    byte_t *rom_data = NULL;
+    byte_t *rom = NULL;
     size_t savestate_len;
     byte_t *savestate_data = NULL;
 
     // TODO handle wrong packet type received
     int ret = exchange_info(sfd, gb, &mode, &can_compress, &is_cable_link, &is_ir_link);
-    if (ret == 0) {
-        exchange_rom(sfd, gb, &rom_data, &rom_len);
-    }
+    if (ret == 0)
+        exchange_rom(sfd, gb, &rom, &rom_len);
     exchange_savestate(sfd, gb, can_compress, &savestate_data, &savestate_len);
 
     // --- LINK BACKGROUND EMULATOR ---
 
     gb_options_t opts = { .mode = mode };
-    if (rom_data) {
-        *linked_gb = gb_init(rom_data, rom_len, &opts);
+    if (rom) {
+        *linked_gb = gb_init(rom, rom_len, &opts);
         if (!*linked_gb) {
             eprintf("received invalid or corrupted PKT_ROM\n");
-            free(rom_data);
+            free(rom);
             return 0;
         }
-        free(rom_data);
+        free(rom);
     } else {
-        rom_data = gb_get_rom(gb, &rom_len);
-        *linked_gb = gb_init(rom_data, rom_len, &opts);
+        rom = gb_get_rom(gb, &rom_len);
+        *linked_gb = gb_init(rom, rom_len, &opts);
     }
 
     if (!gb_load_savestate(*linked_gb, savestate_data, savestate_len)) {

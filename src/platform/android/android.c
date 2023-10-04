@@ -521,7 +521,7 @@ static void start_emulation_loop(void) {
     SDL_CloseAudioDevice(audio_device);
 }
 
-static void load_cartridge(const byte_t *rom_data, size_t rom_size, int resume, int emu_mode, int palette, float emu_speed, float sound) {
+static void load_cartridge(const byte_t *rom, size_t rom_size, int resume, int emu_mode, int palette, float emu_speed, float sound) {
     gb_options_t opts = {
         .apu_sample_count = APU_SAMPLE_COUNT,
         .mode = emu_mode,
@@ -531,7 +531,7 @@ static void load_cartridge(const byte_t *rom_data, size_t rom_size, int resume, 
         .apu_sound_level = sound,
         .palette = palette
     };
-    gb = gb_init(rom_data, rom_size, &opts);
+    gb = gb_init(rom, rom_size, &opts);
     if (!gb) return;
 
     if (resume) {
@@ -600,12 +600,12 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
         jfloat land_link_y)
 {
     jboolean is_copy;
-    jbyte *rom_data = (*env)->GetByteArrayElements(env, data, &is_copy);
+    jbyte *rom = (*env)->GetByteArrayElements(env, data, &is_copy);
 
-    load_cartridge((byte_t *) rom_data, size, resume, emu_mode, palette, emu_speed, sound);
+    load_cartridge((byte_t *) rom, size, resume, emu_mode, palette, emu_speed, sound);
     frame_skip = emu_frame_skip;
 
-    (*env)->ReleaseByteArrayElements(env, data, rom_data, JNI_ABORT);
+    (*env)->ReleaseByteArrayElements(env, data, rom, JNI_ABORT);
 
     portrait_dpad_x = port_dpad_x * (float) screen_width;
     portrait_dpad_y = port_dpad_y * (float) screen_height;

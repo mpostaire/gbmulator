@@ -6,7 +6,7 @@ import glob
 import re
 
 blargg_times = {
-    "DMG": {
+    "GB_MODE_DMG": {
         "cpu_instrs.gb": 55 * 60,
         "dmg_sound.gb": 36 * 60,
         "halt_bug.gb": 2 * 60,
@@ -15,7 +15,7 @@ blargg_times = {
         "mem_timing.gb": 4 * 60,
         "oam_bug.gb": 21 * 60
     },
-    "CGB": {
+    "GB_MODE_CGB": {
         "cgb_sound.gb": 37 * 60,
         "cpu_instrs.gb": 31 * 60,
         "halt_bug.gb": 2 * 60,
@@ -32,32 +32,32 @@ def path_remove_first_elements(path, tests_root):
     return ret[1:] if ret[0] == os.sep else ret
 
 def generate_acid_tests(output_file):
-    output_file.write('{"cgb-acid-hell/cgb-acid-hell.gbc", "cgb-acid-hell.png", NULL, CGB, 0, 0x40, NULL, 0},\n')
-    output_file.write('{"cgb-acid2/cgb-acid2.gbc", "cgb-acid2.png", NULL, CGB, 0, 0x40, NULL, 0},\n')
-    output_file.write('{"dmg-acid2/dmg-acid2.gb", "dmg-acid2-dmg.png", NULL, DMG, 0, 0x40, NULL, 0},\n')
-    output_file.write('{"dmg-acid2/dmg-acid2.gb", "dmg-acid2-cgb.png", NULL, CGB, 0, 0x40, NULL, 0},\n')
+    output_file.write('{"cgb-acid-hell/cgb-acid-hell.gbc", "cgb-acid-hell.png", NULL, GB_MODE_CGB, 0, 0x40, NULL, 0},\n')
+    output_file.write('{"cgb-acid2/cgb-acid2.gbc", "cgb-acid2.png", NULL, GB_MODE_CGB, 0, 0x40, NULL, 0},\n')
+    output_file.write('{"dmg-acid2/dmg-acid2.gb", "dmg-acid2-dmg.png", NULL, GB_MODE_DMG, 0, 0x40, NULL, 0},\n')
+    output_file.write('{"dmg-acid2/dmg-acid2.gb", "dmg-acid2-cgb.png", NULL, GB_MODE_CGB, 0, 0x40, NULL, 0},\n')
 
 def generate_rtc3tests(output_file):
-    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-basic-tests-dmg.png", "basic-tests", DMG, 780, 0, "1:a", 0},\n')
-    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-basic-tests-cgb.png", "basic-tests", CGB, 780, 0, "1:a", 0},\n')
-    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-range-tests-dmg.png", "range-tests", DMG, 480, 0, "1:down,1:a", 0},\n')
-    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-range-tests-cgb.png", "range-tests", CGB, 480, 0, "1:down,1:a", 0},\n')
-    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-sub-second-writes-dmg.png", "sub-second-writes", DMG, 1560, 0, "1:down,1:down,1:a", 0},\n')
-    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-sub-second-writes-cgb.png", "sub-second-writes", CGB, 1560, 0, "1:down,1:down,1:a", 0},\n')
+    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-basic-tests-dmg.png", "basic-tests", GB_MODE_DMG, 780, 0, "1:a", 0},\n')
+    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-basic-tests-cgb.png", "basic-tests", GB_MODE_CGB, 780, 0, "1:a", 0},\n')
+    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-range-tests-dmg.png", "range-tests", GB_MODE_DMG, 480, 0, "1:down,1:a", 0},\n')
+    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-range-tests-cgb.png", "range-tests", GB_MODE_CGB, 480, 0, "1:down,1:a", 0},\n')
+    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-sub-second-writes-dmg.png", "sub-second-writes", GB_MODE_DMG, 1560, 0, "1:down,1:down,1:a", 0},\n')
+    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-sub-second-writes-cgb.png", "sub-second-writes", GB_MODE_CGB, 1560, 0, "1:down,1:down,1:a", 0},\n')
 
 def generate_bully_tests(output_file):
-    output_file.write('{"bully/bully.gb", "bully.png", NULL, DMG, 60, 0, NULL, 0},\n')
-    output_file.write('{"bully/bully.gb", "bully.png", NULL, CGB, 60, 0, NULL, 0},\n')
+    output_file.write('{"bully/bully.gb", "bully.png", NULL, GB_MODE_DMG, 60, 0, NULL, 0},\n')
+    output_file.write('{"bully/bully.gb", "bully.png", NULL, GB_MODE_CGB, 60, 0, NULL, 0},\n')
 
 def generate_little_things_tests(output_file):
-    output_file.write('{"little-things-gb/firstwhite.gb", "firstwhite-dmg-cgb.png", NULL, DMG, 60, 0, NULL, 0},\n')
-    output_file.write('{"little-things-gb/firstwhite.gb", "firstwhite-dmg-cgb.png", NULL, CGB, 60, 0, NULL, 0},\n')
-    output_file.write('{"little-things-gb/tellinglys.gb", "tellinglys-dmg.png", NULL, DMG, 300, 0, "1:right,1:left,1:up,1:down,1:a,1:b,1:select,1:start", 0},\n')
-    output_file.write('{"little-things-gb/tellinglys.gb", "tellinglys-cgb.png", NULL, CGB, 300, 0, "1:right,1:left,1:up,1:down,1:a,1:b,1:select,1:start", 0},\n')
+    output_file.write('{"little-things-gb/firstwhite.gb", "firstwhite-dmg-cgb.png", NULL, GB_MODE_DMG, 60, 0, NULL, 0},\n')
+    output_file.write('{"little-things-gb/firstwhite.gb", "firstwhite-dmg-cgb.png", NULL, GB_MODE_CGB, 60, 0, NULL, 0},\n')
+    output_file.write('{"little-things-gb/tellinglys.gb", "tellinglys-dmg.png", NULL, GB_MODE_DMG, 300, 0, "1:right,1:left,1:up,1:down,1:a,1:b,1:select,1:start", 0},\n')
+    output_file.write('{"little-things-gb/tellinglys.gb", "tellinglys-cgb.png", NULL, GB_MODE_CGB, 300, 0, "1:right,1:left,1:up,1:down,1:a,1:b,1:select,1:start", 0},\n')
 
 def generate_strikethrough_tests(output_file):
-    output_file.write('{"strikethrough/strikethrough.gb", "strikethrough-dmg.png", NULL, DMG, 60, 0, NULL, 0},\n')
-    output_file.write('{"strikethrough/strikethrough.gb", "strikethrough-cgb.png", NULL, CGB, 60, 0, NULL, 0},\n')
+    output_file.write('{"strikethrough/strikethrough.gb", "strikethrough-dmg.png", NULL, GB_MODE_DMG, 60, 0, NULL, 0},\n')
+    output_file.write('{"strikethrough/strikethrough.gb", "strikethrough-cgb.png", NULL, GB_MODE_CGB, 60, 0, NULL, 0},\n')
 
 
 def generate_tests(tests_root, category, max_depth, output_file,
@@ -84,8 +84,8 @@ def generate_tests(tests_root, category, max_depth, output_file,
                     continue
                 continue
 
-            dmg_ref_images = reference_image_getter("DMG", full_rom_path)
-            cgb_ref_images = reference_image_getter("CGB", full_rom_path)
+            dmg_ref_images = reference_image_getter("GB_MODE_DMG", full_rom_path)
+            cgb_ref_images = reference_image_getter("GB_MODE_CGB", full_rom_path)
 
             if not dmg_ref_images and not cgb_ref_images:
                 # parse internal state test
@@ -97,12 +97,12 @@ def generate_tests(tests_root, category, max_depth, output_file,
                 # parse screenshot test
                 for image in dmg_ref_images:
                     test = screenshot_test_generator(
-                        "DMG", rom_path, os.path.basename(image))
+                        "GB_MODE_DMG", rom_path, os.path.basename(image))
                     if test is not None:
                         output.append(test)
                 for image in cgb_ref_images:
                     test = screenshot_test_generator(
-                        "CGB", rom_path, os.path.basename(image))
+                        "GB_MODE_CGB", rom_path, os.path.basename(image))
                     if test is not None:
                         output.append(test)
 
@@ -113,7 +113,7 @@ def blargg_reference_image_getter(mode, full_rom_path):
     rom_name = os.path.basename(full_rom_path)
     rom_dir = os.path.dirname(full_rom_path)
     # full_rom_dir = os.path.dirname(full_rom_path)
-    image_glob = f'{os.path.splitext(rom_name)[0]}*{mode.lower()}*.png'
+    image_glob = f'{os.path.splitext(rom_name)[0]}*{mode.lower()[-3:]}*.png'
     image_glob = os.path.join(rom_dir, image_glob)
     return glob.glob(image_glob)
 
@@ -122,7 +122,7 @@ def blargg_screenshot_test_generator(mode, rom_path, reference_image_path):
 
 
 def age_reference_image_getter(mode, full_rom_path):
-    if mode == "DMG":
+    if mode == "GB_MODE_DMG":
         ret = glob.glob(f'{os.path.splitext(full_rom_path)[0]}-dmg*C*.png')
         return ret
     else:
@@ -137,11 +137,11 @@ def age_internal_state_test_generator(rom_path):
     rom_name = os.path.basename(rom_path)
     ret = []
     if re.match(".*-dmg.*C.*.gb$", rom_name):
-        ret.append(f'{{"{rom_path}", NULL, NULL, DMG, 60, 0x40, NULL, 0}},\n')
+        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_DMG, 60, 0x40, NULL, 0}},\n')
     if re.match(".*-cgb.*C.*.gb$", rom_name):
-        ret.append(f'{{"{rom_path}", NULL, NULL, CGB, 60, 0x40, NULL, 0}},\n')
+        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 60, 0x40, NULL, 0}},\n')
     if re.match(".*-ncm.*C.*.gb$", rom_name):
-        ret.append(f'{{"{rom_path}", NULL, NULL, CGB, 60, 0x40, NULL, 0}},\n')
+        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 60, 0x40, NULL, 0}},\n')
     return ret
 
 
@@ -156,11 +156,11 @@ def mooneye_internal_state_test_generator(rom_path):
     if re.match(".*(?:-S|-A|-dmg0|-mgb|-sgb|-sgb2|-cgb0)\.gb$", rom_name):
         return ret
     if re.match(".*(?:-C|-cgb.*C.*|-cgb)\.gb$", rom_name):
-        ret.append(f'{{"{rom_path}", NULL, NULL, CGB, 0, 0x40, NULL, 0}},\n')
+        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 0, 0x40, NULL, 0}},\n')
     if re.match(".*(?:-G.*|-dmg.*C.*)\.gb$", rom_name):
-        ret.append(f'{{"{rom_path}", NULL, NULL, DMG, 0, 0x40, NULL, 0}},\n')
+        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_DMG, 0, 0x40, NULL, 0}},\n')
     if not ret:
-        return [f'{{"{rom_path}", NULL, NULL, {mode}, 0, 0x40, NULL, 0}},\n' for mode in ["DMG", "CGB"]]
+        return [f'{{"{rom_path}", NULL, NULL, {mode}, 0, 0x40, NULL, 0}},\n' for mode in ["GB_MODE_DMG", "GB_MODE_CGB"]]
     return ret
 
 
@@ -172,11 +172,11 @@ def mooneye_wilbertpol_internal_state_test_generator(rom_path):
     if re.match(".*(?:-S|-A|-dmg0|-mgb|-sgb|-sgb2|-cgb0)\.gb$", rom_name):
         return ret
     if re.match(".*(?:-C|-cgb.*C.*|-cgb)\.gb$", rom_name):
-        ret.append(f'{{"{rom_path}", NULL, NULL, CGB, 0, 0xED, NULL, 0}},\n')
+        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 0, 0xED, NULL, 0}},\n')
     if re.match(".*(?:-G.*|-dmg.*C.*)\.gb$", rom_name):
-        ret.append(f'{{"{rom_path}", NULL, NULL, DMG, 0, 0xED, NULL, 0}},\n')
+        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_DMG, 0, 0xED, NULL, 0}},\n')
     if not ret:
-        return [f'{{"{rom_path}", NULL, NULL, {mode}, 0, 0xED, NULL, 0}},\n' for mode in ["DMG", "CGB"]]
+        return [f'{{"{rom_path}", NULL, NULL, {mode}, 0, 0xED, NULL, 0}},\n' for mode in ["GB_MODE_DMG", "GB_MODE_CGB"]]
     return ret
 
 
@@ -184,7 +184,7 @@ def mealybug_reference_image_getter(mode, full_rom_path):
     rom_name = os.path.basename(full_rom_path)
     rom_dir = os.path.dirname(full_rom_path)
     # full_rom_dir = os.path.dirname(full_rom_path)
-    image_glob = f'{os.path.splitext(rom_name)[0]}_{"dmg_blob" if mode == "DMG" else "cgb_c"}*.png'
+    image_glob = f'{os.path.splitext(rom_name)[0]}_{"dmg_blob" if mode == "GB_MODE_DMG" else "cgb_c"}*.png'
     image_glob = os.path.join(rom_dir, image_glob)
     return glob.glob(image_glob)
 
@@ -193,12 +193,12 @@ def mealybug_screenshot_test_generator(mode, rom_path, reference_image_path):
 
 def mealybug_internal_state_test_generator(rom_path):
     if "dma/hdma" in rom_path:
-        return [f'{{"{rom_path}", NULL, NULL, CGB, 0, 0x40, NULL, 0}},\n']
-    return [f'{{"{rom_path}", NULL, NULL, {mode}, 0, 0x40, NULL, 0}},\n' for mode in ["DMG", "CGB"]]
+        return [f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 0, 0x40, NULL, 0}},\n']
+    return [f'{{"{rom_path}", NULL, NULL, {mode}, 0, 0x40, NULL, 0}},\n' for mode in ["GB_MODE_DMG", "GB_MODE_CGB"]]
 
 
 def same_internal_state_test_generator(rom_path):
-    # CPU-CGB-C fail most tests (useless to test them)
+    # CPU-GB_MODE_CGB-C fail most tests (useless to test them)
     ret = []
     if "same-suite/sgb/" in rom_path or "apu/channel_1" in rom_path or "apu/channel_2" in rom_path or "apu/channel_4" in rom_path:
         return ret
@@ -207,21 +207,21 @@ def same_internal_state_test_generator(rom_path):
         if "-cgb0" in rom_name or "-cgbB" in rom_name:
             return ret
         if "apu/div_write_trigger" in rom_path or "apu/div_write_trigger_10" in rom_path:
-            ret.append(f'{{"{rom_path}", NULL, NULL, DMG, 0, 0x40, NULL, 0}},\n')
-        ret.append(f'{{"{rom_path}", NULL, NULL, CGB, 0, 0x40, NULL, 0}},\n')
+            ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_DMG, 0, 0x40, NULL, 0}},\n')
+        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 0, 0x40, NULL, 0}},\n')
     elif "same-suite/dma" in rom_path:
-        ret.append(f'{{"{rom_path}", NULL, NULL, CGB, 0, 0x40, NULL, 0}},\n')
+        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 0, 0x40, NULL, 0}},\n')
     else:
-        ret.append(f'{{"{rom_path}", NULL, NULL, DMG, 0, 0x40, NULL, 0}},\n')
-        ret.append(f'{{"{rom_path}", NULL, NULL, CGB, 0, 0x40, NULL, 0}},\n')
+        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_DMG, 0, 0x40, NULL, 0}},\n')
+        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 0, 0x40, NULL, 0}},\n')
 
     return ret
 
 
 def gbmicrotest_internal_state_test_generator(rom_path):
     if "is_if_set_during_ime0.gb" in rom_path:
-        return [f'{{"{rom_path}", NULL, NULL, DMG, 60, 0, NULL, 1}},\n']
-    return [f'{{"{rom_path}", NULL, NULL, DMG, 2, 0, NULL, 1}},\n']
+        return [f'{{"{rom_path}", NULL, NULL, GB_MODE_DMG, 60, 0, NULL, 1}},\n']
+    return [f'{{"{rom_path}", NULL, NULL, GB_MODE_DMG, 2, 0, NULL, 1}},\n']
 
 
 def main():
@@ -231,7 +231,7 @@ def main():
 
     tests_root = sys.argv[1]
 
-    # the aim is to implement DMG-CPU-C and CGB-CPU-C (because they have the most test roms compatible)
+    # the aim is to implement GB_MODE_DMG-CPU-C and GB_MODE_CGB-CPU-C (because they have the most test roms compatible)
     # the generated tests filter out all the test roms that are not made for these models
 
     # TODO gambatte (need a different test implementation to work)

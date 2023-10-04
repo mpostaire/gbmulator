@@ -44,13 +44,15 @@ static inline void gb_run_frames(gb_t *gb, long frames_limit) {
     gb_run_steps(gb, frames_limit * GB_CPU_STEPS_PER_FRAME);
 }
 
+int gb_is_rom_valid(const byte_t *rom);
+
 /**
  * Inits the emulator.
- * @param rom_data a buffer containing the rom the emulator will play.
- * @param rom_size the size of the `rom_data`.
+ * @param rom a buffer containing the rom the emulator will play.
+ * @param rom_size the size of the `rom`.
  * @param opts the initialization options of the emulator or NULL for defaults.
  */
-gb_t *gb_init(const byte_t *rom_data, size_t rom_size, gb_options_t *opts);
+gb_t *gb_init(const byte_t *rom, size_t rom_size, gb_options_t *opts);
 
 /**
  * Quits the emulator gracefully (save eram into a '.sav' file, ...).

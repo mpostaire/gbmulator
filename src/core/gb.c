@@ -82,12 +82,16 @@ int gb_step(gb_t *gb) {
     return gb_step_linked(gb, 1);
 }
 
-gb_t *gb_init(const byte_t *rom_data, size_t rom_size, gb_options_t *opts) {
+int gb_is_rom_valid(const byte_t *rom) {
+    return parse_header_mbc_byte(rom[0x0147], NULL, NULL, NULL, NULL, NULL) && validate_header_checksum(rom);
+}
+
+gb_t *gb_init(const byte_t *rom, size_t rom_size, gb_options_t *opts) {
     gb_t *gb = xcalloc(1, sizeof(gb_t));
     gb->exit_on_invalid_opcode = 1;
     gb_set_options(gb, opts);
 
-    if (!mmu_init(gb, rom_data, rom_size)) {
+    if (!mmu_init(gb, rom, rom_size)) {
         free(gb);
         return NULL;
     }
@@ -114,8 +118,8 @@ void gb_quit(gb_t *gb) {
 
 void gb_reset(gb_t *gb, gb_mode_t mode) {
     size_t rom_size = gb->mmu->rom_size;
-    byte_t *rom_data = xmalloc(rom_size);
-    memcpy(rom_data, gb->mmu->rom, rom_size);
+    byte_t *rom = xmalloc(rom_size);
+    memcpy(rom, gb->mmu->rom, rom_size);
 
     gb->mode = 0;
     gb_options_t opts;
@@ -134,7 +138,7 @@ void gb_reset(gb_t *gb, gb_mode_t mode) {
     link_quit(gb);
     joypad_quit(gb);
 
-    mmu_init(gb, rom_data, rom_size);
+    mmu_init(gb, rom, rom_size);
     cpu_init(gb);
     apu_init(gb);
     ppu_init(gb);
@@ -145,7 +149,7 @@ void gb_reset(gb_t *gb, gb_mode_t mode) {
     if (save_data)
         gb_load_save(gb, save_data, save_len);
 
-    free(rom_data);
+    free(rom);
 }
 
 static const char *get_new_licensee(gb_t *gb) {

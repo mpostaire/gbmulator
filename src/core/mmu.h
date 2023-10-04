@@ -172,7 +172,11 @@ typedef struct {
     gb_mbc_t mbc;
 } gb_mmu_t;
 
-int mmu_init(gb_t *gb, const byte_t *rom_data, size_t rom_size);
+int parse_header_mbc_byte(byte_t mbc_byte, byte_t *mbc_type, byte_t *has_eram, byte_t *has_battery, byte_t *has_rtc, byte_t *has_rumble);
+
+int validate_header_checksum(const byte_t *rom);
+
+int mmu_init(gb_t *gb, const byte_t *rom, size_t rom_size);
 
 void mmu_quit(gb_t *gb);
 

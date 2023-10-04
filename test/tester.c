@@ -37,7 +37,7 @@ test_t tests[] = {
     #include "./tests.txt"
 };
 
-static byte_t *get_rom_data(const char *path, size_t *rom_size) {
+static byte_t *get_rom(const char *path, size_t *rom_size) {
     const char *dot = strrchr(path, '.');
     if (!dot || (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) && strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))))) {
         eprintf("%s: wrong file extension (expected .gb or .gbc)\n", path);
@@ -263,8 +263,8 @@ static int run_test(test_t *test) {
     snprintf(rom_path, sizeof(rom_path) + 2, "%s/%s", root_path, test->rom_path);
 
     size_t rom_size = 0;
-    byte_t *rom_data = get_rom_data(rom_path, &rom_size);
-    if (!rom_data)
+    byte_t *rom = get_rom(rom_path, &rom_size);
+    if (!rom)
         return 0;
 
     gb_options_t opts = {
@@ -272,8 +272,8 @@ static int run_test(test_t *test) {
         .palette = PPU_COLOR_PALETTE_GRAY,
         .disable_cgb_color_correction = 1
     };
-    gb_t *gb = gb_init(rom_data, rom_size, &opts);
-    free(rom_data);
+    gb_t *gb = gb_init(rom, rom_size, &opts);
+    free(rom);
     if (!gb)
         return 0;
 
