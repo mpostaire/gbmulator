@@ -32,8 +32,6 @@ static int gamepad_button_name_parser(const char *button_name);
 
 static gboolean loop(gpointer user_data);
 
-// TODO switch row in pref window to toggle audio dynamic rate control
-
 // config struct initialized to defaults
 static config_t config = {
     .mode = GB_MODE_CGB,
