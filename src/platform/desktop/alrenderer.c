@@ -20,9 +20,8 @@ static ALint sampling_rate;
 static ALuint buffers[N_BUFFERS];
 static gb_apu_sample_t samples[N_SAMPLES];
 static ALsizei samples_count;
+static ALboolean drc_enabled;
 static int ewma_queue_size;
-
-// TODO try with 44100Hz to see if it sounds better (less pitch variation)
 
 static inline void init_buffers(void) {
     // fill buffers with empty data to tell the source what format and sampling_rate they are using
@@ -73,6 +72,7 @@ ALboolean alrenderer_init(ALuint sampling_freq) {
     alGenSources(1, &source);
     init_buffers();
 
+    drc_enabled = AL_TRUE;
     return AL_TRUE;
 }
 
@@ -139,6 +139,10 @@ static inline ALuint alrenderer_get_queue_size(void) {
     return (queued - processed) * sizeof(samples) + samples_count * sizeof(*samples);
 }
 
+void alrenderer_enable_dynamic_rate_control(ALboolean enabled) {
+    drc_enabled = enabled;
+}
+
 static inline uint32_t dynamic_rate_control(void) {
     // https://github.com/kevinbchen/nes-emu/blob/a993b0a5c080bc689de5f41e1e492e9e219e14e6/src/audio.cpp#L39
     int queue_size = alrenderer_get_queue_size() / sizeof(gb_apu_sample_t);
@@ -185,7 +189,8 @@ void alrenderer_queue_sample(const gb_apu_sample_t sample, uint32_t *dynamic_sam
         return;
     }
 
-    *dynamic_sampling_rate = dynamic_rate_control(); // TODO takes time to stabilize itself at the beginning and this is noticeable
+    if (drc_enabled)
+        *dynamic_sampling_rate = dynamic_rate_control(); // TODO takes time to stabilize itself at the beginning and this is noticeable
 
     ALint state;
     alGetSourcei(source, AL_SOURCE_STATE, &state);

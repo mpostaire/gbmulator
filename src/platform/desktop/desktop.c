@@ -40,6 +40,7 @@ static config_t config = {
     .color_palette = PPU_COLOR_PALETTE_ORIG,
     .scale = 2,
     .sound = 1.0f,
+    .sound_drc = 1,
     .speed = 1.0f,
     .link_host = "127.0.0.1",
     .link_port = "7777",
@@ -522,17 +523,22 @@ static int load_cartridge(char *path) {
     return 1;
 }
 
-static void set_speed(GtkRange* self, gpointer user_data) {
+static void set_speed(GtkRange *self, gpointer user_data) {
     config.speed = gtk_range_get_value(self);
     steps_per_frame = GB_CPU_STEPS_PER_FRAME * config.speed;
     if (gb)
         gb_set_apu_speed(gb, config.speed);
 }
 
-static void set_sound(GtkRange* self, gpointer user_data) {
+static void set_sound(GtkRange *self, gpointer user_data) {
     config.sound = gtk_range_get_value(self);
     if (gb)
         gb_set_apu_sound_level(gb, config.sound);
+}
+
+static void set_sound_drc(AdwSwitchRow *self, gpointer user_data) {
+    config.sound_drc = adw_switch_row_get_active(self);
+    alrenderer_enable_dynamic_rate_control(config.sound_drc);
 }
 
 static void set_palette(AdwComboRow *self, GParamSpec *pspec, gpointer user_data) {
@@ -1039,6 +1045,10 @@ static void activate_cb(GtkApplication *app) {
     gtk_scale_set_format_value_func(GTK_SCALE(widget), sound_slider_format, NULL, NULL);
     gtk_range_set_adjustment(GTK_RANGE(widget), sound_adjustment);
     g_signal_connect(widget, "value-changed", G_CALLBACK(set_sound), NULL);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_sound_drc"));
+    adw_switch_row_set_active(ADW_SWITCH_ROW(widget), config.sound_drc);
+    g_signal_connect(widget, "notify::active", G_CALLBACK(set_sound_drc), NULL);
 
     speed_slider = GTK_WIDGET(gtk_builder_get_object(builder, "pref_speed"));
     GtkAdjustment *speed_adjustment = gtk_adjustment_new(config.speed, 1.0, 8.0, 0.5, 1, 0.0);

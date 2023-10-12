@@ -6,7 +6,7 @@
 #include "../../core/gb.h"
 
 static void parse_config_line(config_t *config, const char *line) {
-    byte_t scale, color_palette;
+    byte_t scale, color_palette, sound_drc;
     float speed, sound;
     char link_host[INET6_ADDRSTRLEN], link_port[6];
     byte_t mode;
@@ -37,6 +37,15 @@ static void parse_config_line(config_t *config, const char *line) {
             config->sound = 1.0f;
         else
             config->sound = sound;
+        return;
+    }
+    if (sscanf(line, "sound_drc=%hhu", &sound_drc)) {
+        if (sound_drc < 0.0f)
+            config->sound_drc = 0.0f;
+        else if (sound_drc > 1.0f)
+            config->sound_drc = 1.0f;
+        else
+            config->sound_drc = sound_drc;
         return;
     }
     if (sscanf(line, "color_palette=%hhu", &color_palette)) {
@@ -160,17 +169,18 @@ char *config_save_to_string(config_t *config) {
     char *buf = xmalloc(512);
 
     snprintf(buf, 512,
-        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\ncolor_palette=%d\nlink_host=%s\nlink_port=%s\n",
+        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\nsound_drc=%d\ncolor_palette=%d\nlink_host=%s\nlink_port=%s\n",
         config->mode,
         config->scale,
         config->speed,
         config->sound,
+        config->sound_drc,
         config->color_palette,
         config->link_host,
         config->link_port
     );
 
-    // separate snprintfs as key_parser() can return a pointer which contents get overwritten at each call
+    // separate snprintfs because key_parser() can return a pointer which contents get overwritten at each call
     size_t len = strlen(buf);
     if (config->keycode_parser) {
         snprintf(&buf[len], 512 - len, "keyboard_right=%s\n", config->keycode_parser(config->keybindings[JOYPAD_RIGHT]));

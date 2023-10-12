@@ -15,6 +15,7 @@ typedef struct {
     byte_t scale;
     float speed;
     float sound;
+    byte_t sound_drc;
     char link_host[INET6_ADDRSTRLEN];
     char link_port[6];
 
