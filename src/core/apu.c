@@ -236,8 +236,6 @@ void apu_step(gb_t *gb) {
         if (apu->take_sample_cycles_count >= (GB_CPU_FREQ / apu->dynamic_sampling_rate) * gb->apu_speed) {
             apu->take_sample_cycles_count = 0;
 
-            // TODO keep it between -1.0f and 1.0f (AND MAYBE USE DOUBLES TO SEE IF BETTER QUALITY)
-            //      ----> check how sameboy does it
             float S01_volume = ((mmu->io_registers[NR50 - IO] & 0x07) + 1) / 8.0f; // keep it between 0.0f and 1.0f
             float S02_volume = (((mmu->io_registers[NR50 - IO] & 0x70) >> 4) + 1) / 8.0f; // keep it between 0.0f and 1.0f
             float S01_output = ((CHECK_BIT(mmu->io_registers[NR51 - IO], APU_CHANNEL_1) ? channel_dac(gb, &apu->channel1) : 0.0f)
@@ -258,7 +256,6 @@ void apu_step(gb_t *gb) {
     }
 }
 
-// TODO find a way to make speed unnecessary
 void apu_init(gb_t *gb) {
     apu_t *apu = xcalloc(1, sizeof(apu_t));
     apu->dynamic_sampling_rate = gb->apu_sampling_rate;
