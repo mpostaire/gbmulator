@@ -258,7 +258,7 @@ static void toggle_loop(void) {
 static inline gboolean loop(gpointer user_data) {
     gb_set_joypad_state(gb, joypad_state);
 
-    // TODO weird stutter while linked
+    // TODO async link
     if (linked_gb)
         link_exchange_joypad(sfd, gb, linked_gb);
     gb_run_steps(gb, steps_per_frame);

@@ -137,7 +137,7 @@ check: $(SDIR)
 	cppcheck --enable=all --suppress=missingIncludeSystem -i $(SDIR)/platform/android/android-project -i $(SDIR)/platform/desktop/resources.c $(SDIR)
 
 clean:
-	rm -rf $(ODIR)
+	rm -rf $(ODIR) web_build
 	$(MAKE) -C test clean
 
 cleaner: clean
