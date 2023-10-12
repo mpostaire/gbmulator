@@ -11,7 +11,7 @@
 static int keycode_filter(SDL_Keycode key);
 
 // config struct initialized to defaults
-config_t config = {
+static config_t config = {
     .mode = GB_MODE_CGB,
     .color_palette = PPU_COLOR_PALETTE_ORIG,
     .scale = 2,
@@ -46,26 +46,31 @@ config_t config = {
     .keyname_parser = (keyname_parser_t) SDL_GetKeyFromName
 };
 
-SDL_bool is_paused = SDL_TRUE;
+static SDL_bool is_paused = SDL_TRUE;
 
-SDL_Renderer *renderer;
-SDL_Window *window;
+static SDL_Renderer *renderer;
+static SDL_Window *window;
 
-SDL_Texture *ppu_texture;
-int ppu_texture_pitch;
+static SDL_Texture *ppu_texture;
+static int ppu_texture_pitch;
 
-SDL_AudioDeviceID audio_device;
+#define N_BUFFERS 8
+#define N_SAMPLES 1024
+#define SAMPLING_RATE 44100
+static SDL_AudioDeviceID audio_device;
+static gb_apu_sample_t samples[N_SAMPLES];
+static int samples_count;
 
-SDL_GameController *pad;
-SDL_bool is_controller_present = SDL_FALSE;
+static SDL_GameController *pad;
+static SDL_bool is_controller_present = SDL_FALSE;
 
-byte_t scale;
+static byte_t scale;
 
-int editing_keybind = -1;
+static int editing_keybind = -1;
 
-char window_title[sizeof(EMULATOR_NAME) + 19];
+static char window_title[sizeof(EMULATOR_NAME) + 19];
 
-gb_t *gb;
+static gb_t *gb;
 
 static int keycode_filter(SDL_Keycode key) {
     switch (key) {
@@ -86,10 +91,29 @@ static void ppu_vblank_cb(const byte_t *pixels) {
     SDL_UpdateTexture(ppu_texture, NULL, pixels, ppu_texture_pitch);
 }
 
-static void apu_samples_ready_cb(const void *audio_buffer, size_t audio_buffer_size) {
-    while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 8)
-        emscripten_sleep(1);
-    SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
+#define DRC_TARGET_QUEUE_SIZE ((N_BUFFERS / 4) * N_SAMPLES)
+#define DRC_MAX_FREQ_DIFF 0.02
+#define DRC_ALPHA 0.1
+static int ewma_queue_size;
+static inline uint32_t dynamic_rate_control(int queue_size) {
+    queue_size /= sizeof(gb_apu_sample_t);
+    ewma_queue_size = queue_size * DRC_ALPHA + ewma_queue_size * (1.0 - DRC_ALPHA);
+
+    double diff = (ewma_queue_size - DRC_TARGET_QUEUE_SIZE) / (double) DRC_TARGET_QUEUE_SIZE;
+    return SAMPLING_RATE * (1.0 - CLAMP(diff, -1.0, 1.0) * DRC_MAX_FREQ_DIFF);
+}
+static void apu_new_sample_cb(const gb_apu_sample_t sample, uint32_t *dynamic_sampling_rate) {
+    samples[samples_count++] = sample;
+    if (samples_count < N_SAMPLES)
+        return;
+    samples_count = 0;
+
+    Uint32 queue_size = SDL_GetQueuedAudioSize(audio_device);
+    if (queue_size > N_BUFFERS * N_SAMPLES * sizeof(sample))
+        return;
+    SDL_QueueAudio(audio_device, &samples, sizeof(samples));
+
+    *dynamic_sampling_rate = dynamic_rate_control(SDL_GetQueuedAudioSize(audio_device));
 }
 
 EMSCRIPTEN_KEEPALIVE void set_pause(uint8_t value) {
@@ -111,7 +135,6 @@ static byte_t *local_storage_get_item(const char *key, size_t *data_length, byte
         stringToUTF8(item, ret, itemLength);
         return ret;
     }, key);
-
 
     if (!data) {
         if (data_length) *data_length = 0;
@@ -169,9 +192,10 @@ static void save(void) {
 void load_cartridge(const byte_t *rom, size_t rom_size) {
     gb_options_t opts = {
         .mode = config.mode,
-        .on_apu_samples_ready = apu_samples_ready_cb,
+        .on_new_sample = apu_new_sample_cb,
         .on_new_frame = ppu_vblank_cb,
         .apu_speed = config.speed,
+        .apu_sampling_rate = SAMPLING_RATE,
         .apu_sound_level = config.sound,
         .palette = config.color_palette
     };
@@ -184,6 +208,7 @@ void load_cartridge(const byte_t *rom, size_t rom_size) {
     }
     gb = new_emu;
     char *rom_title = gb_get_rom_title(gb);
+    SDL_ClearQueuedAudio(audio_device);
 
     size_t save_length;
     unsigned char *save = local_storage_get_item(rom_title, &save_length, 1);
@@ -246,6 +271,7 @@ EMSCRIPTEN_KEEPALIVE void receive_rom(uint8_t *rom, size_t rom_size) {
 EMSCRIPTEN_KEEPALIVE void reset_rom(void) {
     if (!gb) return;
     gb_reset(gb, config.mode);
+    SDL_ClearQueuedAudio(audio_device);
     set_pause(SDL_FALSE);
     EM_ASM({
         setTheme($0);
@@ -479,10 +505,10 @@ int main(int argc, char **argv) {
     ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
 
     SDL_AudioSpec audio_settings = {
-        .freq = GB_APU_SAMPLE_RATE,
-        .format = AUDIO_F32SYS,
-        .channels = GB_APU_CHANNELS,
-        .samples = GB_APU_DEFAULT_SAMPLE_COUNT
+        .freq = SAMPLING_RATE,
+        .format = AUDIO_S16SYS,
+        .channels = 2,
+        .samples = N_SAMPLES
     };
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
     SDL_PauseAudioDevice(audio_device, 0);

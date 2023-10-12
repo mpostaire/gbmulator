@@ -23,9 +23,7 @@ gb_options_t defaults_opts = {
     .palette = PPU_COLOR_PALETTE_ORIG,
     .apu_speed = 1.0f,
     .apu_sound_level = 1.0f,
-    .apu_sample_count = GB_APU_DEFAULT_SAMPLE_COUNT,
-    .apu_format = APU_FORMAT_F32,
-    .on_apu_samples_ready = NULL,
+    .on_new_sample = NULL,
     .on_new_frame = NULL,
     .on_accelerometer_request = NULL
 };
@@ -88,7 +86,6 @@ int gb_is_rom_valid(const byte_t *rom) {
 
 gb_t *gb_init(const byte_t *rom, size_t rom_size, gb_options_t *opts) {
     gb_t *gb = xcalloc(1, sizeof(gb_t));
-    gb->exit_on_invalid_opcode = 1;
     gb_set_options(gb, opts);
 
     if (!mmu_init(gb, rom, rom_size)) {
@@ -766,12 +763,11 @@ byte_t *gb_get_rom(gb_t *gb, size_t *rom_size) {
 void gb_get_options(gb_t *gb, gb_options_t *opts) {
     opts->mode = gb->mode;
     opts->disable_cgb_color_correction = gb->disable_cgb_color_correction;
-    opts->apu_sample_count = gb->apu_sample_count;
     opts->apu_speed = gb->apu_speed;
+    opts->apu_sampling_rate = gb->apu_sampling_rate;
     opts->apu_sound_level = gb->apu_sound_level;
-    opts->apu_format = gb->apu_format;
     opts->palette = gb->dmg_palette;
-    opts->on_apu_samples_ready = gb->on_apu_samples_ready;
+    opts->on_new_sample = gb->on_new_sample;
     opts->on_new_frame = gb->on_new_frame;
     opts->on_accelerometer_request = gb->on_accelerometer_request;
 }
@@ -780,11 +776,10 @@ void gb_set_options(gb_t *gb, gb_options_t *opts) {
     if (!opts)
         opts = &defaults_opts;
 
-    // allow changes of mode, apu_sample_count and apu_format only once (inside gb_init())
+    // allow changes of mode and apu_sampling_rate only once (inside gb_init())
     if (!gb->mode) {
         gb->mode = opts->mode >= GB_MODE_DMG && opts->mode <= GB_MODE_CGB ? opts->mode : defaults_opts.mode;
-        gb->apu_sample_count = opts->apu_sample_count >= 128 ? opts->apu_sample_count : defaults_opts.apu_sample_count;
-        gb->apu_format = opts->apu_format >= APU_FORMAT_F32 && opts->apu_format <= APU_FORMAT_U8 ? opts->apu_format : defaults_opts.apu_format;
+        gb->apu_sampling_rate = opts->apu_sampling_rate == 0 ? 1 : opts->apu_sampling_rate;
     }
 
     gb->disable_cgb_color_correction = opts->disable_cgb_color_correction;
@@ -792,7 +787,7 @@ void gb_set_options(gb_t *gb, gb_options_t *opts) {
     gb->apu_sound_level = opts->apu_sound_level > 1.0f ? defaults_opts.apu_sound_level : opts->apu_sound_level;
     gb->dmg_palette = opts->palette >= 0 && opts->palette < PPU_COLOR_PALETTE_MAX ? opts->palette : defaults_opts.palette;
     gb->on_new_frame = opts->on_new_frame;
-    gb->on_apu_samples_ready = opts->on_apu_samples_ready;
+    gb->on_new_sample = opts->on_new_sample;
     gb->on_accelerometer_request = opts->on_accelerometer_request;
 }
 

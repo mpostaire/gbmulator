@@ -232,10 +232,15 @@ void apu_step(gb_t *gb) {
         if (gb->apu_speed > 2.0f) // don't collect samples when emulation speed increases too much
             return;
 
+        if (!gb->on_new_sample)
+            return;
+
         apu->take_sample_cycles_count++;
-        if (apu->take_sample_cycles_count >= (GB_CPU_FREQ / GB_APU_SAMPLE_RATE) * gb->apu_speed) { // 44100 Hz (if speed == 1.0f)
+        if (apu->take_sample_cycles_count >= (GB_CPU_FREQ / apu->dynamic_sampling_rate) /** gb->apu_speed*/) { // TODO function to set the sampling rate
             apu->take_sample_cycles_count = 0;
 
+            // TODO keep it between -1.0f and 1.0f (AND MAYBE USE DOUBLES TO SEE IF BETTER QUALITY)
+            //      ----> check how sameboy does it
             float S01_volume = ((mmu->io_registers[NR50 - IO] & 0x07) + 1) / 8.0f; // keep it between 0.0f and 1.0f
             float S02_volume = (((mmu->io_registers[NR50 - IO] & 0x70) >> 4) + 1) / 8.0f; // keep it between 0.0f and 1.0f
             float S01_output = ((CHECK_BIT(mmu->io_registers[NR51 - IO], APU_CHANNEL_1) ? channel_dac(gb, &apu->channel1) : 0.0f)
@@ -251,26 +256,7 @@ void apu_step(gb_t *gb) {
             S01_output = S01_output * S01_volume * gb->apu_sound_level;
             S02_output = S02_output * S02_volume * gb->apu_sound_level;
 
-            switch (gb->apu_format) {
-            case APU_FORMAT_F32:
-                // S02 (left)
-                ((float *) apu->audio_buffer)[apu->audio_buffer_index++] = S02_output;
-                // S01 (right)
-                ((float *) apu->audio_buffer)[apu->audio_buffer_index++] = S01_output;
-                break;
-            case APU_FORMAT_U8:
-                // S02 (left) -->  convert from float [0, 1] to uint8 [0, 255], 128 is volume output level 0
-                ((byte_t *) apu->audio_buffer)[apu->audio_buffer_index++] = (S02_output * 127) + 128;
-                // S01 (right) --> convert from float [0, 1] to unt8 [0, 255], 128 is volume output level 0
-                ((byte_t *) apu->audio_buffer)[apu->audio_buffer_index++] = (S01_output * 127) + 128;
-                break;
-            }
-        }
-
-        if (apu->audio_buffer_index >= gb->apu_sample_count) {
-            apu->audio_buffer_index = 0;
-            if (gb->on_apu_samples_ready)
-                gb->on_apu_samples_ready(apu->audio_buffer, apu->audio_buffer_sample_size * gb->apu_sample_count);
+            gb->on_new_sample((gb_apu_sample_t) {.l = S02_output * 32767, .r = S01_output * 32767}, &apu->dynamic_sampling_rate);
         }
     }
 }
@@ -278,9 +264,7 @@ void apu_step(gb_t *gb) {
 // TODO find a way to make speed unnecessary
 void apu_init(gb_t *gb) {
     apu_t *apu = xcalloc(1, sizeof(apu_t));
-
-    apu->audio_buffer_sample_size = gb->apu_format == APU_FORMAT_F32 ? sizeof(float) : sizeof(byte_t);
-    apu->audio_buffer = xmalloc(apu->audio_buffer_sample_size * gb->apu_sample_count);
+    apu->dynamic_sampling_rate = gb->apu_sampling_rate;
 
     apu->channel1 = (gb_channel_t) {
         .NRx0 = &gb->mmu->io_registers[NR10 - IO],
@@ -318,6 +302,5 @@ void apu_init(gb_t *gb) {
 }
 
 void apu_quit(gb_t *gb) {
-    free(gb->apu->audio_buffer);
     free(gb->apu);
 }

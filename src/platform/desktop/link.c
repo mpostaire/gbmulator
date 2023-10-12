@@ -10,27 +10,27 @@ typedef enum {
     PKT_JOYPAD
 } pkt_type_t;
 
-GSocketConnection *connection = NULL;
-GOutputStream *output_stream = NULL;
-GInputStream *input_stream = NULL;
+static GSocketConnection *connection = NULL;
+static GOutputStream *output_stream = NULL;
+static GInputStream *input_stream = NULL;
 
-byte_t *in_pkt = NULL;
-byte_t *out_pkt = NULL;
+static byte_t *in_pkt = NULL;
+static byte_t *out_pkt = NULL;
 
-word_t checksum = 0;
-gb_mode_t emu_mode = GB_MODE_DMG;
-gboolean is_cable_link = FALSE;
-gboolean is_ir_link = FALSE;
-gboolean can_compress = FALSE;
-byte_t *savestate_data = NULL;
-size_t savestate_len = 0;
-gb_t *local_gb = NULL;
-gb_t *linked_gb = NULL;
+static word_t checksum = 0;
+static gb_mode_t emu_mode = GB_MODE_DMG;
+static gboolean is_cable_link = FALSE;
+static gboolean is_ir_link = FALSE;
+static gboolean can_compress = FALSE;
+static byte_t *savestate_data = NULL;
+static size_t savestate_len = 0;
+static gb_t *local_gb = NULL;
+static gb_t *linked_gb = NULL;
 
-gboolean write_done = FALSE;
-gboolean read_done = FALSE;
+static gboolean write_done = FALSE;
+static gboolean read_done = FALSE;
 typedef void (*cb_t)(void);
-struct read_cb_arg {
+static struct read_cb_arg {
     gssize pkt_size;
     gssize read;
     cb_t cb;

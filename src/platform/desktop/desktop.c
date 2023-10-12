@@ -10,7 +10,7 @@
 #include "glrenderer.h"
 #include "alrenderer.h"
 #include "utils.h"
-#include "link.h"
+#include "../common/link.h"
 #include "../common/utils.h"
 #include "../common/config.h"
 
@@ -27,13 +27,15 @@
 #define XPM_BLACK "-"
 
 static gboolean keycode_filter(guint keyval);
-const char *gamepad_gamepad_button_parser(guint16 button);
-int gamepad_button_name_parser(const char *button_name);
+static const char *gamepad_gamepad_button_parser(guint16 button);
+static int gamepad_button_name_parser(const char *button_name);
 
 static gboolean loop(gpointer user_data);
 
+// TODO switch row in pref window to toggle audio dynamic rate control
+
 // config struct initialized to defaults
-config_t config = {
+static config_t config = {
     .mode = GB_MODE_CGB,
     .color_palette = PPU_COLOR_PALETTE_ORIG,
     .scale = 2,
@@ -83,7 +85,7 @@ typedef struct {
     GtkWidget *widget;
 } setter_handler_t;
 
-setter_handler_t key_handlers[] = {
+static setter_handler_t key_handlers[] = {
     { "key_setter_right", "key_setter_right_label", 0, NULL },
     { "key_setter_left", "key_setter_left_label", 1, NULL },
     { "key_setter_up", "key_setter_up_label", 2, NULL },
@@ -94,7 +96,7 @@ setter_handler_t key_handlers[] = {
     { "key_setter_start", "key_setter_start_label", 7, NULL }
 };
 
-setter_handler_t gamepad_handlers[] = {
+static setter_handler_t gamepad_handlers[] = {
     { "gamepad_setter_right", "gamepad_setter_right_label", 0, NULL },
     { "gamepad_setter_left", "gamepad_setter_left_label", 1, NULL },
     { "gamepad_setter_up", "gamepad_setter_up_label", 2, NULL },
@@ -105,7 +107,7 @@ setter_handler_t gamepad_handlers[] = {
     { "gamepad_setter_start", "gamepad_setter_start_label", 7, NULL }
 };
 
-const char *joypad_names[] = {
+static const char *joypad_names[] = {
     "Right:",
     "Left:",
     "Up:",
@@ -116,38 +118,38 @@ const char *joypad_names[] = {
     "Start:"
 };
 
-gint argc;
-gchar **argv = NULL;
+static gint argc;
+static gchar **argv = NULL;
 
-int current_bind_setter;
-int binding_setter_handler = -1;
-int gamepad_state = GAMEPAD_DISABLED;
+static int current_bind_setter;
+static int binding_setter_handler = -1;
+static int gamepad_state = GAMEPAD_DISABLED;
 
-AdwApplication *app;
-GtkWidget *main_window, *preferences_window, *window_title, *toast_overlay, *emu_gl_area, *printer_gl_area, *keybind_dialog, *bind_value, *mode_setter;
-GtkWidget *joypad_name, *restart_dialog, *link_emu_dialog, *printer_window, *status, *link_mode_setter_server, *link_host, *link_host_revealer;
-GtkWidget *printer_save_btn, *printer_clear_btn, *printer_scroll_adj, *printer_quit_dialog, *main_window_view;
-GtkEventController *motion_event_controller;
-glong motion_event_handler = 0;
-GtkFileDialog *open_rom_dialog, *save_printer_image_dialog;
-guint loop_source;
+static AdwApplication *app;
+static GtkWidget *main_window, *preferences_window, *window_title, *toast_overlay, *emu_gl_area, *printer_gl_area, *keybind_dialog, *bind_value, *mode_setter;
+static GtkWidget *joypad_name, *restart_dialog, *link_emu_dialog, *printer_window, *status, *link_mode_setter_server, *link_host, *link_host_revealer;
+static GtkWidget *printer_save_btn, *printer_clear_btn, *printer_scroll_adj, *printer_quit_dialog, *main_window_view;
+static GtkEventController *motion_event_controller;
+static glong motion_event_handler = 0;
+static GtkFileDialog *open_rom_dialog, *save_printer_image_dialog;
+static guint loop_source = 0;
 
-GSocketService *socket_service = NULL;
-gboolean is_connected = FALSE;
+static gsize printer_gl_area_height = GB_SCREEN_HEIGHT;
+static gboolean printer_window_allowed_to_close = FALSE;
+static gboolean printer_save_dialog_resume_loop = FALSE;
+static gboolean is_paused = TRUE, link_is_server = TRUE;
+static int steps_per_frame, sfd;
+static gb_t *gb = NULL;
+static byte_t joypad_state = 0xFF;
+static double accel_x, accel_y;
+static gb_printer_t *printer = NULL;
 
-gsize printer_gl_area_height = GB_SCREEN_HEIGHT;
-gboolean printer_window_allowed_to_close = FALSE;
-gboolean printer_save_dialog_resume_loop = FALSE;
-gboolean is_paused = TRUE, link_is_server = TRUE;
-int steps_per_frame, sfd;
-gb_t *gb;
-byte_t joypad_state = 0xFF;
-double accel_x, accel_y;
-gb_printer_t *printer;
+static gb_t *linked_gb = NULL;
+static int sfd = -1;
 
-char *rom_path, *forced_save_path, *config_path;
+static char *rom_path, *forced_save_path, *config_path;
 
-glrenderer_t *emu_renderer, *printer_renderer;
+static glrenderer_t *emu_renderer, *printer_renderer;
 
 static gboolean keycode_filter(guint keyval) {
     switch (keyval) {
@@ -161,7 +163,7 @@ static gboolean keycode_filter(guint keyval) {
     }
 }
 
-const char *gamepad_gamepad_button_parser(guint16 button) {
+static const char *gamepad_gamepad_button_parser(guint16 button) {
     switch (button) {
         CASE_THEN_STRING(BTN_A);
         CASE_THEN_STRING(BTN_B);
@@ -187,7 +189,7 @@ const char *gamepad_gamepad_button_parser(guint16 button) {
     }
 }
 
-int gamepad_button_name_parser(const char *button_name) {
+static int gamepad_button_name_parser(const char *button_name) {
     size_t max_len = sizeof(STRING(BTN_DPAD_RIGHT));
     if (!strncmp(button_name, STRING(BTN_A), max_len))
         return BTN_A;
@@ -230,14 +232,21 @@ int gamepad_button_name_parser(const char *button_name) {
     return 0;
 }
 
+gint64 last;
 void start_loop(void) {
-    loop_source = g_timeout_add_full(G_PRIORITY_HIGH, 1000 / 60, G_SOURCE_FUNC(loop), NULL, NULL);
+    if (loop_source > 0)
+        return;
+    last = g_get_monotonic_time();
+    loop_source = g_timeout_add(1000 / 60, G_SOURCE_FUNC(loop), NULL);
     is_paused = FALSE;
+    alrenderer_play();
 }
 
 void stop_loop(void) {
     g_source_remove(loop_source);
+    loop_source = 0;
     is_paused = TRUE;
+    alrenderer_pause();
 }
 
 static void toggle_loop(void) {
@@ -247,11 +256,12 @@ static void toggle_loop(void) {
         stop_loop();
 }
 
-static gboolean loop(gpointer user_data) {
+static inline gboolean loop(gpointer user_data) {
     gb_set_joypad_state(gb, joypad_state);
 
-    // run the emulator for the approximate number of cycles it takes for the ppu to render a frame
-    gb_t *linked_gb = link_communicate();
+    // TODO weird stutter while linked
+    if (linked_gb)
+        link_exchange_joypad(sfd, gb, linked_gb);
     gb_run_steps(gb, linked_gb ? GB_CPU_STEPS_PER_FRAME : steps_per_frame);
 
     gtk_gl_area_queue_render(GTK_GL_AREA(emu_gl_area));
@@ -366,8 +376,10 @@ static void restart_emulator(AdwMessageDialog *self, gchar *response, gpointer u
         // TODO what to do if there is an active link cable connection
         // if (linked_gb)
         //     on_link_disconnect();
+        start_loop();
         gb_reset(gb, config.mode);
         gb_print_status(gb);
+        alrenderer_clear_queue();
     }
 }
 
@@ -378,86 +390,17 @@ static void ask_restart_emulator(GSimpleAction *action, GVariant *parameter, gpo
     }
 }
 
-gboolean link_server_incoming(GSocketService *service, GSocketConnection *connection, GObject *source_object, gpointer user_data) {
-    printf("Received Connection from client! Refusing new requests. %d %d %d\n", g_socket_service_is_active(service), g_socket_get_fd(g_socket_connection_get_socket(connection)), g_socket_connection_is_connected(connection));
-    g_socket_service_stop(service); // TODO useless? this works stopping this signal but the print Hurray client still works and new file descriptor are still created...
-
-    g_object_ref(connection); // don't close connection at the end of this handler
-    link_setup_connection(connection, gb);
-    show_toast("Link cable connected");
-    is_connected = TRUE;
-
-    return TRUE;
-}
-
-// TODO handle link disconnection
-void link_client_connected(GObject *client, GAsyncResult *res, gpointer user_data) {
-    GError *err = NULL;
-    GSocketConnection *connection = g_socket_client_connect_finish(G_SOCKET_CLIENT(client), res, &err);
-
-    // https://docs.gtk.org/gio/index.html
-    // https://docs.gtk.org/gio/class.SocketService.html
-
-    if (connection) {
-        printf("Hurray! %d\n", g_socket_get_fd(g_socket_connection_get_socket(connection)));
-        // g_object_ref(connection); // useless?
-        link_setup_connection(connection, gb);
-        is_connected = TRUE;
-        show_toast("Link cable connected");
-    } else {
-        eprintf("%s\n", err->message);
-        show_toast(err->message);
-        g_error_free(err);
-    }
-}
-
 static void start_link(void) {
     if (!gb) return;
 
-    if (link_is_server) {
-        struct addrinfo hints = {
-            .ai_family = AF_UNSPEC,
-            .ai_socktype = SOCK_STREAM,
-            .ai_protocol = IPPROTO_TCP,
-            .ai_flags = AI_PASSIVE // use my IP
-        };
-        struct addrinfo *res;
-        int ret;
-        if ((ret = getaddrinfo(NULL, config.link_port, &hints, &res)) != 0) {
-            eprintf("getaddrinfo: %s\n", gai_strerror(ret));
-            show_toast("Server connection setup error");
-            return;
-        }
+    if (link_is_server)
+        sfd = link_start_server(config.link_port);
+    else
+        sfd = link_connect_to_server(config.link_host, config.link_port);
 
-        GSocketAddress *address = g_socket_address_new_from_native(res->ai_addr, res->ai_addrlen);
-        if (!socket_service)
-            socket_service = g_socket_service_new();
-        g_signal_connect(socket_service, "incoming", G_CALLBACK(link_server_incoming), NULL);
-
-        if (g_socket_listener_add_address(G_SOCKET_LISTENER(socket_service), address, G_SOCKET_TYPE_STREAM, G_SOCKET_PROTOCOL_TCP, NULL, NULL, NULL))
-            show_toast("Link server listening...");
-        else
-            show_toast("Error listening to given address");
-    } else {
-        struct addrinfo hints = {
-            .ai_family = AF_UNSPEC,
-            .ai_socktype = SOCK_STREAM,
-            .ai_protocol = IPPROTO_TCP
-        };
-        struct addrinfo *res;
-        int ret;
-        if ((ret = getaddrinfo(config.link_host, config.link_port, &hints, &res)) != 0) {
-            eprintf("getaddrinfo: %s\n", gai_strerror(ret));
-            show_toast("Client connection setup error");
-            return;
-        }
-
-        GSocketAddress *address = g_socket_address_new_from_native(res->ai_addr, res->ai_addrlen);
-        GSocketClient *client = g_socket_client_new();
-        g_socket_client_connect_async(client, G_SOCKET_CONNECTABLE(address), NULL, link_client_connected, NULL);
-
-        freeaddrinfo(res);
-    }
+    gb_t *new_linked_gb;
+    if (sfd > 0 && link_init_transfer(sfd, gb, &new_linked_gb))
+        linked_gb = new_linked_gb;
 }
 
 static void link_dialog_response(GtkDialog *self, gint response_id, gpointer user_data) {
@@ -524,12 +467,12 @@ static int load_cartridge(char *path) {
 
     gb_options_t opts = {
         .mode = config.mode,
-        .on_apu_samples_ready = (gb_apu_samples_ready_cb_t) alrenderer_queue_audio,
+        .on_new_sample = alrenderer_queue_sample,
         .on_new_frame = ppu_vblank_cb,
         .on_accelerometer_request = set_accelerometer_data,
         .apu_speed = config.speed,
+        .apu_sampling_rate = alrenderer_get_sampling_rate(),
         .apu_sound_level = config.sound,
-        .apu_format = APU_FORMAT_U8,
         .palette = config.color_palette
     };
     gb_t *new_emu = gb_init(rom, rom_size, &opts);
@@ -544,12 +487,10 @@ static int load_cartridge(char *path) {
         // if (linked_gb)
         //     on_link_disconnect();
         gb_quit(gb);
-    } else {
-        // init audio at the first successful call to load_cartridge to avoid opening audio device when there is no rom loaded
-        alrenderer_init(GB_APU_SAMPLE_RATE);
     }
     gb = new_emu;
     gb_print_status(gb);
+    alrenderer_clear_queue();
 
     steps_per_frame = GB_CPU_STEPS_PER_FRAME * config.speed;
 
@@ -1282,6 +1223,8 @@ int main(int argc, char **argv) {
     ManetteDevice *device;
     while (manette_monitor_iter_next(iter, &device))
         gamepad_connected_cb(NULL, device, NULL);
+
+    alrenderer_init(0);
 
     return g_application_run(G_APPLICATION(app), argc, argv);
 }

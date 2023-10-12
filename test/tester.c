@@ -20,7 +20,7 @@
 
 #define BUF_SIZE 256
 
-char root_path[BUF_SIZE];
+static char root_path[BUF_SIZE];
 
 typedef struct {
     char *rom_path;                 // relative the the root_path given in the program's argument
@@ -33,7 +33,7 @@ typedef struct {
     int is_gbmicrotest;
 } test_t;
 
-test_t tests[] = {
+static test_t tests[] = {
     #include "./tests.txt"
 };
 
@@ -67,7 +67,7 @@ static byte_t *get_rom(const char *path, size_t *rom_size) {
     return buf;
 }
 
-int dir_exists(const char *directory_path) {
+static int dir_exists(const char *directory_path) {
     DIR *dir = opendir(directory_path);
 	if (dir == NULL) {
 		if (errno == ENOENT)
@@ -79,7 +79,7 @@ int dir_exists(const char *directory_path) {
 	return 1;
 }
 
-void mkdirp(const char *directory_path) {
+static void mkdirp(const char *directory_path) {
     char buf[256];
     snprintf(buf, sizeof(buf), "%s", directory_path);
     size_t len = strlen(buf);
@@ -104,7 +104,7 @@ void mkdirp(const char *directory_path) {
     }
 }
 
-void make_parent_dirs(const char *filepath) {
+static void make_parent_dirs(const char *filepath) {
     char *last_slash = strrchr(filepath, '/');
     int last_slash_index = last_slash ? (int) (last_slash - filepath) : -1;
 
@@ -246,7 +246,7 @@ static void exec_input_sequence(gb_t *gb, char *input_sequence) {
         int delay = atoi(delay_str);
         gb_joypad_button_t input = str_to_joypad(input_str);
 
-        gb_run_frames(gb, delay * GB_CPU_FRAMES_PER_SECONDS);
+        gb_run_frames(gb, delay * GB_FRAMES_PER_SECOND);
         gb_joypad_press(gb, input);
         gb_run_frames(gb, 1);
         gb_joypad_release(gb, input);
@@ -276,8 +276,6 @@ static int run_test(test_t *test) {
     free(rom);
     if (!gb)
         return 0;
-
-    gb->exit_on_invalid_opcode = 0;
 
     // TODO GBmulator's boot roms aren't the same as the original DMG and CGB. This may cause problems in some test roms
     //      like timer based test roms

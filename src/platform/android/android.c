@@ -11,78 +11,53 @@
 
 #define log(...) __android_log_print(ANDROID_LOG_WARN, "GBmulator", __VA_ARGS__)
 
-// going higher than 2048 starts to add noticeable audio lag
-#define APU_SAMPLE_COUNT 1024
-
 // TODO savestates ui
 
 static SDL_bool is_running;
 static SDL_bool is_landscape;
-SDL_bool show_link_dialog;
-SDL_bool init_handshake;
+static SDL_bool show_link_dialog;
+static SDL_bool init_handshake;
 
-int frame_skip;
+static int frame_skip;
 
 static int screen_width;
 static int screen_height;
 
-SDL_Renderer *renderer;
-SDL_Window *window;
+static SDL_Renderer *renderer;
+static SDL_Window *window;
 
-SDL_Texture *ppu_texture;
-int ppu_texture_pitch;
+static SDL_Texture *ppu_texture;
+static int ppu_texture_pitch;
 
-SDL_AudioDeviceID audio_device;
+#define N_BUFFERS 8
+#define N_SAMPLES 1024
+#define SAMPLING_RATE 44100
+static SDL_AudioDeviceID audio_device;
+static gb_apu_sample_t samples[N_SAMPLES];
+static int samples_count;
 
-int link_sfd;
+static int link_sfd;
 
-gb_t *gb;
-gb_t *linked_gb;
+static gb_t *gb;
+static gb_t *linked_gb;
 
-SDL_Rect gb_screen_rect;
+static SDL_Rect gb_screen_rect;
 
-float portrait_dpad_x;
-float portrait_dpad_y;
-float portrait_a_x;
-float portrait_a_y;
-float portrait_b_x;
-float portrait_b_y;
-float portrait_start_x;
-float portrait_start_y;
-float portrait_select_x;
-float portrait_select_y;
-float portrait_link_x;
-float portrait_link_y;
+static float portrait_dpad_x, portrait_dpad_y, portrait_a_x, portrait_a_y, portrait_b_x, portrait_b_y;
+static float portrait_start_x, portrait_start_y, portrait_select_x, portrait_select_y, portrait_link_x, portrait_link_y;
 
-float landscape_dpad_x;
-float landscape_dpad_y;
-float landscape_a_x;
-float landscape_a_y;
-float landscape_b_x;
-float landscape_b_y;
-float landscape_start_x;
-float landscape_start_y;
-float landscape_select_x;
-float landscape_select_y;
-float landscape_link_x;
-float landscape_link_y;
+static float landscape_dpad_x, landscape_dpad_y, landscape_a_x, landscape_a_y, landscape_b_x, landscape_b_y;
+static float landscape_start_x, landscape_start_y, landscape_select_x, landscape_select_y, landscape_link_x, landscape_link_y;
 
-int dpad_status;
+static int dpad_status;
 
-SDL_Texture *dpad_textures[16];
+static SDL_Texture *dpad_textures[16];
 
-SDL_Texture *a_texture;
-SDL_Texture *b_texture;
-SDL_Texture *start_texture;
-SDL_Texture *select_texture;
-SDL_Texture *a_pressed_texture;
-SDL_Texture *b_pressed_texture;
-SDL_Texture *start_pressed_texture;
-SDL_Texture *select_pressed_texture;
-SDL_Texture *link_texture;
-SDL_Texture *link_pressed_texture;
+static SDL_Texture *a_texture, *b_texture, *start_texture, *select_texture;
+static SDL_Texture *a_pressed_texture, *b_pressed_texture, *start_pressed_texture, *select_pressed_texture;
+static SDL_Texture *link_texture, *link_pressed_texture;
 
-int steps_per_frame;
+static int steps_per_frame;
 
 static button_t buttons[] = {
     {
@@ -411,10 +386,29 @@ static void ppu_vblank_cb(const byte_t *pixels) {
     SDL_UpdateTexture(ppu_texture, NULL, pixels, ppu_texture_pitch);
 }
 
-static void apu_samples_ready_cb(const void *audio_buffer, size_t audio_buffer_size) {
-    while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 4)
-        SDL_Delay(1);
-    SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
+#define DRC_TARGET_QUEUE_SIZE ((N_BUFFERS / 4) * N_SAMPLES)
+#define DRC_MAX_FREQ_DIFF 0.02
+#define DRC_ALPHA 0.1
+static int ewma_queue_size;
+static inline uint32_t dynamic_rate_control(int queue_size) {
+    queue_size /= sizeof(gb_apu_sample_t);
+    ewma_queue_size = queue_size * DRC_ALPHA + ewma_queue_size * (1.0 - DRC_ALPHA);
+
+    double diff = (ewma_queue_size - DRC_TARGET_QUEUE_SIZE) / (double) DRC_TARGET_QUEUE_SIZE;
+    return SAMPLING_RATE * (1.0 - CLAMP(diff, -1.0, 1.0) * DRC_MAX_FREQ_DIFF);
+}
+static void apu_new_sample_cb(const gb_apu_sample_t sample, uint32_t *dynamic_sampling_rate) {
+    samples[samples_count++] = sample;
+    if (samples_count < N_SAMPLES)
+        return;
+    samples_count = 0;
+
+    Uint32 queue_size = SDL_GetQueuedAudioSize(audio_device);
+    if (queue_size > N_BUFFERS * N_SAMPLES * sizeof(sample))
+        return;
+    SDL_QueueAudio(audio_device, &samples, sizeof(samples));
+
+    *dynamic_sampling_rate = dynamic_rate_control(SDL_GetQueuedAudioSize(audio_device));
 }
 
 static void handle_input(void) {
@@ -461,10 +455,10 @@ static void start_emulation_loop(void) {
     ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
 
     SDL_AudioSpec audio_settings = {
-        .freq = GB_APU_SAMPLE_RATE,
-        .format = AUDIO_F32SYS,
-        .channels = GB_APU_CHANNELS,
-        .samples = APU_SAMPLE_COUNT
+        .freq = SAMPLING_RATE,
+        .format = AUDIO_S16SYS,
+        .channels = 2,
+        .samples = N_SAMPLES
     };
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
     SDL_PauseAudioDevice(audio_device, 0);
@@ -523,11 +517,11 @@ static void start_emulation_loop(void) {
 
 static void load_cartridge(const byte_t *rom, size_t rom_size, int resume, int emu_mode, int palette, float emu_speed, float sound) {
     gb_options_t opts = {
-        .apu_sample_count = APU_SAMPLE_COUNT,
         .mode = emu_mode,
-        .on_apu_samples_ready = apu_samples_ready_cb,
+        .on_new_sample = apu_new_sample_cb,
         .on_new_frame = ppu_vblank_cb,
         .apu_speed = emu_speed,
+        .apu_sampling_rate = SAMPLING_RATE,
         .apu_sound_level = sound,
         .palette = palette
     };

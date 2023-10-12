@@ -40,13 +40,13 @@ typedef enum {
     GB_MODE_CGB
 } gb_mode_t;
 
-typedef enum {
-    APU_FORMAT_F32 = 1,
-    APU_FORMAT_U8,
-} apu_audio_format_t;
+typedef struct {
+    int16_t l;
+    int16_t r;
+} gb_apu_sample_t;
 
 typedef void (*gb_new_frame_cb_t)(const byte_t *pixels);
-typedef void (*gb_apu_samples_ready_cb_t)(const void *audio_buffer, size_t audio_buffer_size);
+typedef void (*gb_new_sample_cb_t)(const gb_apu_sample_t sample, uint32_t *dynamic_sampling_rate);
 typedef void (*gb_accelerometer_request_cb_t)(double *x, double *y);
 
 typedef void (*gb_new_printer_line_cb_t)(const byte_t *pixels, size_t height);
@@ -62,9 +62,8 @@ typedef struct {
     gb_color_palette_t palette;
     float apu_speed;
     float apu_sound_level;
-    int apu_sample_count;
-    apu_audio_format_t apu_format;
+    uint32_t apu_sampling_rate;
     gb_new_frame_cb_t on_new_frame; // the function called whenever the ppu has finished rendering a new frame
-    gb_apu_samples_ready_cb_t on_apu_samples_ready; // the function called whenever the samples buffer of the apu is full
+    gb_new_sample_cb_t on_new_sample; // the function called whenever a new audio sample is produced by the apu
     gb_accelerometer_request_cb_t on_accelerometer_request; // the function called whenever the MBC7 latches accelerometer data
 } gb_options_t;

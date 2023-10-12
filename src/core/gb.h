@@ -10,16 +10,10 @@
 #define GB_SCREEN_HEIGHT 144
 
 #define GB_CPU_FREQ 4194304
-#define GB_CPU_FRAMES_PER_SECONDS 60
+#define GB_FRAMES_PER_SECOND 60
 // 4194304 cycles executed per second --> 4194304 / fps --> 4194304 / 60 == 69905 cycles per frame (the Game Boy runs at approximatively 60 fps)
-#define GB_CPU_CYCLES_PER_FRAME (GB_CPU_FREQ / GB_CPU_FRAMES_PER_SECONDS)
-#define GB_CPU_STEPS_PER_FRAME (GB_CPU_FREQ / 4 / GB_CPU_FRAMES_PER_SECONDS)
-
-#define GB_APU_CHANNELS 2
-#define GB_APU_SAMPLE_RATE 44100
-// this is the number of samples needed per frame at a 44100Hz sample rate (735)
-#define GB_APU_SAMPLES_PER_FRAME (GB_APU_SAMPLE_RATE / GB_CPU_FRAMES_PER_SECONDS)
-#define GB_APU_DEFAULT_SAMPLE_COUNT 512
+#define GB_CPU_CYCLES_PER_FRAME (GB_CPU_FREQ / GB_FRAMES_PER_SECOND)
+#define GB_CPU_STEPS_PER_FRAME (GB_CPU_FREQ / 4 / GB_FRAMES_PER_SECOND)
 
 /**
  * Runs the emulator for one cpu step. If `gb` is linked to another device, it is also run for one step.

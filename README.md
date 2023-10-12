@@ -14,7 +14,7 @@ You can compile and run it on your linux machine or use it in your browser [here
 
 - GameBoy and GameBoy Color emulator
 - PPU implements fifo rendering
-- Audio
+- Audio with dynamic rate control
 - Wireless link cable and IR sensor
 - Support for MBC1, MBC1M, MBC2, MBC3, MBC30, MBC5, MBC7 and HuC1 cartridges
 - Battery saves and savestates

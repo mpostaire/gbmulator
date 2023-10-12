@@ -798,37 +798,6 @@ static inline void sbc(gb_cpu_t *cpu, byte_t reg) {
     SET_FLAG(cpu, FLAG_N);
 }
 
-static void handle_missing_opcode(gb_t *gb, byte_t is_cb) {
-    gb_cpu_t *cpu = gb->cpu;
-
-    if (cpu->opcode >= (is_cb ? sizeof(extended_instructions) : sizeof(instructions))) {
-        eprintf("(invalid) opcode%s%02X\n", is_cb ? " CB " : " ", cpu->opcode);
-        if (gb->exit_on_invalid_opcode)
-            exit(EXIT_FAILURE);
-        else
-            gb->cpu->halt = 1;
-    }
-
-    cpu->operand = 0; // initialize to 0 to shut gcc warnings
-    switch (is_cb ? extended_instructions[cpu->opcode].operand_size : instructions[cpu->opcode].operand_size) {
-    case 1:
-        cpu->operand = mmu_read(gb, cpu->registers.pc);
-        break;
-    case 2:
-        cpu->operand = mmu_read(gb, cpu->registers.pc) | mmu_read(gb, cpu->registers.pc + 1) << 8;
-        break;
-    }
-
-    char buf[32];
-    snprintf(buf, sizeof(buf), is_cb ? extended_instructions[cpu->opcode].name : instructions[cpu->opcode].name, cpu->operand);
-
-    eprintf("(not implemented) opcode%s%02X: %s\n", is_cb ? " CB " : " ", cpu->opcode, buf);
-    if (gb->exit_on_invalid_opcode)
-        exit(EXIT_FAILURE);
-    else
-        gb->cpu->halt = 1;
-}
-
 static void exec_extended_opcode(gb_t *gb) {
     gb_cpu_t *cpu = gb->cpu;
 
@@ -1473,9 +1442,6 @@ static void exec_extended_opcode(gb_t *gb) {
         CLOCK(END_OPCODE);
     case 0xFF: // SET 7, A (4 cycles)
         CLOCK(SET_BIT(cpu->registers.a, 7); END_OPCODE;);
-    default:
-        handle_missing_opcode(gb, 1);
-        break;
     }
 }
 
@@ -2240,7 +2206,12 @@ static void exec_opcode(gb_t *gb) {
         PUSH(cpu->registers.pc);
         CLOCK(cpu->registers.pc = 0x0038; END_OPCODE;);
     default:
-        handle_missing_opcode(gb, 0);
+        CLOCK(
+            eprintf("(invalid) opcode %02X\n", cpu->opcode);
+            cpu->ime = IME_DISABLED;
+            gb->cpu->halt = 1;
+            END_OPCODE;
+        );
         break;
     }
 }
