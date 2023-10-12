@@ -230,7 +230,7 @@ void apu_step(gb_t *gb) {
         channel_step(&apu->channel4);
 
         if (gb->apu_speed > 2.0f || !gb->on_new_sample)  // don't collect samples when emulation speed increases too much
-            return;
+            continue;
 
         apu->take_sample_cycles_count++;
         if (apu->take_sample_cycles_count >= (GB_CPU_FREQ / apu->dynamic_sampling_rate) * gb->apu_speed) {
