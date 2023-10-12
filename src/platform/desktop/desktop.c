@@ -128,7 +128,7 @@ static int gamepad_state = GAMEPAD_DISABLED;
 static AdwApplication *app;
 static GtkWidget *main_window, *preferences_window, *window_title, *toast_overlay, *emu_gl_area, *printer_gl_area, *keybind_dialog, *bind_value, *mode_setter;
 static GtkWidget *joypad_name, *restart_dialog, *link_emu_dialog, *printer_window, *status, *link_mode_setter_server, *link_host, *link_host_revealer;
-static GtkWidget *printer_save_btn, *printer_clear_btn, *printer_scroll_adj, *printer_quit_dialog, *main_window_view;
+static GtkWidget *printer_save_btn, *printer_clear_btn, *printer_scroll_adj, *printer_quit_dialog, *main_window_view, *speed_slider;
 static GtkEventController *motion_event_controller;
 static glong motion_event_handler = 0;
 static GtkFileDialog *open_rom_dialog, *save_printer_image_dialog;
@@ -262,7 +262,7 @@ static inline gboolean loop(gpointer user_data) {
     // TODO weird stutter while linked
     if (linked_gb)
         link_exchange_joypad(sfd, gb, linked_gb);
-    gb_run_steps(gb, linked_gb ? GB_CPU_STEPS_PER_FRAME : steps_per_frame);
+    gb_run_steps(gb, steps_per_frame);
 
     gtk_gl_area_queue_render(GTK_GL_AREA(emu_gl_area));
 
@@ -399,8 +399,13 @@ static void start_link(void) {
         sfd = link_connect_to_server(config.link_host, config.link_port);
 
     gb_t *new_linked_gb;
-    if (sfd > 0 && link_init_transfer(sfd, gb, &new_linked_gb))
+    if (sfd > 0 && link_init_transfer(sfd, gb, &new_linked_gb)) {
         linked_gb = new_linked_gb;
+        config.speed = 1.0f;
+        steps_per_frame = GB_CPU_STEPS_PER_FRAME * config.speed;
+        gb_set_apu_speed(gb, config.speed);
+        gtk_range_set_value(GTK_RANGE(speed_slider), config.speed);
+    }
 }
 
 static void link_dialog_response(GtkDialog *self, gint response_id, gpointer user_data) {
@@ -1035,13 +1040,12 @@ static void activate_cb(GtkApplication *app) {
     gtk_range_set_adjustment(GTK_RANGE(widget), sound_adjustment);
     g_signal_connect(widget, "value-changed", G_CALLBACK(set_sound), NULL);
 
-    widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_speed"));
+    speed_slider = GTK_WIDGET(gtk_builder_get_object(builder, "pref_speed"));
     GtkAdjustment *speed_adjustment = gtk_adjustment_new(config.speed, 1.0, 8.0, 0.5, 1, 0.0);
-    gtk_scale_set_format_value_func(GTK_SCALE(widget), speed_slider_format, NULL, NULL);
-    gtk_range_set_adjustment(GTK_RANGE(widget), speed_adjustment);
-    g_signal_connect(widget, "value-changed", G_CALLBACK(set_speed), NULL);
-
-    g_signal_connect(widget, "notify::selected", G_CALLBACK(set_speed), NULL);
+    gtk_scale_set_format_value_func(GTK_SCALE(speed_slider), speed_slider_format, NULL, NULL);
+    gtk_range_set_adjustment(GTK_RANGE(speed_slider), speed_adjustment);
+    g_signal_connect(speed_slider, "value-changed", G_CALLBACK(set_speed), NULL);
+    g_signal_connect(speed_slider, "notify::selected", G_CALLBACK(set_speed), NULL);
 
     widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_palette"));
     g_signal_connect(widget, "notify::selected", G_CALLBACK(set_palette), NULL);

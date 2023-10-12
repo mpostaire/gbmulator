@@ -409,6 +409,7 @@ static void on_link_connect(gb_t *new_linked_gb) {
     linked_gb = new_linked_gb;
     gbmulator_play(NULL);
     config.speed = 1.0f;
+    gb_set_apu_speed(gb, config.speed);
 
     link_menu.entries[0].disabled = 1;
     link_menu.entries[1].disabled = 1;

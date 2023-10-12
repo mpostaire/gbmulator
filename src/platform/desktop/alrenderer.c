@@ -141,17 +141,17 @@ static inline ALuint alrenderer_get_queue_size(void) {
 
 static inline uint32_t dynamic_rate_control(void) {
     // https://github.com/kevinbchen/nes-emu/blob/a993b0a5c080bc689de5f41e1e492e9e219e14e6/src/audio.cpp#L39
-
     int queue_size = alrenderer_get_queue_size() / sizeof(gb_apu_sample_t);
     ewma_queue_size = queue_size * DRC_ALPHA + ewma_queue_size * (1.0 - DRC_ALPHA);
 
-    // double fill_level = queue_size / (double) (N_SAMPLES * N_BUFFERS);
-
     // Adjust sample frequency to try and maintain a constant queue size
     double diff = (ewma_queue_size - DRC_TARGET_QUEUE_SIZE) / (double) DRC_TARGET_QUEUE_SIZE;
-    int sample_rate = sampling_rate * (1.0 - CLAMP(diff, -1.0, 1.0) * DRC_MAX_FREQ_DIFF);
+    int sample_rate = sampling_rate * (1.0 - CLAMP(diff, -1.0, 1.0) * (DRC_MAX_FREQ_DIFF));
+
+    // double fill_level = queue_size / (double) (N_SAMPLES * N_BUFFERS);
     // printf("fill_level=%lf dynamic_frequency=%d (sampling_rate=%d) DRC_TARGET_QUEUE_SIZE=%d queue_size=%d ewma_queue_size=%d\n",
     //         fill_level, (ALsizei) sample_rate, sampling_rate, DRC_TARGET_QUEUE_SIZE, queue_size, ewma_queue_size);
+
     return sample_rate;
 }
 
@@ -168,12 +168,8 @@ void alrenderer_queue_sample(const gb_apu_sample_t sample, uint32_t *dynamic_sam
         return;
     }
 
-    if (processed <= 0) {
-        // drop these samples if the audio queue is full
-        // TODO why this prints 2 times at the beginning?
-        eprintf("processed\n");
-        return;
-    }
+    if (processed <= 0)
+        return; // drop these samples if the audio queue is full
 
     ALuint recycled_buffer;
     alSourceUnqueueBuffers(source, 1, &recycled_buffer);

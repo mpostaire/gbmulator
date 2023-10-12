@@ -17,7 +17,7 @@ struct gb_t {
     gb_mode_t mode;
     byte_t disable_cgb_color_correction;
     float apu_sound_level;
-    float apu_speed; // TODO check if this can be removed
+    float apu_speed;
     uint32_t apu_sampling_rate;
     byte_t dmg_palette;
     gb_new_frame_cb_t on_new_frame;
