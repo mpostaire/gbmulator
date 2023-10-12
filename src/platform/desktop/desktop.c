@@ -1208,9 +1208,16 @@ static void shutdown_cb(GtkApplication *app) {
         char *save_path = get_save_path(rom_path);
         save_battery_to_file(gb, forced_save_path ? forced_save_path : save_path);
         free(save_path);
+        gb_quit(gb);
     }
     config_save_to_file(&config, config_path);
     free(config_path);
+
+    if (emu_renderer)
+        glrenderer_quit(emu_renderer);
+    if (printer_renderer)
+        glrenderer_quit(printer_renderer);
+    alrenderer_quit();
 }
 
 static gint command_line_cb(GtkApplication *app, GApplicationCommandLine *command_line, gpointer user_data) {

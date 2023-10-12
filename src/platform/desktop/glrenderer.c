@@ -31,8 +31,6 @@ struct glrenderer_t {
 
 static GLuint shader_program;
 
-// TODO glrenderer_quit
-
 static GLuint create_shader_program(const char *vertex_source_path, const char *fragment_source_path) {
     GBytes *vertex_shader_data = g_resources_lookup_data(vertex_source_path, 0, NULL);
     gsize data_size = g_bytes_get_size(vertex_shader_data);
@@ -168,6 +166,13 @@ glrenderer_t *glrenderer_init(GLsizei width, GLsizei height, const GLvoid *pixel
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 
     return renderer;
+}
+
+void glrenderer_quit(glrenderer_t *renderer) {
+    glDeleteTextures(1, &renderer->texture);
+    glDeleteVertexArrays(1, &renderer->VAO);
+    glDeleteBuffers(1, &renderer->VBO);
+    glDeleteBuffers(1, &renderer->EBO);
 }
 
 void glrenderer_render(glrenderer_t *renderer) {
