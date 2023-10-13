@@ -143,12 +143,18 @@ static byte_t joypad_state = 0xFF;
 static double accel_x, accel_y;
 static gb_printer_t *printer = NULL;
 
+static GTask *link_task;
 static gb_t *linked_gb = NULL;
 static int sfd = -1;
 
 static char *rom_path, *forced_save_path, *config_path;
 
 static glrenderer_t *emu_renderer, *printer_renderer;
+
+static void show_link_emu_dialog(GSimpleAction *action, GVariant *parameter, gpointer app);
+static void show_printer_window(GSimpleAction *action, GVariant *parameter, gpointer app);
+static void ask_restart_emulator(GSimpleAction *action, GVariant *parameter, gpointer app);
+static void toggle_pause(GSimpleAction *action, GVariant *parameter, gpointer app);
 
 static gboolean keycode_filter(guint keyval) {
     switch (keyval) {
@@ -255,12 +261,39 @@ static void toggle_loop(void) {
         stop_loop();
 }
 
+static void set_link_actions_gui(gboolean enabled, gboolean play_pause_action_affected) {
+    if (enabled) {
+        const GActionEntry app_entries[] = {
+            { "link_emulator", show_link_emu_dialog, NULL, NULL, NULL },
+            { "link_printer", show_printer_window, NULL, NULL, NULL },
+            { "restart", ask_restart_emulator, NULL, NULL, NULL },
+        };
+        g_action_map_add_action_entries(G_ACTION_MAP(app), app_entries, G_N_ELEMENTS(app_entries), app);
+        if (play_pause_action_affected) {
+            const GActionEntry other_app_entries[] = {
+                { "play_pause", toggle_pause, NULL, NULL, NULL },
+            };
+            g_action_map_add_action_entries(G_ACTION_MAP(app), other_app_entries, G_N_ELEMENTS(other_app_entries), app);
+        }
+    } else {
+        g_action_map_remove_action(G_ACTION_MAP(app), "link_emulator");
+        g_action_map_remove_action(G_ACTION_MAP(app), "link_printer");
+        g_action_map_remove_action(G_ACTION_MAP(app), "restart");
+        if (play_pause_action_affected)
+            g_action_map_remove_action(G_ACTION_MAP(app), "play_pause");
+    }
+}
+
 static inline gboolean loop(gpointer user_data) {
     gb_set_joypad_state(gb, joypad_state);
 
-    // TODO async link
-    if (linked_gb)
-        link_exchange_joypad(sfd, gb, linked_gb);
+    // TODO async or timeout link_exchange_joypad
+    if (linked_gb) {
+        if (!link_exchange_joypad(sfd, gb, linked_gb)) {
+            linked_gb = NULL;
+            set_link_actions_gui(TRUE, TRUE);
+        }
+    }
     gb_run_steps(gb, steps_per_frame);
 
     gtk_gl_area_queue_render(GTK_GL_AREA(emu_gl_area));
@@ -284,16 +317,7 @@ static void on_emu_unrealize(GtkGLArea *area, gpointer user_data) {
 }
 
 static gboolean on_emu_render(GtkGLArea *area, GdkGLContext *context, gpointer user_data) {
-    // inside this function it's safe to use GL; the given
-    // GdkGLContext has been made current to the drawable
-    // surface used by the `GtkGLArea` and the viewport has
-    // already been set to be the size of the allocation
-
     glrenderer_render(emu_renderer);
-
-    // we completed our drawing; the draw commands will be
-    // flushed at the end of the signal emission chain, and
-    // the buffers will be drawn on the window
     return TRUE;
 }
 
@@ -372,9 +396,6 @@ static void toggle_pause(GSimpleAction *action, GVariant *parameter, gpointer ap
 
 static void restart_emulator(AdwMessageDialog *self, gchar *response, gpointer user_data) {
     if (!strncmp(response, "restart", 8)) {
-        // TODO what to do if there is an active link cable connection
-        // if (linked_gb)
-        //     on_link_disconnect();
         start_loop();
         gb_reset(gb, config.mode);
         gb_print_status(gb);
@@ -389,9 +410,13 @@ static void ask_restart_emulator(GSimpleAction *action, GVariant *parameter, gpo
     }
 }
 
-static void start_link(void) {
-    if (!gb) return;
+void start_link_thread_cb(GObject *source_object, GAsyncResult *res, gpointer data) {
+    g_object_unref(link_task);
+    link_task = NULL;
+    start_loop();
+}
 
+void start_link_thread(GTask *task, gpointer source_object, gpointer task_data, GCancellable *cancellable) {
     if (link_is_server)
         sfd = link_start_server(config.link_port);
     else
@@ -405,15 +430,21 @@ static void start_link(void) {
         gb_set_apu_speed(gb, config.speed);
         gtk_range_set_value(GTK_RANGE(speed_slider), config.speed);
     }
+
+    g_task_return_boolean(link_task, TRUE);
 }
 
 static void link_dialog_response(GtkDialog *self, gint response_id, gpointer user_data) {
     gtk_window_close(GTK_WINDOW(self));
-    if (response_id == GTK_RESPONSE_OK) {
-        start_link();
-        g_action_map_remove_action(G_ACTION_MAP(app), "link_emulator");
-        g_action_map_remove_action(G_ACTION_MAP(app), "link_printer");
-    }
+    if (response_id != GTK_RESPONSE_OK || !gb)
+        return;
+
+    // TODO do something in the gui to notify that a connection attempt is being made and button to cancel
+    //      --> a status icon/button/menu that appear that can be used to check link status and cancel link
+    stop_loop();
+    set_link_actions_gui(FALSE, TRUE);
+    link_task = g_task_new(NULL, NULL, start_link_thread_cb, NULL);
+    g_task_run_in_thread(link_task, start_link_thread);
 }
 
 static void show_link_emu_dialog(GSimpleAction *action, GVariant *parameter, gpointer app) {
@@ -424,9 +455,7 @@ static void show_link_emu_dialog(GSimpleAction *action, GVariant *parameter, gpo
 static void show_printer_window(GSimpleAction *action, GVariant *parameter, gpointer app) {
     printer = gb_printer_init(printer_new_line_cb, printer_start_cb, printer_finish_cb);
     gb_link_connect_printer(gb, printer);
-    g_action_map_remove_action(G_ACTION_MAP(app), "link_emulator");
-    g_action_map_remove_action(G_ACTION_MAP(app), "link_printer");
-
+    set_link_actions_gui(FALSE, FALSE);
     gamepad_state = GAMEPAD_DISABLED;
     gtk_window_present(GTK_WINDOW(printer_window));
 }
@@ -968,12 +997,7 @@ static void printer_quit_dialog_response_cb(AdwMessageDialog *self, gchar *respo
 
         gtk_widget_set_sensitive(GTK_WIDGET(printer_save_btn), FALSE);
         gtk_widget_set_sensitive(GTK_WIDGET(printer_clear_btn), FALSE);
-
-        const GActionEntry app_entries[] = {
-            { "link_emulator", show_link_emu_dialog, NULL, NULL, NULL },
-            { "link_printer", show_printer_window, NULL, NULL, NULL },
-        };
-        g_action_map_add_action_entries(G_ACTION_MAP(app), app_entries, G_N_ELEMENTS(app_entries), app);
+        set_link_actions_gui(TRUE, FALSE);
 
         printer_window_allowed_to_close = TRUE;
         gtk_window_close(GTK_WINDOW(printer_window));
