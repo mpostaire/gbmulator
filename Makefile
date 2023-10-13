@@ -69,7 +69,7 @@ profile: run
 
 # TODO this should also make a gbmulator.apk file in this project root dir (next do the gbmulator desktop binary) 
 android: $(SDIR)/core/boot.c
-	cd $(SDIR)/platform/android/android-project && ./gradlew assemble
+	cd $(SDIR)/platform/android/android-project && ./gradlew build
 
 debug_android: android
 	cd $(SDIR)/platform/android/android-project && ./gradlew installDebug
