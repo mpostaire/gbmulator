@@ -35,3 +35,11 @@ int load_state_from_file(gb_t *gb, const char *path);
  *          gb_init() won't fail if the return value is not `NULL`.
  */
 byte_t *get_rom(const char *path, size_t *rom_size);
+
+char *get_xdg_path(const char *xdg_variable, const char *fallback);
+
+char *get_config_path(void);
+
+char *get_save_path(const char *rom_filepath);
+
+char *get_savestate_path(const char *rom_filepath, int slot);
