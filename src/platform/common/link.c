@@ -240,7 +240,7 @@ static int exchange_rom(int sfd, gb_t *gb, byte_t **other_rom, size_t *rom_len) 
     byte_t *pkt = xcalloc(1, *rom_len + 9);
     pkt[0] = PKT_ROM;
     memcpy(&pkt[1], rom_len, sizeof(size_t));
-    memcpy(&pkt[9], &this_rom, *rom_len);
+    memcpy(&pkt[9], this_rom, *rom_len); // causes segfault
 
     send(sfd, pkt, *rom_len + 9, 0);
     free(pkt);
