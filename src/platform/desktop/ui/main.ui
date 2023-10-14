@@ -34,6 +34,20 @@
                                 <property name="tooltip-text">Menu</property>
                             </object>
                         </child>
+
+                        <child type="end">
+                            <object class="GtkRevealer" id="link_spinner_revealer">
+                                <property name="transition-type">slide-left</property>
+                                <property name="visible">false</property>
+                                <property name="reveal-child">false</property>
+                                <property name="child">
+                                    <object class="GtkSpinner" id="link_spinner">
+                                        <property name="spinning">false</property>
+                                        <property name="tooltip-text">Connecting Link Cable...</property>                                        
+                                    </object>
+                                </property>
+                            </object>
+                        </child>
                     </object>
                 </child>
 
@@ -89,14 +103,19 @@
                 <attribute name="action">app.restart</attribute>
                 <attribute name="accel">&lt;Ctrl&gt;r</attribute>
             </item>
+        </section>
+        <section>
             <item>
                 <attribute name="label">Connect emulator</attribute>
-                <attribute name="action">app.link_emulator</attribute>
-                <attribute name="accel">&lt;Ctrl&gt;l</attribute>
+                <attribute name="action">app.connect_emulator</attribute>
+            </item>
+            <item>
+                <attribute name="label">Disconnect emulator</attribute>
+                <attribute name="action">app.disconnect_emulator</attribute>
             </item>
             <item>
                 <attribute name="label">Connect printer</attribute>
-                <attribute name="action">app.link_printer</attribute>
+                <attribute name="action">app.connect_printer</attribute>
             </item>
         </section>
         <section>

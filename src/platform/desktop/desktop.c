@@ -127,7 +127,8 @@ static int gamepad_state = GAMEPAD_DISABLED;
 static AdwApplication *app;
 static GtkWidget *main_window, *preferences_window, *window_title, *toast_overlay, *emu_gl_area, *printer_gl_area, *keybind_dialog, *bind_value, *mode_setter;
 static GtkWidget *joypad_name, *restart_dialog, *link_emu_dialog, *printer_window, *status, *link_mode_setter_server, *link_host, *link_host_revealer;
-static GtkWidget *printer_save_btn, *printer_clear_btn, *printer_scroll_adj, *printer_quit_dialog, *main_window_view, *speed_slider;
+static GtkWidget *printer_save_btn, *printer_clear_btn, *printer_scroll_adj, *printer_quit_dialog, *main_window_view, *speed_slider, *open_btn;
+static GtkWidget *link_spinner_revealer, *link_spinner;
 static GtkEventController *motion_event_controller;
 static glong motion_event_handler = 0;
 static GtkFileDialog *open_rom_dialog, *save_printer_image_dialog;
@@ -137,12 +138,13 @@ static gsize printer_gl_area_height = GB_SCREEN_HEIGHT;
 static gboolean printer_window_allowed_to_close = FALSE;
 static gboolean printer_save_dialog_resume_loop = FALSE;
 static gboolean is_paused = TRUE, link_is_server = TRUE;
-static int steps_per_frame, sfd;
+static int steps_per_frame;
 static gb_t *gb = NULL;
 static byte_t joypad_state = 0xFF;
 static double accel_x, accel_y;
 static gb_printer_t *printer = NULL;
 
+static GCancellable *link_task_cancellable;
 static GTask *link_task;
 static gb_t *linked_gb = NULL;
 static int sfd = -1;
@@ -239,7 +241,7 @@ static int gamepad_button_name_parser(const char *button_name) {
 
 gint64 last;
 void start_loop(void) {
-    if (loop_source > 0)
+    if (loop_source > 0 || link_task)
         return;
     last = g_get_monotonic_time();
     loop_source = g_timeout_add(1000 / 60, G_SOURCE_FUNC(loop), NULL);
@@ -261,27 +263,44 @@ static void toggle_loop(void) {
         stop_loop();
 }
 
-static void set_link_actions_gui(gboolean enabled, gboolean play_pause_action_affected) {
+static void disconnect_emu(GSimpleAction *action, GVariant *parameter, gpointer app) {
+    if (link_task)
+        g_cancellable_cancel(link_task_cancellable);
+    else
+        close(sfd);
+}
+
+static void set_link_gui_actions(gboolean enabled, gboolean link_is_gb) {
+    gtk_widget_set_sensitive(open_btn, enabled);
+
     if (enabled) {
         const GActionEntry app_entries[] = {
-            { "link_emulator", show_link_emu_dialog, NULL, NULL, NULL },
-            { "link_printer", show_printer_window, NULL, NULL, NULL },
+            { "connect_emulator", show_link_emu_dialog, NULL, NULL, NULL },
+            { "connect_printer", show_printer_window, NULL, NULL, NULL },
             { "restart", ask_restart_emulator, NULL, NULL, NULL },
         };
         g_action_map_add_action_entries(G_ACTION_MAP(app), app_entries, G_N_ELEMENTS(app_entries), app);
-        if (play_pause_action_affected) {
-            const GActionEntry other_app_entries[] = {
-                { "play_pause", toggle_pause, NULL, NULL, NULL },
-            };
+        if (link_is_gb) {
+            const GActionEntry other_app_entries[] = {{ "play_pause", toggle_pause, NULL, NULL, NULL }};
             g_action_map_add_action_entries(G_ACTION_MAP(app), other_app_entries, G_N_ELEMENTS(other_app_entries), app);
+            g_action_map_remove_action(G_ACTION_MAP(app), "disconnect_emulator");
         }
     } else {
-        g_action_map_remove_action(G_ACTION_MAP(app), "link_emulator");
-        g_action_map_remove_action(G_ACTION_MAP(app), "link_printer");
+        g_action_map_remove_action(G_ACTION_MAP(app), "connect_emulator");
+        g_action_map_remove_action(G_ACTION_MAP(app), "connect_printer");
         g_action_map_remove_action(G_ACTION_MAP(app), "restart");
-        if (play_pause_action_affected)
+        if (link_is_gb) {
+            const GActionEntry app_entries[] = {{ "disconnect_emulator", disconnect_emu, NULL, NULL, NULL }};
+            g_action_map_add_action_entries(G_ACTION_MAP(app), app_entries, G_N_ELEMENTS(app_entries), app);
             g_action_map_remove_action(G_ACTION_MAP(app), "play_pause");
+        }
     }
+}
+
+static void show_toast(const char *text) {
+    AdwToast *toast = adw_toast_new(text);
+    adw_toast_set_timeout(toast, 1);
+    adw_toast_overlay_add_toast(ADW_TOAST_OVERLAY(toast_overlay), toast);
 }
 
 static inline gboolean loop(gpointer user_data) {
@@ -291,7 +310,9 @@ static inline gboolean loop(gpointer user_data) {
     if (linked_gb) {
         if (!link_exchange_joypad(sfd, gb, linked_gb)) {
             linked_gb = NULL;
-            set_link_actions_gui(TRUE, TRUE);
+            sfd = -1;
+            set_link_gui_actions(TRUE, TRUE);
+            show_toast("Link Cable disconnected");
         }
     }
     gb_run_steps(gb, steps_per_frame);
@@ -344,12 +365,6 @@ static gboolean on_printer_resize(GtkGLArea *area, GdkGLContext *context) {
     double adj_upper = gtk_adjustment_get_upper(GTK_ADJUSTMENT(printer_scroll_adj));
     gtk_adjustment_set_value(GTK_ADJUSTMENT(printer_scroll_adj), adj_upper);
     return TRUE;
-}
-
-static void show_toast(const char *text) {
-    AdwToast *toast = adw_toast_new(text);
-    adw_toast_set_timeout(toast, 1);
-    adw_toast_overlay_add_toast(ADW_TOAST_OVERLAY(toast_overlay), toast);
 }
 
 static void ppu_vblank_cb(const byte_t *pixels) {
@@ -411,8 +426,26 @@ static void ask_restart_emulator(GSimpleAction *action, GVariant *parameter, gpo
 }
 
 void start_link_thread_cb(GObject *source_object, GAsyncResult *res, gpointer data) {
+    gtk_revealer_set_reveal_child(GTK_REVEALER(link_spinner_revealer), FALSE);
+
+    if (g_task_propagate_boolean(G_TASK(res), NULL)) {
+        show_toast("Link Cable connected");
+    } else if (g_cancellable_is_cancelled(link_task_cancellable)) {
+        link_cancel();
+        close(sfd);
+        sfd = -1;
+
+        set_link_gui_actions(TRUE, TRUE);
+        show_toast("Connection cancelled");
+    } else {
+        set_link_gui_actions(TRUE, TRUE);
+        show_toast("Connection error");
+    }
+
+    g_object_unref(link_task_cancellable);
     g_object_unref(link_task);
     link_task = NULL;
+    link_task_cancellable = NULL;
     start_loop();
 }
 
@@ -429,9 +462,12 @@ void start_link_thread(GTask *task, gpointer source_object, gpointer task_data, 
         steps_per_frame = GB_CPU_STEPS_PER_FRAME * config.speed;
         gb_set_apu_speed(gb, config.speed);
         gtk_range_set_value(GTK_RANGE(speed_slider), config.speed);
-    }
 
-    g_task_return_boolean(link_task, TRUE);
+        g_task_return_boolean(link_task, TRUE);
+    } else {
+        g_task_return_boolean(link_task, FALSE);
+        sfd = -1; // closed by link_init_transfer in case of error
+    }
 }
 
 static void link_dialog_response(GtkDialog *self, gint response_id, gpointer user_data) {
@@ -439,11 +475,18 @@ static void link_dialog_response(GtkDialog *self, gint response_id, gpointer use
     if (response_id != GTK_RESPONSE_OK || !gb)
         return;
 
-    // TODO do something in the gui to notify that a connection attempt is being made and button to cancel
-    //      --> a status icon/button/menu that appear that can be used to check link status and cancel link
     stop_loop();
-    set_link_actions_gui(FALSE, TRUE);
-    link_task = g_task_new(NULL, NULL, start_link_thread_cb, NULL);
+
+    show_toast("Connecting Link Cable...");
+
+    set_link_gui_actions(FALSE, TRUE);
+    gtk_widget_set_visible(link_spinner_revealer, TRUE);
+    gtk_revealer_set_reveal_child(GTK_REVEALER(link_spinner_revealer), TRUE);
+    gtk_spinner_set_spinning(GTK_SPINNER(link_spinner), TRUE);
+
+    link_task_cancellable = g_cancellable_new();
+    link_task = g_task_new(NULL, link_task_cancellable, start_link_thread_cb, NULL);
+    g_task_set_return_on_cancel(link_task, TRUE);
     g_task_run_in_thread(link_task, start_link_thread);
 }
 
@@ -455,7 +498,7 @@ static void show_link_emu_dialog(GSimpleAction *action, GVariant *parameter, gpo
 static void show_printer_window(GSimpleAction *action, GVariant *parameter, gpointer app) {
     printer = gb_printer_init(printer_new_line_cb, printer_start_cb, printer_finish_cb);
     gb_link_connect_printer(gb, printer);
-    set_link_actions_gui(FALSE, FALSE);
+    set_link_gui_actions(FALSE, FALSE);
     gamepad_state = GAMEPAD_DISABLED;
     gtk_window_present(GTK_WINDOW(printer_window));
 }
@@ -530,8 +573,8 @@ static int load_cartridge(char *path) {
     const GActionEntry app_entries[] = {
         { "play_pause", toggle_pause, NULL, NULL, NULL },
         { "restart", ask_restart_emulator, NULL, NULL, NULL },
-        { "link_emulator", show_link_emu_dialog, NULL, NULL, NULL },
-        { "link_printer", show_printer_window, NULL, NULL, NULL },
+        { "connect_emulator", show_link_emu_dialog, NULL, NULL, NULL },
+        { "connect_printer", show_printer_window, NULL, NULL, NULL },
     };
     g_action_map_add_action_entries(G_ACTION_MAP(app), app_entries, G_N_ELEMENTS(app_entries), app);
 
@@ -691,7 +734,7 @@ static void show_about(GSimpleAction *action, GVariant *parameter, gpointer app)
                           "license-type", GTK_LICENSE_MIT_X11, 
                           "developers", developers,
                           "website", "https://github.com/mpostaire/gbmulator",
-                          "comments", "A Game Boy Color emulator with sound and link cable support over tcp.",
+                          "comments", "A Game Boy Color emulator with sound and Link Cable / IR sensor support over tcp.",
                           NULL);
 }
 
@@ -900,6 +943,13 @@ static void popover_closed(GtkPopover *self, gpointer user_data) {
     gtk_widget_grab_focus(emu_gl_area);
 }
 
+static void link_spinner_revealer_done_cb(GtkRevealer *self, gpointer user_data) {
+    if (!gtk_revealer_get_child_revealed(self)) {
+        gtk_widget_set_visible(link_spinner_revealer, FALSE);
+        gtk_spinner_set_spinning(GTK_SPINNER(link_spinner), FALSE);
+    }
+}
+
 static gboolean on_drop(GtkDropTarget *target, const GValue *value, double x, double y, gpointer data) {
     // GdkFileList is a boxed value so we use the boxed API.
     GdkFileList *file_list = g_value_get_boxed(value);
@@ -997,7 +1047,7 @@ static void printer_quit_dialog_response_cb(AdwMessageDialog *self, gchar *respo
 
         gtk_widget_set_sensitive(GTK_WIDGET(printer_save_btn), FALSE);
         gtk_widget_set_sensitive(GTK_WIDGET(printer_clear_btn), FALSE);
-        set_link_actions_gui(TRUE, FALSE);
+        set_link_gui_actions(TRUE, FALSE);
 
         printer_window_allowed_to_close = TRUE;
         gtk_window_close(GTK_WINDOW(printer_window));
@@ -1033,7 +1083,7 @@ static void activate_cb(GtkApplication *app) {
     g_signal_connect(emu_gl_area, "unrealize", G_CALLBACK(on_emu_unrealize), NULL); // call stop_loop() on unrealize to avoid annoying warnings when app is quitting
     g_signal_connect(emu_gl_area, "render", G_CALLBACK(on_emu_render), NULL);
 
-    GtkWidget *open_btn = GTK_WIDGET(gtk_builder_get_object(builder, "open_btn"));
+    open_btn = GTK_WIDGET(gtk_builder_get_object(builder, "open_btn"));
     g_signal_connect(open_btn, "clicked", G_CALLBACK(open_btn_clicked), NULL);
 
     toast_overlay = GTK_WIDGET(gtk_builder_get_object(builder, "overlay"));
@@ -1043,6 +1093,10 @@ static void activate_cb(GtkApplication *app) {
     g_signal_connect(popover, "closed", G_CALLBACK(popover_closed), NULL);
 
     window_title = GTK_WIDGET(gtk_builder_get_object(builder, "window_title"));
+
+    link_spinner_revealer = GTK_WIDGET(gtk_builder_get_object(builder, "link_spinner_revealer"));
+    link_spinner = GTK_WIDGET(gtk_builder_get_object(builder, "link_spinner"));
+    g_signal_connect(link_spinner_revealer, "notify::child-revealed", G_CALLBACK(link_spinner_revealer_done_cb), NULL);
 
     g_object_unref(builder);
 

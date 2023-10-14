@@ -4,6 +4,8 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <sys/poll.h>
+#include <pthread.h>
 
 #include "../../core/gb.h"
 
@@ -13,6 +15,46 @@ typedef enum {
     PKT_STATE,
     PKT_JOYPAD
 } pkt_type_t;
+
+static int server_sfd = -1;
+
+// TODO maybe just put the blocking connection code into a thread that returns the socket sfd once the connection is done
+//      ---> how to notify that we are done to join the thread? check every frame that the mutex protected sfd is != -1
+//          if yes, its done and thread can be joined if no, continue. this check is only done if there is a current connection attempt
+//          to avoid overhead of locking/unlocking mutexes
+
+// TODO in adwaita port, exchange_joypad timeouts (value to determine) (using poll because socket timeouts behaviour is less portable) to let the ui time to update.
+//      if this timeouts, do not run gb_step, skip until next loop() call and retry exchange_joypad
+
+// void send_recv_timeout(total_elapsed, total_len_bytes_requested) {
+//     max_timeout = 10;
+//     if (total_elapsed >= max_timeout)
+//         return;
+//     start = time();
+//     struct pollfd pfd = {
+//         .fd = sfd,
+//         .events = POLLIN/POLLOUT
+//     };
+//     do {
+//         // TODO this method may not work as expected for send() (this only checks if data can be sent but the send operation still will take time after)
+//         // ----> in this case maybe better use socket timeouts instead of poll
+//         switch (poll(timeout=max_timeout - total_elapsed)) {
+//         case -1:
+//             return error;
+//         case 0:
+//             return timeout;
+//         default:
+//             // TODO Even if the polling call indicates that a particular socket is ready for reading, a blocking socket would sometimes still block
+//             //  -----> set sfd to non blocking socket (poll is what will do the blocking)
+//             len_bytes = recv()/send();
+//             elapsed = time();
+//             if ()
+//                 send_recv_timeout(total_elapsed + elapsed, total_len_bytes_requested);
+//             else
+//                 return;
+//         }
+//     } while (len_bytes < total_len_bytes_requested);
+// }
 
 static void print_connected_to(struct sockaddr *addr) {
     char buf[INET6_ADDRSTRLEN];
@@ -27,6 +69,10 @@ static void print_connected_to(struct sockaddr *addr) {
     printf("Link cable connected to %s on port %d\n", buf, ntohs(port));
 }
 
+void link_cancel(void) {
+    shutdown(server_sfd, SHUT_RD);
+}
+
 int link_start_server(const char *port) {
     struct addrinfo hints = { 0 };
 	hints.ai_family = AF_UNSPEC;
@@ -39,27 +85,34 @@ int link_start_server(const char *port) {
         return -1;
     }
 
-    int server_sfd;
-    for (; res != NULL; res = res->ai_next) {
-        if ((server_sfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) == -1)
-            continue;
+    server_sfd = -1;
 
-        if (setsockopt(server_sfd, SOL_SOCKET, SO_REUSEADDR, &(int) { 1 }, sizeof(int))) {
+    struct addrinfo *ai = res;
+    for (; ai != NULL; ai = ai->ai_next) {
+        if ((server_sfd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol)) == -1) {
+            errnoprintf("socket");
+            continue;
+        }
+
+        int yes = 1;
+        if (setsockopt(server_sfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
             errnoprintf("setsockopt");
             close(server_sfd);
+            server_sfd = -1;
             return -1;
         };
 
-        if (bind(server_sfd, res->ai_addr, res->ai_addrlen) == -1) {
+        if (bind(server_sfd, ai->ai_addr, ai->ai_addrlen) == -1) {
             close(server_sfd);
+            server_sfd = -1;
             continue;
         }
 
         break;
     }
 
-    if (res == NULL) {
-        eprintf("bind: Could not bind\n");
+    if (ai == NULL) {
+        errnoprintf("bind");
         return -1;
     }
 
@@ -68,6 +121,7 @@ int link_start_server(const char *port) {
     if (listen(server_sfd, 1) == -1) {
         errnoprintf("listen");
         close(server_sfd);
+        server_sfd = -1;
         return -1;
     }
 
@@ -81,6 +135,7 @@ int link_start_server(const char *port) {
         return -1;
 
     close(server_sfd); // don't accept additional connections
+    server_sfd = -1;
     print_connected_to(client_addr);
     free(client_addr);
 
@@ -100,15 +155,16 @@ int link_connect_to_server(const char *address, const char *port) {
         return -1;
     }
 
-    int server_sfd;
     for (; res != NULL; res = res->ai_next) {
         if ((server_sfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) == -1)
             continue;
 
-        if (connect(server_sfd, res->ai_addr, res->ai_addrlen) == -1)
+        if (connect(server_sfd, res->ai_addr, res->ai_addrlen) == -1) {
             close(server_sfd);
-        else
+            server_sfd = -1;
+        } else {
             break;
+        }
     }
 
     if (res == NULL) {
@@ -267,6 +323,7 @@ int link_init_transfer(int sfd, gb_t *gb, gb_t **linked_gb) {
         if (!*linked_gb) {
             eprintf("received invalid or corrupted PKT_ROM\n");
             free(rom);
+            close(sfd);
             return 0;
         }
         free(rom);
@@ -277,6 +334,7 @@ int link_init_transfer(int sfd, gb_t *gb, gb_t **linked_gb) {
 
     if (!gb_load_savestate(*linked_gb, savestate_data, savestate_len)) {
         eprintf("received invalid or corrupted savestate\n");
+        close(sfd);
         return 0;
     }
 
