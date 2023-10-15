@@ -16,7 +16,6 @@ typedef struct __attribute__((packed)) {
     byte_t mode; // GB_MODE_DMG or GB_MODE_CGB
 } savestate_header_t;
 
-// TODO fix the weird options getter/setters and default values implementation
 gb_options_t defaults_opts = {
     .mode = GB_MODE_DMG,
     .disable_cgb_color_correction = 0,

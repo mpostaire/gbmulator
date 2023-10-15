@@ -14,7 +14,6 @@ typedef struct {
             LINK_TYPE_GB,
             LINK_TYPE_PRINTER
         } type;
-        // void (*step)(void *device); // TODO undefined behavior if casting function pointer with void *device arg into one with gb_t *device (or other type) arg
         linked_device_shift_bit_cb_t shift_bit;
         linked_device_data_received_cb_t data_received;
     } linked_device;
