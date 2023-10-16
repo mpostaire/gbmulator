@@ -14,7 +14,7 @@
                     <object class="AdwPreferencesGroup">
                         <property name="title">Emulation</property>
                         <child>
-                            <object class="AdwActionRow">
+                            <object class="AdwActionRow" id="pref_speed_container">
                                 <property name="activatable">false</property>
                                 <property name="focusable">false</property>
                                 <property name="title">Speed</property>

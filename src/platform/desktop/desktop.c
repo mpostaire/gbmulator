@@ -127,8 +127,8 @@ static int gamepad_state = GAMEPAD_DISABLED;
 static AdwApplication *app;
 static GtkWidget *main_window, *preferences_window, *window_title, *toast_overlay, *emu_gl_area, *printer_gl_area, *keybind_dialog, *bind_value, *mode_setter;
 static GtkWidget *joypad_name, *restart_dialog, *link_emu_dialog, *printer_window, *status, *link_mode_setter_server, *link_host, *link_host_revealer;
-static GtkWidget *printer_save_btn, *printer_clear_btn, *printer_scroll_adj, *printer_quit_dialog, *main_window_view, *speed_slider, *open_btn;
-static GtkWidget *link_spinner_revealer, *link_spinner;
+static GtkWidget *printer_save_btn, *printer_clear_btn, *printer_scroll_adj, *printer_quit_dialog, *main_window_view, *speed_slider_container, *speed_slider;
+static GtkWidget *open_btn, *link_spinner_revealer, *link_spinner;
 static GtkEventController *motion_event_controller;
 static glong motion_event_handler = 0;
 static GtkFileDialog *open_rom_dialog, *save_printer_image_dialog;
@@ -272,6 +272,8 @@ static void disconnect_emu(GSimpleAction *action, GVariant *parameter, gpointer 
 
 static void set_link_gui_actions(gboolean enabled, gboolean link_is_gb) {
     gtk_widget_set_sensitive(open_btn, enabled);
+    if (link_is_gb)
+        gtk_widget_set_sensitive(speed_slider_container, enabled);
 
     if (enabled) {
         const GActionEntry app_entries[] = {
@@ -312,6 +314,8 @@ static inline gboolean loop(gpointer user_data) {
             linked_gb = NULL;
             sfd = -1;
             set_link_gui_actions(TRUE, TRUE);
+            steps_per_frame = GB_CPU_STEPS_PER_FRAME * config.speed;
+            gb_set_apu_speed(gb, config.speed);
             show_toast("Link Cable disconnected");
         }
     }
@@ -458,11 +462,8 @@ void start_link_thread(GTask *task, gpointer source_object, gpointer task_data, 
     gb_t *new_linked_gb;
     if (sfd > 0 && link_init_transfer(sfd, gb, &new_linked_gb)) {
         linked_gb = new_linked_gb;
-        config.speed = 1.0f;
-        steps_per_frame = GB_CPU_STEPS_PER_FRAME * config.speed;
-        gb_set_apu_speed(gb, config.speed);
-        gtk_range_set_value(GTK_RANGE(speed_slider), config.speed);
-
+        steps_per_frame = GB_CPU_STEPS_PER_FRAME;
+        gb_set_apu_speed(gb, 1.0f);
         g_task_return_boolean(link_task, TRUE);
     } else {
         g_task_return_boolean(link_task, FALSE);
@@ -900,6 +901,9 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
     case GDK_KEY_F3: case GDK_KEY_F4:
     case GDK_KEY_F5: case GDK_KEY_F6:
     case GDK_KEY_F7: case GDK_KEY_F8:
+        if (linked_gb)
+            return TRUE;
+
         char *savestate_path = get_savestate_path(rom_path, keyval - GDK_KEY_F1);
         if (state & GDK_SHIFT_MASK) {
             save_state_to_file(gb, savestate_path, 1);
@@ -1126,6 +1130,7 @@ static void activate_cb(GtkApplication *app) {
     adw_switch_row_set_active(ADW_SWITCH_ROW(widget), config.sound_drc);
     g_signal_connect(widget, "notify::active", G_CALLBACK(set_sound_drc), NULL);
 
+    speed_slider_container = GTK_WIDGET(gtk_builder_get_object(builder, "pref_speed_container"));
     speed_slider = GTK_WIDGET(gtk_builder_get_object(builder, "pref_speed"));
     GtkAdjustment *speed_adjustment = gtk_adjustment_new(config.speed, 1.0, 8.0, 0.5, 1, 0.0);
     gtk_scale_set_format_value_func(GTK_SCALE(speed_slider), speed_slider_format, NULL, NULL);
