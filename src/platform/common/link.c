@@ -4,8 +4,6 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <arpa/inet.h>
-#include <sys/poll.h>
-#include <pthread.h>
 
 #include "../../core/gb.h"
 
