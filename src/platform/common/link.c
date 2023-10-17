@@ -18,44 +18,6 @@ typedef enum {
 
 static int server_sfd = -1;
 
-// TODO maybe just put the blocking connection code into a thread that returns the socket sfd once the connection is done
-//      ---> how to notify that we are done to join the thread? check every frame that the mutex protected sfd is != -1
-//          if yes, its done and thread can be joined if no, continue. this check is only done if there is a current connection attempt
-//          to avoid overhead of locking/unlocking mutexes
-
-// TODO in adwaita port, exchange_joypad timeouts (value to determine) (using poll because socket timeouts behaviour is less portable) to let the ui time to update.
-//      if this timeouts, do not run gb_step, skip until next loop() call and retry exchange_joypad
-
-// void send_recv_timeout(total_elapsed, total_len_bytes_requested) {
-//     max_timeout = 10;
-//     if (total_elapsed >= max_timeout)
-//         return;
-//     start = time();
-//     struct pollfd pfd = {
-//         .fd = sfd,
-//         .events = POLLIN/POLLOUT
-//     };
-//     do {
-//         // TODO this method may not work as expected for send() (this only checks if data can be sent but the send operation still will take time after)
-//         // ----> in this case maybe better use socket timeouts instead of poll
-//         switch (poll(timeout=max_timeout - total_elapsed)) {
-//         case -1:
-//             return error;
-//         case 0:
-//             return timeout;
-//         default:
-//             // TODO Even if the polling call indicates that a particular socket is ready for reading, a blocking socket would sometimes still block
-//             //  -----> set sfd to non blocking socket (poll is what will do the blocking)
-//             len_bytes = recv()/send();
-//             elapsed = time();
-//             if ()
-//                 send_recv_timeout(total_elapsed + elapsed, total_len_bytes_requested);
-//             else
-//                 return;
-//         }
-//     } while (len_bytes < total_len_bytes_requested);
-// }
-
 static void print_connected_to(struct sockaddr *addr) {
     char buf[INET6_ADDRSTRLEN];
     int port;
