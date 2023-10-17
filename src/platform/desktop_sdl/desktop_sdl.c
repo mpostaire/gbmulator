@@ -14,7 +14,7 @@ static void on_link_connect(gb_t *new_linked_gb);
 static void on_link_disconnect(void);
 
 // config struct initialized to defaults
-config_t config = {
+static config_t config = {
     .mode = GB_MODE_CGB,
     .color_palette = PPU_COLOR_PALETTE_ORIG,
     .scale = 2,
@@ -49,31 +49,36 @@ config_t config = {
     .keyname_parser = (keyname_parser_t) SDL_GetKeyFromName
 };
 
-SDL_bool is_running = SDL_TRUE;
-SDL_bool is_paused = SDL_TRUE;
+static SDL_bool is_running = SDL_TRUE;
+static SDL_bool is_paused = SDL_TRUE;
 
-SDL_Window *window;
+static SDL_Window *window;
 
-SDL_Texture *ppu_texture;
-int ppu_texture_pitch;
+static SDL_Texture *ppu_texture;
+static int ppu_texture_pitch;
 
-SDL_AudioDeviceID audio_device;
+#define N_BUFFERS 8
+#define N_SAMPLES 1024
+#define SAMPLING_RATE 44100
+static SDL_AudioDeviceID audio_device;
+static gb_apu_sample_t samples[N_SAMPLES];
+static int samples_count;
 
-SDL_GameController *pad;
-SDL_bool is_controller_present = SDL_FALSE;
+static SDL_GameController *pad;
+static SDL_bool is_controller_present = SDL_FALSE;
 
-char window_title[sizeof(EMULATOR_NAME) + 19];
+static char window_title[sizeof(EMULATOR_NAME) + 19];
 
-ui_t *ui;
-char *rom_path;
-char *forced_save_path;
+static ui_t *ui;
+static char *rom_path;
+static char *forced_save_path;
 
-int steps_per_frame = GB_CPU_STEPS_PER_FRAME;
+static int steps_per_frame = GB_CPU_STEPS_PER_FRAME;
 
-int sfd;
+static int sfd;
 
-gb_t *gb;
-gb_t *linked_gb;
+static gb_t *gb;
+static gb_t *linked_gb;
 
 static int keycode_filter(SDL_Keycode key) {
     switch (key) {
@@ -94,71 +99,42 @@ static void gbmulator_exit(menu_entry_t *entry) {
     is_running = SDL_FALSE;
 }
 
-static void gbmulator_unpause(menu_entry_t *entry) {
+static void gbmulator_play(menu_entry_t *entry) {
     if (gb)
         is_paused = SDL_FALSE;
+}
+
+static void gbmulator_pause(menu_entry_t *entry) {
+    is_paused = SDL_TRUE;
 }
 
 static void ppu_vblank_cb(const byte_t *pixels) {
     SDL_UpdateTexture(ppu_texture, NULL, pixels, ppu_texture_pitch);
 }
 
-static void apu_samples_ready_cb(const void *audio_buffer, size_t audio_buffer_size) {
-    while (SDL_GetQueuedAudioSize(audio_device) > audio_buffer_size * 8)
-        SDL_Delay(1);
-    SDL_QueueAudio(audio_device, audio_buffer, audio_buffer_size);
+#define DRC_TARGET_QUEUE_SIZE ((N_BUFFERS / 4) * N_SAMPLES)
+#define DRC_MAX_FREQ_DIFF 0.02
+#define DRC_ALPHA 0.1
+static int ewma_queue_size;
+static inline uint32_t dynamic_rate_control(int queue_size) {
+    queue_size /= sizeof(gb_apu_sample_t);
+    ewma_queue_size = queue_size * DRC_ALPHA + ewma_queue_size * (1.0 - DRC_ALPHA);
+
+    double diff = (ewma_queue_size - DRC_TARGET_QUEUE_SIZE) / (double) DRC_TARGET_QUEUE_SIZE;
+    return SAMPLING_RATE * (1.0 - CLAMP(diff, -1.0, 1.0) * DRC_MAX_FREQ_DIFF);
 }
+static void apu_new_sample_cb(const gb_apu_sample_t sample, uint32_t *dynamic_sampling_rate) {
+    samples[samples_count++] = sample;
+    if (samples_count < N_SAMPLES)
+        return;
+    samples_count = 0;
 
-static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
-    char *xdg = getenv(xdg_variable);
-    if (xdg) return xdg;
+    Uint32 queue_size = SDL_GetQueuedAudioSize(audio_device);
+    if (queue_size > N_BUFFERS * N_SAMPLES * sizeof(sample))
+        return;
+    SDL_QueueAudio(audio_device, &samples, sizeof(samples));
 
-    char *home = getenv("HOME");
-    size_t home_len = strlen(home);
-    size_t fallback_len = strlen(fallback);
-    char *buf = xmalloc(home_len + fallback_len + 3);
-    snprintf(buf, home_len + fallback_len + 2, "%s/%s", home, fallback);
-    return buf;
-}
-
-static char *get_config_path(void) {
-    char *xdg_config = get_xdg_path("XDG_CONFIG_HOME", ".config");
-
-    char *config_path = xmalloc(strlen(xdg_config) + 27);
-    snprintf(config_path, strlen(xdg_config) + 26, "%s%s", xdg_config, "/gbmulator/gbmulator.conf");
-
-    free(xdg_config);
-    return config_path;
-}
-
-static char *get_save_path(const char *rom_filepath) {
-    char *xdg_data = get_xdg_path("XDG_DATA_HOME", ".local/share");
-
-    char *last_slash = strrchr(rom_filepath, '/');
-    char *last_period = strrchr(last_slash ? last_slash : rom_filepath, '.');
-    int last_period_index = last_period ? (int) (last_period - last_slash) : (int) strlen(rom_filepath);
-
-    size_t len = strlen(xdg_data) + strlen(last_slash ? last_slash : rom_filepath);
-    char *save_path = xmalloc(len + 13);
-    snprintf(save_path, len + 12, "%s/gbmulator%.*s.sav", xdg_data, last_period_index, last_slash);
-
-    free(xdg_data);
-    return save_path;
-}
-
-static char *get_savestate_path(const char *rom_filepath, int slot) {
-    char *xdg_data = get_xdg_path("XDG_DATA_HOME", ".local/share");
-
-    char *last_slash = strrchr(rom_filepath, '/');
-    char *last_period = strrchr(last_slash ? last_slash : rom_filepath, '.');
-    int last_period_index = last_period ? (int) (last_period - last_slash) : (int) strlen(rom_filepath);
-
-    size_t len = strlen(xdg_data) + strlen(last_slash);
-    char *save_path = xmalloc(len + 33);
-    snprintf(save_path, len + 32, "%s/gbmulator/savestates%.*s-%d.gbstate", xdg_data, last_period_index, last_slash, slot);
-
-    free(xdg_data);
-    return save_path;
+    *dynamic_sampling_rate = dynamic_rate_control(SDL_GetQueuedAudioSize(audio_device));
 }
 
 static void load_cartridge(char *path) {
@@ -191,9 +167,10 @@ static void load_cartridge(char *path) {
 
     gb_options_t opts = {
         .mode = config.mode,
-        .on_apu_samples_ready = apu_samples_ready_cb,
+        .on_new_sample = apu_new_sample_cb,
         .on_new_frame = ppu_vblank_cb,
         .apu_speed = config.speed,
+        .apu_sampling_rate = SAMPLING_RATE,
         .apu_sound_level = config.sound,
         .palette = config.color_palette
     };
@@ -215,6 +192,7 @@ static void load_cartridge(char *path) {
     }
     gb = new_emu;
     gb_print_status(gb);
+    SDL_ClearQueuedAudio(audio_device);
 
     snprintf(window_title, sizeof(window_title), EMULATOR_NAME" - %s", gb_get_rom_title(gb));
     SDL_SetWindowTitle(window, window_title);
@@ -223,7 +201,7 @@ static void load_cartridge(char *path) {
     ui->root_menu->entries[2].disabled = 0; // enable reset rom menu entry
     ui->root_menu->entries[3].disabled = 0; // enable link cable menu entry
 
-    is_paused = SDL_FALSE;
+    gbmulator_play(NULL);
 }
 
 
@@ -312,7 +290,8 @@ static void reset_rom(menu_entry_t *entry) {
     }
     gb_reset(gb, config.mode);
     gb_print_status(gb);
-    is_paused = SDL_FALSE;
+    SDL_ClearQueuedAudio(audio_device);
+    gbmulator_play(NULL);
 }
 
 menu_t link_menu = {
@@ -360,7 +339,7 @@ menu_t main_menu = {
     .title = "GBmulator",
     .length = 7,
     .entries = {
-        { "Resume", UI_ACTION, .disabled = 1, .action = gbmulator_unpause },
+        { "Resume", UI_ACTION, .disabled = 1, .action = gbmulator_play },
         { "Open ROM...", UI_ACTION, .action = open_rom },
         { "Reset ROM", UI_ACTION, .disabled = 1, .action = reset_rom },
         { "Link cable...", UI_SUBMENU, .disabled = 1, .submenu = &link_menu },
@@ -376,8 +355,9 @@ menu_t main_menu = {
 
 static void on_link_connect(gb_t *new_linked_gb) {
     linked_gb = new_linked_gb;
-    is_paused = SDL_FALSE;
+    gbmulator_play(NULL);
     config.speed = 1.0f;
+    gb_set_apu_speed(gb, config.speed);
 
     link_menu.entries[0].disabled = 1;
     link_menu.entries[1].disabled = 1;
@@ -407,7 +387,7 @@ static void handle_input(void) {
             if (is_paused) {
                 if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
                     if (gb)
-                        is_paused = SDL_FALSE;
+                        gbmulator_play(NULL);
                     else
                         ui_back_to_root_menu(ui);
                 } else {
@@ -419,7 +399,7 @@ static void handle_input(void) {
             if (is_paused) {
                 if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
                     if (gb)
-                        is_paused = SDL_FALSE;
+                        gbmulator_play(NULL);
                     else
                         ui_back_to_root_menu(ui);
                 } else {
@@ -432,7 +412,7 @@ static void handle_input(void) {
             switch (event.key.keysym.sym) {
             case SDLK_PAUSE:
             case SDLK_ESCAPE:
-                is_paused = SDL_TRUE;
+                gbmulator_pause(NULL);
                 ui_back_to_root_menu(ui);
                 break;
             case SDLK_F1: case SDLK_F2:
@@ -465,7 +445,7 @@ static void handle_input(void) {
             if (is_paused) {
                 if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
                     if (gb)
-                        is_paused = SDL_FALSE;
+                        gbmulator_play(NULL);
                     else
                         ui_back_to_root_menu(ui);
                 } else {
@@ -474,7 +454,7 @@ static void handle_input(void) {
                 break;
             }
             if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
-                is_paused = SDL_TRUE;
+                gbmulator_pause(NULL);
                 ui_back_to_root_menu(ui);
                 break;
             }
@@ -585,10 +565,10 @@ int main(int argc, char **argv) {
     SDL_SetTextureBlendMode(ui_texture, SDL_BLENDMODE_BLEND);
 
     SDL_AudioSpec audio_settings = {
-        .freq = GB_APU_SAMPLE_RATE,
-        .format = AUDIO_F32SYS,
-        .channels = GB_APU_CHANNELS,
-        .samples = GB_APU_DEFAULT_SAMPLE_COUNT
+        .freq = SAMPLING_RATE,
+        .format = AUDIO_S16SYS,
+        .channels = 2,
+        .samples = N_SAMPLES
     };
     audio_device = SDL_OpenAudioDevice(NULL, 0, &audio_settings, NULL, 0);
     SDL_PauseAudioDevice(audio_device, 0);

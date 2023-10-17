@@ -2,6 +2,8 @@
 
 #include "../../core/gb.h"
 
+void link_cancel(void);
+
 int link_start_server(const char *port);
 
 int link_connect_to_server(const char *address, const char *port);

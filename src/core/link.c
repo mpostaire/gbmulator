@@ -50,11 +50,7 @@ void link_step(gb_t *gb) {
     if (!master_transfer_request)
         return;
 
-    // TODO instead of link->linked_device and link->printer pointers, on connection, take a pointer to the link data register of the device
-    //      and to tranfer to this pointer dereferenced. Allow callback once transfer of the byte is finished
-    //      to request interrupt in slave gameboy or do whatever is needed in slave printer
-
-    if (link->bit_shift_counter < 8) { // emulate 8 bit shifting
+    if (link->bit_shift_counter < 8) {
         link->bit_shift_counter++;
 
         byte_t other_bit = 1; // this is 1 if no device is connected

@@ -798,37 +798,6 @@ static inline void sbc(gb_cpu_t *cpu, byte_t reg) {
     SET_FLAG(cpu, FLAG_N);
 }
 
-static void handle_missing_opcode(gb_t *gb, byte_t is_cb) {
-    gb_cpu_t *cpu = gb->cpu;
-
-    if (cpu->opcode >= (is_cb ? sizeof(extended_instructions) : sizeof(instructions))) {
-        eprintf("(invalid) opcode%s%02X\n", is_cb ? " CB " : " ", cpu->opcode);
-        if (gb->exit_on_invalid_opcode)
-            exit(EXIT_FAILURE);
-        else
-            gb->cpu->halt = 1;
-    }
-
-    cpu->operand = 0; // initialize to 0 to shut gcc warnings
-    switch (is_cb ? extended_instructions[cpu->opcode].operand_size : instructions[cpu->opcode].operand_size) {
-    case 1:
-        cpu->operand = mmu_read(gb, cpu->registers.pc);
-        break;
-    case 2:
-        cpu->operand = mmu_read(gb, cpu->registers.pc) | mmu_read(gb, cpu->registers.pc + 1) << 8;
-        break;
-    }
-
-    char buf[32];
-    snprintf(buf, sizeof(buf), is_cb ? extended_instructions[cpu->opcode].name : instructions[cpu->opcode].name, cpu->operand);
-
-    eprintf("(not implemented) opcode%s%02X: %s\n", is_cb ? " CB " : " ", cpu->opcode, buf);
-    if (gb->exit_on_invalid_opcode)
-        exit(EXIT_FAILURE);
-    else
-        gb->cpu->halt = 1;
-}
-
 static void exec_extended_opcode(gb_t *gb) {
     gb_cpu_t *cpu = gb->cpu;
 
@@ -1473,9 +1442,6 @@ static void exec_extended_opcode(gb_t *gb) {
         CLOCK(END_OPCODE);
     case 0xFF: // SET 7, A (4 cycles)
         CLOCK(SET_BIT(cpu->registers.a, 7); END_OPCODE;);
-    default:
-        handle_missing_opcode(gb, 1);
-        break;
     }
 }
 
@@ -2240,7 +2206,12 @@ static void exec_opcode(gb_t *gb) {
         PUSH(cpu->registers.pc);
         CLOCK(cpu->registers.pc = 0x0038; END_OPCODE;);
     default:
-        handle_missing_opcode(gb, 0);
+        CLOCK(
+            eprintf("(invalid) opcode %02X\n", cpu->opcode);
+            cpu->ime = IME_DISABLED;
+            gb->cpu->halt = 1;
+            END_OPCODE;
+        );
         break;
     }
 }
@@ -2250,15 +2221,15 @@ static void print_trace(gb_t *gb) {
     gb_cpu_t *cpu = gb->cpu;
 
     byte_t opcode = mmu_read(gb, cpu->registers.pc);
-    byte_t operand_size = instructions[mmu_read(gb, cpu->registers.pc)].operand_size;
+    byte_t operand_size = instructions[opcode].operand_size;
 
-    // TODO print CB opcodes names
     if (operand_size == 0) {
         printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x        %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, instructions[opcode].name);
     } else if (operand_size == 1) {
         char buf[32];
+        char *instr_name = opcode == 0xCB ? extended_instructions[mmu_read(gb, cpu->registers.pc + 1)].name : instructions[mmu_read(gb, cpu->registers.pc)].name;
         byte_t operand = mmu_read(gb, cpu->registers.pc + 1);
-        snprintf(buf, sizeof(buf), instructions[opcode].name, operand);
+        snprintf(buf, sizeof(buf), instr_name, operand);
         printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x     %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, operand, buf);
     } else {
         char buf[32];
@@ -2341,7 +2312,7 @@ void cpu_step(gb_t *gb) {
         else
             cpu->registers.pc++;
         cpu->exec_state = EXEC_OPCODE;
-        // don't break, exec opcode now
+        // exec opcode now
         // fall through
     case EXEC_OPCODE:
         exec_opcode(gb);
@@ -2350,7 +2321,7 @@ void cpu_step(gb_t *gb) {
         cpu->opcode = cpu->operand;
         cpu->opcode_state = cpu->opcode;
         cpu->exec_state = EXEC_OPCODE_CB;
-        // don't break, exec extended opcode now
+        // exec extended opcode now
         // fall through
     case EXEC_OPCODE_CB:
         exec_extended_opcode(gb);

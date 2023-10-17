@@ -14,7 +14,7 @@ You can compile and run it on your linux machine or use it in your browser [here
 
 - GameBoy and GameBoy Color emulator
 - PPU implements fifo rendering
-- Audio
+- Audio with dynamic rate control
 - Wireless link cable and IR sensor
 - Support for MBC1, MBC1M, MBC2, MBC3, MBC30, MBC5, MBC7 and HuC1 cartridges
 - Battery saves and savestates
@@ -84,7 +84,6 @@ There is also support for gamepad controllers.
 
 - implement other MBCs
 - find out what are the accurate timings for the ppu pixel fifo/fetcher (especially for corner cases)
-- better audio/video sync
 - android link cable via bluetooth + cross platform link cable
 - Maybe: web link cable using Emscripten WebSockets API (https://emscripten.org/docs/porting/networking.html and https://github.com/emscripten-core/emscripten/blob/main/system/include/emscripten/websocket.h. Example gist: https://gist.github.com/nus/564e9e57e4c107faa1a45b8332c265b9)
 - rewrite Makefile (it's a mess) maybe use CMake instead

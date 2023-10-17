@@ -8,7 +8,7 @@
 #include "glrenderer.h"
 
 // Vertices coordinates
-GLfloat vertices[] = {
+static GLfloat vertices[] = {
     //     COORDINATES   /  TexCoord (vertically flipped)
     -1.0f, -1.0f, 0.0f,    0.0f, 1.0f, // Lower left corner
     -1.0f,  1.0f, 0.0f,    0.0f, 0.0f, // Upper left corner
@@ -17,7 +17,7 @@ GLfloat vertices[] = {
 };
 
 // Indices for vertices order
-GLuint indices[] = {
+static GLuint indices[] = {
     0, 2, 1, // Upper triangle
     0, 3, 2 // Lower triangle
 };
@@ -29,7 +29,7 @@ struct glrenderer_t {
     GLuint EBO; // Element Buffer Object
 };
 
-GLuint shader_program;
+static GLuint shader_program;
 
 static GLuint create_shader_program(const char *vertex_source_path, const char *fragment_source_path) {
     GBytes *vertex_shader_data = g_resources_lookup_data(vertex_source_path, 0, NULL);
@@ -166,6 +166,13 @@ glrenderer_t *glrenderer_init(GLsizei width, GLsizei height, const GLvoid *pixel
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 
     return renderer;
+}
+
+void glrenderer_quit(glrenderer_t *renderer) {
+    glDeleteTextures(1, &renderer->texture);
+    glDeleteVertexArrays(1, &renderer->VAO);
+    glDeleteBuffers(1, &renderer->VBO);
+    glDeleteBuffers(1, &renderer->EBO);
 }
 
 void glrenderer_render(glrenderer_t *renderer) {

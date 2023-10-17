@@ -39,14 +39,11 @@ typedef struct {
 } gb_channel_t;
 
 typedef struct {
-    int take_sample_cycles_count;
-
-    int audio_buffer_index;
-    size_t audio_buffer_sample_size;
-    void *audio_buffer;
+    uint32_t take_sample_cycles_count;
+    uint32_t dynamic_sampling_rate;
 
     byte_t frame_sequencer;
-    int frame_sequencer_cycles_count;
+    uint32_t frame_sequencer_cycles_count;
 
     gb_channel_t channel1;
     gb_channel_t channel2;

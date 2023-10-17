@@ -14,9 +14,9 @@ static int screen_width;
 static int screen_height;
 
 static button_t *buttons;
-int moving;
-int moving_offset_x;
-int moving_offset_y;
+static int moving;
+static int moving_offset_x;
+static int moving_offset_y;
 
 static inline s_byte_t is_finger_over_ui_element(float x, float y) {
     if (is_landscape) {

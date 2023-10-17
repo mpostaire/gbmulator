@@ -12,27 +12,9 @@
                 <property name="title">General</property>
                 <child>
                     <object class="AdwPreferencesGroup">
-                        <!-- <property name="title">General</property> -->
-
+                        <property name="title">Emulation</property>
                         <child>
-                            <object class="AdwActionRow">
-                                <property name="activatable">false</property>
-                                <property name="focusable">false</property>
-                                <property name="title">Sound</property>
-                                <property name="subtitle">Sets the sound level.              </property>
-                                <child>
-                                    <object class="GtkScale" id="pref_sound">
-                                        <property name="hexpand">true</property>
-                                        <property name="draw-value">true</property>
-                                        <property name="value-pos">right</property>
-                                        <property name="digits">2</property>
-                                    </object>
-                                </child>
-                            </object>
-                        </child>
-
-                        <child>
-                            <object class="AdwActionRow">
+                            <object class="AdwActionRow" id="pref_speed_container">
                                 <property name="activatable">false</property>
                                 <property name="focusable">false</property>
                                 <property name="title">Speed</property>
@@ -80,30 +62,43 @@
                     </object>
                 </child>
 
-                <!-- <child>
+                <child>
                     <object class="AdwPreferencesGroup">
-                        <property name="title">Game Boy Printer</property>
+                        <property name="title">Audio</property>
 
                         <child>
-                            <object class="AdwActionRow" id="pref_print_margins">
-                                <property name="title">Enable Game Boy Printer margins</property>
-                                <property name="subtitle">The Game Boy Printer emulation adds margins between printed pictures.</property>
+                            <object class="AdwActionRow">
+                                <property name="activatable">false</property>
+                                <property name="focusable">false</property>
+                                <property name="title">Sound</property>
+                                <property name="subtitle">Sets the sound level.              </property>
                                 <child>
-                                    <object class="GtkSwitch">
-                                        <property name="valign">center</property>
+                                    <object class="GtkScale" id="pref_sound">
+                                        <property name="hexpand">true</property>
+                                        <property name="draw-value">true</property>
+                                        <property name="value-pos">right</property>
+                                        <property name="digits">2</property>
                                     </object>
                                 </child>
                             </object>
                         </child>
+
+                        <child>
+                            <object class="AdwSwitchRow" id="pref_sound_drc">
+                                <property name="title">Dynamic rate control</property>
+                                <property name="subtitle">Reduces audio crackling at the cost of slight pitch distortion</property>
+                            </object>
+                        </child>
+
                     </object>
-                </child> -->
+                </child>
 
             </object>
         </child>
 
         <child>
             <object class="AdwPreferencesPage">
-                <property name="icon-name">applications-games-symbolic</property>
+                <property name="icon-name">input-keyboard-symbolic</property>
                 <property name="title">Controls</property>
                 <child>
                     <object class="AdwPreferencesGroup">

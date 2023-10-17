@@ -69,7 +69,7 @@ profile: run
 
 # TODO this should also make a gbmulator.apk file in this project root dir (next do the gbmulator desktop binary) 
 android: $(SDIR)/core/boot.c
-	cd $(SDIR)/platform/android/android-project && ./gradlew assemble
+	cd $(SDIR)/platform/android/android-project && ./gradlew build
 
 debug_android: android
 	cd $(SDIR)/platform/android/android-project && ./gradlew installDebug
@@ -137,7 +137,7 @@ check: $(SDIR)
 	cppcheck --enable=all --suppress=missingIncludeSystem -i $(SDIR)/platform/android/android-project -i $(SDIR)/platform/desktop/resources.c $(SDIR)
 
 clean:
-	rm -rf $(ODIR)
+	rm -rf $(ODIR) web_build
 	$(MAKE) -C test clean
 
 cleaner: clean
