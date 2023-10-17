@@ -409,8 +409,10 @@ static void set_accelerometer_data(double *x, double *y) {
 }
 
 static void toggle_pause(GSimpleAction *action, GVariant *parameter, gpointer app) {
-    show_toast(is_paused ? "Resumed" : "Paused");
-    toggle_loop();
+    if (!linked_gb && !link_task) {
+        show_toast(is_paused ? "Resumed" : "Paused");
+        toggle_loop();
+    }
 }
 
 static void restart_emulator(AdwMessageDialog *self, gchar *response, gpointer user_data) {
@@ -423,7 +425,7 @@ static void restart_emulator(AdwMessageDialog *self, gchar *response, gpointer u
 }
 
 static void ask_restart_emulator(GSimpleAction *action, GVariant *parameter, gpointer app) {
-    if (gb) {
+    if (gb && !linked_gb && !link_task) {
         gamepad_state = GAMEPAD_DISABLED;
         gtk_window_present(GTK_WINDOW(restart_dialog));
     }
