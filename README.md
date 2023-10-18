@@ -18,7 +18,8 @@ You can compile and run it on your linux machine or use it in your browser [here
 - Wireless link cable and IR sensor
 - Support for MBC1, MBC1M, MBC2, MBC3, MBC30, MBC5, MBC7 and HuC1 cartridges
 - Battery saves and savestates
-- Game Boy Printer emulation
+- Game Boy Printer
+- Game Boy Camera
 - Supports keyboard and gamepad controllers
 
 ## Installation
