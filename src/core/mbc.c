@@ -280,6 +280,22 @@ void mbc_write_registers(gb_t *gb, word_t address, byte_t data) {
             break;
         }
         break;
+    case CAMERA:
+        switch (address & 0xE000) {
+        case 0x0000:
+            mbc->eram_enabled = (data & 0x0F) == 0x0A; // ERAM reads are always enabled: this only enable/disable ERAM writes
+            break;
+        case 0x2000:
+            mbc->camera.rom_bank = data & 0x3F;
+            mbc->camera.rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to mbc->camera.rom_bank %= rom_banks but avoid division by 0
+            mmu->rom_bankn_addr = (mbc->camera.rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
+            break;
+        case 0x4000:;
+            mbc->camera.cam_regs_enabled = CHECK_BIT(data, 4);
+            mbc->camera.eram_bank = data & 0x0F;
+            break;
+        }
+        break;
     }
 }
 
@@ -317,15 +333,22 @@ byte_t mbc_read_eram(gb_t *gb, word_t address) {
         return 0xC0;
     }
 
+    if (mbc->type == CAMERA) {
+        if (mbc->camera.cam_regs_enabled)
+            return camera_read_reg(gb, address);
+        if (CHECK_BIT(mmu->mbc.camera.regs[0], 0)) // camera capture in progress
+            return 0x00;
+        return mmu->eram[mmu->eram_bank_addr + (address - ERAM)];
+    }
+
     byte_t can_access_rtc = (mbc->type == MBC3 || mbc->type == MBC30) && mbc->mbc3.rtc_mapped; // mbc->mbc3.rtc_mapped implies that mmu->has_rtc is true
     if (mbc->eram_enabled && !can_access_rtc) {
         if (mbc->type == MBC2) {
             // wrap around from 0xA200 to 0xBFFF (eg: address 0xA200 reads as address 0xA000)
             // return mmu->eram_bank_pointer[ERAM + (address & 0x1FF)] | 0xF0;
             return mmu->eram[mmu->eram_bank_addr + ((address - ERAM) & 0x1FF)] | 0xF0;
-        } else {
-            return mmu->eram[mmu->eram_bank_addr + (address - ERAM)];
         }
+        return mmu->eram[mmu->eram_bank_addr + (address - ERAM)];
     }
 
     if (mbc->mbc3.rtc.enabled) { // mbc->mbc3.rtc.enabled implies that mmu->has_rtc is true
@@ -382,6 +405,14 @@ void mbc_write_eram(gb_t *gb, word_t address, byte_t data) {
         data &= 0x01;
         if (mbc->huc1.ir_led != data)
             mbc->huc1.ir_led = data;
+        return;
+    }
+
+    if (mbc->type == CAMERA) {
+        if (mbc->camera.cam_regs_enabled)
+            camera_write_reg(gb, address, data);
+        else if (mbc->eram_enabled && !CHECK_BIT(mmu->mbc.camera.regs[0], 0)) // eram enabled and camera capture not in progress
+            mmu->eram[mmu->eram_bank_addr + (address - ERAM)] = data;
         return;
     }
 

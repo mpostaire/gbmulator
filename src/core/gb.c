@@ -22,9 +22,11 @@ gb_options_t defaults_opts = {
     .palette = PPU_COLOR_PALETTE_ORIG,
     .apu_speed = 1.0f,
     .apu_sound_level = 1.0f,
+    .apu_sampling_rate = 44100,
     .on_new_sample = NULL,
     .on_new_frame = NULL,
-    .on_accelerometer_request = NULL
+    .on_accelerometer_request = NULL,
+    .on_camera_capture_image = NULL
 };
 
 const char *mbc_names[] = {
@@ -58,6 +60,8 @@ static inline int gb_step_linked(gb_t *gb, byte_t step_linked_device) {
 
     if (gb->mmu->has_rtc)
         rtc_step(gb);
+    if (gb->mmu->mbc.type == CAMERA)
+        camera_step(gb);
 
     // TODO during the time the cpu is blocked after a STOP opcode triggering a speed switch, the ppu and apu
     //      behave in a weird way: https://gbdev.io/pandocs/CGB_Registers.html?highlight=key1#ff4d--key1-cgb-mode-only-prepare-speed-switch
@@ -769,6 +773,7 @@ void gb_get_options(gb_t *gb, gb_options_t *opts) {
     opts->on_new_sample = gb->on_new_sample;
     opts->on_new_frame = gb->on_new_frame;
     opts->on_accelerometer_request = gb->on_accelerometer_request;
+    opts->on_camera_capture_image = gb->on_camera_capture_image;
 }
 
 void gb_set_options(gb_t *gb, gb_options_t *opts) {
@@ -778,7 +783,7 @@ void gb_set_options(gb_t *gb, gb_options_t *opts) {
     // allow changes of mode and apu_sampling_rate only once (inside gb_init())
     if (!gb->mode) {
         gb->mode = opts->mode >= GB_MODE_DMG && opts->mode <= GB_MODE_CGB ? opts->mode : defaults_opts.mode;
-        gb->apu_sampling_rate = opts->apu_sampling_rate == 0 ? 1 : opts->apu_sampling_rate;
+        gb->apu_sampling_rate = opts->apu_sampling_rate == 0 ? defaults_opts.apu_sampling_rate : opts->apu_sampling_rate;
     }
 
     gb->disable_cgb_color_correction = opts->disable_cgb_color_correction;
@@ -788,6 +793,7 @@ void gb_set_options(gb_t *gb, gb_options_t *opts) {
     gb->on_new_frame = opts->on_new_frame;
     gb->on_new_sample = opts->on_new_sample;
     gb->on_accelerometer_request = opts->on_accelerometer_request;
+    gb->on_camera_capture_image = opts->on_camera_capture_image;
 }
 
 gb_mode_t gb_is_cgb(gb_t *gb) {
@@ -824,4 +830,8 @@ void gb_set_palette(gb_t *gb, gb_color_palette_t palette) {
 
 byte_t gb_has_accelerometer(gb_t *gb) {
     return gb->mmu->mbc.type == MBC7;
+}
+
+byte_t gb_has_camera(gb_t *gb) {
+    return gb->mmu->mbc.type == CAMERA;
 }

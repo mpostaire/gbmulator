@@ -10,6 +10,7 @@
 #include "joypad.h"
 #include "link.h"
 #include "printer.h"
+#include "camera.h"
 
 #define PRINTER_CHUNK_SIZE 0x280
 
@@ -23,6 +24,7 @@ struct gb_t {
     gb_new_frame_cb_t on_new_frame;
     gb_new_sample_cb_t on_new_sample;
     gb_accelerometer_request_cb_t on_accelerometer_request;
+    gb_camera_capture_image_cb_t on_camera_capture_image;
 
     char rom_title[17];
 

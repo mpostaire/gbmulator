@@ -94,9 +94,9 @@ int parse_header_mbc_byte(byte_t mbc_byte, byte_t *mbc_type, byte_t *has_eram, b
     case 0x22:
         tmp_mbc_type = MBC7;
         break;
-    // case 0xFC:
-    //     tmp_mbc_type = CAMERA;
-    //     break;
+    case 0xFC:
+        tmp_mbc_type = CAMERA;
+        break;
     // case 0xFD:
     //     tmp_mbc_type = TAMA5;
     //     break;

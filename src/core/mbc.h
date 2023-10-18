@@ -92,6 +92,14 @@ typedef struct {
             byte_t rom_bank;
             byte_t eram_bank;
         } huc1;
+
+        struct {
+            byte_t rom_bank;
+            byte_t eram_bank;
+            byte_t cam_regs_enabled;
+            uint32_t cam_cycles_left;
+            byte_t regs[0x36];
+        } camera;
     };
 } gb_mbc_t;
 
@@ -160,6 +168,8 @@ void rtc_step(gb_t *gb);
     X(huc1.ir_led)  \
     X(huc1.rom_bank) \
     X(huc1.eram_bank)
+
+// TODO serialize CAMERA MBC
 
 #define MBC_SERIALIZED_MEMBERS \
     MBC_COMMON_MEMBERS         \

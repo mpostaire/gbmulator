@@ -141,3 +141,5 @@ void gb_set_apu_sound_level(gb_t *gb, float level);
 void gb_set_palette(gb_t *gb, gb_color_palette_t palette);
 
 byte_t gb_has_accelerometer(gb_t *gb);
+
+byte_t gb_has_camera(gb_t *gb);

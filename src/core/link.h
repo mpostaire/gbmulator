@@ -2,6 +2,9 @@
 
 #include "types.h"
 
+typedef byte_t (*linked_device_shift_bit_cb_t)(void *device, byte_t in_bit);
+typedef void (*linked_device_data_received_cb_t)(void *device);
+
 typedef struct {
     word_t cycles;
     word_t max_clock_cycles;
