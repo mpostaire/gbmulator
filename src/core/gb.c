@@ -553,7 +553,10 @@ int gb_load_save(gb_t *gb, byte_t *save_data, size_t save_length) {
     if (eram_len > 0)
         memcpy(gb->mmu->eram, save_data, eram_len);
 
-    size_t rtc_len = gb->mmu->has_rtc ? save_length - eram_len : 0;
+    if (!gb->mmu->has_rtc)
+        return 1;
+
+    size_t rtc_len = save_length - eram_len;
     if (rtc_len != 44 && rtc_len != 48) {
         eprintf("Invalid rtc format\n");
         return 1;
