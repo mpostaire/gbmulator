@@ -218,15 +218,21 @@ int mmu_init(gb_t *gb, const byte_t *rom, size_t rom_size) {
     memcpy(mmu->rom, rom, mmu->rom_size);
     gb->mmu = mmu;
 
-    if (parse_cartridge(gb))
-        return 1;
+    if (!parse_cartridge(gb)) {
+        mmu_quit(gb);
+        return 0;
+    }
 
-    mmu_quit(gb);
-    return 0;
+    if (mmu->mbc.type == CAMERA)
+        mmu->mbc.camera.sensor_image = xcalloc(GB_CAMERA_SENSOR_HEIGHT * GB_CAMERA_SENSOR_WIDTH, sizeof(*mmu->mbc.camera.sensor_image)); // TODO change every xcalloc to use the 2 args like this
+
+    return 1;
 }
 
 void mmu_quit(gb_t *gb) {
     free(gb->mmu->rom);
+    if (gb->mmu->mbc.type == CAMERA)
+        free(gb->mmu->mbc.camera.sensor_image);
     free(gb->mmu);
 }
 

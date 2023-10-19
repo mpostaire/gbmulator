@@ -1,6 +1,4 @@
 #include <stdlib.h>
-#define __USE_XOPEN
-#include <time.h>
 
 #include "utils.h"
 

@@ -338,6 +338,8 @@ byte_t mbc_read_eram(gb_t *gb, word_t address) {
             return camera_read_reg(gb, address);
         if (CHECK_BIT(mmu->mbc.camera.regs[0], 0)) // camera capture in progress
             return 0x00;
+        if (mbc->camera.eram_bank == 0 && address >= ERAM + 0x0100 && address < ERAM + 0x0F00)
+            return gb_camera_read_image(gb, address - (ERAM + 0x0100));
         return mmu->eram[mmu->eram_bank_addr + (address - ERAM)];
     }
 
@@ -402,9 +404,7 @@ void mbc_write_eram(gb_t *gb, word_t address, byte_t data) {
     }
 
     if (mbc->type == HuC1 && mbc->huc1.ir_mode) {
-        data &= 0x01;
-        if (mbc->huc1.ir_led != data)
-            mbc->huc1.ir_led = data;
+        mbc->huc1.ir_led = data & 0x01;
         return;
     }
 
