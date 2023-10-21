@@ -3,6 +3,8 @@
 #define GB_CAMERA_WIDTH 128
 #define GB_CAMERA_HEIGHT 112
 
+// TODO every even picture is corrupted on the upper right corner
+
 // --------------------------------------------------------------------
 
 // The code delimited by the dash lines comments is adapted from SameBoy:
