@@ -48,7 +48,7 @@ typedef struct {
 typedef void (*gb_new_frame_cb_t)(const byte_t *pixels);
 typedef void (*gb_new_sample_cb_t)(const gb_apu_sample_t sample, uint32_t *dynamic_sampling_rate);
 typedef void (*gb_accelerometer_request_cb_t)(double *x, double *y);
-typedef void (*gb_camera_capture_image_cb_t)(byte_t *image, const byte_t width, const byte_t height);
+typedef byte_t (*gb_camera_capture_image_cb_t)(byte_t *image);
 
 typedef struct {
     gb_mode_t mode; // either `GB_MODE_DMG` for original game boy emulation or `GB_MODE_CGB` for game boy color emulation

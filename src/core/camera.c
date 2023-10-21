@@ -1,5 +1,8 @@
 #include "gb_priv.h"
 
+#define GB_CAMERA_WIDTH 128
+#define GB_CAMERA_HEIGHT 112
+
 // --------------------------------------------------------------------
 
 // The code delimited by the dash lines comments is adapted from SameBoy:
@@ -55,7 +58,7 @@ static inline int64_t get_processed_color(gb_mbc_t *mbc, byte_t x, byte_t y) {
     // Multiply color by gain value
     color *= gain_values[mbc->camera.work_regs[1] & 0x1F];
     // Color is multiplied by the exposure register to simulate exposure.
-    return color * ((mbc->camera.work_regs[2] << 8) + mbc->camera.work_regs[3]) / 0x1000;
+    return CLAMP(128 + (color * ((mbc->camera.work_regs[2] << 8) + mbc->camera.work_regs[3]) / 0x2000), 0, 255);
 }
 
 byte_t gb_camera_read_image(gb_t *gb, word_t address) {
@@ -130,9 +133,10 @@ void camera_write_reg(gb_t *gb, word_t address, byte_t data) {
             mmu->mbc.camera.capture_cycles_remaining = 4 * (32448 + (CHECK_BIT(mmu->mbc.camera.regs[1], 7) ? 0 : 512) + (exposure * 16));
             memcpy(mmu->mbc.camera.work_regs, mmu->mbc.camera.regs, GB_CAMERA_N_REGS);
 
-            if (gb->on_camera_capture_image) {
-                gb->on_camera_capture_image(mmu->mbc.camera.sensor_image, GB_CAMERA_SENSOR_WIDTH, GB_CAMERA_SENSOR_HEIGHT);
-            } else {
+            byte_t generate_noise_image = gb->on_camera_capture_image == NULL;
+            if (!generate_noise_image)
+                generate_noise_image |= !gb->on_camera_capture_image(mmu->mbc.camera.sensor_image);
+            if (generate_noise_image) {
                 for (int i = 0; i < GB_CAMERA_SENSOR_HEIGHT * GB_CAMERA_SENSOR_WIDTH; i++)
                     mmu->mbc.camera.sensor_image[i] = fastrand();
             }

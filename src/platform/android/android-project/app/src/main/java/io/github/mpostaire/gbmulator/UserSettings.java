@@ -105,4 +105,7 @@ public class UserSettings {
 
     public static final String LANDSCAPE_LINK_Y = "landscape_link_y";
     public static final float LANDSCAPE_LINK_Y_DEFAULT = 0.02f;
+
+    public static final String CAMERA_IS_FRONT = "camera_is_front";
+    public static final boolean CAMERA_IS_FRONT_DEFAULT = false;
 }
