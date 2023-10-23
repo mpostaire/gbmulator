@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <netdb.h>
 #include <string.h>
+#include <gst/gst.h>
 
 #include "glrenderer.h"
 #include "alrenderer.h"
@@ -127,7 +128,8 @@ static int gamepad_state = GAMEPAD_DISABLED;
 static AdwApplication *app;
 static GtkWidget *main_window, *preferences_window, *window_title, *toast_overlay, *emu_gl_area, *printer_gl_area, *keybind_dialog;
 static GtkWidget *joypad_name, *restart_dialog, *link_emu_dialog, *printer_window, *status, *bind_value, *mode_setter, *printer_save_btn;
-static GtkWidget *printer_clear_btn, *printer_scroll_adj, *speed_slider_container, *open_btn, *link_spinner_revealer, *link_spinner;
+static GtkWidget *printer_clear_btn, *speed_slider_container, *open_btn, *link_spinner_revealer, *link_spinner;
+static GtkAdjustment *printer_scroll_adj;
 static GtkEventController *motion_event_controller;
 static glong motion_event_handler = 0;
 static GtkFileDialog *open_rom_dialog, *save_printer_image_dialog;
@@ -368,6 +370,11 @@ static void ppu_vblank_cb(const byte_t *pixels) {
     glrenderer_update_texture(emu_renderer, 0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, pixels);
 }
 
+byte_t camera_capture_image(byte_t *image) {
+    // TODO use gstreamer
+    return 0;
+}
+
 static void printer_new_line_cb(const byte_t *pixels, size_t height) {
     if (!printer_renderer)
         return; // segfault if printer gl area was not realized (printer window not shown at least once before printing)
@@ -396,7 +403,6 @@ static void printer_finish_cb(const byte_t *pixels, size_t height) {
 }
 
 static void set_accelerometer_data(double *x, double *y) {
-    // TODO emulate this with numpad arrows
     *x = accel_x;
     *y = accel_y;
 }
@@ -545,7 +551,8 @@ static int load_cartridge(char *path) {
         .apu_speed = config.speed,
         .apu_sampling_rate = alrenderer_get_sampling_rate(),
         .apu_sound_level = config.sound,
-        .palette = config.color_palette
+        .palette = config.color_palette,
+        .on_camera_capture_image = camera_capture_image
     };
     gb_t *new_emu = gb_init(rom, rom_size, &opts);
     free(rom);
@@ -581,6 +588,39 @@ static int load_cartridge(char *path) {
     } else if (motion_event_handler) {
         g_signal_handler_disconnect(motion_event_controller, motion_event_handler);
         motion_event_handler = 0;
+    }
+
+    if (gb_has_camera(gb)) {
+        // TODO init_gstreamer
+        // Create the GStreamer pipeline
+        GstElement *pipeline = gst_pipeline_new("webcam-pipeline");
+        GstElement *src = gst_element_factory_make("v4l2src", "video-source");
+        GstElement *filter = gst_element_factory_make("videoconvert", "video-filter");
+        GstElement *sink = gst_element_factory_make("autovideosink", "video-sink");
+
+        if (!pipeline || !src || !filter || !sink) {
+            eprintf("Failed creating gstreamer pipeline\n");
+            // return 1;
+        } else {
+            // Set the video device for the v4l2src element
+            g_object_set(src, "device", "/dev/video0", NULL); // TODO select multiple devices
+
+            // Add elements to the pipeline
+            gst_bin_add_many(GST_BIN(pipeline), src, filter, sink, NULL);
+            if (!gst_element_link_many(src, filter, sink, NULL)) {
+                eprintf("Failed linking elements to the gstreamer source\n");
+            }
+
+            // // Add a pad probe to capture each frame
+            // GstPad *sinkpad = gst_element_get_static_pad(filter, "sink");
+            // gst_pad_add_probe(sinkpad, GST_PAD_PROBE_TYPE_BUFFER, buffer_probe_cb, NULL, NULL);
+
+            // // Create a bus to watch for messages
+            // GstBus *bus = gst_element_get_bus(pipeline);
+            // gst_bus_add_watch(bus, bus_callback, NULL);
+        }
+    } else {
+        // TODO deinit_gstreamer_if_it_was_inited_before
     }
 
     gamepad_state = GAMEPAD_PLAYING;
@@ -780,7 +820,7 @@ static void printer_save_as_xpm(gb_printer_t *printer, char *file_path) {
     FILE *f = fopen(file_path, "w+");
 
     fprintf(f, "/* XPM */\nstatic char *image = {\n");
-    fprintf(f, "\"%d %ld 4 1\",\n", GB_PRINTER_IMG_WIDTH, height);
+    fprintf(f, "\"%d %lu 4 1\",\n", GB_PRINTER_IMG_WIDTH, height);
     fprintf(f, "\""XPM_WHITE" c #FFFFFF\",\n\""XPM_LIGHT_GRAY" c #AAAAAA\",\n\""XPM_DARK_GRAY" c #555555\",\n\""XPM_BLACK" c #000000\",\n");
 
     for (size_t i = 0; i < height; i++) {
@@ -1221,7 +1261,7 @@ static void activate_cb(GtkApplication *app) {
     g_signal_connect(printer_clear_btn, "clicked", G_CALLBACK(printer_clear_btn_clicked), NULL);
 
     GtkScrolledWindow *printer_scroll = GTK_SCROLLED_WINDOW(gtk_builder_get_object(builder, "printer_scroll"));
-    printer_scroll_adj = GTK_WIDGET(gtk_scrolled_window_get_vadjustment(printer_scroll));
+    printer_scroll_adj = gtk_scrolled_window_get_vadjustment(printer_scroll);
 
     // Printer quit dialog
     widget = adw_message_dialog_new(GTK_WINDOW(printer_window), "Disconnect printer?", NULL);
@@ -1317,6 +1357,6 @@ int main(int argc, char **argv) {
         gamepad_connected_cb(NULL, device, NULL);
 
     alrenderer_init(0);
-
+    gst_init(&argc, &argv);
     return g_application_run(G_APPLICATION(app), argc, argv);
 }
