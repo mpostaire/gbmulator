@@ -5,6 +5,8 @@
 // Because the documentation is incomplete and sources contradict each other, the implementation is based on SameBoy:
 // https://github.com/LIJI32/SameBoy/blob/master/Core/printer.c 
 
+// TODO printing pictures taken with the gb camera isn't working
+
 #define MAGIC_1 0x88
 #define MAGIC_2 0x33
 
