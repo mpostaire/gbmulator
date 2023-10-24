@@ -246,8 +246,8 @@ static inline byte_t read_io_register(gb_t *gb, word_t address) {
         return joypad_get_input(gb);
     case SB: return mmu->io_registers[io_reg_addr];
     case SC: return mmu->io_registers[io_reg_addr] | (gb->mode == GB_MODE_CGB ? 0x7C : 0x7E);
-    case DIV_LSB: return 0xFF;
-    case DIV: return mmu->io_registers[io_reg_addr];
+    case 0xFF03: return 0xFF;
+    case DIV: return gb->timer->div_timer >> 8;
     case TIMA: return mmu->io_registers[io_reg_addr];
     case TMA: return mmu->io_registers[io_reg_addr];
     case TAC: return mmu->io_registers[io_reg_addr] | 0xF8;
@@ -353,11 +353,10 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
             mmu->io_registers[io_reg_addr] = data & 0x83;
         }
         break;
-    case DIV_LSB:
+    case 0xFF03:
     case DIV:
         // writing to DIV resets it to 0
-        mmu->io_registers[DIV_LSB - IO] = 0;
-        mmu->io_registers[DIV - IO] = 0;
+        gb->timer->div_timer = 0;
         mmu->io_registers[TIMA - IO] = mmu->io_registers[TMA - IO];
         break;
     case TIMA:

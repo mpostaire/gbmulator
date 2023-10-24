@@ -30,12 +30,10 @@ void timer_step(gb_t *gb) {
     }
 
     // DIV register incremented at 16384 Hz (every 256 cycles)
-    word_t div = (mmu->io_registers[DIV - IO] << 8) | mmu->io_registers[DIV_LSB - IO];
-    div += 4; // each step is 4 cycles
-    mmu->io_registers[DIV_LSB - IO] = div & 0x00FF;
-    mmu->io_registers[DIV - IO] = div >> 8;
+    timer->div_timer += 4; // each step is 4 cycles
+    mmu->io_registers[DIV - IO] = timer->div_timer >> 8;
 
-    byte_t tima_signal = CHECK_BIT(div, timer->tima_increase_div_bit) && CHECK_BIT(mmu->io_registers[TAC - IO], 2);
+    byte_t tima_signal = CHECK_BIT(timer->div_timer, timer->tima_increase_div_bit) && CHECK_BIT(mmu->io_registers[TAC - IO], 2);
 
     if (falling_edge_detector(timer, tima_signal)) {
         // increase TIMA (and handle its overflow)
@@ -66,6 +64,7 @@ void timer_quit(gb_t *gb) {
 }
 
 #define SERIALIZED_MEMBERS         \
+    X(div_timer)                   \
     X(tima_increase_div_bit)       \
     X(falling_edge_detector_delay) \
     X(tima_loading_value)          \

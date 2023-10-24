@@ -1504,8 +1504,7 @@ static void exec_opcode(gb_t *gb) {
         // TODO Halts until button press.
         CLOCK(
             // reset timer to 0
-            gb->mmu->io_registers[DIV_LSB - IO] = 0x00;
-            gb->mmu->io_registers[DIV - IO] = 0x00;
+            gb->timer->div_timer = 0;
             if (PREPARE_SPEED_SWITCH(gb)) {
                 // TODO this should also stop the cpu for 2050 steps (8200 cycles)
                 // https://gbdev.io/pandocs/CGB_Registers.html?highlight=key1#ff4d--key1-cgb-mode-only-prepare-speed-switch

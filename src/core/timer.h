@@ -4,6 +4,7 @@
 #include "serialize.h"
 
 typedef struct {
+    word_t div_timer;
     byte_t tima_increase_div_bit; // bit of DIV that causes an increase of TIMA when set to 1 and TAC timer is enabled
     byte_t falling_edge_detector_delay;
     s_word_t tima_loading_value;
