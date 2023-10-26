@@ -704,7 +704,7 @@ void ppu_step(gb_t *gb) {
 }
 
 void ppu_init(gb_t *gb) {
-    gb->ppu = xcalloc(1, sizeof(gb_ppu_t));
+    gb->ppu = xcalloc(1, sizeof(*gb->ppu));
     gb->ppu->wly = -1;
     // PPU_SET_MODE(gb->mmu, PPU_MODE_OAM); // TODO start in OAM mode?
 }

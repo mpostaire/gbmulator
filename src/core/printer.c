@@ -40,7 +40,7 @@ typedef enum {
 } printer_cmd_t;
 
 gb_printer_t *gb_printer_init(gb_new_printer_line_cb_t new_line_cb, gb_start_printing_cb_t start_printing_cb, gb_finish_printing_cb_t finish_printing_cb) {
-    gb_printer_t *printer = xcalloc(1, sizeof(gb_printer_t));
+    gb_printer_t *printer = xcalloc(1, sizeof(*printer));
     printer->on_new_line = new_line_cb;
     printer->on_start_printing = start_printing_cb;
     printer->on_finish_printing = finish_printing_cb;

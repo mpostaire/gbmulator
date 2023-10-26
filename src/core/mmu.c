@@ -200,7 +200,7 @@ static int parse_cartridge(gb_t *gb) {
 }
 
 int mmu_init(gb_t *gb, const byte_t *rom, size_t rom_size) {
-    gb_mmu_t *mmu = xcalloc(1, sizeof(gb_mmu_t));
+    gb_mmu_t *mmu = xcalloc(1, sizeof(*mmu));
     mmu->rom = xcalloc(1, rom_size);
 
     mmu->mbc.mbc1.bank_lo = 1;
@@ -223,8 +223,12 @@ int mmu_init(gb_t *gb, const byte_t *rom, size_t rom_size) {
         return 0;
     }
 
-    if (mmu->mbc.type == CAMERA)
-        mmu->mbc.camera.sensor_image = xcalloc(GB_CAMERA_SENSOR_HEIGHT * GB_CAMERA_SENSOR_WIDTH, sizeof(*mmu->mbc.camera.sensor_image)); // TODO change every xcalloc to use the 2 args like this
+    if (mmu->mbc.type == CAMERA) {
+        mmu->mbc.camera.sensor_image = xcalloc(GB_CAMERA_SENSOR_HEIGHT * GB_CAMERA_SENSOR_WIDTH, sizeof(*mmu->mbc.camera.sensor_image));
+    } else if (mmu->mbc.type == MBC7) {
+        mmu->mbc.mbc7.accelerometer.latched_x = 0x81D0;
+        mmu->mbc.mbc7.accelerometer.latched_y = 0x81D0;
+    }
 
     return 1;
 }

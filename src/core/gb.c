@@ -88,7 +88,7 @@ int gb_is_rom_valid(const byte_t *rom) {
 }
 
 gb_t *gb_init(const byte_t *rom, size_t rom_size, gb_options_t *opts) {
-    gb_t *gb = xcalloc(1, sizeof(gb_t));
+    gb_t *gb = xcalloc(1, sizeof(*gb));
     gb_set_options(gb, opts);
 
     if (!mmu_init(gb, rom, rom_size)) {
@@ -612,7 +612,7 @@ byte_t *gb_get_savestate(gb_t *gb, size_t *length, byte_t compressed) {
 byte_t *gb_get_savestate(gb_t *gb, size_t *length, UNUSED byte_t compressed) {
 #endif
     // make savestate header
-    savestate_header_t *savestate_header = xmalloc(sizeof(savestate_header_t));
+    savestate_header_t *savestate_header = xmalloc(sizeof(*savestate_header));
     savestate_header->mode = gb->mode;
     memcpy(savestate_header->identifier, SAVESTATE_STRING, sizeof(savestate_header->identifier));
     memcpy(savestate_header->rom_title, gb->rom_title, sizeof(savestate_header->rom_title));
@@ -680,7 +680,7 @@ int gb_load_savestate(gb_t *gb, const byte_t *data, size_t length) {
         return 0;
     }
 
-    savestate_header_t *savestate_header = xmalloc(sizeof(savestate_header_t));
+    savestate_header_t *savestate_header = xmalloc(sizeof(*savestate_header));
     memcpy(savestate_header, data, sizeof(savestate_header_t));
 
     if (strncmp(savestate_header->identifier, SAVESTATE_STRING, sizeof(SAVESTATE_STRING))) {

@@ -11,7 +11,7 @@ void link_set_clock(gb_t *gb) {
 }
 
 void link_init(gb_t *gb) {
-    gb->link = xcalloc(1, sizeof(gb_link_t));
+    gb->link = xcalloc(1, sizeof(*gb->link));
     link_set_clock(gb);
 }
 

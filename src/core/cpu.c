@@ -2332,7 +2332,7 @@ void cpu_step(gb_t *gb) {
 }
 
 void cpu_init(gb_t *gb) {
-    gb->cpu = xcalloc(1, sizeof(gb_cpu_t));
+    gb->cpu = xcalloc(1, sizeof(*gb->cpu));
     gb->cpu->exec_state = FETCH_OPCODE; // immediately request to fetch an instruction
 }
 

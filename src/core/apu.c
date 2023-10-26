@@ -257,7 +257,7 @@ void apu_step(gb_t *gb) {
 }
 
 void apu_init(gb_t *gb) {
-    apu_t *apu = xcalloc(1, sizeof(apu_t));
+    apu_t *apu = xcalloc(1, sizeof(*apu));
     apu->dynamic_sampling_rate = gb->apu_sampling_rate;
 
     apu->channel1 = (gb_channel_t) {

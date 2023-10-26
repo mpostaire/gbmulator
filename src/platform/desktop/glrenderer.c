@@ -119,7 +119,7 @@ glrenderer_t *glrenderer_init(GLsizei width, GLsizei height, const GLvoid *pixel
             "/io/github/mpostaire/gbmulator/src/platform/desktop/ui/default.fs.glsl");
     }
 
-    glrenderer_t *renderer = xcalloc(1, sizeof(glrenderer_t));
+    glrenderer_t *renderer = xcalloc(1, sizeof(*renderer));
 
     // Generate the VAO, VBO, and EBO with only 1 object each
     glGenVertexArrays(1, &renderer->VAO);

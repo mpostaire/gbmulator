@@ -54,7 +54,7 @@ void timer_step(gb_t *gb) {
 }
 
 void timer_init(gb_t *gb) {
-    gb->timer = xcalloc(1, sizeof(gb_timer_t));
+    gb->timer = xcalloc(1, sizeof(*gb->timer));
     gb->timer->tima_loading_value = -2;
     gb->timer->old_tma = -1;
 }

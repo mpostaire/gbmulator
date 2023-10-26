@@ -3,7 +3,7 @@
 #include "gb_priv.h"
 
 void joypad_init(gb_t *gb) {
-    gb->joypad = xmalloc(sizeof(gb_joypad_t));
+    gb->joypad = xcalloc(1, sizeof(*gb->joypad));
     gb->joypad->action = 0xCF;
     gb->joypad->direction = 0xCF;
 }
