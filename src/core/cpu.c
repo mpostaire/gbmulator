@@ -55,262 +55,262 @@ typedef struct {
 } opcode_t;
 
 const opcode_t instructions[256] = {
-    {"NOP", 0},                   // 0x00
-    {"LD BC, %04X", 2},           // 0x01
-    {"LD (BC), A", 0},            // 0x02
-    {"INC BC", 0},                // 0x03
-    {"INC B", 0},                 // 0x04
-    {"DEC B", 0},                 // 0x05
-    {"LD B, %02X", 1},            // 0x06
-    {"RLCA", 0},                  // 0x07
-    {"LD (%04X), SP", 2},         // 0x08
-    {"ADD HL, BC", 0},            // 0x09
-    {"LD A, (BC)", 0},            // 0x0A
-    {"DEC BC", 0},                // 0x0B
-    {"INC C", 0},                 // 0x0C
-    {"DEC C", 0},                 // 0x0D
-    {"LD C, %02X", 1},            // 0x0E
-    {"RRCA", 0},                  // 0x0F
-    {"STOP", 1},                  // 0x10
-    {"LD DE, %04X", 2},           // 0x11
-    {"LD (DE), A", 0},            // 0x12
-    {"INC DE", 0},                // 0x13
-    {"INC D", 0},                 // 0x14
-    {"DEC D", 0},                 // 0x15
-    {"LD D, %02X", 1},            // 0x16
-    {"RLA", 0},                   // 0x17
-    {"JR %02X", 1},               // 0x18
-    {"ADD HL, DE", 0},            // 0x19
-    {"LD A, (DE)", 0},            // 0x1A
-    {"DEC DE", 0},                // 0x1B
-    {"INC E", 0},                 // 0x1C
-    {"DEC E", 0},                 // 0x1D
-    {"LD E, %02X", 1},            // 0x1E
-    {"RRA", 0},                   // 0x1F
-    {"JR NZ, %02X", 1},           // 0x20
-    {"LD HL, %04X", 2},           // 0x21
-    {"LDI (HL), A", 0},           // 0x22
-    {"INC HL", 0},                // 0x23
-    {"INC H", 0},                 // 0x24
-    {"DEC H", 0},                 // 0x25
-    {"LD H,%02X", 1},             // 0x26
-    {"DAA", 0},                   // 0x27
-    {"JR Z, %02X", 1},            // 0x28
-    {"ADD HL, HL", 0},            // 0x29
-    {"LDI A, (HL)", 0},           // 0x2A
-    {"DEC HL", 0},                // 0x2B
-    {"INC L", 0},                 // 0x2C
-    {"DEC L", 0},                 // 0x2D
-    {"LD L, %02X", 1},            // 0x2E
-    {"CPL", 0},                   // 0x2F
-    {"JR NC, %02X", 1},           // 0x30
-    {"LD SP, %04X", 2},           // 0x31
-    {"LDD (HL), A", 0},           // 0x32
-    {"INC SP", 0},                // 0x33
-    {"INC (HL)", 0},              // 0x34
-    {"DEC (HL)", 0},              // 0x35
-    {"LD (HL), %02X", 1},         // 0x36
-    {"SCF", 0},                   // 0x37
-    {"JR C, %02X", 1},            // 0x38
-    {"ADD HL, SP", 0},            // 0x39
-    {"LDD A, (HL)", 0},           // 0x3A
-    {"DEC SP", 0},                // 0x3B
-    {"INC A", 0},                 // 0x3C
-    {"DEC A", 0},                 // 0x3D
-    {"LD A, %02X", 1},            // 0x3E
-    {"CCF", 0},                   // 0x3F
-    {"LD B, B", 0},               // 0x40
-    {"LD B, C", 0},               // 0x41
-    {"LD B, D", 0},               // 0x42
-    {"LD B, E", 0},               // 0x43
-    {"LD B, H", 0},               // 0x44
-    {"LD B, L", 0},               // 0x45
-    {"LD B, (HL)", 0},            // 0x46
-    {"LD B, A", 0},               // 0x47
-    {"LD C, B", 0},               // 0x48
-    {"LD C, C", 0},               // 0x49
-    {"LD C, D", 0},               // 0x4A
-    {"LD C, E", 0},               // 0x4B
-    {"LD C, H", 0},               // 0x4C
-    {"LD C, L", 0},               // 0x4D
-    {"LD C, (HL)", 0},            // 0x4E
-    {"LD C, A", 0},               // 0x4F
-    {"LD D, B", 0},               // 0x50
-    {"LD D, C", 0},               // 0x51
-    {"LD D, D", 0},               // 0x52
-    {"LD D, E", 0},               // 0x53
-    {"LD D, H", 0},               // 0x54
-    {"LD D, L", 0},               // 0x55
-    {"LD D, (HL)", 0},            // 0x56
-    {"LD D, A", 0},               // 0x57
-    {"LD E, B", 0},               // 0x58
-    {"LD E, C", 0},               // 0x59
-    {"LD E, D", 0},               // 0x5A
-    {"LD E, E", 0},               // 0x5B
-    {"LD E, H", 0},               // 0x5C
-    {"LD E, L", 0},               // 0x5D
-    {"LD E, (HL)", 0},            // 0x5E
-    {"LD E, A", 0},               // 0x5F
-    {"LD H, B", 0},               // 0x60
-    {"LD H, C", 0},               // 0x61
-    {"LD H, D", 0},               // 0x62
-    {"LD H, E", 0},               // 0x63
-    {"LD H, H", 0},               // 0x64
-    {"LD H, L", 0},               // 0x65
-    {"LD H, (HL)", 0},            // 0x66
-    {"LD H, A", 0},               // 0x67
-    {"LD L, B", 0},               // 0x68
-    {"LD L, C", 0},               // 0x69
-    {"LD L, D", 0},               // 0x6A
-    {"LD L, E", 0},               // 0x6B
-    {"LD L, H", 0},               // 0x6C
-    {"LD L, L", 0},               // 0x6D
-    {"LD L, (HL)", 0},            // 0x6E
-    {"LD L, A", 0},               // 0x6F
-    {"LD (HL), B", 0},            // 0x70
-    {"LD (HL), C", 0},            // 0x71
-    {"LD (HL), D", 0},            // 0x72
-    {"LD (HL), E", 0},            // 0x73
-    {"LD (HL), H", 0},            // 0x74
-    {"LD (HL), L", 0},            // 0x75
-    {"HALT", 0},                  // 0x76
-    {"LD (HL), A", 0},            // 0x77
-    {"LD A, B", 0},               // 0x78
-    {"LD A, C", 0},               // 0x79
-    {"LD A, D", 0},               // 0x7A
-    {"LD A, E", 0},               // 0x7B
-    {"LD A, H", 0},               // 0x7C
-    {"LD A, L", 0},               // 0x7D
-    {"LD A, (HL)", 0},            // 0x7E
-    {"LD A, A", 0},               // 0x7F
-    {"ADD A, B", 0},              // 0x80
-    {"ADD A, C", 0},              // 0x81
-    {"ADD A, D", 0},              // 0x82
-    {"ADD A, E", 0},              // 0x83
-    {"ADD A, H", 0},              // 0x84
-    {"ADD A, L", 0},              // 0x85
-    {"ADD A, (HL)", 0},           // 0x86
-    {"ADD A, A", 0},              // 0x87
-    {"ADC A, B", 0},              // 0x88
-    {"ADC A, C", 0},              // 0x89
-    {"ADC A, D", 0},              // 0x8A
-    {"ADC A, E", 0},              // 0x8B
-    {"ADC A, H", 0},              // 0x8C
-    {"ADC A, L", 0},              // 0x8D
-    {"ADC A, (HL)", 0},           // 0x8E
-    {"ADC A", 0},                 // 0x8F
-    {"SUB A, B", 0},              // 0x90
-    {"SUB A, C", 0},              // 0x91
-    {"SUB A, D", 0},              // 0x92
-    {"SUB A, E", 0},              // 0x93
-    {"SUB A, H", 0},              // 0x94
-    {"SUB A, L", 0},              // 0x95
-    {"SUB A, (HL)", 0},           // 0x96
-    {"SUB A, A", 0},              // 0x97
-    {"SBC A, B", 0},              // 0x98
-    {"SBC A, C", 0},              // 0x99
-    {"SBC A, D", 0},              // 0x9A
-    {"SBC A, E", 0},              // 0x9B
-    {"SBC A, H", 0},              // 0x9C
-    {"SBC A, L", 0},              // 0x9D
-    {"SBC A, (HL)", 0},           // 0x9E
-    {"SBC A, A", 0},              // 0x9F
-    {"AND B", 0},                 // 0xA0
-    {"AND C", 0},                 // 0xA1
-    {"AND D", 0},                 // 0xA2
-    {"AND E", 0},                 // 0xA3
-    {"AND H", 0},                 // 0xA4
-    {"AND L", 0},                 // 0xA5
-    {"AND (HL)", 0},              // 0xA6
-    {"AND A", 0},                 // 0xA7
-    {"XOR B", 0},                 // 0xA8
-    {"XOR C", 0},                 // 0xA9
-    {"XOR D", 0},                 // 0xAA
-    {"XOR E", 0},                 // 0xAB
-    {"XOR H", 0},                 // 0xAC
-    {"XOR L", 0},                 // 0xAD
-    {"XOR (HL)", 0},              // 0xAE
-    {"XOR A", 0},                 // 0xAF
-    {"OR B", 0},                  // 0xB0
-    {"OR C", 0},                  // 0xB1
-    {"OR D", 0},                  // 0xB2
-    {"OR E", 0},                  // 0xB3
-    {"OR H", 0},                  // 0xB4
-    {"OR L", 0},                  // 0xB5
-    {"OR (HL)", 0},               // 0xB6
-    {"OR A", 0},                  // 0xB7
-    {"CP B", 0},                  // 0xB8
-    {"CP C", 0},                  // 0xB9
-    {"CP D", 0},                  // 0xBA
-    {"CP E", 0},                  // 0xBB
-    {"CP H", 0},                  // 0xBC
-    {"CP L", 0},                  // 0xBD
-    {"CP (HL)", 0},               // 0xBE
-    {"CP A", 0},                  // 0xBF
-    {"RET NZ", 0},                // 0xC0
-    {"POP BC", 0},                // 0xC1
-    {"JP NZ, %04X", 2},           // 0xC2
-    {"JP %04X", 2},               // 0xC3
-    {"CALL NZ, %04X", 2},         // 0xC4
-    {"PUSH BC", 0},               // 0xC5
-    {"ADD A, %02X", 1},           // 0xC6
-    {"RST 0x00", 0},              // 0xC7
-    {"RET Z", 0},                 // 0xC8
-    {"RET", 0},                   // 0xC9
-    {"JP Z, %04X", 2},            // 0xCA
-    {"CB %02X", 1},               // 0xCB
-    {"CALL Z, %04X", 2},          // 0xCC
-    {"CALL %04X", 2},             // 0xCD
-    {"ADC %02X", 1},              // 0xCE
-    {"RST 0x08", 0},              // 0xCF
-    {"RET NC", 0},                // 0xD0
-    {"POP DE", 0},                // 0xD1
-    {"JP NC, %04X", 2},           // 0xD2
-    {"UNDEFINED", 0},             // 0xD3
-    {"CALL NC, %04X", 2},         // 0xD4
-    {"PUSH DE", 0},               // 0xD5
-    {"SUB A, %02X", 1},           // 0xD6
-    {"RST 0x10", 0},              // 0xD7
-    {"RET C", 0},                 // 0xD8
-    {"RETI", 0},                  // 0xD9
-    {"JP C, %04X", 2},            // 0xDA
-    {"UNDEFINED", 0},             // 0xDB
-    {"CALL C, %04X", 2},          // 0xDC
-    {"UNDEFINED", 0},             // 0xDD
-    {"SBC %02X", 1},              // 0xDE
-    {"RST 0x18", 0},              // 0xDF
-    {"LD (0xFF00 + %02X), A", 1}, // 0xE0
-    {"POP HL", 0},                // 0xE1
-    {"LD (0xFF00 + C), A", 0},    // 0xE2
-    {"UNDEFINED", 0},             // 0xE3
-    {"UNDEFINED", 0},             // 0xE4
-    {"PUSH HL", 0},               // 0xE5
-    {"AND %02X", 1},              // 0xE6
-    {"RST 0x20", 0},              // 0xE7
-    {"ADD SP,%02X", 1},           // 0xE8
-    {"JP HL", 0},                 // 0xE9
-    {"LD (%04X), A", 2},          // 0xEA
-    {"UNDEFINED", 0},             // 0xEB
-    {"UNDEFINED", 0},             // 0xEC
-    {"UNDEFINED", 0},             // 0xED
-    {"XOR %02X", 1},              // 0xEE
-    {"RST 0x28", 0},              // 0xEF
-    {"LD A, (0xFF00 + %02X)", 1}, // 0xF0
-    {"POP AF", 0},                // 0xF1
-    {"LD A, (0xFF00 + C)", 0},    // 0xF2
-    {"DI", 0},                    // 0xF3
-    {"UNDEFINED", 0},             // 0xF4
-    {"PUSH AF", 0},               // 0xF5
-    {"OR %02X", 1},               // 0xF6
-    {"RST 0x30", 0},              // 0xF7
-    {"LD HL, SP+%02X", 1},        // 0xF8
-    {"LD SP, HL", 0},             // 0xF9
-    {"LD A, (%04X)", 2},          // 0xFA
-    {"EI", 0},                    // 0xFB
-    {"UNDEFINED", 0},             // 0xFC
-    {"UNDEFINED", 0},             // 0xFD
-    {"CP %02X", 1},               // 0xFE
-    {"RST 0x38", 0},              // 0xFF
+    {"NOP", 0},                    // 0x00
+    {"LD BC, %04X", 2},            // 0x01
+    {"LD (BC), A", 0},             // 0x02
+    {"INC BC", 0},                 // 0x03
+    {"INC B", 0},                  // 0x04
+    {"DEC B", 0},                  // 0x05
+    {"LD B, %02X", 1},             // 0x06
+    {"RLCA", 0},                   // 0x07
+    {"LD (%04X), SP", 2},          // 0x08
+    {"ADD HL, BC", 0},             // 0x09
+    {"LD A, (BC)", 0},             // 0x0A
+    {"DEC BC", 0},                 // 0x0B
+    {"INC C", 0},                  // 0x0C
+    {"DEC C", 0},                  // 0x0D
+    {"LD C, %02X", 1},             // 0x0E
+    {"RRCA", 0},                   // 0x0F
+    {"STOP", 1},                   // 0x10
+    {"LD DE, %04X", 2},            // 0x11
+    {"LD (DE), A", 0},             // 0x12
+    {"INC DE", 0},                 // 0x13
+    {"INC D", 0},                  // 0x14
+    {"DEC D", 0},                  // 0x15
+    {"LD D, %02X", 1},             // 0x16
+    {"RLA", 0},                    // 0x17
+    {"JR %02X", 1},                // 0x18
+    {"ADD HL, DE", 0},             // 0x19
+    {"LD A, (DE)", 0},             // 0x1A
+    {"DEC DE", 0},                 // 0x1B
+    {"INC E", 0},                  // 0x1C
+    {"DEC E", 0},                  // 0x1D
+    {"LD E, %02X", 1},             // 0x1E
+    {"RRA", 0},                    // 0x1F
+    {"JR NZ, %02X", 1},            // 0x20
+    {"LD HL, %04X", 2},            // 0x21
+    {"LDI (HL), A", 0},            // 0x22
+    {"INC HL", 0},                 // 0x23
+    {"INC H", 0},                  // 0x24
+    {"DEC H", 0},                  // 0x25
+    {"LD H,%02X", 1},              // 0x26
+    {"DAA", 0},                    // 0x27
+    {"JR Z, %02X", 1},             // 0x28
+    {"ADD HL, HL", 0},             // 0x29
+    {"LDI A, (HL)", 0},            // 0x2A
+    {"DEC HL", 0},                 // 0x2B
+    {"INC L", 0},                  // 0x2C
+    {"DEC L", 0},                  // 0x2D
+    {"LD L, %02X", 1},             // 0x2E
+    {"CPL", 0},                    // 0x2F
+    {"JR NC, %02X", 1},            // 0x30
+    {"LD SP, %04X", 2},            // 0x31
+    {"LDD (HL), A", 0},            // 0x32
+    {"INC SP", 0},                 // 0x33
+    {"INC (HL)", 0},               // 0x34
+    {"DEC (HL)", 0},               // 0x35
+    {"LD (HL), %02X", 1},          // 0x36
+    {"SCF", 0},                    // 0x37
+    {"JR C, %02X", 1},             // 0x38
+    {"ADD HL, SP", 0},             // 0x39
+    {"LDD A, (HL)", 0},            // 0x3A
+    {"DEC SP", 0},                 // 0x3B
+    {"INC A", 0},                  // 0x3C
+    {"DEC A", 0},                  // 0x3D
+    {"LD A, %02X", 1},             // 0x3E
+    {"CCF", 0},                    // 0x3F
+    {"LD B, B", 0},                // 0x40
+    {"LD B, C", 0},                // 0x41
+    {"LD B, D", 0},                // 0x42
+    {"LD B, E", 0},                // 0x43
+    {"LD B, H", 0},                // 0x44
+    {"LD B, L", 0},                // 0x45
+    {"LD B, (HL)", 0},             // 0x46
+    {"LD B, A", 0},                // 0x47
+    {"LD C, B", 0},                // 0x48
+    {"LD C, C", 0},                // 0x49
+    {"LD C, D", 0},                // 0x4A
+    {"LD C, E", 0},                // 0x4B
+    {"LD C, H", 0},                // 0x4C
+    {"LD C, L", 0},                // 0x4D
+    {"LD C, (HL)", 0},             // 0x4E
+    {"LD C, A", 0},                // 0x4F
+    {"LD D, B", 0},                // 0x50
+    {"LD D, C", 0},                // 0x51
+    {"LD D, D", 0},                // 0x52
+    {"LD D, E", 0},                // 0x53
+    {"LD D, H", 0},                // 0x54
+    {"LD D, L", 0},                // 0x55
+    {"LD D, (HL)", 0},             // 0x56
+    {"LD D, A", 0},                // 0x57
+    {"LD E, B", 0},                // 0x58
+    {"LD E, C", 0},                // 0x59
+    {"LD E, D", 0},                // 0x5A
+    {"LD E, E", 0},                // 0x5B
+    {"LD E, H", 0},                // 0x5C
+    {"LD E, L", 0},                // 0x5D
+    {"LD E, (HL)", 0},             // 0x5E
+    {"LD E, A", 0},                // 0x5F
+    {"LD H, B", 0},                // 0x60
+    {"LD H, C", 0},                // 0x61
+    {"LD H, D", 0},                // 0x62
+    {"LD H, E", 0},                // 0x63
+    {"LD H, H", 0},                // 0x64
+    {"LD H, L", 0},                // 0x65
+    {"LD H, (HL)", 0},             // 0x66
+    {"LD H, A", 0},                // 0x67
+    {"LD L, B", 0},                // 0x68
+    {"LD L, C", 0},                // 0x69
+    {"LD L, D", 0},                // 0x6A
+    {"LD L, E", 0},                // 0x6B
+    {"LD L, H", 0},                // 0x6C
+    {"LD L, L", 0},                // 0x6D
+    {"LD L, (HL)", 0},             // 0x6E
+    {"LD L, A", 0},                // 0x6F
+    {"LD (HL), B", 0},             // 0x70
+    {"LD (HL), C", 0},             // 0x71
+    {"LD (HL), D", 0},             // 0x72
+    {"LD (HL), E", 0},             // 0x73
+    {"LD (HL), H", 0},             // 0x74
+    {"LD (HL), L", 0},             // 0x75
+    {"HALT", 0},                   // 0x76
+    {"LD (HL), A", 0},             // 0x77
+    {"LD A, B", 0},                // 0x78
+    {"LD A, C", 0},                // 0x79
+    {"LD A, D", 0},                // 0x7A
+    {"LD A, E", 0},                // 0x7B
+    {"LD A, H", 0},                // 0x7C
+    {"LD A, L", 0},                // 0x7D
+    {"LD A, (HL)", 0},             // 0x7E
+    {"LD A, A", 0},                // 0x7F
+    {"ADD A, B", 0},               // 0x80
+    {"ADD A, C", 0},               // 0x81
+    {"ADD A, D", 0},               // 0x82
+    {"ADD A, E", 0},               // 0x83
+    {"ADD A, H", 0},               // 0x84
+    {"ADD A, L", 0},               // 0x85
+    {"ADD A, (HL)", 0},            // 0x86
+    {"ADD A, A", 0},               // 0x87
+    {"ADC A, B", 0},               // 0x88
+    {"ADC A, C", 0},               // 0x89
+    {"ADC A, D", 0},               // 0x8A
+    {"ADC A, E", 0},               // 0x8B
+    {"ADC A, H", 0},               // 0x8C
+    {"ADC A, L", 0},               // 0x8D
+    {"ADC A, (HL)", 0},            // 0x8E
+    {"ADC A", 0},                  // 0x8F
+    {"SUB A, B", 0},               // 0x90
+    {"SUB A, C", 0},               // 0x91
+    {"SUB A, D", 0},               // 0x92
+    {"SUB A, E", 0},               // 0x93
+    {"SUB A, H", 0},               // 0x94
+    {"SUB A, L", 0},               // 0x95
+    {"SUB A, (HL)", 0},            // 0x96
+    {"SUB A, A", 0},               // 0x97
+    {"SBC A, B", 0},               // 0x98
+    {"SBC A, C", 0},               // 0x99
+    {"SBC A, D", 0},               // 0x9A
+    {"SBC A, E", 0},               // 0x9B
+    {"SBC A, H", 0},               // 0x9C
+    {"SBC A, L", 0},               // 0x9D
+    {"SBC A, (HL)", 0},            // 0x9E
+    {"SBC A, A", 0},               // 0x9F
+    {"AND B", 0},                  // 0xA0
+    {"AND C", 0},                  // 0xA1
+    {"AND D", 0},                  // 0xA2
+    {"AND E", 0},                  // 0xA3
+    {"AND H", 0},                  // 0xA4
+    {"AND L", 0},                  // 0xA5
+    {"AND (HL)", 0},               // 0xA6
+    {"AND A", 0},                  // 0xA7
+    {"XOR B", 0},                  // 0xA8
+    {"XOR C", 0},                  // 0xA9
+    {"XOR D", 0},                  // 0xAA
+    {"XOR E", 0},                  // 0xAB
+    {"XOR H", 0},                  // 0xAC
+    {"XOR L", 0},                  // 0xAD
+    {"XOR (HL)", 0},               // 0xAE
+    {"XOR A", 0},                  // 0xAF
+    {"OR B", 0},                   // 0xB0
+    {"OR C", 0},                   // 0xB1
+    {"OR D", 0},                   // 0xB2
+    {"OR E", 0},                   // 0xB3
+    {"OR H", 0},                   // 0xB4
+    {"OR L", 0},                   // 0xB5
+    {"OR (HL)", 0},                // 0xB6
+    {"OR A", 0},                   // 0xB7
+    {"CP B", 0},                   // 0xB8
+    {"CP C", 0},                   // 0xB9
+    {"CP D", 0},                   // 0xBA
+    {"CP E", 0},                   // 0xBB
+    {"CP H", 0},                   // 0xBC
+    {"CP L", 0},                   // 0xBD
+    {"CP (HL)", 0},                // 0xBE
+    {"CP A", 0},                   // 0xBF
+    {"RET NZ", 0},                 // 0xC0
+    {"POP BC", 0},                 // 0xC1
+    {"JP NZ, %04X", 2},            // 0xC2
+    {"JP %04X", 2},                // 0xC3
+    {"CALL NZ, %04X", 2},          // 0xC4
+    {"PUSH BC", 0},                // 0xC5
+    {"ADD A, %02X", 1},            // 0xC6
+    {"RST 0x00", 0},               // 0xC7
+    {"RET Z", 0},                  // 0xC8
+    {"RET", 0},                    // 0xC9
+    {"JP Z, %04X", 2},             // 0xCA
+    {"CB %02X", 1},                // 0xCB
+    {"CALL Z, %04X", 2},           // 0xCC
+    {"CALL %04X", 2},              // 0xCD
+    {"ADC %02X", 1},               // 0xCE
+    {"RST 0x08", 0},               // 0xCF
+    {"RET NC", 0},                 // 0xD0
+    {"POP DE", 0},                 // 0xD1
+    {"JP NC, %04X", 2},            // 0xD2
+    {"UNDEFINED", 0},              // 0xD3
+    {"CALL NC, %04X", 2},          // 0xD4
+    {"PUSH DE", 0},                // 0xD5
+    {"SUB A, %02X", 1},            // 0xD6
+    {"RST 0x10", 0},               // 0xD7
+    {"RET C", 0},                  // 0xD8
+    {"RETI", 0},                   // 0xD9
+    {"JP C, %04X", 2},             // 0xDA
+    {"UNDEFINED", 0},              // 0xDB
+    {"CALL C, %04X", 2},           // 0xDC
+    {"UNDEFINED", 0},              // 0xDD
+    {"SBC %02X", 1},               // 0xDE
+    {"RST 0x18", 0},               // 0xDF
+    {"LDH (0xFF00 + %02X), A", 1}, // 0xE0
+    {"POP HL", 0},                 // 0xE1
+    {"LDH (0xFF00 + C), A", 0},    // 0xE2
+    {"UNDEFINED", 0},              // 0xE3
+    {"UNDEFINED", 0},              // 0xE4
+    {"PUSH HL", 0},                // 0xE5
+    {"AND %02X", 1},               // 0xE6
+    {"RST 0x20", 0},               // 0xE7
+    {"ADD SP,%02X", 1},            // 0xE8
+    {"JP HL", 0},                  // 0xE9
+    {"LD (%04X), A", 2},           // 0xEA
+    {"UNDEFINED", 0},              // 0xEB
+    {"UNDEFINED", 0},              // 0xEC
+    {"UNDEFINED", 0},              // 0xED
+    {"XOR %02X", 1},               // 0xEE
+    {"RST 0x28", 0},               // 0xEF
+    {"LDH A, (0xFF00 + %02X)", 1}, // 0xF0
+    {"POP AF", 0},                 // 0xF1
+    {"LDH A, (0xFF00 + C)", 0},    // 0xF2
+    {"DI", 0},                     // 0xF3
+    {"UNDEFINED", 0},              // 0xF4
+    {"PUSH AF", 0},                // 0xF5
+    {"OR %02X", 1},                // 0xF6
+    {"RST 0x30", 0},               // 0xF7
+    {"LD HL, SP+%02X", 1},         // 0xF8
+    {"LD SP, HL", 0},              // 0xF9
+    {"LD A, (%04X)", 2},           // 0xFA
+    {"EI", 0},                     // 0xFB
+    {"UNDEFINED", 0},              // 0xFC
+    {"UNDEFINED", 0},              // 0xFD
+    {"CP %02X", 1},                // 0xFE
+    {"RST 0x38", 0},               // 0xFF
 };
 
 const opcode_t extended_instructions[256] = {
@@ -2099,14 +2099,14 @@ static void exec_opcode(gb_t *gb) {
         CLOCK();
         PUSH(cpu->registers.pc);
         CLOCK(cpu->registers.pc = 0x0018; END_OPCODE;);
-    case 0xE0: // LD (0xFF00 + n), A (12 cycles)
+    case 0xE0: // LDH (0xFF00 + n), A (12 cycles)
         GET_OPERAND_8();
         CLOCK(mmu_write(gb, IO + cpu->operand, cpu->registers.a));
         CLOCK(END_OPCODE);
     case 0xE1: // POP HL (12 cycles)
         POP(&cpu->registers.hl);
         CLOCK(END_OPCODE);
-    case 0xE2: // LD (0xFF00 + C),A (8 cycles)
+    case 0xE2: // LDH (0xFF00 + C), A (8 cycles)
         CLOCK(mmu_write(gb, IO + cpu->registers.c, cpu->registers.a));
         CLOCK(END_OPCODE);
     case 0xE5: // PUSH HL (16 cycles)
@@ -2145,7 +2145,7 @@ static void exec_opcode(gb_t *gb) {
         CLOCK();
         PUSH(cpu->registers.pc);
         CLOCK(cpu->registers.pc = 0x0028; END_OPCODE;);
-    case 0xF0: // LD A, (0xFF00 + n) (12 cycles)
+    case 0xF0: // LDH A, (0xFF00 + n) (12 cycles)
         GET_OPERAND_8();
         CLOCK(cpu->accumulator = mmu_read(gb, IO + cpu->operand));
         CLOCK(cpu->registers.a = cpu->accumulator; END_OPCODE;);
@@ -2153,7 +2153,7 @@ static void exec_opcode(gb_t *gb) {
         // also clear lower nibble of cpu->registers.f because it can only retreive its flags (most significant nibble)
         POP(&cpu->registers.af);
         CLOCK(cpu->registers.f &= 0xF0; END_OPCODE;);
-    case 0xF2: // LD A,(0xFF00 + C) (8 cycles)
+    case 0xF2: // LDH A,(0xFF00 + C) (8 cycles)
         CLOCK(cpu->accumulator = mmu_read(gb, IO + cpu->registers.c););
         CLOCK(cpu->registers.a = cpu->accumulator; END_OPCODE;);
     case 0xF3: // DI (4 cycles)
