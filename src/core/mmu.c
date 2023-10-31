@@ -342,7 +342,7 @@ static inline byte_t read_io_register(gb_t *gb, word_t address) {
 
 static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
     gb_mmu_t *mmu = gb->mmu;
-    word_t io_reg_addr = address - IO;
+    word_t io_reg_addr = address & 0xFF;
 
     switch (address) {
     case P1:
@@ -357,23 +357,22 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
             mmu->io_registers[io_reg_addr] = data & 0x83;
         }
         break;
-    case 0xFF03:
     case DIV:
         // writing to DIV resets it to 0
-        gb->timer->div_timer = 0;
-        mmu->io_registers[TIMA - IO] = mmu->io_registers[TMA - IO];
+        timer_set_div_timer(gb, 0);
         break;
     case TIMA:
-        if (gb->timer->tima_loading_value == -1)
-            mmu->io_registers[io_reg_addr] = mmu->io_registers[TMA - IO];
-        else
+        if (gb->timer->tima_state == TIMA_LOADING) {
+            gb->timer->tima_cancelled_value = data;
+            gb->timer->tima_state = TIMA_LOADING_CANCELLED;
+        } else if (gb->timer->tima_state != TIMA_LOADING_END) {
             mmu->io_registers[io_reg_addr] = data;
+        }
         break;
     case TMA:
-        if (gb->timer->tima_loading_value == -1)
-            mmu->io_registers[TIMA - IO] = data;
-        gb->timer->old_tma = mmu->io_registers[io_reg_addr];
         mmu->io_registers[io_reg_addr] = data;
+        if (gb->timer->tima_state != TIMA_COUNTING)
+            mmu->io_registers[TIMA - IO] = data;
         break;
     case TAC:
         mmu->io_registers[io_reg_addr] = data;
