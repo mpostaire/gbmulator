@@ -475,11 +475,19 @@ byte_t gb_get_joypad_state(gb_t *gb) {
 }
 
 void gb_set_joypad_state(gb_t *gb, byte_t state) {
-    gb->joypad->action = (state >> 4) & 0x0F;
-    gb->joypad->direction = state & 0x0F;
+    gb_joypad_t *joypad = gb->joypad;
 
-    if (!CHECK_BIT(gb->mmu->io_registers[P1 - IO], 4) || !CHECK_BIT(gb->mmu->io_registers[P1 - IO], 5))
+    byte_t direction = state & 0x0F;
+    byte_t action = (state >> 4) & 0x0F;
+
+    // request interrupt if it is enabled and any button bit goes from released to pressed (1 -> 0)
+    byte_t direction_changed = (joypad->direction & ~direction) && !CHECK_BIT(gb->mmu->io_registers[P1 - IO], 4);
+    byte_t action_changed = (joypad->action & ~action) && !CHECK_BIT(gb->mmu->io_registers[P1 - IO], 5);
+    if (direction_changed || action_changed)
         CPU_REQUEST_INTERRUPT(gb, IRQ_JOYPAD);
+ 
+    joypad->action = action;
+    joypad->direction = direction;
 }
 
 byte_t *gb_get_save(gb_t *gb, size_t *save_length) {

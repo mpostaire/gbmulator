@@ -22,6 +22,11 @@
 
 static char root_path[BUF_SIZE];
 
+static byte_t dmg_boot_found;
+static byte_t cgb_boot_found;
+static byte_t dmg_boot[0x100];
+static byte_t cgb_boot[0x900];
+
 typedef struct {
     char *rom_path;                 // relative the the root_path given in the program's argument
     char *reference_image_filename; // relative to the dir of the rom_path
@@ -36,6 +41,30 @@ typedef struct {
 static test_t tests[] = {
     #include "./tests.txt"
 };
+
+static void load_bootroms(void) {
+    FILE *dmg_f = fopen("dmg_boot.bin", "r");
+    if (dmg_f) {
+        if (fread(dmg_boot, 1, sizeof(dmg_boot), dmg_f) == 0x100)
+            dmg_boot_found = 1;
+        else
+            printf("Cannot read dmg_boot.bin, using default DMG boot ROM...\n");
+        fclose(dmg_f);
+    } else {
+        printf("Cannot open dmg_boot.bin, using default DMG boot ROM...\n");
+    }
+
+    FILE *cgb_f = fopen("cgb_boot.bin", "r");
+    if (cgb_f) {
+        if (fread(cgb_boot, 1, sizeof(cgb_boot), dmg_f) == 0x900)
+            cgb_boot_found = 1;
+        else
+            printf("Cannot read cgb_boot.bin, using default CGB boot ROM...\n");
+        fclose(cgb_f);
+    } else {
+        printf("Cannot open cgb_boot.bin, using default CGB boot ROM...\n");
+    }
+}
 
 static byte_t *get_rom(const char *path, size_t *rom_size) {
     const char *dot = strrchr(path, '.');
@@ -260,7 +289,7 @@ static int run_test(test_t *test) {
     MagickWandGenesis();
 
     char rom_path[BUF_SIZE];
-    snprintf(rom_path, sizeof(rom_path) + 2, "%s/%s", root_path, test->rom_path);
+    snprintf(rom_path, BUF_SIZE, "%s/%s", root_path, test->rom_path);
 
     size_t rom_size = 0;
     byte_t *rom = get_rom(rom_path, &rom_size);
@@ -277,8 +306,11 @@ static int run_test(test_t *test) {
     if (!gb)
         return 0;
 
-    // TODO GBmulator's boot roms aren't the same as the original DMG and CGB. This may cause problems in some test roms
-    //      like timer based test roms
+    if (dmg_boot_found)
+        gb->mmu->dmg_boot_rom = dmg_boot;
+    if (cgb_boot_found)
+        gb->mmu->cgb_boot_rom = cgb_boot;
+
     // run until the boot sequence is done
     while (gb->cpu->registers.pc != 0x100)
         gb_step(gb);
@@ -356,5 +388,6 @@ int main(int argc, char **argv) {
 
     snprintf(root_path, sizeof(root_path), "%.*s", (int) root_path_len, argv[1]);
 
+    load_bootroms();
     run_tests();
 }

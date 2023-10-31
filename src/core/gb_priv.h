@@ -17,10 +17,10 @@
 struct gb_t {
     gb_mode_t mode;
     byte_t disable_cgb_color_correction;
+    byte_t dmg_palette;
     float apu_sound_level;
     float apu_speed;
     uint32_t apu_sampling_rate;
-    byte_t dmg_palette;
     gb_new_frame_cb_t on_new_frame;
     gb_new_sample_cb_t on_new_sample;
     gb_accelerometer_request_cb_t on_accelerometer_request;

@@ -202,6 +202,14 @@ static int parse_cartridge(gb_t *gb) {
 int mmu_init(gb_t *gb, const byte_t *rom, size_t rom_size) {
     gb_mmu_t *mmu = xcalloc(1, sizeof(*mmu));
     mmu->rom = xcalloc(1, rom_size);
+    mmu->rom_size = rom_size;
+    memcpy(mmu->rom, rom, mmu->rom_size);
+    gb->mmu = mmu;
+
+    if (!parse_cartridge(gb)) {
+        mmu_quit(gb);
+        return 0;
+    }
 
     mmu->mbc.mbc1.bank_lo = 1;
     // mmu->rom_bank0_addr = 0; // initialized to 0 by xcalloc
@@ -214,21 +222,15 @@ int mmu_init(gb_t *gb, const byte_t *rom, size_t rom_size) {
     // mmu->mbc7.accelerometer.latched_y = 0x8000;
     // mmu->mbc7.accelerometer.latch_ready = 1;
 
-    mmu->rom_size = rom_size;
-    memcpy(mmu->rom, rom, mmu->rom_size);
-    gb->mmu = mmu;
-
-    if (!parse_cartridge(gb)) {
-        mmu_quit(gb);
-        return 0;
-    }
-
     if (mmu->mbc.type == CAMERA) {
         mmu->mbc.camera.sensor_image = xcalloc(GB_CAMERA_SENSOR_HEIGHT * GB_CAMERA_SENSOR_WIDTH, sizeof(*mmu->mbc.camera.sensor_image));
     } else if (mmu->mbc.type == MBC7) {
         mmu->mbc.mbc7.accelerometer.latched_x = 0x81D0;
         mmu->mbc.mbc7.accelerometer.latched_y = 0x81D0;
     }
+
+    mmu->dmg_boot_rom = dmg_boot;
+    mmu->cgb_boot_rom = cgb_boot;
 
     return 1;
 }
@@ -671,9 +673,9 @@ byte_t mmu_read_io_src(gb_t *gb, word_t address, gb_io_source_t io_src) {
     case ROM_BANK0:
         if (!mmu->boot_finished) {
             if (gb->mode == GB_MODE_DMG && address < 0x100)
-                return dmg_boot[address];
+                return mmu->dmg_boot_rom[address];
             if (gb->mode == GB_MODE_CGB && (address < 0x100 || (address >= 0x200 && address < sizeof(cgb_boot))))
-                return cgb_boot[address];
+                return mmu->cgb_boot_rom[address];
         }
         // fallthrough
     case ROM_BANK0 + 0x1000:

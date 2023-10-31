@@ -4,8 +4,8 @@
 
 void joypad_init(gb_t *gb) {
     gb->joypad = xcalloc(1, sizeof(*gb->joypad));
-    gb->joypad->action = 0xCF;
-    gb->joypad->direction = 0xCF;
+    gb->joypad->action = 0x0F;
+    gb->joypad->direction = 0x0F;
 }
 
 void joypad_quit(gb_t *gb) {

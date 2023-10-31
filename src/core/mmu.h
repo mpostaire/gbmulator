@@ -115,9 +115,12 @@ typedef enum {
 } gb_io_source_t;
 
 typedef struct {
-    size_t rom_size;
+    byte_t *dmg_boot_rom;
+    byte_t *cgb_boot_rom;
 
+    size_t rom_size;
     byte_t *rom; // max size: 8400000
+
     byte_t vram[2 * VRAM_BANK_SIZE]; // DMG: 1 bank / CGB: 2 banks of size 0x2000
     byte_t eram[16 * ERAM_BANK_SIZE]; // max 16 banks of size 0x2000
     byte_t wram[8 * WRAM_BANK_SIZE]; // DMG: 2 banks / CGB: 8 banks of size 0x1000 (bank 0 non switchable)
