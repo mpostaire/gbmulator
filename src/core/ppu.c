@@ -585,6 +585,11 @@ static inline void hblank_step(gb_t *gb) {
         if (IS_VBLANK_IRQ_STAT_ENABLED(gb))
             CPU_REQUEST_INTERRUPT(gb, IRQ_STAT);
 
+        if (IS_OAM_IRQ_STAT_ENABLED(gb)) {
+            CPU_REQUEST_INTERRUPT(gb, IRQ_STAT);
+            // TODO CGB --> IRQ_STAT triggered 1 cycle (T-cycle or M-cycle?) before IRQ_VBLANK
+        }
+
         CPU_REQUEST_INTERRUPT(gb, IRQ_VBLANK);
 
         // skip first screen rendering after the LCD was just turned on

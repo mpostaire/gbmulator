@@ -793,6 +793,7 @@ void gb_set_options(gb_t *gb, gb_options_t *opts) {
     // allow changes of mode and apu_sampling_rate only once (inside gb_init())
     if (!gb->mode) {
         gb->mode = opts->mode >= GB_MODE_DMG && opts->mode <= GB_MODE_CGB ? opts->mode : defaults_opts.mode;
+        gb->cgb_mode_enabled = gb->mode == GB_MODE_CGB;
         gb->apu_sampling_rate = opts->apu_sampling_rate == 0 ? defaults_opts.apu_sampling_rate : opts->apu_sampling_rate;
     }
 

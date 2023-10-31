@@ -16,6 +16,8 @@
 
 struct gb_t {
     gb_mode_t mode;
+    byte_t cgb_mode_enabled; // this is 1 if CGB is in CGB mode, 0 if it is in DMG compatibility mode // TODO understand this better
+
     byte_t disable_cgb_color_correction;
     byte_t dmg_palette;
     float apu_sound_level;

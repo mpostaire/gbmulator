@@ -184,17 +184,13 @@ static int parse_cartridge(gb_t *gb) {
     // get rom title
     memcpy(gb->rom_title, (char *) &mmu->rom[0x0134], 16);
     gb->rom_title[16] = '\0';
-    byte_t cgb_flag = mmu->rom[0x0143] == 0xC0 || mmu->rom[0x0143] == 0x80;
+    byte_t cgb_flag = mmu->rom[0x0143] & 0xC0;
     if (cgb_flag)
         gb->rom_title[15] = '\0';
 
     // remove trailing non alphanumeric characters from the rom title
     for (char *c = &gb->rom_title[16]; c >= gb->rom_title && !isalnum(*c); c--)
         *c = '\0';
-
-    // TODO better understand and implement CGB's DMG compatbility mode
-    // byte_t cgb_dmg_compat = gb->mode == CGB && !cgb_flag;
-    // byte_t cgb_mode_enabled = gb->mode == CGB && cgb_flag;
 
     return 1;
 }
@@ -251,7 +247,7 @@ static inline byte_t read_io_register(gb_t *gb, word_t address) {
         // Reading from P1 register returns joypad input state according to its current bit 4 or 5 value
         return joypad_get_input(gb);
     case SB: return mmu->io_registers[io_reg_addr];
-    case SC: return mmu->io_registers[io_reg_addr] | (gb->mode == GB_MODE_CGB ? 0x7C : 0x7E);
+    case SC: return mmu->io_registers[io_reg_addr] | (gb->cgb_mode_enabled ? 0x7C : 0x7E);
     case 0xFF03: return 0xFF;
     case DIV: return gb->timer->div_timer >> 8;
     case TIMA: return mmu->io_registers[io_reg_addr];
@@ -296,15 +292,15 @@ static inline byte_t read_io_register(gb_t *gb, word_t address) {
     case OBP1: return mmu->io_registers[io_reg_addr];
     case WY: return mmu->io_registers[io_reg_addr];
     case WX: return mmu->io_registers[io_reg_addr];
-    case KEY0: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
-    case KEY1: return gb->mode == GB_MODE_CGB ? (mmu->io_registers[io_reg_addr] | 0x7E) : 0xFF;
+    case KEY0: return 0xFF;
+    case KEY1: return gb->cgb_mode_enabled ? (mmu->io_registers[io_reg_addr] | 0x7E) : 0xFF;
     case 0xFF4E: return 0xFF;
     case VBK: return gb->mode == GB_MODE_CGB ? 0xFE | (mmu->io_registers[io_reg_addr] & 0x01) : 0xFF;
     case BANK: return 0xFF;
     case HDMA1 ... HDMA4: return 0xFF;
-    case HDMA5: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
+    case HDMA5: return gb->cgb_mode_enabled ? mmu->io_registers[io_reg_addr] : 0xFF;
     case RP:
-        if (gb->mode == GB_MODE_CGB) {
+        if (gb->cgb_mode_enabled) {
             if (!gb->ir_gb)
                 return mmu->io_registers[io_reg_addr] | 0x3E;
 
@@ -315,7 +311,7 @@ static inline byte_t read_io_register(gb_t *gb, word_t address) {
         }
         return 0xFF;
     case 0xFF57 ... 0xFF67: return 0xFF;
-    case BGPI: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
+    case BGPI: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] | 0x40 : 0xFF;
     case BGPD: {
         if (gb->mode == GB_MODE_DMG || PPU_IS_MODE(gb, PPU_MODE_DRAWING))
             return 0xFF;
@@ -323,19 +319,25 @@ static inline byte_t read_io_register(gb_t *gb, word_t address) {
         byte_t cram_address = mmu->io_registers[BGPI - IO] & 0x3F;
         return mmu->cram_bg[cram_address];
     }
-    case OBPI: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
+    case OBPI: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] | 0x40 : 0xFF;
     case OBPD: {
-        if (gb->mode == GB_MODE_DMG || PPU_IS_MODE(gb, PPU_MODE_DRAWING))
+        if (!gb->cgb_mode_enabled || PPU_IS_MODE(gb, PPU_MODE_DRAWING))
             return 0xFF;
 
         byte_t cram_address = mmu->io_registers[OBPI - IO] & 0x3F;
         return mmu->cram_obj[cram_address];
     }
     case 0xFF6C ... 0xFF6F: return 0xFF;
-    case SVBK: return gb->mode == GB_MODE_CGB ? 0xF8 | (mmu->io_registers[io_reg_addr] & 0x07) : 0xFF;
-    case 0xFF71 ... 0xFF74: return 0xFF;
-    case 0xFF75: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] & 0x70 : 0xFF;
-    case 0xFF76 ... 0xFF7F: return 0xFF;
+    case SVBK: return gb->cgb_mode_enabled ? 0xF8 | (mmu->io_registers[io_reg_addr] & 0x07) : 0xFF;
+    case 0xFF71: return 0xFF;
+    case 0xFF72 ... 0xFF73: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
+    case 0xFF74: return gb->cgb_mode_enabled ? mmu->io_registers[io_reg_addr] : 0xFF;
+    case 0xFF75: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] | 0x8F : 0xFF;
+    case PCM12:
+    case PCM34:
+        // not emulated because it appears to be never used
+        return gb->mode == GB_MODE_CGB ? 0x00 : 0xFF;
+    case 0xFF78 ... 0xFF7F: return 0xFF;
     default:
         eprintf("invalid read at 0x%04X\n", address);
         exit(EXIT_FAILURE);
@@ -544,6 +546,12 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
             }
         }
         break;
+    case KEY0:
+        if (gb->mode == GB_MODE_CGB && !mmu->boot_finished) {
+            gb->cgb_mode_enabled = !(data & 0x0C);
+            mmu->io_registers[io_reg_addr] = data;
+        }
+        break;
     case KEY1:
         mmu->io_registers[io_reg_addr] |= data & 0x01;
         break;
@@ -560,7 +568,7 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
         mmu->io_registers[io_reg_addr] = data;
         break;
     case HDMA5:
-        if (gb->mode == GB_MODE_DMG)
+        if (!gb->cgb_mode_enabled)
             break;
 
         // writing to this register starts a VRAM DMA transfer
@@ -599,7 +607,11 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
         //     printf("GDMA size=%d (%d blocs), vram bank=%d, wram bank n=%d, src=%x, dest=%x\n", (mmu->io_registers[io_reg_addr] + 1) * 0x10, mmu->io_registers[io_reg_addr] + 1, GBC_CURRENT_VRAM_BANK(mmu), GBC_CURRENT_WRAM_BANK(mmu), mmu->hdma.src_address, mmu->hdma.dest_address);
         break;
     case RP:
-        mmu->io_registers[io_reg_addr] = gb->mode == GB_MODE_CGB ? data & 0xC1 : 0xFF;
+        mmu->io_registers[io_reg_addr] = gb->cgb_mode_enabled ? data & 0xC1 : 0xFF;
+        break;
+    case BGPI:
+        if (gb->mode == GB_MODE_CGB)
+            mmu->io_registers[io_reg_addr] = data;
         break;
     case BGPD:
         if (gb->mode == GB_MODE_DMG)
@@ -619,6 +631,10 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
             mmu->io_registers[BGPI - IO] = new_bgpi_address;
             SET_BIT(mmu->io_registers[BGPI - IO], 7);
         }
+        break;
+    case OBPI:
+        if (gb->mode == GB_MODE_CGB)
+            mmu->io_registers[io_reg_addr] = data;
         break;
     case OBPD:
         if (gb->mode == GB_MODE_DMG)
@@ -640,7 +656,7 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
         }
         break;
     case SVBK:
-        if (gb->mode == GB_MODE_CGB) {
+        if (gb->cgb_mode_enabled) {
             mmu->io_registers[io_reg_addr] = data & 0x07;
             mmu->wram_bankn_addr_offset = ((GBC_CURRENT_WRAM_BANK(mmu) - 1) * WRAM_BANK_SIZE) - WRAM_BANK0;
         }
