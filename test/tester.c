@@ -289,7 +289,8 @@ static int run_test(test_t *test) {
     MagickWandGenesis();
 
     char rom_path[BUF_SIZE];
-    snprintf(rom_path, BUF_SIZE, "%s/%s", root_path, test->rom_path);
+    if (snprintf(rom_path, BUF_SIZE, "%s/%s", root_path, test->rom_path) < 0)
+        exit(EXIT_FAILURE);
 
     size_t rom_size = 0;
     byte_t *rom = get_rom(rom_path, &rom_size);
