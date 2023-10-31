@@ -70,7 +70,7 @@ CGB:mooneye-test-suite/acceptance/bits/reg_f.gb::success
 DMG:mooneye-test-suite/acceptance/bits/reg_f.gb::success
 DMG:mooneye-test-suite/acceptance/bits/unused_hwio-GS.gb::success
 DMG:mooneye-test-suite/acceptance/boot_div-dmgABCmgb.gb::failed
-DMG:mooneye-test-suite/acceptance/boot_hwio-dmgABCmgb.gb::failed
+DMG:mooneye-test-suite/acceptance/boot_hwio-dmgABCmgb.gb::success
 DMG:mooneye-test-suite/acceptance/boot_regs-dmgABC.gb::success
 CGB:mooneye-test-suite/acceptance/call_cc_timing.gb::success
 DMG:mooneye-test-suite/acceptance/call_cc_timing.gb::success
