@@ -156,7 +156,6 @@ static const char *get_new_licensee(gb_t *gb) {
     byte_t code = ((gb->mmu->rom[0x0144] - 0x30) * 10) + (gb->mmu->rom[0x0145]) - 0x30;
 
     switch (code) {
-    case 0: return "None";
     case 1: return "Nintendo";
     case 8: return "Capcom";
     case 13: return "Electronic Arts";
@@ -217,13 +216,12 @@ static const char *get_new_licensee(gb_t *gb) {
     case 97: return "Kaneko";
     case 99: return "Pack in soft";
     case 0xA4: return "Konami (Yu-Gi-Oh!)";
-    default: return "Unknown";
+    default: return NULL;
     }
 }
 
 static const char *get_licensee(gb_t *gb) {
     switch (gb->mmu->rom[0x014B]) {
-    case 0x00: return "None";
     case 0x01: return "Nintendo";
     case 0x08: return "Capcom";
     case 0x09: return "Hot-B";
@@ -370,35 +368,36 @@ static const char *get_licensee(gb_t *gb) {
     case 0xF0: return "A Wave";
     case 0xF3: return "Extreme Entertainment";
     case 0xFF: return "LJN";
-    default: return "Unknown";
+    default: return NULL;
     }
 }
 
 void gb_print_status(gb_t *gb) {
     gb_mmu_t *mmu = gb->mmu;
+    char str_buf[30];
 
-    printf("[%s] Playing %s (v%d) by %s\n",
+    const char *licensee = get_licensee(gb);
+    if (licensee)
+        snprintf(str_buf, 30, " by %s", licensee);
+
+    printf("[%s] Playing %s (v%d)%s\n",
             gb->mode == GB_MODE_DMG ? "DMG" : "CGB",
             gb->rom_title,
             mmu->rom[0x014C],
-            get_licensee(gb)
+            licensee ? str_buf : ""
     );
 
-    char *ram_str = NULL;
-    if (mmu->eram_banks > 0) {
-        ram_str = xmalloc(18);
-        snprintf(ram_str, 17, " + %d RAM banks", mmu->eram_banks);
-    }
+    if (mmu->eram_banks > 0)
+        snprintf(str_buf, 17, " + %d RAM banks", mmu->eram_banks);
 
     printf("Cartridge using %s with %d ROM banks%s%s%s%s\n",
             mbc_names[mmu->mbc.type],
             mmu->rom_banks,
-            ram_str ? ram_str : "",
+            mmu->eram_banks > 0 ? str_buf : "",
             mmu->has_battery ? " + BATTERY" : "",
             mmu->has_rtc ? " + RTC" : "",
             mmu->has_rumble ? " + RUMBLE" : ""
     );
-    free(ram_str);
 }
 
 void gb_link_connect_gb(gb_t *gb, gb_t *other_gb) {
