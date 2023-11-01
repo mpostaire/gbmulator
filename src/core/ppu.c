@@ -12,14 +12,14 @@
 // TODO read this: http://gameboy.mongenel.com/dmg/istat98.txt
 // TODO read this for fetcher timings: https://www.reddit.com/r/EmuDev/comments/s6cpis/comment/htlwkx9
 
-#define PPU_SET_MODE(mmu_ptr, mode) (mmu_ptr)->io_registers[STAT - IO] = ((mmu_ptr)->io_registers[STAT - IO] & 0xFC) | (mode)
+#define SCANLINE_CYCLES 456
 
-#define IS_PPU_WIN_ENABLED(mmu_ptr) (CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 5))
-#define IS_PPU_OBJ_TALL(mmu_ptr) (CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 2))
-#define IS_PPU_OBJ_ENABLED(mmu_ptr) (CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 1))
-#define IS_PPU_BG_WIN_ENABLED(mmu_ptr) (CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 0))
+#define SET_MODE(mmu_ptr, mode) (mmu_ptr)->io_registers[STAT - IO] = ((mmu_ptr)->io_registers[STAT - IO] & 0xFC) | (mode)
 
-#define IS_PPU_BG_NORMAL_ADDRESS(mmu_ptr) CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 4)
+#define IS_WIN_ENABLED(mmu_ptr) (CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 5))
+#define IS_OBJ_TALL(mmu_ptr) (CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 2))
+#define IS_OBJ_ENABLED(mmu_ptr) (CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 1))
+#define IS_BG_WIN_ENABLED(mmu_ptr) (CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 0))
 
 #define IS_CGB_COMPAT_MODE(mmu_ptr) ((((mmu_ptr)->io_registers[KEY0 - IO] >> 2) & 0x03) == 1)
 
@@ -167,7 +167,7 @@ static inline word_t get_obj_tiledata_address(gb_t *gb, byte_t is_high) {
     byte_t flip_y = CHECK_BIT(obj.attributes, 6);
     byte_t actual_tile_id = obj.tile_id;
 
-    if (IS_PPU_OBJ_TALL(mmu)) {
+    if (IS_OBJ_TALL(mmu)) {
         byte_t is_top_tile = abs(mmu->io_registers[LY - IO] - obj.y) > 8;
         CHANGE_BIT(actual_tile_id, 0, flip_y ? is_top_tile : !is_top_tile);
     }
@@ -391,22 +391,22 @@ static inline gb_pixel_t *select_pixel(gb_t *gb, gb_pixel_t *bg_win_pixel, gb_pi
 
     byte_t is_cgb_mode = gb->mode == GB_MODE_CGB && !IS_CGB_COMPAT_MODE(mmu);
     if (is_cgb_mode) {
-        if (!obj_pixel || !IS_PPU_OBJ_ENABLED(mmu) || obj_pixel->color == DMG_WHITE)
+        if (!obj_pixel || !IS_OBJ_ENABLED(mmu) || obj_pixel->color == DMG_WHITE)
             return bg_win_pixel;
-        if (bg_win_pixel->color == DMG_WHITE || !IS_PPU_BG_WIN_ENABLED(mmu))
+        if (bg_win_pixel->color == DMG_WHITE || !IS_BG_WIN_ENABLED(mmu))
             return obj_pixel;
         if (!CHECK_BIT(bg_win_pixel->attributes, 7) && !CHECK_BIT(obj_pixel->attributes, 7))
             return obj_pixel;
         return bg_win_pixel;
     } else {
-        if (!IS_PPU_BG_WIN_ENABLED(mmu)) {
+        if (!IS_BG_WIN_ENABLED(mmu)) {
             bg_win_pixel->color = DMG_WHITE;
             // TODO keep palette / change palette / force white?
         }
 
         if (!obj_pixel)
             return bg_win_pixel;
-        if (!IS_PPU_OBJ_ENABLED(mmu))
+        if (!IS_OBJ_ENABLED(mmu))
             return bg_win_pixel;
 
         byte_t bg_over_obj = CHECK_BIT(obj_pixel->attributes, 7) && bg_win_pixel->color != DMG_WHITE;
@@ -441,7 +441,7 @@ static inline void drawing_step(gb_t *gb) {
         break;
     }
 
-    if (IS_PPU_WIN_ENABLED(mmu) && mmu->io_registers[WY - IO] <= mmu->io_registers[LY - IO] && mmu->io_registers[WX - IO] - 7 <= ppu->lcd_x && ppu->pixel_fetcher.mode == FETCH_BG) {
+    if (IS_WIN_ENABLED(mmu) && mmu->io_registers[WY - IO] <= mmu->io_registers[LY - IO] && mmu->io_registers[WX - IO] - 7 <= ppu->lcd_x && ppu->pixel_fetcher.mode == FETCH_BG) {
         // the fetcher must switch to window mode for the remaining of the scanline (except when an object needs to be drawn)
         ppu->pixel_fetcher.mode = FETCH_WIN;
         ppu->pixel_fetcher.old_mode = FETCH_WIN;
@@ -453,7 +453,7 @@ static inline void drawing_step(gb_t *gb) {
     }
 
     if (ppu->bg_win_fifo.size > 0 && ppu->pixel_fetcher.mode != FETCH_OBJ && ppu->oam_scan.index < ppu->oam_scan.size && ppu->oam_scan.objs[ppu->oam_scan.index].x <= ppu->lcd_x + 8) {
-        if (IS_PPU_OBJ_ENABLED(mmu)) {
+        if (IS_OBJ_ENABLED(mmu)) {
             // there is an obj at the new position
             ppu->pixel_fetcher.mode = FETCH_OBJ;
             ppu->pixel_fetcher.step = 0;
@@ -524,7 +524,7 @@ static inline void drawing_step(gb_t *gb) {
 
         ppu->oam_scan.index = 0;
 
-        PPU_SET_MODE(mmu, PPU_MODE_HBLANK);
+        SET_MODE(mmu, PPU_MODE_HBLANK);
         if (IS_HBLANK_IRQ_STAT_ENABLED(gb))
             CPU_REQUEST_INTERRUPT(gb, IRQ_STAT);
         mmu->hdma.allow_hdma_block = mmu->hdma.type == HDMA && mmu->hdma.progress > 0;
@@ -542,7 +542,7 @@ static inline void oam_scan_step(gb_t *gb) {
     }
 
     gb_obj_t *obj = (gb_obj_t *) &mmu->oam[ppu->oam_scan.index * 4];
-    byte_t obj_height = IS_PPU_OBJ_TALL(mmu) ? 16 : 8;
+    byte_t obj_height = IS_OBJ_TALL(mmu) ? 16 : 8;
     // NOTE: obj->x != 0 condition should not be checked even if ultimate gameboy talk says it should
     if (ppu->oam_scan.size < 10 && (obj->y <= mmu->io_registers[LY - IO] + 16) && (obj->y + obj_height > mmu->io_registers[LY - IO] + 16)) {
         s_byte_t i;
@@ -565,7 +565,7 @@ static inline void oam_scan_step(gb_t *gb) {
         ppu->oam_scan.index = 0;
 
         ppu->discarded_pixels = 0;
-        PPU_SET_MODE(mmu, PPU_MODE_DRAWING);
+        SET_MODE(mmu, PPU_MODE_DRAWING);
     }
 }
 
@@ -573,15 +573,15 @@ static inline void hblank_step(gb_t *gb) {
     gb_mmu_t *mmu = gb->mmu;
     gb_ppu_t *ppu = gb->ppu;
 
-    if (ppu->cycles < 456)
+    if (ppu->cycles < SCANLINE_CYCLES)
         return;
 
     mmu->io_registers[LY - IO]++;
     ppu->cycles = 0;
 
-    if (mmu->io_registers[LY - IO] >= GB_SCREEN_HEIGHT) {
+    if (mmu->io_registers[LY - IO] == GB_SCREEN_HEIGHT) {
         ppu->wly = -1;
-        PPU_SET_MODE(mmu, PPU_MODE_VBLANK);
+        SET_MODE(mmu, PPU_MODE_VBLANK);
         if (IS_VBLANK_IRQ_STAT_ENABLED(gb))
             CPU_REQUEST_INTERRUPT(gb, IRQ_STAT);
 
@@ -602,7 +602,7 @@ static inline void hblank_step(gb_t *gb) {
             gb->on_new_frame(ppu->pixels);
     } else {
         ppu->oam_scan.size = 0;
-        PPU_SET_MODE(mmu, PPU_MODE_OAM);
+        SET_MODE(mmu, PPU_MODE_OAM);
         if (IS_OAM_IRQ_STAT_ENABLED(gb))
             CPU_REQUEST_INTERRUPT(gb, IRQ_STAT);
     }
@@ -620,19 +620,19 @@ static inline void vblank_step(gb_t *gb) {
     } else if (ppu->cycles == 12) {
         if (ppu->is_last_vblank_line)
             ppu_ly_lyc_compare(gb);
-    } else if (ppu->cycles == 456) {
-        if (!ppu->is_last_vblank_line)
-            mmu->io_registers[LY - IO]++; // increase on each new line
-        ppu->cycles = 0;
-
-        if (ppu->is_last_vblank_line) { // we actually are on line 153 but LY reads 0
+    } else if (ppu->cycles == SCANLINE_CYCLES) {
+        if (ppu->is_last_vblank_line) {
+            // we actually are on line 153 but LY reads 0
             ppu->is_last_vblank_line = 0;
-
             ppu->oam_scan.size = 0;
-            PPU_SET_MODE(mmu, PPU_MODE_OAM);
+            SET_MODE(mmu, PPU_MODE_OAM);
             if (IS_OAM_IRQ_STAT_ENABLED(gb))
                 CPU_REQUEST_INTERRUPT(gb, IRQ_STAT);
+        } else {
+            mmu->io_registers[LY - IO]++; // increase on each new line
         }
+
+        ppu->cycles = 0;
     }
 }
 
@@ -665,7 +665,7 @@ void ppu_step(gb_t *gb) {
                 gb->on_new_frame(ppu->pixels);
             ppu->is_lcd_turning_on = 1;
 
-            PPU_SET_MODE(mmu, PPU_MODE_HBLANK);
+            SET_MODE(mmu, PPU_MODE_HBLANK);
             mmu->hdma.allow_hdma_block = mmu->hdma.type == HDMA && mmu->hdma.progress > 0;
             RESET_BIT(mmu->io_registers[STAT - IO], 2); // set LYC=LY to 0?
             ppu->wly = -1;
@@ -711,7 +711,7 @@ void ppu_step(gb_t *gb) {
 void ppu_init(gb_t *gb) {
     gb->ppu = xcalloc(1, sizeof(*gb->ppu));
     gb->ppu->wly = -1;
-    // PPU_SET_MODE(gb->mmu, PPU_MODE_OAM); // TODO start in OAM mode?
+    // SET_MODE(gb->mmu, PPU_MODE_OAM); // TODO start in OAM mode?
 }
 
 void ppu_quit(gb_t *gb) {

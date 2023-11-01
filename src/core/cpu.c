@@ -3,6 +3,12 @@
 
 #include "gb_priv.h"
 
+#define IRQ_VBLANK_VECTOR 0x0040
+#define IRQ_STAT_VECTOR 0x0048
+#define IRQ_TIMER_VECTOR 0x0050
+#define IRQ_SERIAL_VECTOR 0x0058
+#define IRQ_JOYPAD_VECTOR 0x0060
+
 #define FLAG_Z 0x80 // flag zero
 #define FLAG_N 0x40 // flag substraction
 #define FLAG_H 0x20 // flag half carry
@@ -34,7 +40,6 @@ typedef enum {
 
 // must be used in the last microcode (CLOCK() call) of an opcode
 #define END_OPCODE cpu->exec_state = FETCH_OPCODE
-#define END_PUSH_IRQ { END_OPCODE; cpu->ime = IME_DISABLED; }
 #define START_OPCODE_CB cpu->exec_state = FETCH_OPCODE_CB
 
 // https://www.reddit.com/r/EmuDev/comments/a7kr9h/comment/ec3wkfo/?utm_source=share&utm_medium=web2x&context=3
@@ -577,22 +582,22 @@ const opcode_t extended_instructions[256] = {
     CLOCK(cpu->operand = mmu_read(gb, cpu->registers.pc); cpu->registers.pc++; __VA_ARGS__;);
 
 // takes 8 cycles
-#define GET_OPERAND_16(...)                                                           \
-    {                                                                                 \
+#define GET_OPERAND_16(...)                                                          \
+    {                                                                                \
         CLOCK(cpu->operand = mmu_read(gb, cpu->registers.pc++));                     \
         CLOCK(cpu->operand |= mmu_read(gb, cpu->registers.pc++) << 8; __VA_ARGS__;); \
     }
 
 // takes 12 cycles
-#define PUSH(word, ...)                                                          \
-    {                                                                            \
+#define PUSH(word, ...)                                                         \
+    {                                                                           \
         CLOCK(mmu_write(gb, --cpu->registers.sp, (word) >> 8));                 \
         CLOCK(mmu_write(gb, --cpu->registers.sp, (word) & 0xFF); __VA_ARGS__;); \
     }
 
 // takes 12 cycles
-#define POP(reg_ptr, ...)                                                           \
-    {                                                                               \
+#define POP(reg_ptr, ...)                                                          \
+    {                                                                              \
         CLOCK(*(reg_ptr) = mmu_read(gb, cpu->registers.sp++));                     \
         CLOCK(*(reg_ptr) |= mmu_read(gb, cpu->registers.sp++) << 8; __VA_ARGS__;); \
     }
@@ -607,15 +612,15 @@ const opcode_t extended_instructions[256] = {
     }
 
 // takes 8 or 20 cycles
-#define RET_CC(condition)                                                    \
-    { /* can't use the POP macro here as the timings are a little tricky */  \
-        CLOCK();                                                             \
-        CLOCK(                                                               \
-            if ((condition)) END_OPCODE;                                     \
+#define RET_CC(condition)                                                   \
+    { /* can't use the POP macro here as the timings are a little tricky */ \
+        CLOCK();                                                            \
+        CLOCK(                                                              \
+            if ((condition)) END_OPCODE;                                    \
             else cpu->registers.pc = mmu_read(gb, cpu->registers.sp++););   \
         CLOCK(cpu->registers.pc |= mmu_read(gb, cpu->registers.sp++) << 8); \
-        CLOCK();                                                             \
-        CLOCK(END_OPCODE);                                                   \
+        CLOCK();                                                            \
+        CLOCK(END_OPCODE);                                                  \
     }
 
 static inline void and(gb_cpu_t *cpu, byte_t reg) {
@@ -2024,7 +2029,7 @@ static void exec_opcode(gb_t *gb) {
         PUSH(cpu->registers.pc);
         CLOCK(cpu->registers.pc = 0x0000; END_OPCODE;);
     case 0xC8: // RET Z (8 or 20 cycles)
-        RET_CC(!CHECK_FLAG(cpu, FLAG_Z))
+        RET_CC(!CHECK_FLAG(cpu, FLAG_Z));
     case 0xC9: // RET (16 cycles)
         POP(&cpu->registers.pc);
         CLOCK();
@@ -2053,7 +2058,7 @@ static void exec_opcode(gb_t *gb) {
         PUSH(cpu->registers.pc);
         CLOCK(cpu->registers.pc = 0x0008; END_OPCODE;);
     case 0xD0: // RET NC (8 or 20 cycles)
-        RET_CC(CHECK_FLAG(cpu, FLAG_C))
+        RET_CC(CHECK_FLAG(cpu, FLAG_C));
     case 0xD1: // POP DE (12 cycles)
         POP(&cpu->registers.de);
         CLOCK(END_OPCODE);
@@ -2250,31 +2255,31 @@ static void push_interrupt(gb_t *gb) {
         CLOCK();
         CLOCK();
         CLOCK();
-        CLOCK(mmu_write(gb, --cpu->registers.sp, (cpu->registers.pc) >> 8));
+        CLOCK(mmu_write(gb, --cpu->registers.sp, cpu->registers.pc >> 8));
         CLOCK(
             byte_t old_ie = mmu->ie; // in case the mmu_write below overwrites the IE register
             mmu_write(gb, --cpu->registers.sp, cpu->registers.pc & 0xFF);
             if (CHECK_BIT(mmu->io_registers[IF - IO], IRQ_VBLANK) && CHECK_BIT(old_ie, IRQ_VBLANK)) {
                 RESET_BIT(mmu->io_registers[IF - IO], IRQ_VBLANK);
-                cpu->registers.pc = 0x0040;
+                cpu->registers.pc = IRQ_VBLANK_VECTOR;
             } else if (CHECK_BIT(mmu->io_registers[IF - IO], IRQ_STAT) && CHECK_BIT(old_ie, IRQ_STAT)) {
                 RESET_BIT(mmu->io_registers[IF - IO], IRQ_STAT);
-                cpu->registers.pc = 0x0048;
+                cpu->registers.pc = IRQ_STAT_VECTOR;
             } else if (CHECK_BIT(mmu->io_registers[IF - IO], IRQ_TIMER) && CHECK_BIT(old_ie, IRQ_TIMER)) {
                 RESET_BIT(mmu->io_registers[IF - IO], IRQ_TIMER);
-                cpu->registers.pc = 0x0050;
+                cpu->registers.pc = IRQ_TIMER_VECTOR;
             } else if (CHECK_BIT(mmu->io_registers[IF - IO], IRQ_SERIAL) && CHECK_BIT(old_ie, IRQ_SERIAL)) {
                 RESET_BIT(mmu->io_registers[IF - IO], IRQ_SERIAL);
-                cpu->registers.pc = 0x0058;
+                cpu->registers.pc = IRQ_SERIAL_VECTOR;
             } else if (CHECK_BIT(mmu->io_registers[IF - IO], IRQ_JOYPAD) && CHECK_BIT(old_ie, IRQ_JOYPAD)) {
                 RESET_BIT(mmu->io_registers[IF - IO], IRQ_JOYPAD);
-                cpu->registers.pc = 0x0060;
+                cpu->registers.pc = IRQ_JOYPAD_VECTOR;
             } else {
                 // an overwrite of the IE register happened during the previous CLOCK() and disabled all interrupts
                 // this has the effect to jump the cpu to address 0x0000
                 cpu->registers.pc = 0x0000;
             }
-            END_PUSH_IRQ;
+            END_OPCODE;
         );
     }
 }
@@ -2296,6 +2301,7 @@ void cpu_step(gb_t *gb) {
             cpu->opcode = 0;
             cpu->opcode_state = cpu->opcode;
             cpu->exec_state = EXEC_PUSH_IRQ;
+            cpu->ime = IME_DISABLED;
             push_interrupt(gb);
             break;
         }
