@@ -14,7 +14,11 @@
 
 #define SCANLINE_CYCLES 456
 
-#define SET_MODE(mmu_ptr, mode) (mmu_ptr)->io_registers[STAT - IO] = ((mmu_ptr)->io_registers[STAT - IO] & 0xFC) | (mode)
+#define PPU_SET_MODE(gb, mode)                                                                     \
+    do {                                                                                           \
+        (gb)->mmu->io_registers[STAT - IO] = ((gb)->mmu->io_registers[STAT - IO] & 0xFC) | (mode); \
+        ppu_update_stat_irq_line((gb));                                                            \
+    } while (0)
 
 #define IS_WIN_ENABLED(mmu_ptr) (CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 5))
 #define IS_OBJ_TALL(mmu_ptr) (CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 2))
@@ -23,20 +27,20 @@
 
 #define IS_CGB_COMPAT_MODE(mmu_ptr) ((((mmu_ptr)->io_registers[KEY0 - IO] >> 2) & 0x03) == 1)
 
-#define SET_PIXEL_DMG(emu_ptr, x, y, color)                                                                                     \
-    do {                                                                                                                        \
-        (emu_ptr)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)] = dmg_palettes[(emu_ptr)->dmg_palette][(color)][0];     \
-        (emu_ptr)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1] = dmg_palettes[(emu_ptr)->dmg_palette][(color)][1]; \
-        (emu_ptr)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2] = dmg_palettes[(emu_ptr)->dmg_palette][(color)][2]; \
-        (emu_ptr)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 3] = 0xFF;                                             \
+#define SET_PIXEL_DMG(gb, x, y, color)                                                                                \
+    do {                                                                                                              \
+        (gb)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)] = dmg_palettes[(gb)->dmg_palette][(color)][0];     \
+        (gb)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1] = dmg_palettes[(gb)->dmg_palette][(color)][1]; \
+        (gb)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2] = dmg_palettes[(gb)->dmg_palette][(color)][2]; \
+        (gb)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 3] = 0xFF;                                        \
     } while (0)
 
-#define SET_PIXEL_CGB(emu_ptr, x, y, r, g, b)                                       \
-    do {                                                                            \
-        (emu_ptr)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)] = (r);      \
-        (emu_ptr)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1] = (g);  \
-        (emu_ptr)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2] = (b);  \
-        (emu_ptr)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 3] = 0xFF; \
+#define SET_PIXEL_CGB(gb, x, y, r, g, b)                                       \
+    do {                                                                       \
+        (gb)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)] = (r);      \
+        (gb)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1] = (g);  \
+        (gb)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2] = (b);  \
+        (gb)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 3] = 0xFF; \
     } while (0)
 
 byte_t dmg_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
@@ -95,18 +99,6 @@ static inline void cgb_get_color(gb_mmu_t *mmu, gb_pixel_t *pixel, byte_t is_obj
         *r = (*r << 3) | (*r >> 2);
         *g = (*g << 3) | (*g >> 2);
         *b = (*b << 3) | (*b >> 2);
-    }
-}
-
-void ppu_ly_lyc_compare(gb_t *gb) {
-    gb_mmu_t *mmu = gb->mmu;
-
-    if (mmu->io_registers[LY - IO] == mmu->io_registers[LYC - IO]) {
-        SET_BIT(mmu->io_registers[STAT - IO], 2);
-        if (IS_LY_LYC_IRQ_STAT_ENABLED(gb))
-            CPU_REQUEST_INTERRUPT(gb, IRQ_STAT);
-    } else {
-        RESET_BIT(mmu->io_registers[STAT - IO], 2);
     }
 }
 
@@ -524,9 +516,7 @@ static inline void drawing_step(gb_t *gb) {
 
         ppu->oam_scan.index = 0;
 
-        SET_MODE(mmu, PPU_MODE_HBLANK);
-        if (IS_HBLANK_IRQ_STAT_ENABLED(gb))
-            CPU_REQUEST_INTERRUPT(gb, IRQ_STAT);
+        PPU_SET_MODE(gb, PPU_MODE_HBLANK);
         mmu->hdma.allow_hdma_block = mmu->hdma.type == HDMA && mmu->hdma.progress > 0;
     }
 }
@@ -565,7 +555,7 @@ static inline void oam_scan_step(gb_t *gb) {
         ppu->oam_scan.index = 0;
 
         ppu->discarded_pixels = 0;
-        SET_MODE(mmu, PPU_MODE_DRAWING);
+        PPU_SET_MODE(gb, PPU_MODE_DRAWING);
     }
 }
 
@@ -581,15 +571,14 @@ static inline void hblank_step(gb_t *gb) {
 
     if (mmu->io_registers[LY - IO] == GB_SCREEN_HEIGHT) {
         ppu->wly = -1;
-        SET_MODE(mmu, PPU_MODE_VBLANK);
-        if (IS_VBLANK_IRQ_STAT_ENABLED(gb))
-            CPU_REQUEST_INTERRUPT(gb, IRQ_STAT);
+        PPU_SET_MODE(gb, PPU_MODE_VBLANK);
 
-        if (IS_OAM_IRQ_STAT_ENABLED(gb)) {
+        if (IS_OAM_IRQ_STAT_ENABLED(gb)) { // if OAM stat irq is enabled while entering vblank, a stat irq is requested
             CPU_REQUEST_INTERRUPT(gb, IRQ_STAT);
             // TODO CGB --> IRQ_STAT triggered 1 cycle (T-cycle or M-cycle?) before IRQ_VBLANK
         }
 
+        // TODO vblank too soon?
         CPU_REQUEST_INTERRUPT(gb, IRQ_VBLANK);
 
         // skip first screen rendering after the LCD was just turned on
@@ -602,9 +591,7 @@ static inline void hblank_step(gb_t *gb) {
             gb->on_new_frame(ppu->pixels);
     } else {
         ppu->oam_scan.size = 0;
-        SET_MODE(mmu, PPU_MODE_OAM);
-        if (IS_OAM_IRQ_STAT_ENABLED(gb))
-            CPU_REQUEST_INTERRUPT(gb, IRQ_STAT);
+        PPU_SET_MODE(gb, PPU_MODE_OAM);
     }
 }
 
@@ -619,15 +606,13 @@ static inline void vblank_step(gb_t *gb) {
         }
     } else if (ppu->cycles == 12) {
         if (ppu->is_last_vblank_line)
-            ppu_ly_lyc_compare(gb);
+            ppu_update_stat_irq_line(gb);
     } else if (ppu->cycles == SCANLINE_CYCLES) {
         if (ppu->is_last_vblank_line) {
             // we actually are on line 153 but LY reads 0
             ppu->is_last_vblank_line = 0;
             ppu->oam_scan.size = 0;
-            SET_MODE(mmu, PPU_MODE_OAM);
-            if (IS_OAM_IRQ_STAT_ENABLED(gb))
-                CPU_REQUEST_INTERRUPT(gb, IRQ_STAT);
+            PPU_SET_MODE(gb, PPU_MODE_OAM);
         } else {
             mmu->io_registers[LY - IO]++; // increase on each new line
         }
@@ -650,6 +635,21 @@ static inline void blank_screen(gb_t *gb) {
     }
 }
 
+void ppu_update_stat_irq_line(gb_t *gb) {
+    gb_ppu_t *ppu = gb->ppu;
+
+    byte_t old_stat_irq_line = ppu->stat_irq_line;
+
+    ppu->stat_irq_line = IS_HBLANK_IRQ_STAT_ENABLED(gb) && PPU_IS_MODE(gb, PPU_MODE_HBLANK);
+    ppu->stat_irq_line |= IS_VBLANK_IRQ_STAT_ENABLED(gb) && PPU_IS_MODE(gb, PPU_MODE_VBLANK);
+    ppu->stat_irq_line |= IS_OAM_IRQ_STAT_ENABLED(gb) && PPU_IS_MODE(gb, PPU_MODE_OAM);
+    // TODO LY=LYC logic seems wrong
+    ppu->stat_irq_line |= IS_LY_LYC_IRQ_STAT_ENABLED(gb) && gb->mmu->io_registers[LY - IO] == gb->mmu->io_registers[LYC - IO];
+
+    if (!old_stat_irq_line && ppu->stat_irq_line)
+        CPU_REQUEST_INTERRUPT(gb, IRQ_STAT);
+}
+
 void ppu_step(gb_t *gb) {
     gb_ppu_t *ppu = gb->ppu;
     gb_mmu_t *mmu = gb->mmu;
@@ -665,14 +665,14 @@ void ppu_step(gb_t *gb) {
                 gb->on_new_frame(ppu->pixels);
             ppu->is_lcd_turning_on = 1;
 
-            SET_MODE(mmu, PPU_MODE_HBLANK);
+            PPU_SET_MODE(gb, PPU_MODE_HBLANK); // TODO maybe prevent the update stat interrupt line here
             mmu->hdma.allow_hdma_block = mmu->hdma.type == HDMA && mmu->hdma.progress > 0;
             RESET_BIT(mmu->io_registers[STAT - IO], 2); // set LYC=LY to 0?
             ppu->wly = -1;
             reset_pixel_fetcher(ppu);
             pixel_fifo_clear(&ppu->bg_win_fifo);
             pixel_fifo_clear(&ppu->obj_fifo);
-            ppu->cycles = 8; // TODO for some reason values from 5 to 8 (included) are needed to pass some tests (like blargg/oam_bug/rom_singles/1-lcd_sync.gb)...
+            ppu->cycles = 8; // TODO lcd turning on appears to have a 8 cycles offset (but is it 8 or -8?) (like blargg/oam_bug/rom_singles/1-lcd_sync.gb)...
             mmu->io_registers[LY - IO] = 0;
         }
         return;
@@ -680,7 +680,7 @@ void ppu_step(gb_t *gb) {
 
     // check for LYC=LY at the 4th cycle or if lcd was just enabled
     if (ppu->cycles == 4 || ppu->is_lcd_turning_on)
-        ppu_ly_lyc_compare(gb);
+        ppu_update_stat_irq_line(gb);
 
     for (byte_t cycles = 0; cycles < 4; cycles++) { // 4 cycles per step
         switch (PPU_GET_MODE(gb)) {
@@ -711,7 +711,7 @@ void ppu_step(gb_t *gb) {
 void ppu_init(gb_t *gb) {
     gb->ppu = xcalloc(1, sizeof(*gb->ppu));
     gb->ppu->wly = -1;
-    // SET_MODE(gb->mmu, PPU_MODE_OAM); // TODO start in OAM mode?
+    // PPU_SET_MODE(gb->mmu, PPU_MODE_OAM); // TODO start in OAM mode?
 }
 
 void ppu_quit(gb_t *gb) {
@@ -758,6 +758,7 @@ void ppu_quit(gb_t *gb) {
     X(lcd_x)                     \
     X(wly)                       \
     X(is_last_vblank_line)       \
+    X(stat_irq_line)             \
     SERIALIZED_OAM_SCAN          \
     SERIALIZED_FIFO(bg_win_fifo) \
     SERIALIZED_FIFO(obj_fifo)    \

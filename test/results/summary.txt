@@ -29,7 +29,7 @@ CGB:age-test-roms/m3-bg-bgp/m3-bg-bgp.gb::failed
 CGB:age-test-roms/m3-bg-lcdc/m3-bg-lcdc-ds.gb::failed
 CGB:age-test-roms/m3-bg-lcdc/m3-bg-lcdc-nocgb.gb::failed
 CGB:age-test-roms/m3-bg-lcdc/m3-bg-lcdc.gb::failed
-DMG:age-test-roms/m3-bg-lcdc/m3-bg-lcdc.gb::success
+DMG:age-test-roms/m3-bg-lcdc/m3-bg-lcdc.gb::failed
 CGB:age-test-roms/m3-bg-scx/m3-bg-scx-ds.gb::failed
 CGB:age-test-roms/m3-bg-scx/m3-bg-scx-nocgb.gb::failed
 CGB:age-test-roms/m3-bg-scx/m3-bg-scx.gb::failed
@@ -317,10 +317,10 @@ DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/ly_lyc-GS.gb::failed
 CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/ly_lyc_0-C.gb::failed
 DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/ly_lyc_0-GS.gb::failed
 CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/ly_lyc_0_write-C.gb::failed
-DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/ly_lyc_0_write-GS.gb::failed
+DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/ly_lyc_0_write-GS.gb::success
 CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/ly_lyc_144-C.gb::failed
 DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/ly_lyc_144-GS.gb::failed
-CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/ly_lyc_153-C.gb::success
+CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/ly_lyc_153-C.gb::failed
 DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/ly_lyc_153-GS.gb::failed
 CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/ly_lyc_153_write-C.gb::failed
 DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/ly_lyc_153_write-GS.gb::failed

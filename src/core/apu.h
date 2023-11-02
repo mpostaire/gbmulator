@@ -3,10 +3,10 @@
 #include "types.h"
 #include "mmu.h"
 
-#define IS_APU_ENABLED(emu_ptr) CHECK_BIT((emu_ptr)->mmu->io_registers[NR52 - IO], 7)
-#define APU_IS_CHANNEL_ENABLED(emu_ptr, channel) CHECK_BIT((emu_ptr)->mmu->io_registers[NR52 - IO], (channel))
-#define APU_ENABLE_CHANNEL(emu_ptr, channel) SET_BIT((emu_ptr)->mmu->io_registers[NR52 - IO], (channel))
-#define APU_DISABLE_CHANNEL(emu_ptr, channel) RESET_BIT((emu_ptr)->mmu->io_registers[NR52 - IO], (channel))
+#define IS_APU_ENABLED(gb) CHECK_BIT((gb)->mmu->io_registers[NR52 - IO], 7)
+#define APU_IS_CHANNEL_ENABLED(gb, channel) CHECK_BIT((gb)->mmu->io_registers[NR52 - IO], (channel))
+#define APU_ENABLE_CHANNEL(gb, channel) SET_BIT((gb)->mmu->io_registers[NR52 - IO], (channel))
+#define APU_DISABLE_CHANNEL(gb, channel) RESET_BIT((gb)->mmu->io_registers[NR52 - IO], (channel))
 
 typedef enum {
     APU_CHANNEL_1,

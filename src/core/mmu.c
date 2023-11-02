@@ -346,7 +346,7 @@ static inline byte_t read_io_register(gb_t *gb, word_t address) {
 
 static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
     gb_mmu_t *mmu = gb->mmu;
-    word_t io_reg_addr = address & 0xFF;
+    word_t io_reg_addr = address & 0x00FF;
 
     switch (address) {
     case P1:
@@ -527,13 +527,20 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
             mmu->io_registers[io_reg_addr] = data;
         break;
     case STAT:
+        if (gb->mode == GB_MODE_DMG) {
+            // on DMG hardware, writing any data to STAT is like writing 0xFF, then 4 cycles later, the actual data is written into STAT
+            // the 4 cycles delay is not emulated because it this only relevant for STAT interrupts
+            // so we check for a STAT interrupt then immediatly set STAT to its actual value
+            mmu->io_registers[io_reg_addr] = 0xF8 | (mmu->io_registers[io_reg_addr] & 0x07);
+            ppu_update_stat_irq_line(gb);
+        }
         mmu->io_registers[io_reg_addr] = 0x80 | (data & 0x78) | (mmu->io_registers[io_reg_addr] & 0x07);
         break;
     case LY: break; // read only
     case LYC:
         // a write to LYC triggers an immediate LY=LYC comparison
         mmu->io_registers[io_reg_addr] = data;
-        ppu_ly_lyc_compare(gb);
+        ppu_update_stat_irq_line(gb);
         break;
     case DMA:
         // writing to this register starts an OAM DMA transfer

@@ -5,15 +5,15 @@
 #include "cpu.h"
 #include "serialize.h"
 
-#define PPU_GET_MODE(emu_ptr) ((emu_ptr)->mmu->io_registers[STAT - IO] & 0x03)
-#define PPU_IS_MODE(emu_ptr, mode) (PPU_GET_MODE(emu_ptr) == (mode))
+#define PPU_GET_MODE(gb) ((gb)->mmu->io_registers[STAT - IO] & 0x03)
+#define PPU_IS_MODE(gb, mode) (PPU_GET_MODE(gb) == (mode))
 
-#define IS_LCD_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->io_registers[LCDC - IO], 7))
+#define IS_LCD_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[LCDC - IO], 7))
 
-#define IS_LY_LYC_IRQ_STAT_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->io_registers[STAT - IO], 6))
-#define IS_OAM_IRQ_STAT_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->io_registers[STAT - IO], 5))
-#define IS_VBLANK_IRQ_STAT_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->io_registers[STAT - IO], 4))
-#define IS_HBLANK_IRQ_STAT_ENABLED(emu_ptr) (CHECK_BIT((emu_ptr)->mmu->io_registers[STAT - IO], 3))
+#define IS_LY_LYC_IRQ_STAT_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[STAT - IO], 6))
+#define IS_OAM_IRQ_STAT_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[STAT - IO], 5))
+#define IS_VBLANK_IRQ_STAT_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[STAT - IO], 4))
+#define IS_HBLANK_IRQ_STAT_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[STAT - IO], 3))
 
 typedef enum {
     PPU_MODE_HBLANK,
@@ -65,6 +65,7 @@ typedef struct {
     byte_t lcd_x; // x coordinate of the lcd pixel shifter
     s_word_t wly; // window "LY" internal counter
     byte_t is_last_vblank_line;
+    byte_t stat_irq_line;
 
     struct {
         gb_obj_t objs[10]; // this is ordered on the x coord of the gb_obj_t, popping an element is just increasing the index
@@ -94,7 +95,7 @@ typedef struct {
 
 extern byte_t dmg_palettes[PPU_COLOR_PALETTE_MAX][4][3];
 
-void ppu_ly_lyc_compare(gb_t *gb);
+void ppu_update_stat_irq_line(gb_t *gb);
 
 void ppu_step(gb_t *gb);
 
