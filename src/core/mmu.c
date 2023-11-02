@@ -539,7 +539,8 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
     case LY: break; // read only
     case LYC:
         // a write to LYC triggers an immediate LY=LYC comparison
-        mmu->io_registers[io_reg_addr] = data;
+        mmu->io_registers[LYC - IO] = data;
+        UPDATE_STAT_LY_LYC_BIT(gb);
         ppu_update_stat_irq_line(gb);
         break;
     case DMA:

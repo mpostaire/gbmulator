@@ -136,7 +136,7 @@ DMG:mooneye-test-suite/acceptance/ppu/intr_2_oam_ok_timing.gb::success
 DMG:mooneye-test-suite/acceptance/ppu/lcdon_timing-GS.gb::failed
 DMG:mooneye-test-suite/acceptance/ppu/lcdon_write_timing-GS.gb::failed
 CGB:mooneye-test-suite/acceptance/ppu/stat_irq_blocking.gb::failed
-DMG:mooneye-test-suite/acceptance/ppu/stat_irq_blocking.gb::failed
+DMG:mooneye-test-suite/acceptance/ppu/stat_irq_blocking.gb::success
 CGB:mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb::failed
 DMG:mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb::failed
 DMG:mooneye-test-suite/acceptance/ppu/vblank_stat_intr-GS.gb::success
@@ -329,7 +329,7 @@ DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/ly_lyc_write-GS.gb::failed
 CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/ly_new_frame-C.gb::failed
 DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/ly_new_frame-GS.gb::success
 CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/stat_irq_blocking.gb::failed
-DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/stat_irq_blocking.gb::failed
+DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/stat_irq_blocking.gb::success
 CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/stat_write_if-C.gb::failed
 DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/stat_write_if-GS.gb::failed
 CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/vblank_if_timing.gb::failed

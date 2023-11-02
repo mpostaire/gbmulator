@@ -15,6 +15,8 @@
 #define IS_VBLANK_IRQ_STAT_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[STAT - IO], 4))
 #define IS_HBLANK_IRQ_STAT_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[STAT - IO], 3))
 
+#define UPDATE_STAT_LY_LYC_BIT(gb) CHANGE_BIT(gb->mmu->io_registers[STAT - IO], 2, (gb)->mmu->io_registers[LY - IO] == (gb)->mmu->io_registers[LYC - IO])
+
 typedef enum {
     PPU_MODE_HBLANK,
     PPU_MODE_VBLANK,

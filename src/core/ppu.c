@@ -20,12 +20,18 @@
         ppu_update_stat_irq_line((gb));                                                            \
     } while (0)
 
-#define IS_WIN_ENABLED(mmu_ptr) (CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 5))
-#define IS_OBJ_TALL(mmu_ptr) (CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 2))
-#define IS_OBJ_ENABLED(mmu_ptr) (CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 1))
-#define IS_BG_WIN_ENABLED(mmu_ptr) (CHECK_BIT((mmu_ptr)->io_registers[LCDC - IO], 0))
+#define SET_LY(gb, value)                           \
+    do {                                            \
+        (gb)->mmu->io_registers[LY - IO] = (value); \
+        UPDATE_STAT_LY_LYC_BIT(gb);                 \
+    } while (0)
 
-#define IS_CGB_COMPAT_MODE(mmu_ptr) ((((mmu_ptr)->io_registers[KEY0 - IO] >> 2) & 0x03) == 1)
+#define IS_WIN_ENABLED(mmu) (CHECK_BIT((mmu)->io_registers[LCDC - IO], 5))
+#define IS_OBJ_TALL(mmu) (CHECK_BIT((mmu)->io_registers[LCDC - IO], 2))
+#define IS_OBJ_ENABLED(mmu) (CHECK_BIT((mmu)->io_registers[LCDC - IO], 1))
+#define IS_BG_WIN_ENABLED(mmu) (CHECK_BIT((mmu)->io_registers[LCDC - IO], 0))
+
+#define IS_CGB_COMPAT_MODE(mmu) ((((mmu)->io_registers[KEY0 - IO] >> 2) & 0x03) == 1)
 
 #define SET_PIXEL_DMG(gb, x, y, color)                                                                                \
     do {                                                                                                              \
@@ -566,7 +572,7 @@ static inline void hblank_step(gb_t *gb) {
     if (ppu->cycles < SCANLINE_CYCLES)
         return;
 
-    mmu->io_registers[LY - IO]++;
+    SET_LY(gb, mmu->io_registers[LY - IO] + 1);
     ppu->cycles = 0;
 
     if (mmu->io_registers[LY - IO] == GB_SCREEN_HEIGHT) {
@@ -601,7 +607,7 @@ static inline void vblank_step(gb_t *gb) {
 
     if (ppu->cycles == 4) {
         if (mmu->io_registers[LY - IO] == 153) {
-            mmu->io_registers[LY - IO] = 0;
+            SET_LY(gb, 0);
             ppu->is_last_vblank_line = 1;
         }
     } else if (ppu->cycles == 12) {
@@ -614,7 +620,7 @@ static inline void vblank_step(gb_t *gb) {
             ppu->oam_scan.size = 0;
             PPU_SET_MODE(gb, PPU_MODE_OAM);
         } else {
-            mmu->io_registers[LY - IO]++; // increase on each new line
+            SET_LY(gb, mmu->io_registers[LY - IO] + 1); // increase on each new line
         }
 
         ppu->cycles = 0;
@@ -643,7 +649,6 @@ void ppu_update_stat_irq_line(gb_t *gb) {
     ppu->stat_irq_line = IS_HBLANK_IRQ_STAT_ENABLED(gb) && PPU_IS_MODE(gb, PPU_MODE_HBLANK);
     ppu->stat_irq_line |= IS_VBLANK_IRQ_STAT_ENABLED(gb) && PPU_IS_MODE(gb, PPU_MODE_VBLANK);
     ppu->stat_irq_line |= IS_OAM_IRQ_STAT_ENABLED(gb) && PPU_IS_MODE(gb, PPU_MODE_OAM);
-    // TODO LY=LYC logic seems wrong
     ppu->stat_irq_line |= IS_LY_LYC_IRQ_STAT_ENABLED(gb) && gb->mmu->io_registers[LY - IO] == gb->mmu->io_registers[LYC - IO];
 
     if (!old_stat_irq_line && ppu->stat_irq_line)
@@ -667,13 +672,13 @@ void ppu_step(gb_t *gb) {
 
             PPU_SET_MODE(gb, PPU_MODE_HBLANK); // TODO maybe prevent the update stat interrupt line here
             mmu->hdma.allow_hdma_block = mmu->hdma.type == HDMA && mmu->hdma.progress > 0;
-            RESET_BIT(mmu->io_registers[STAT - IO], 2); // set LYC=LY to 0?
+            // RESET_BIT(mmu->io_registers[STAT - IO], 2); // set LYC=LY to 0?
             ppu->wly = -1;
             reset_pixel_fetcher(ppu);
             pixel_fifo_clear(&ppu->bg_win_fifo);
             pixel_fifo_clear(&ppu->obj_fifo);
             ppu->cycles = 8; // TODO lcd turning on appears to have a 8 cycles offset (but is it 8 or -8?) (like blargg/oam_bug/rom_singles/1-lcd_sync.gb)...
-            mmu->io_registers[LY - IO] = 0;
+            SET_LY(gb, 0);
         }
         return;
     }
