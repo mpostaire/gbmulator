@@ -65,7 +65,7 @@ typedef enum {
 
     // Pixel Processing Unit (PPU)
     LCDC = 0xFF40, // LCD Control
-    STAT = 0xFF41, // LCDC Status
+    STAT = 0xFF41, // LCD Status
     SCY = 0xFF42,  // Scroll Y
     SCX = 0xFF43,  // Scroll X
     LY = 0xFF44,   // LCD Y-Coordinate
@@ -135,7 +135,7 @@ typedef struct {
 
     struct {
         byte_t initializing; // 4 cycles of initialization delay
-        byte_t allow_hdma_block; // set to 1 while the current 0x10 bytes block of HDMA can be copied, else 0 (emu->mode == CGB is assumed)
+        byte_t allow_hdma_block; // set to 1 while the current 0x10 bytes block of HDMA can be copied, else 0 (gb->mode == CGB is assumed)
         byte_t lock_cpu;
         byte_t type;
         byte_t progress;
@@ -189,11 +189,11 @@ void mmu_write_io_src(gb_t *gb, word_t address, byte_t data, gb_io_source_t io_s
 /**
  * like mmu_read_io_src but using IO_SRC_CPU as io_src
  */
-#define mmu_read(emu, address) mmu_read_io_src((emu), (address), IO_SRC_CPU)
+#define mmu_read(gb, address) mmu_read_io_src((gb), (address), IO_SRC_CPU)
 
 /**
  * like mmu_write_io_src but using IO_SRC_CPU as io_src
  */
-#define mmu_write(emu, address, data) mmu_write_io_src((emu), (address), (data), IO_SRC_CPU)
+#define mmu_write(gb, address, data) mmu_write_io_src((gb), (address), (data), IO_SRC_CPU)
 
 SERIALIZE_FUNCTION_DECLS(mmu);
