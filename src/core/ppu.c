@@ -14,17 +14,7 @@
 
 #define SCANLINE_CYCLES 456
 
-#define PPU_SET_MODE(gb, mode)                                                                     \
-    do {                                                                                           \
-        (gb)->mmu->io_registers[STAT - IO] = ((gb)->mmu->io_registers[STAT - IO] & 0xFC) | (mode); \
-        ppu_update_stat_irq_line((gb));                                                            \
-    } while (0)
-
-#define SET_LY(gb, value)                           \
-    do {                                            \
-        (gb)->mmu->io_registers[LY - IO] = (value); \
-        UPDATE_STAT_LY_LYC_BIT(gb);                 \
-    } while (0)
+#define PPU_SET_STAT_MODE(gb, new_mode) ((gb)->mmu->io_registers[STAT - IO] = ((gb)->mmu->io_registers[STAT - IO] & 0xFC) | (new_mode))
 
 #define IS_WIN_ENABLED(mmu) (CHECK_BIT((mmu)->io_registers[LCDC - IO], 5))
 #define IS_OBJ_TALL(mmu) (CHECK_BIT((mmu)->io_registers[LCDC - IO], 2))
@@ -63,6 +53,27 @@ byte_t dmg_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
         { 0x0F, 0x38, 0x0F }
     }
 };
+
+static inline void set_mode(gb_t *gb, byte_t mode) {
+    gb->ppu->mode = mode;
+
+    switch (mode) {
+    case PPU_MODE_VBLANK:
+        if (gb->mode == GB_MODE_DMG) {
+            // no delay to enter vblank mode and set stat bit
+            PPU_SET_STAT_MODE(gb, mode);
+            ppu_update_stat_irq_line(gb);
+        } else {
+            gb->ppu->pending_stat_mode = mode;
+        }
+        break;
+    case PPU_MODE_HBLANK:
+    case PPU_MODE_OAM:
+    case PPU_MODE_DRAWING:
+        gb->ppu->pending_stat_mode = mode;
+        break;
+    }
+}
 
 /**
  * @returns dmg color after applying palette.
@@ -522,7 +533,7 @@ static inline void drawing_step(gb_t *gb) {
 
         ppu->oam_scan.index = 0;
 
-        PPU_SET_MODE(gb, PPU_MODE_HBLANK);
+        set_mode(gb, PPU_MODE_HBLANK);
         mmu->hdma.allow_hdma_block = mmu->hdma.type == HDMA && mmu->hdma.progress > 0;
     }
 }
@@ -561,7 +572,7 @@ static inline void oam_scan_step(gb_t *gb) {
         ppu->oam_scan.index = 0;
 
         ppu->discarded_pixels = 0;
-        PPU_SET_MODE(gb, PPU_MODE_DRAWING);
+        set_mode(gb, PPU_MODE_DRAWING);
     }
 }
 
@@ -572,19 +583,18 @@ static inline void hblank_step(gb_t *gb) {
     if (ppu->cycles < SCANLINE_CYCLES)
         return;
 
-    SET_LY(gb, mmu->io_registers[LY - IO] + 1);
+    mmu->io_registers[LY - IO]++;
     ppu->cycles = 0;
 
     if (mmu->io_registers[LY - IO] == GB_SCREEN_HEIGHT) {
         ppu->wly = -1;
-        PPU_SET_MODE(gb, PPU_MODE_VBLANK);
+        set_mode(gb, PPU_MODE_VBLANK);
 
         if (IS_OAM_IRQ_STAT_ENABLED(gb)) { // if OAM stat irq is enabled while entering vblank, a stat irq is requested
             CPU_REQUEST_INTERRUPT(gb, IRQ_STAT);
             // TODO CGB --> IRQ_STAT triggered 1 cycle (T-cycle or M-cycle?) before IRQ_VBLANK
         }
 
-        // TODO vblank too soon?
         CPU_REQUEST_INTERRUPT(gb, IRQ_VBLANK);
 
         // skip first screen rendering after the LCD was just turned on
@@ -597,7 +607,8 @@ static inline void hblank_step(gb_t *gb) {
             gb->on_new_frame(ppu->pixels);
     } else {
         ppu->oam_scan.size = 0;
-        PPU_SET_MODE(gb, PPU_MODE_OAM);
+        set_mode(gb, PPU_MODE_OAM);
+        RESET_BIT(mmu->io_registers[STAT - IO], 2); // clear LY=LYC until ppu->cycles == 4
     }
 }
 
@@ -607,7 +618,8 @@ static inline void vblank_step(gb_t *gb) {
 
     if (ppu->cycles == 4) {
         if (mmu->io_registers[LY - IO] == 153) {
-            SET_LY(gb, 0);
+            mmu->io_registers[LY - IO] = 0;
+            UPDATE_STAT_LY_LYC_BIT(gb);
             ppu->is_last_vblank_line = 1;
         }
     } else if (ppu->cycles == 12) {
@@ -618,27 +630,59 @@ static inline void vblank_step(gb_t *gb) {
             // we actually are on line 153 but LY reads 0
             ppu->is_last_vblank_line = 0;
             ppu->oam_scan.size = 0;
-            PPU_SET_MODE(gb, PPU_MODE_OAM);
+            set_mode(gb, PPU_MODE_OAM);
         } else {
-            SET_LY(gb, mmu->io_registers[LY - IO] + 1); // increase on each new line
+            mmu->io_registers[LY - IO]++; // increase on each new line
         }
 
         ppu->cycles = 0;
     }
 }
 
-static inline void blank_screen(gb_t *gb) {
+void ppu_enable_lcd(gb_t *gb) {
+    gb_ppu_t *ppu = gb->ppu;
+
+    ppu->mode = PPU_MODE_OAM; // reading hblank mode but actually in OAM mode
+    ppu->cycles = 8; // lcd is 8 cycles early when turning on
+    ppu->is_lcd_turning_on = 1;
+    UPDATE_STAT_LY_LYC_BIT(gb);
+    ppu_update_stat_irq_line(gb);
+
+    // advance oam_scan to take into account the 8 cycles early
+    ppu->oam_scan.index = 3; // 4 objects scanned
+    ppu->oam_scan.step = 1; // scan 5th object immediately
+}
+
+void ppu_disable_lcd(gb_t *gb) {
+    gb_mmu_t *mmu = gb->mmu;
+    gb_ppu_t *ppu = gb->ppu;
+
+    PPU_SET_STAT_MODE(gb, PPU_MODE_HBLANK);
+    mmu->io_registers[LY - IO] = 0;
+    UPDATE_STAT_LY_LYC_BIT(gb);
+
+    ppu->wly = -1;
+    reset_pixel_fetcher(ppu);
+    pixel_fifo_clear(&ppu->bg_win_fifo);
+    pixel_fifo_clear(&ppu->obj_fifo);
+
+    mmu->hdma.allow_hdma_block = mmu->hdma.type == HDMA && mmu->hdma.progress > 0;
+
+    // white screen
     for (int x = 0; x < GB_SCREEN_WIDTH; x++) {
         for (int y = 0; y < GB_SCREEN_HEIGHT; y++) {
             if (gb->mode == GB_MODE_CGB) {
                 byte_t r, g, b;
-                cgb_get_color(gb->mmu, NULL, 0, !gb->disable_cgb_color_correction, &r, &g, &b);
+                cgb_get_color(mmu, NULL, 0, !gb->disable_cgb_color_correction, &r, &g, &b);
                 SET_PIXEL_CGB(gb, x, y, r, g, b);
             } else {
                 SET_PIXEL_DMG(gb, x, y, DMG_WHITE);
             }
         }
     }
+
+    if (gb->on_new_frame)
+        gb->on_new_frame(gb->ppu->pixels);
 }
 
 void ppu_update_stat_irq_line(gb_t *gb) {
@@ -656,39 +700,26 @@ void ppu_update_stat_irq_line(gb_t *gb) {
 }
 
 void ppu_step(gb_t *gb) {
-    gb_ppu_t *ppu = gb->ppu;
-    gb_mmu_t *mmu = gb->mmu;
-
-    if (!IS_LCD_ENABLED(gb)) {
-        // TODO not sure of the handling of LCD disabled
-        // TODO LCD disabled should fill screen with a color brighter than WHITE
-
-        if (!ppu->is_lcd_turning_on) {
-            blank_screen(gb);
-
-            if (gb->on_new_frame)
-                gb->on_new_frame(ppu->pixels);
-            ppu->is_lcd_turning_on = 1;
-
-            PPU_SET_MODE(gb, PPU_MODE_HBLANK); // TODO maybe prevent the update stat interrupt line here
-            mmu->hdma.allow_hdma_block = mmu->hdma.type == HDMA && mmu->hdma.progress > 0;
-            // RESET_BIT(mmu->io_registers[STAT - IO], 2); // set LYC=LY to 0?
-            ppu->wly = -1;
-            reset_pixel_fetcher(ppu);
-            pixel_fifo_clear(&ppu->bg_win_fifo);
-            pixel_fifo_clear(&ppu->obj_fifo);
-            ppu->cycles = 8; // TODO lcd turning on appears to have a 8 cycles offset (but is it 8 or -8?) (like blargg/oam_bug/rom_singles/1-lcd_sync.gb)...
-            SET_LY(gb, 0);
-        }
+    if (!IS_LCD_ENABLED(gb))
         return;
+
+    gb_ppu_t *ppu = gb->ppu;
+
+    // STAT ppu mode bits have 4 cycles of delay compared to the actual ppu mode (except for VBLANK)
+    if (ppu->pending_stat_mode >= 0) {
+        PPU_SET_STAT_MODE(gb, ppu->pending_stat_mode);
+        ppu_update_stat_irq_line(gb);
+        ppu->pending_stat_mode = -1;
     }
 
-    // check for LYC=LY at the 4th cycle or if lcd was just enabled
-    if (ppu->cycles == 4 || ppu->is_lcd_turning_on)
-        ppu_update_stat_irq_line(gb);
-
     for (byte_t cycles = 0; cycles < 4; cycles++) { // 4 cycles per step
-        switch (PPU_GET_MODE(gb)) {
+        // check for LYC=LY at the 4th cycle
+        if (ppu->cycles == 4) {
+            UPDATE_STAT_LY_LYC_BIT(gb);
+            ppu_update_stat_irq_line(gb);
+        }
+
+        switch (ppu->mode) {
         case PPU_MODE_OAM:
             // Scanning OAM for (X, Y) coordinates of sprites that overlap this line
             // there is up to 40 OBJs in OAM memory and this mode takes 80 cycles: 2 cycles per OBJ to check if it should be displayed
@@ -716,7 +747,7 @@ void ppu_step(gb_t *gb) {
 void ppu_init(gb_t *gb) {
     gb->ppu = xcalloc(1, sizeof(*gb->ppu));
     gb->ppu->wly = -1;
-    // PPU_SET_MODE(gb->mmu, PPU_MODE_OAM); // TODO start in OAM mode?
+    gb->ppu->pending_stat_mode = -1;
 }
 
 void ppu_quit(gb_t *gb) {
@@ -756,7 +787,8 @@ void ppu_quit(gb_t *gb) {
     X(pixel_fetcher.x)
 
 #define SERIALIZED_MEMBERS       \
-    X(wly)                       \
+    X(mode)                      \
+    X(pending_stat_mode)         \
     X(is_lcd_turning_on)         \
     X(cycles)                    \
     X(discarded_pixels)          \

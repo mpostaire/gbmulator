@@ -5,8 +5,10 @@
 #include "cpu.h"
 #include "serialize.h"
 
-#define PPU_GET_MODE(gb) ((gb)->mmu->io_registers[STAT - IO] & 0x03)
+#define PPU_STAT_GET_MODE(gb) ((gb)->mmu->io_registers[STAT - IO] & 0x03)
+#define PPU_GET_MODE(gb) ((gb)->ppu->mode)
 #define PPU_IS_MODE(gb, mode) (PPU_GET_MODE(gb) == (mode))
+#define PPU_STAT_IS_MODE(gb, mode) (PPU_STAT_GET_MODE(gb) == (mode))
 
 #define IS_LCD_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[LCDC - IO], 7))
 
@@ -61,6 +63,8 @@ typedef struct {
 } gb_obj_t;
 
 typedef struct {
+    byte_t mode; // actual mode of the ppu (the mode reflected in the STAT io register is not always true)
+    s_byte_t pending_stat_mode; // when ppu changes mode, it has a 1 cycle delay before being seen in the STAT register (this is -1 if no pending stat mode)
     byte_t is_lcd_turning_on;
     word_t cycles;
     byte_t discarded_pixels; // dicarded pixel counter at the start of a scanline due to either SCX scrolling or WX < 7
@@ -96,6 +100,10 @@ typedef struct {
 } gb_ppu_t;
 
 extern byte_t dmg_palettes[PPU_COLOR_PALETTE_MAX][4][3];
+
+void ppu_enable_lcd(gb_t *gb);
+
+void ppu_disable_lcd(gb_t *gb);
 
 void ppu_update_stat_irq_line(gb_t *gb);
 

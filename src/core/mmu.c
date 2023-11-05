@@ -238,6 +238,23 @@ void mmu_quit(gb_t *gb) {
     free(gb->mmu);
 }
 
+static inline byte_t is_oam_locked_for_cpu(gb_t *gb) {
+    // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
+    if (IS_LCD_ENABLED(gb) && (PPU_STAT_IS_MODE(gb, PPU_MODE_OAM) || PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING) || gb->ppu->pending_stat_mode == PPU_MODE_OAM))
+        return 1;
+
+    // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
+    // but it has some quirks for the other memory regions (check links below):
+    // https://www.reddit.com/r/EmuDev/comments/5hahss/comment/daz9cbi/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
+    // https://github.com/Gekkio/mooneye-gb/issues/39#issuecomment-265953981
+    return IS_OAM_DMA_RUNNING(gb->mmu);
+}
+
+static inline byte_t is_vram_locked_for_cpu(gb_t *gb) {
+    // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
+    return IS_LCD_ENABLED(gb) && (PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING) || (PPU_STAT_IS_MODE(gb, PPU_MODE_OAM) && gb->ppu->pending_stat_mode == PPU_MODE_DRAWING));
+}
+
 static inline byte_t read_io_register(gb_t *gb, word_t address) {
     gb_mmu_t *mmu = gb->mmu;
     word_t io_reg_addr = address - IO;
@@ -526,11 +543,20 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
         if (!CHECK_BIT(mmu->io_registers[NR30 - IO], 7))
             mmu->io_registers[io_reg_addr] = data;
         break;
+    case LCDC:
+        byte_t old_lcd_enabled = IS_LCD_ENABLED(gb);
+        mmu->io_registers[io_reg_addr] = data;
+
+        if (!old_lcd_enabled && IS_LCD_ENABLED(gb)) // lcd turned on
+            ppu_enable_lcd(gb);
+        else if (old_lcd_enabled && !IS_LCD_ENABLED(gb)) // lcd turned off
+            ppu_disable_lcd(gb);
+        break;
     case STAT:
         if (gb->mode == GB_MODE_DMG) {
             // on DMG hardware, writing any data to STAT is like writing 0xFF, then 4 cycles later, the actual data is written into STAT
             // the 4 cycles delay is not emulated because it this only relevant for STAT interrupts
-            // so we check for a STAT interrupt then immediatly set STAT to its actual value
+            // so we check for a STAT interrupt then immediately set STAT to its actual value
             mmu->io_registers[io_reg_addr] = 0xF8 | (mmu->io_registers[io_reg_addr] & 0x07);
             ppu_update_stat_irq_line(gb);
         }
@@ -538,10 +564,11 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
         break;
     case LY: break; // read only
     case LYC:
-        // a write to LYC triggers an immediate LY=LYC comparison
         mmu->io_registers[LYC - IO] = data;
-        UPDATE_STAT_LY_LYC_BIT(gb);
-        ppu_update_stat_irq_line(gb);
+        if (IS_LCD_ENABLED(gb)) {
+            UPDATE_STAT_LY_LYC_BIT(gb);
+            ppu_update_stat_irq_line(gb);
+        }
         break;
     case DMA:
         // writing to this register starts an OAM DMA transfer
@@ -715,8 +742,8 @@ byte_t mmu_read_io_src(gb_t *gb, word_t address, gb_io_source_t io_src) {
     case VRAM + 0x1000:
         if (io_src == IO_SRC_GDMA_HDMA)
             return 0xFF; // src can be inside vram but it reads incorrect data: see TCAGBD.pdf for more details
-        if (io_src == IO_SRC_CPU && IS_LCD_ENABLED(gb) && PPU_IS_MODE(gb, PPU_MODE_DRAWING))
-            return 0xFF; // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
+        if (io_src == IO_SRC_CPU && is_vram_locked_for_cpu(gb))
+            return 0xFF;
         return mmu->vram[mmu->vram_bank_addr_offset + address];
     case ERAM:
     case ERAM + 0x1000:
@@ -736,17 +763,8 @@ byte_t mmu_read_io_src(gb_t *gb, word_t address, gb_io_source_t io_src) {
             return mmu->wram[(mmu->wram_bankn_addr_offset - (ECHO - WRAM_BANK0)) + address];
 
         if (address < UNUSABLE) { // we are in OAM
-            // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
-            if (io_src == IO_SRC_CPU && IS_LCD_ENABLED(gb) && ((PPU_IS_MODE(gb, PPU_MODE_OAM) || PPU_IS_MODE(gb, PPU_MODE_DRAWING))))
+            if (io_src == IO_SRC_CPU && is_oam_locked_for_cpu(gb))
                 return 0xFF;
-
-            // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
-            // but it has some quirks for the other memory regions (check links below):
-            // https://www.reddit.com/r/EmuDev/comments/5hahss/comment/daz9cbi/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
-            // https://github.com/Gekkio/mooneye-gb/issues/39#issuecomment-265953981
-            if (io_src == IO_SRC_CPU && IS_OAM_DMA_RUNNING(mmu))
-                return 0xFF;
-
             return mmu->oam[address - OAM];
         }
 
@@ -782,8 +800,7 @@ void mmu_write_io_src(gb_t *gb, word_t address, byte_t data, gb_io_source_t io_s
         break;
     case VRAM:
     case VRAM + 0x1000:
-        // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
-        if (io_src == IO_SRC_CPU && IS_LCD_ENABLED(gb) && PPU_IS_MODE(gb, PPU_MODE_DRAWING))
+        if (io_src == IO_SRC_CPU && is_vram_locked_for_cpu(gb))
             return;
         mmu->vram[mmu->vram_bank_addr_offset + address] = data;
         break;
@@ -804,17 +821,8 @@ void mmu_write_io_src(gb_t *gb, word_t address, byte_t data, gb_io_source_t io_s
         if (address < OAM) { // we are still in echo ram
             mmu->wram[(mmu->wram_bankn_addr_offset - (ECHO - WRAM_BANK0)) + address] = data;
         } else if (address < UNUSABLE) {
-            // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
-            if (io_src == IO_SRC_CPU && IS_LCD_ENABLED(gb) && ((PPU_IS_MODE(gb, PPU_MODE_OAM) || PPU_IS_MODE(gb, PPU_MODE_DRAWING))))
+            if (io_src == IO_SRC_CPU && is_oam_locked_for_cpu(gb))
                 break;
-
-            // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
-            // but it has some quirks for the other memory regions (check links below):
-            // https://www.reddit.com/r/EmuDev/comments/5hahss/comment/daz9cbi/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
-            // https://github.com/Gekkio/mooneye-gb/issues/39#issuecomment-265953981
-            if (io_src == IO_SRC_CPU && IS_OAM_DMA_RUNNING(mmu))
-                break;
-
             mmu->oam[address - OAM] = data;
         } else if (address < IO) {
             // UNUSABLE memory is unusable
