@@ -689,9 +689,9 @@ void ppu_update_stat_irq_line(gb_t *gb) {
 
     byte_t old_stat_irq_line = ppu->stat_irq_line;
 
-    ppu->stat_irq_line = IS_HBLANK_IRQ_STAT_ENABLED(gb) && PPU_IS_MODE(gb, PPU_MODE_HBLANK);
-    ppu->stat_irq_line |= IS_VBLANK_IRQ_STAT_ENABLED(gb) && PPU_IS_MODE(gb, PPU_MODE_VBLANK);
-    ppu->stat_irq_line |= IS_OAM_IRQ_STAT_ENABLED(gb) && PPU_IS_MODE(gb, PPU_MODE_OAM);
+    ppu->stat_irq_line = IS_HBLANK_IRQ_STAT_ENABLED(gb) && ppu->mode == PPU_MODE_HBLANK;
+    ppu->stat_irq_line |= IS_VBLANK_IRQ_STAT_ENABLED(gb) && ppu->mode == PPU_MODE_VBLANK;
+    ppu->stat_irq_line |= IS_OAM_IRQ_STAT_ENABLED(gb) && ppu->mode == PPU_MODE_OAM;
     ppu->stat_irq_line |= IS_LY_LYC_IRQ_STAT_ENABLED(gb) && gb->mmu->io_registers[LY - IO] == gb->mmu->io_registers[LYC - IO];
 
     if (!old_stat_irq_line && ppu->stat_irq_line)

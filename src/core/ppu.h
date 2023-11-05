@@ -6,8 +6,6 @@
 #include "serialize.h"
 
 #define PPU_STAT_GET_MODE(gb) ((gb)->mmu->io_registers[STAT - IO] & 0x03)
-#define PPU_GET_MODE(gb) ((gb)->ppu->mode)
-#define PPU_IS_MODE(gb, mode) (PPU_GET_MODE(gb) == (mode))
 #define PPU_STAT_IS_MODE(gb, mode) (PPU_STAT_GET_MODE(gb) == (mode))
 
 #define IS_LCD_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[LCDC - IO], 7))

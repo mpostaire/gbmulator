@@ -238,21 +238,45 @@ void mmu_quit(gb_t *gb) {
     free(gb->mmu);
 }
 
-static inline byte_t is_oam_locked_for_cpu(gb_t *gb) {
-    // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
-    if (IS_LCD_ENABLED(gb) && (PPU_STAT_IS_MODE(gb, PPU_MODE_OAM) || PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING) || gb->ppu->pending_stat_mode == PPU_MODE_OAM))
-        return 1;
-
+static inline byte_t is_oam_locked_for_cpu_read(gb_t *gb) {
     // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
     // but it has some quirks for the other memory regions (check links below):
     // https://www.reddit.com/r/EmuDev/comments/5hahss/comment/daz9cbi/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
     // https://github.com/Gekkio/mooneye-gb/issues/39#issuecomment-265953981
-    return IS_OAM_DMA_RUNNING(gb->mmu);
+    if (IS_OAM_DMA_RUNNING(gb->mmu))
+        return 1;
+
+    // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
+    return IS_LCD_ENABLED(gb) && (PPU_STAT_IS_MODE(gb, PPU_MODE_OAM) || PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING) || gb->ppu->pending_stat_mode == PPU_MODE_OAM);
 }
 
-static inline byte_t is_vram_locked_for_cpu(gb_t *gb) {
+static inline byte_t is_oam_locked_for_cpu_write(gb_t *gb) {
+    // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
+    // but it has some quirks for the other memory regions (check links below):
+    // https://www.reddit.com/r/EmuDev/comments/5hahss/comment/daz9cbi/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
+    // https://github.com/Gekkio/mooneye-gb/issues/39#issuecomment-265953981
+    if (IS_OAM_DMA_RUNNING(gb->mmu))
+        return 1;
+
+    if (!IS_LCD_ENABLED(gb))
+        return 0;
+
+    byte_t lcd_booting_up_into_drawing = PPU_STAT_IS_MODE(gb, PPU_MODE_HBLANK) && gb->ppu->pending_stat_mode == PPU_MODE_DRAWING;
+    byte_t starting_drawing = gb->ppu->mode == PPU_MODE_DRAWING && PPU_STAT_IS_MODE(gb, PPU_MODE_OAM);
+    if (starting_drawing || lcd_booting_up_into_drawing)
+        return 0;
+
+    return PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING) || PPU_STAT_IS_MODE(gb, PPU_MODE_OAM);
+}
+
+static inline byte_t is_vram_locked_for_cpu_read(gb_t *gb) {
     // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
     return IS_LCD_ENABLED(gb) && (PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING) || (PPU_STAT_IS_MODE(gb, PPU_MODE_OAM) && gb->ppu->pending_stat_mode == PPU_MODE_DRAWING));
+}
+
+static inline byte_t is_vram_locked_for_cpu_write(gb_t *gb) {
+    // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
+    return IS_LCD_ENABLED(gb) && PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING);
 }
 
 static inline byte_t read_io_register(gb_t *gb, word_t address) {
@@ -330,7 +354,7 @@ static inline byte_t read_io_register(gb_t *gb, word_t address) {
     case 0xFF57 ... 0xFF67: return 0xFF;
     case BGPI: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] | 0x40 : 0xFF;
     case BGPD: {
-        if (gb->mode == GB_MODE_DMG || PPU_IS_MODE(gb, PPU_MODE_DRAWING))
+        if (gb->mode == GB_MODE_DMG || gb->ppu->mode == PPU_MODE_DRAWING)
             return 0xFF;
 
         byte_t cram_address = mmu->io_registers[BGPI - IO] & 0x3F;
@@ -338,7 +362,7 @@ static inline byte_t read_io_register(gb_t *gb, word_t address) {
     }
     case OBPI: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] | 0x40 : 0xFF;
     case OBPD: {
-        if (!gb->cgb_mode_enabled || PPU_IS_MODE(gb, PPU_MODE_DRAWING))
+        if (!gb->cgb_mode_enabled || gb->ppu->mode == PPU_MODE_DRAWING)
             return 0xFF;
 
         byte_t cram_address = mmu->io_registers[OBPI - IO] & 0x3F;
@@ -628,7 +652,7 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
         } else { // HDMA
             // Start HDMA now if we are in ppu HBLANK mode or if LCD is disabled.
             // In the latter case, only the first 0x10 bytes block are copied, the rest are done at HBLANK once LCD turns on.
-            mmu->hdma.allow_hdma_block = PPU_IS_MODE(gb, PPU_MODE_HBLANK) || !IS_LCD_ENABLED(gb);
+            mmu->hdma.allow_hdma_block = gb->ppu->mode == PPU_MODE_HBLANK || !IS_LCD_ENABLED(gb);
         }
 
         mmu->hdma.src_address = ((mmu->io_registers[HDMA1 - IO] << 8) | mmu->io_registers[HDMA2 - IO]) & 0xFFF0;
@@ -652,7 +676,7 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
         if (gb->mode == GB_MODE_DMG)
             break;
 
-        if (!PPU_IS_MODE(gb, PPU_MODE_DRAWING)) {
+        if (gb->ppu->mode != PPU_MODE_DRAWING) {
             byte_t cram_address = mmu->io_registers[BGPI - IO] & 0x3F;
             mmu->cram_bg[cram_address] = data;
             // printf("write %d in cram_bg %d\n", data, cram_address);
@@ -675,7 +699,7 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
         if (gb->mode == GB_MODE_DMG)
             break;
 
-        if (!PPU_IS_MODE(gb, PPU_MODE_DRAWING)) {
+        if (gb->ppu->mode != PPU_MODE_DRAWING) {
             byte_t cram_address = mmu->io_registers[OBPI - IO] & 0x3F;
             mmu->cram_obj[cram_address] = data;
             // printf("write %d in cram_obj %d\n", data, cram_address);
@@ -742,7 +766,7 @@ byte_t mmu_read_io_src(gb_t *gb, word_t address, gb_io_source_t io_src) {
     case VRAM + 0x1000:
         if (io_src == IO_SRC_GDMA_HDMA)
             return 0xFF; // src can be inside vram but it reads incorrect data: see TCAGBD.pdf for more details
-        if (io_src == IO_SRC_CPU && is_vram_locked_for_cpu(gb))
+        if (io_src == IO_SRC_CPU && is_vram_locked_for_cpu_read(gb))
             return 0xFF;
         return mmu->vram[mmu->vram_bank_addr_offset + address];
     case ERAM:
@@ -763,7 +787,7 @@ byte_t mmu_read_io_src(gb_t *gb, word_t address, gb_io_source_t io_src) {
             return mmu->wram[(mmu->wram_bankn_addr_offset - (ECHO - WRAM_BANK0)) + address];
 
         if (address < UNUSABLE) { // we are in OAM
-            if (io_src == IO_SRC_CPU && is_oam_locked_for_cpu(gb))
+            if (io_src == IO_SRC_CPU && is_oam_locked_for_cpu_read(gb))
                 return 0xFF;
             return mmu->oam[address - OAM];
         }
@@ -800,8 +824,8 @@ void mmu_write_io_src(gb_t *gb, word_t address, byte_t data, gb_io_source_t io_s
         break;
     case VRAM:
     case VRAM + 0x1000:
-        if (io_src == IO_SRC_CPU && is_vram_locked_for_cpu(gb))
-            return;
+        if (io_src == IO_SRC_CPU && is_vram_locked_for_cpu_write(gb))
+            break;
         mmu->vram[mmu->vram_bank_addr_offset + address] = data;
         break;
     case ERAM:
@@ -821,7 +845,7 @@ void mmu_write_io_src(gb_t *gb, word_t address, byte_t data, gb_io_source_t io_s
         if (address < OAM) { // we are still in echo ram
             mmu->wram[(mmu->wram_bankn_addr_offset - (ECHO - WRAM_BANK0)) + address] = data;
         } else if (address < UNUSABLE) {
-            if (io_src == IO_SRC_CPU && is_oam_locked_for_cpu(gb))
+            if (io_src == IO_SRC_CPU && is_oam_locked_for_cpu_write(gb))
                 break;
             mmu->oam[address - OAM] = data;
         } else if (address < IO) {
