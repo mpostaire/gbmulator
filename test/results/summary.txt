@@ -137,8 +137,8 @@ DMG:mooneye-test-suite/acceptance/ppu/lcdon_timing-GS.gb::success
 DMG:mooneye-test-suite/acceptance/ppu/lcdon_write_timing-GS.gb::failed
 CGB:mooneye-test-suite/acceptance/ppu/stat_irq_blocking.gb::failed
 DMG:mooneye-test-suite/acceptance/ppu/stat_irq_blocking.gb::success
-CGB:mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb::failed
-DMG:mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb::failed
+CGB:mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb::success
+DMG:mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb::success
 DMG:mooneye-test-suite/acceptance/ppu/vblank_stat_intr-GS.gb::success
 CGB:mooneye-test-suite/acceptance/push_timing.gb::success
 DMG:mooneye-test-suite/acceptance/push_timing.gb::success

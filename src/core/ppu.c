@@ -659,7 +659,6 @@ void ppu_disable_lcd(gb_t *gb) {
 
     PPU_SET_STAT_MODE(gb, PPU_MODE_HBLANK);
     mmu->io_registers[LY - IO] = 0;
-    UPDATE_STAT_LY_LYC_BIT(gb);
 
     ppu->wly = -1;
     reset_pixel_fetcher(ppu);
