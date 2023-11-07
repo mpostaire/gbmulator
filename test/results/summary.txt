@@ -330,7 +330,7 @@ CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/ly_new_frame-C.gb::failed
 DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/ly_new_frame-GS.gb::success
 CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/stat_irq_blocking.gb::success
 DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/stat_irq_blocking.gb::success
-CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/stat_write_if-C.gb::failed
+CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/stat_write_if-C.gb::success
 DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/stat_write_if-GS.gb::success
 CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/vblank_if_timing.gb::failed
 DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/vblank_if_timing.gb::failed
