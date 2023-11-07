@@ -582,9 +582,17 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
             // the 4 cycles delay is not emulated because it this only relevant for STAT interrupts
             // so we check for a STAT interrupt then immediately set STAT to its actual value
             mmu->io_registers[io_reg_addr] = 0xF8 | (mmu->io_registers[io_reg_addr] & 0x07);
-            ppu_update_stat_irq_line(gb);
+
+            // check for STAT interrupt only if in VBLANK, HBLANK or LY=LYC STAT bit is set
+            // (not sure if the LY=LYC condition is accurate: this passes wilbertpol's stat_write_if-GS test
+            // but maybe only due to other inaccuracies in the emulation)
+            if (PPU_STAT_IS_MODE(gb, PPU_MODE_VBLANK) || PPU_STAT_IS_MODE(gb, PPU_MODE_HBLANK) || CHECK_BIT(gb->mmu->io_registers[STAT - IO], 2))
+                ppu_update_stat_irq_line(gb);
         }
+
         mmu->io_registers[io_reg_addr] = 0x80 | (data & 0x78) | (mmu->io_registers[io_reg_addr] & 0x07);
+        if (gb->mode == GB_MODE_CGB)
+            ppu_update_stat_irq_line(gb);
         break;
     case LY: break; // read only
     case LYC:
