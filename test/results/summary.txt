@@ -240,10 +240,10 @@ DMG:mooneye-test-suite/emulator-only/mbc5/rom_8Mb.gb::success
 CGB:mooneye-test-suite/manual-only/sprite_priority.gb::success
 DMG:mooneye-test-suite/manual-only/sprite_priority.gb::success
 CGB:mooneye-test-suite/misc/bits/unused_hwio-C.gb::success
-CGB:mooneye-test-suite/misc/boot_div-cgbABCDE.gb::failed
+CGB:mooneye-test-suite/misc/boot_div-cgbABCDE.gb::success
 CGB:mooneye-test-suite/misc/boot_hwio-C.gb::success
 CGB:mooneye-test-suite/misc/boot_regs-cgb.gb::success
-CGB:mooneye-test-suite/misc/ppu/vblank_stat_intr-C.gb::failed
+CGB:mooneye-test-suite/misc/ppu/vblank_stat_intr-C.gb::success
 CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/hblank_ly_scx_timing-C.gb::failed
 DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/hblank_ly_scx_timing-GS.gb::failed
 CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/hblank_ly_scx_timing_nops.gb::failed
@@ -253,7 +253,7 @@ DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/hblank_ly_scx_timing_variant_no
 CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/intr_0_timing.gb::success
 DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/intr_0_timing.gb::success
 DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/intr_1_2_timing-GS.gb::success
-CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/intr_1_timing.gb::failed
+CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/intr_1_timing.gb::success
 DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/intr_1_timing.gb::failed
 CGB:mooneye-test-suite-wilbertpol/acceptance/gpu/intr_2_0_timing.gb::failed
 DMG:mooneye-test-suite-wilbertpol/acceptance/gpu/intr_2_0_timing.gb::failed

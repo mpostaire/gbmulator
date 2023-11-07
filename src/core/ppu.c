@@ -55,14 +55,18 @@ byte_t dmg_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
 };
 
 static inline void set_mode(gb_t *gb, byte_t mode) {
-    gb->ppu->mode = mode;
-
     switch (mode) {
     case PPU_MODE_VBLANK:
+        // if OAM stat irq is enabled while entering vblank, a stat irq can be requested depending on the stat irq line
+        gb->ppu->mode = PPU_MODE_OAM;
+        ppu_update_stat_irq_line(gb);
+        gb->ppu->mode = mode;
+
         if (gb->mode == GB_MODE_DMG) {
-            // no delay to enter vblank mode and set stat bit
+            // no delay to set STAT mode bits and request VBLANK irq
             PPU_SET_STAT_MODE(gb, mode);
             ppu_update_stat_irq_line(gb);
+            CPU_REQUEST_INTERRUPT(gb, IRQ_VBLANK);
         } else {
             gb->ppu->pending_stat_mode = mode;
         }
@@ -70,6 +74,7 @@ static inline void set_mode(gb_t *gb, byte_t mode) {
     case PPU_MODE_HBLANK:
     case PPU_MODE_OAM:
     case PPU_MODE_DRAWING:
+        gb->ppu->mode = mode;
         gb->ppu->pending_stat_mode = mode;
         break;
     }
@@ -590,13 +595,6 @@ static inline void hblank_step(gb_t *gb) {
         ppu->wly = -1;
         set_mode(gb, PPU_MODE_VBLANK);
 
-        if (IS_OAM_IRQ_STAT_ENABLED(gb)) { // if OAM stat irq is enabled while entering vblank, a stat irq is requested
-            CPU_REQUEST_INTERRUPT(gb, IRQ_STAT);
-            // TODO CGB --> IRQ_STAT triggered 1 cycle (T-cycle or M-cycle?) before IRQ_VBLANK
-        }
-
-        CPU_REQUEST_INTERRUPT(gb, IRQ_VBLANK);
-
         // skip first screen rendering after the LCD was just turned on
         if (ppu->is_lcd_turning_on) {
             ppu->is_lcd_turning_on = 0;
@@ -685,6 +683,9 @@ void ppu_disable_lcd(gb_t *gb) {
 }
 
 void ppu_update_stat_irq_line(gb_t *gb) {
+    if (!IS_LCD_ENABLED(gb))
+        return;
+
     gb_ppu_t *ppu = gb->ppu;
 
     byte_t old_stat_irq_line = ppu->stat_irq_line;
@@ -708,6 +709,8 @@ void ppu_step(gb_t *gb) {
     if (ppu->pending_stat_mode >= 0) {
         PPU_SET_STAT_MODE(gb, ppu->pending_stat_mode);
         ppu_update_stat_irq_line(gb);
+        if (ppu->pending_stat_mode == PPU_MODE_VBLANK) // this condition only happens in CGB mode (see set_mode() function)
+            CPU_REQUEST_INTERRUPT(gb, IRQ_VBLANK);
         ppu->pending_stat_mode = -1;
     }
 
