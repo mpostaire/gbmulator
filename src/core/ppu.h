@@ -99,8 +99,6 @@ typedef struct {
     byte_t pixels[GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 4];
 } gb_ppu_t;
 
-extern byte_t dmg_palettes[PPU_COLOR_PALETTE_MAX][4][3];
-
 void ppu_enable_lcd(gb_t *gb);
 
 void ppu_disable_lcd(gb_t *gb);

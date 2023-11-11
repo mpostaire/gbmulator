@@ -43,7 +43,7 @@
         (gb)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 3] = 0xFF; \
     } while (0)
 
-byte_t dmg_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
+static const byte_t dmg_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
     { // grayscale colors
         { 0xFF, 0xFF, 0xFF },
         { 0xAA, 0xAA, 0xAA },
@@ -462,8 +462,9 @@ static inline void handle_window(gb_t *gb) {
     byte_t scx = mmu->io_registers[SCX - IO];
     byte_t is_wx_hit = wx - 7 == (gb)->ppu->lcd_x;
     if (ppu->saved_wly != -1 && gb->mode == GB_MODE_DMG && !IS_WIN_ENABLED(gb) && is_wx_hit && ((wx & 7) == 7 - (scx & 7))) {
-        // TODO is this really instantaneous? what are the timings for this?
-        //      --> push it into the fifo
+        // is this really instantaneous? push it into the fifo? what are the timings for this?
+        // this links says there's no added delay except in some cases:
+        // https://github.com/LIJI32/SameBoy/issues/278#issuecomment-1189712129
         gb_pixel_t glitched_pixel = {.color = DMG_WHITE, .palette = 0};
         SET_PIXEL_DMG(gb, ppu->lcd_x, mmu->io_registers[LY - IO], dmg_get_color(mmu, &glitched_pixel, 0));
         ppu->lcd_x++;
