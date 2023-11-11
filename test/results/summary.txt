@@ -424,7 +424,6 @@ CGB:same-suite/dma/hdma_mode0.gb::success
 CGB:same-suite/interrupt/ei_delay_halt.gb::failed
 DMG:same-suite/interrupt/ei_delay_halt.gb::failed
 CGB:same-suite/ppu/blocking_bgpi_increase.gb::success
-DMG:same-suite/ppu/blocking_bgpi_increase.gb::failed
 DMG:bully/bully.gb::failed
 CGB:bully/bully.gb::failed
 CGB:cgb-acid-hell/cgb-acid-hell.gbc::failed

@@ -5,23 +5,27 @@
 #include "serialize.h"
 
 // Useful resources
-// https://pixelbits.16-b.it/GBEDG/ppu/
+// https://hacktix.github.io/GBEDG/ppu/
 // https://github.com/gbdev/pandocs/blob/bae52a72501a4ae872cf06ee0b26b3a83b274fca/src/Rendering_Internals.md
 // https://github.com/trekawek/coffee-gb/tree/master/src/main/java/eu/rekawek/coffeegb/gpu
 
 // TODO read this: http://gameboy.mongenel.com/dmg/istat98.txt
 // TODO read this for fetcher timings: https://www.reddit.com/r/EmuDev/comments/s6cpis/comment/htlwkx9
+// https://github.com/vojty/feather-gb and its debugger
 
 #define SCANLINE_CYCLES 456
 
 #define PPU_SET_STAT_MODE(gb, new_mode) ((gb)->mmu->io_registers[STAT - IO] = ((gb)->mmu->io_registers[STAT - IO] & 0xFC) | (new_mode))
 
-#define IS_WIN_ENABLED(mmu) (CHECK_BIT((mmu)->io_registers[LCDC - IO], 5))
-#define IS_OBJ_TALL(mmu) (CHECK_BIT((mmu)->io_registers[LCDC - IO], 2))
-#define IS_OBJ_ENABLED(mmu) (CHECK_BIT((mmu)->io_registers[LCDC - IO], 1))
-#define IS_BG_WIN_ENABLED(mmu) (CHECK_BIT((mmu)->io_registers[LCDC - IO], 0))
+#define IS_WIN_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[LCDC - IO], 5))
+#define IS_OBJ_TALL(gb) (CHECK_BIT((gb)->mmu->io_registers[LCDC - IO], 2))
+#define IS_OBJ_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[LCDC - IO], 1))
+#define IS_BG_WIN_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[LCDC - IO], 0))
 
-#define IS_CGB_COMPAT_MODE(mmu) ((((mmu)->io_registers[KEY0 - IO] >> 2) & 0x03) == 1)
+#define IS_CGB_COMPAT_MODE(gb) ((((gb)->mmu->io_registers[KEY0 - IO] >> 2) & 0x03) == 1)
+
+#define IS_INSIDE_WINDOW(gb) \
+    (ppu->win_actually_enabled && (gb)->mmu->io_registers[WY - IO] <= (gb)->mmu->io_registers[LY - IO] && (gb)->mmu->io_registers[WX - IO] - 7 <= (gb)->ppu->lcd_x)
 
 #define SET_PIXEL_DMG(gb, x, y, color)                                                                                \
     do {                                                                                                              \
@@ -54,6 +58,9 @@ byte_t dmg_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
     }
 };
 
+/**
+ * This sets the ppu mode and STAT mode and handles stat irq line interrupts
+ */
 static inline void set_mode(gb_t *gb, byte_t mode) {
     switch (mode) {
     case PPU_MODE_VBLANK:
@@ -181,7 +188,7 @@ static inline word_t get_obj_tiledata_address(gb_t *gb, byte_t is_high) {
     byte_t flip_y = CHECK_BIT(obj.attributes, 6);
     byte_t actual_tile_id = obj.tile_id;
 
-    if (IS_OBJ_TALL(mmu)) {
+    if (IS_OBJ_TALL(gb)) {
         byte_t is_top_tile = abs(mmu->io_registers[LY - IO] - obj.y) > 8;
         CHANGE_BIT(actual_tile_id, 0, flip_y ? is_top_tile : !is_top_tile);
     }
@@ -221,8 +228,9 @@ static inline void reset_pixel_fetcher(gb_ppu_t *ppu) {
     ppu->pixel_fetcher.x = 0;
     ppu->pixel_fetcher.step = 0;
     ppu->pixel_fetcher.mode = FETCH_BG;
-    ppu->pixel_fetcher.init_delay_done = 0;
     ppu->pixel_fetcher.old_mode = FETCH_BG;
+    ppu->pixel_fetcher.init_delay_done = 0;
+    ppu->discarded_pixels = 0;
 }
 
 /**
@@ -304,7 +312,6 @@ static inline void fetch_tileslice_low(gb_t *gb) {
 }
 
 static inline void fetch_tileslice_high(gb_t *gb) {
-    gb_mmu_t *mmu = gb->mmu;
     gb_ppu_t *ppu = gb->ppu;
 
     byte_t tileslice = 0;
@@ -317,7 +324,7 @@ static inline void fetch_tileslice_high(gb_t *gb) {
         case FETCH_BG: {
             if (gb->mode == GB_MODE_CGB) {
                 attributes = cgb_get_bg_win_tile_attributes(gb);
-                palette = IS_CGB_COMPAT_MODE(mmu) ? 0 : attributes & 0x07;
+                palette = IS_CGB_COMPAT_MODE(gb) ? 0 : attributes & 0x07;
             } else {
                 palette = 0;
             }
@@ -328,7 +335,7 @@ static inline void fetch_tileslice_high(gb_t *gb) {
         case FETCH_WIN: {
             if (gb->mode == GB_MODE_CGB) {
                 attributes = cgb_get_bg_win_tile_attributes(gb);
-                palette = IS_CGB_COMPAT_MODE(mmu) ? 0 : attributes & 0x07;
+                palette = IS_CGB_COMPAT_MODE(gb) ? 0 : attributes & 0x07;
             } else {
                 palette = 0;
             }
@@ -342,7 +349,7 @@ static inline void fetch_tileslice_high(gb_t *gb) {
             tileslice = get_tileslice(gb, tiledata_address, attributes);
             oam_pos = ppu->oam_scan.objs_oam_pos[ppu->pixel_fetcher.curr_oam_index];
 
-            byte_t is_cgb_mode = gb->mode == GB_MODE_CGB && !IS_CGB_COMPAT_MODE(mmu);
+            byte_t is_cgb_mode = gb->mode == GB_MODE_CGB && !IS_CGB_COMPAT_MODE(gb);
             palette = is_cgb_mode ? attributes & 0x07 : GET_BIT(attributes, 4);
             break;
         }
@@ -401,26 +408,24 @@ static inline byte_t push(gb_t *gb) {
 }
 
 static inline gb_pixel_t *select_pixel(gb_t *gb, gb_pixel_t *bg_win_pixel, gb_pixel_t *obj_pixel) {
-    gb_mmu_t *mmu = gb->mmu;
-
-    byte_t is_cgb_mode = gb->mode == GB_MODE_CGB && !IS_CGB_COMPAT_MODE(mmu);
+    byte_t is_cgb_mode = gb->mode == GB_MODE_CGB && !IS_CGB_COMPAT_MODE(gb);
     if (is_cgb_mode) {
-        if (!obj_pixel || !IS_OBJ_ENABLED(mmu) || obj_pixel->color == DMG_WHITE)
+        if (!obj_pixel || !IS_OBJ_ENABLED(gb) || obj_pixel->color == DMG_WHITE)
             return bg_win_pixel;
-        if (bg_win_pixel->color == DMG_WHITE || !IS_BG_WIN_ENABLED(mmu))
+        if (bg_win_pixel->color == DMG_WHITE || !IS_BG_WIN_ENABLED(gb))
             return obj_pixel;
         if (!CHECK_BIT(bg_win_pixel->attributes, 7) && !CHECK_BIT(obj_pixel->attributes, 7))
             return obj_pixel;
         return bg_win_pixel;
     } else {
-        if (!IS_BG_WIN_ENABLED(mmu)) {
+        if (!IS_BG_WIN_ENABLED(gb)) {
             bg_win_pixel->color = DMG_WHITE;
             // TODO keep palette / change palette / force white?
         }
 
         if (!obj_pixel)
             return bg_win_pixel;
-        if (!IS_OBJ_ENABLED(mmu))
+        if (!IS_OBJ_ENABLED(gb))
             return bg_win_pixel;
 
         byte_t bg_over_obj = CHECK_BIT(obj_pixel->attributes, 7) && bg_win_pixel->color != DMG_WHITE;
@@ -430,12 +435,109 @@ static inline gb_pixel_t *select_pixel(gb_t *gb, gb_pixel_t *bg_win_pixel, gb_pi
     }
 }
 
+static inline void handle_window(gb_t *gb) {
+    // TODO this is almost accurate (check links below: some are handled some are not)
+    // https://github.com/shonumi/gbe-plus/commit/15df53c83677062f98915293fc03620af65bd7c4
+    // https://www.reddit.com/r/EmuDev/comments/6q2tom/gb_changing_window_registers_midframe/
+    // https://github.com/LIJI32/SameBoy/commit/cbbaf2ee843870d96e72380e2dedbdbda471ca76
+    // https://github.com/LIJI32/SameBoy/issues/278
+
+    gb_mmu_t *mmu = gb->mmu;
+    gb_ppu_t *ppu = gb->ppu;
+
+    // wait for the current window tile to finish rendering, then the fetcher mode switches to BG
+    // --> ppu->pixel_fetcher.step == 0 means that previous 8 pixels were just pushed
+    if (ppu->wly != -1 && !IS_WIN_ENABLED(gb) && ppu->pixel_fetcher.step == 0) {
+        // window was disabled in the middle of a frame where it was already enabled
+        ppu->saved_wly = ppu->wly;
+        ppu->wly = -1;
+
+        ppu->pixel_fetcher.old_mode = FETCH_BG;
+        ppu->pixel_fetcher.mode = FETCH_BG;
+        ppu->pixel_fetcher.step = 0;
+    }
+
+    // a glitched pixel can be drawn if the window is disabled but it was enabled before in the same frame and we are on DMG 
+    byte_t wx = mmu->io_registers[WX - IO];
+    byte_t scx = mmu->io_registers[SCX - IO];
+    byte_t is_wx_hit = wx - 7 == (gb)->ppu->lcd_x;
+    if (ppu->saved_wly != -1 && gb->mode == GB_MODE_DMG && !IS_WIN_ENABLED(gb) && is_wx_hit && ((wx & 7) == 7 - (scx & 7))) {
+        // TODO is this really instantaneous? what are the timings for this?
+        //      --> push it into the fifo
+        gb_pixel_t glitched_pixel = {.color = DMG_WHITE, .palette = 0};
+        SET_PIXEL_DMG(gb, ppu->lcd_x, mmu->io_registers[LY - IO], dmg_get_color(mmu, &glitched_pixel, 0));
+        ppu->lcd_x++;
+    }
+
+    if (ppu->pixel_fetcher.mode == FETCH_BG && IS_INSIDE_WINDOW(gb)) {
+        // the fetcher must switch to window mode for the remaining of the scanline (except when an object needs to be drawn)
+        ppu->pixel_fetcher.mode = FETCH_WIN;
+        ppu->pixel_fetcher.old_mode = FETCH_WIN;
+        ppu->pixel_fetcher.step = 0;
+        ppu->pixel_fetcher.x = 0;
+
+        if (ppu->saved_wly != -1) {
+            ppu->wly = ppu->saved_wly + 1; // + 1 because wly increments before every new LY where the window is drawn
+            ppu->saved_wly = -1;
+        } else if (ppu->wly == -1) {
+            // THIS IS WHAT I THINK IS THE BEST EXPLANATION:
+            // BUT what about the case where window was triggered but there is a WY write outside VBLANK?
+            // if WY is written outside VBLANK and window was not triggered, wly becomes LY - WY
+            //     --> it's as if the window was enabled since the beginning when LY was equal to WY
+            // see example (this is what happens in pokemon gold/silver battle intro slide animation):
+            //     ly=106, read wy=144 --> window not triggered
+            //     ly=106, write wy=0 during VBLANK --> window not triggered
+            //     ly=107, read wy=0 during DRAWING --> window triggered (because wy <= ly) but it should have been triggered at ly == wy -> ly == 0
+            //                                      --> to catch up we set wly to ly - wy: it's as if wy was 0 at the beginning of the frame
+            //                                      --> BUT because we can't go back, the window above won't be visible
+            ppu->wly = mmu->io_registers[LY - IO] - mmu->io_registers[WY - IO];
+        } else {
+            ppu->wly++; // wly increments before every new LY where the window is drawn
+        }
+
+        ppu->discarded_pixels = 0;
+        pixel_fifo_clear(&ppu->bg_win_fifo);
+
+        // eprintf("ly=%d lcd_x=%d wy=%d wx=%d wly=%d | lcdc_bg_win=%d lcdc_win=%d\n",
+        //     mmu->io_registers[LY - IO],
+        //     ppu->lcd_x,
+        //     mmu->io_registers[WX - IO],
+        //     mmu->io_registers[WY - IO],
+        //     ppu->wly,
+        //     GET_BIT(mmu->io_registers[LCDC - IO], 0),
+        //     GET_BIT(mmu->io_registers[LCDC - IO], 5)
+        // );
+    }
+}
+
+static inline void handle_obj(gb_t *gb) {
+    gb_ppu_t *ppu = gb->ppu;
+
+    if (ppu->bg_win_fifo.size > 0 && ppu->pixel_fetcher.mode != FETCH_OBJ && ppu->oam_scan.index < ppu->oam_scan.size && ppu->oam_scan.objs[ppu->oam_scan.index].x <= ppu->lcd_x + 8) {
+        if (IS_OBJ_ENABLED(gb)) {
+            // there is an obj at the new position
+            ppu->pixel_fetcher.mode = FETCH_OBJ;
+            ppu->pixel_fetcher.step = 0;
+            ppu->pixel_fetcher.curr_oam_index = ppu->oam_scan.index;
+        } else {
+            // TODO unsure of what to do in this case...
+            //      should we allow a check for window?
+            // TODO in CGB mode, this should also trigger a FETCH_OBJ but the pixels won't show on the lcd
+        }
+        ppu->oam_scan.index++;
+    }
+}
+
 static inline void drawing_step(gb_t *gb) {
     gb_mmu_t *mmu = gb->mmu;
     gb_ppu_t *ppu = gb->ppu;
 
     // 1. FETCHING PIXELS
 
+    // TODO I don't remember where I read this (might be wrong):
+    // the fetcher is busy until its 5th out of 8 steps
+    // --> an obj detected waits until the 5th step and can override the fetcher
+    // --> an obj detected at the 5th step and above overrides immediatly the fetcher
     switch (ppu->pixel_fetcher.step++) {
     case GET_TILE_ID:
         fetch_tile_id(gb);
@@ -455,30 +557,9 @@ static inline void drawing_step(gb_t *gb) {
         break;
     }
 
-    if (IS_WIN_ENABLED(mmu) && mmu->io_registers[WY - IO] <= mmu->io_registers[LY - IO] && mmu->io_registers[WX - IO] - 7 <= ppu->lcd_x && ppu->pixel_fetcher.mode == FETCH_BG) {
-        // the fetcher must switch to window mode for the remaining of the scanline (except when an object needs to be drawn)
-        ppu->pixel_fetcher.mode = FETCH_WIN;
-        ppu->pixel_fetcher.old_mode = FETCH_WIN;
-        ppu->pixel_fetcher.step = 0;
-        ppu->pixel_fetcher.x = 0;
-        ppu->wly++;
-        ppu->discarded_pixels = 0;
-        pixel_fifo_clear(&ppu->bg_win_fifo);
-    }
+    handle_window(gb);
 
-    if (ppu->bg_win_fifo.size > 0 && ppu->pixel_fetcher.mode != FETCH_OBJ && ppu->oam_scan.index < ppu->oam_scan.size && ppu->oam_scan.objs[ppu->oam_scan.index].x <= ppu->lcd_x + 8) {
-        if (IS_OBJ_ENABLED(mmu)) {
-            // there is an obj at the new position
-            ppu->pixel_fetcher.mode = FETCH_OBJ;
-            ppu->pixel_fetcher.step = 0;
-            ppu->pixel_fetcher.curr_oam_index = ppu->oam_scan.index;
-        } else {
-            // TODO unsure of what to do in this case...
-            //      should we allow a check for window?
-            // TODO in CGB mode, this should also trigger a FETCH_OBJ but the pixels won't show on the lcd
-        }
-        ppu->oam_scan.index++;
-    }
+    handle_obj(gb);
 
     // 2. SHIFTING PIXELS OUT TO THE LCD
 
@@ -512,7 +593,7 @@ static inline void drawing_step(gb_t *gb) {
     byte_t selected_is_obj = selected_pixel == obj_pixel;
 
     if (gb->mode == GB_MODE_CGB) {
-        if (IS_CGB_COMPAT_MODE(mmu))
+        if (IS_CGB_COMPAT_MODE(gb))
             selected_pixel->color = dmg_get_color(mmu, selected_pixel, selected_is_obj);
 
         byte_t r, g, b;
@@ -537,7 +618,7 @@ static inline void drawing_step(gb_t *gb) {
         pixel_fifo_clear(&ppu->obj_fifo);
 
         ppu->oam_scan.index = 0;
-
+        ppu->win_actually_enabled = 0;
         set_mode(gb, PPU_MODE_HBLANK);
         mmu->hdma.allow_hdma_block = mmu->hdma.type == HDMA && mmu->hdma.progress > 0;
     }
@@ -554,7 +635,7 @@ static inline void oam_scan_step(gb_t *gb) {
     }
 
     gb_obj_t *obj = (gb_obj_t *) &mmu->oam[ppu->oam_scan.index * 4];
-    byte_t obj_height = IS_OBJ_TALL(mmu) ? 16 : 8;
+    byte_t obj_height = IS_OBJ_TALL(gb) ? 16 : 8;
     // NOTE: obj->x != 0 condition should not be checked even if ultimate gameboy talk says it should
     if (ppu->oam_scan.size < 10 && (obj->y <= mmu->io_registers[LY - IO] + 16) && (obj->y + obj_height > mmu->io_registers[LY - IO] + 16)) {
         s_byte_t i;
@@ -577,6 +658,7 @@ static inline void oam_scan_step(gb_t *gb) {
         ppu->oam_scan.index = 0;
 
         ppu->discarded_pixels = 0;
+        ppu->win_actually_enabled = IS_WIN_ENABLED(gb);
         set_mode(gb, PPU_MODE_DRAWING);
     }
 }
@@ -593,6 +675,7 @@ static inline void hblank_step(gb_t *gb) {
 
     if (mmu->io_registers[LY - IO] == GB_SCREEN_HEIGHT) {
         ppu->wly = -1;
+        ppu->saved_wly = -1;
         set_mode(gb, PPU_MODE_VBLANK);
 
         // skip first screen rendering after the LCD was just turned on
@@ -796,6 +879,8 @@ void ppu_quit(gb_t *gb) {
     X(discarded_pixels)          \
     X(lcd_x)                     \
     X(wly)                       \
+    X(saved_wly)                 \
+    X(win_actually_enabled)      \
     X(is_last_vblank_line)       \
     X(stat_irq_line)             \
     SERIALIZED_OAM_SCAN          \

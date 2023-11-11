@@ -68,6 +68,8 @@ typedef struct {
     byte_t discarded_pixels; // dicarded pixel counter at the start of a scanline due to either SCX scrolling or WX < 7
     byte_t lcd_x; // x coordinate of the lcd pixel shifter
     s_word_t wly; // window "LY" internal counter
+    s_byte_t saved_wly; // the wly value at the moment when the window was disabled in the middle of a frame where it was already enabled
+    byte_t win_actually_enabled; // window was enabled before the current frame's drawing mode (3)
     byte_t is_last_vblank_line;
     byte_t stat_irq_line;
 
