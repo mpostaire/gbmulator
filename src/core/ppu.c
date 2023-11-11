@@ -462,7 +462,7 @@ static inline void handle_window(gb_t *gb) {
     byte_t scx = mmu->io_registers[SCX - IO];
     byte_t is_wx_hit = wx - 7 == (gb)->ppu->lcd_x;
     if (ppu->saved_wly != -1 && gb->mode == GB_MODE_DMG && !IS_WIN_ENABLED(gb) && is_wx_hit && ((wx & 7) == 7 - (scx & 7))) {
-        // is this really instantaneous? push it into the fifo? what are the timings for this?
+        // TODO is this really instantaneous? push it into the fifo? what are the timings for this?
         // this links says there's no added delay except in some cases:
         // https://github.com/LIJI32/SameBoy/issues/278#issuecomment-1189712129
         gb_pixel_t glitched_pixel = {.color = DMG_WHITE, .palette = 0};
