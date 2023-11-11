@@ -198,7 +198,7 @@ def mealybug_internal_state_test_generator(rom_path):
 
 
 def same_internal_state_test_generator(rom_path):
-    # CPU-GB_MODE_CGB-C fail most tests (useless to test them)
+    # CPU-CGB-C fail most tests (useless to test them)
     ret = []
     if "same-suite/sgb/" in rom_path or "apu/channel_1" in rom_path or "apu/channel_2" in rom_path or "apu/channel_4" in rom_path:
         return ret
@@ -210,6 +210,8 @@ def same_internal_state_test_generator(rom_path):
             ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_DMG, 0, 0x40, NULL, 0}},\n')
         ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 0, 0x40, NULL, 0}},\n')
     elif "same-suite/dma" in rom_path:
+        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 0, 0x40, NULL, 0}},\n')
+    elif "same-suite/ppu/blocking_bgpi_increase" in rom_path:
         ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 0, 0x40, NULL, 0}},\n')
     else:
         ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_DMG, 0, 0x40, NULL, 0}},\n')
