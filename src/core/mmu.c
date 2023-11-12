@@ -567,7 +567,7 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
         if (!CHECK_BIT(mmu->io_registers[NR30 - IO], 7))
             mmu->io_registers[io_reg_addr] = data;
         break;
-    case LCDC:
+    case LCDC: {
         byte_t old_lcd_enabled = IS_LCD_ENABLED(gb);
         mmu->io_registers[io_reg_addr] = data;
 
@@ -576,11 +576,14 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
         else if (old_lcd_enabled && !IS_LCD_ENABLED(gb)) // lcd turned off
             ppu_disable_lcd(gb);
         break;
-    case STAT:
+    }
+    case STAT: {
         // check for STAT interrupt only if in VBLANK, HBLANK or LY=LYC STAT bit is set
         // (not sure if the LY=LYC condition is accurate: this passes wilbertpol's stat_write_if-GS test
         // but maybe only due to other inaccuracies in the emulation)
-        byte_t update_irq_line = PPU_STAT_IS_MODE(gb, PPU_MODE_VBLANK) || PPU_STAT_IS_MODE(gb, PPU_MODE_HBLANK) || CHECK_BIT(gb->mmu->io_registers[STAT - IO], 2);
+        byte_t update_irq_line =
+                PPU_STAT_IS_MODE(gb, PPU_MODE_VBLANK) || PPU_STAT_IS_MODE(gb, PPU_MODE_HBLANK) ||
+                CHECK_BIT(gb->mmu->io_registers[STAT - IO], 2);
 
         if (gb->mode == GB_MODE_DMG) {
             // on DMG hardware, writing any data to STAT is like writing 0xFF, then 4 cycles later, the actual data is written into STAT
@@ -592,11 +595,13 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
                 ppu_update_stat_irq_line(gb);
         }
 
-        mmu->io_registers[io_reg_addr] = 0x80 | (data & 0x78) | (mmu->io_registers[io_reg_addr] & 0x07);
+        mmu->io_registers[io_reg_addr] =
+                0x80 | (data & 0x78) | (mmu->io_registers[io_reg_addr] & 0x07);
 
         if (gb->mode == GB_MODE_CGB && update_irq_line)
             ppu_update_stat_irq_line(gb);
         break;
+    }
     case LY: break; // read only
     case LYC:
         mmu->io_registers[LYC - IO] = data;
