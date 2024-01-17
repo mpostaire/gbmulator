@@ -18,11 +18,11 @@
 #define CHECK_FLAG(cpu, x) ((cpu)->registers.f & (x))
 #define RESET_FLAG(cpu, x) ((cpu)->registers.f &= ~(x))
 
-#define PREPARE_SPEED_SWITCH(gb) ((gb)->mmu->io_registers[KEY1 - IO] & 0x01)
-#define ENABLE_DOUBLE_SPEED(gb) do { ((gb)->mmu->io_registers[KEY1 - IO] |= 0x80); ((gb)->mmu->io_registers[KEY1 - IO] &= 0xFE); } while (0)
-#define DISABLE_DOUBLE_SPEED(gb) do { ((gb)->mmu->io_registers[KEY1 - IO] &= 0x7F); ((gb)->mmu->io_registers[KEY1 - IO] &= 0xFE); } while (0)
+#define PREPARE_SPEED_SWITCH(gb) ((gb)->mmu->io_registers[IO_KEY1] & 0x01)
+#define ENABLE_DOUBLE_SPEED(gb) do { ((gb)->mmu->io_registers[IO_KEY1] |= 0x80); ((gb)->mmu->io_registers[IO_KEY1] &= 0xFE); } while (0)
+#define DISABLE_DOUBLE_SPEED(gb) do { ((gb)->mmu->io_registers[IO_KEY1] &= 0x7F); ((gb)->mmu->io_registers[IO_KEY1] &= 0xFE); } while (0)
 
-#define IS_INTERRUPT_PENDING(gb) ((gb)->mmu->ie & (gb)->mmu->io_registers[IF - IO] & 0x1F)
+#define IS_INTERRUPT_PENDING(gb) ((gb)->mmu->ie & (gb)->mmu->io_registers[IO_IF] & 0x1F)
 
 typedef enum {
     IME_DISABLED,
@@ -2106,13 +2106,13 @@ static void exec_opcode(gb_t *gb) {
         CLOCK(cpu->registers.pc = 0x0018; END_OPCODE;);
     case 0xE0: // LDH (0xFF00 + n), A (12 cycles)
         GET_OPERAND_8();
-        CLOCK(mmu_write(gb, IO + cpu->operand, cpu->registers.a));
+        CLOCK(mmu_write(gb, MMU_IO + cpu->operand, cpu->registers.a));
         CLOCK(END_OPCODE);
     case 0xE1: // POP HL (12 cycles)
         POP(&cpu->registers.hl);
         CLOCK(END_OPCODE);
     case 0xE2: // LDH (0xFF00 + C), A (8 cycles)
-        CLOCK(mmu_write(gb, IO + cpu->registers.c, cpu->registers.a));
+        CLOCK(mmu_write(gb, MMU_IO + cpu->registers.c, cpu->registers.a));
         CLOCK(END_OPCODE);
     case 0xE5: // PUSH HL (16 cycles)
         CLOCK();
@@ -2152,14 +2152,14 @@ static void exec_opcode(gb_t *gb) {
         CLOCK(cpu->registers.pc = 0x0028; END_OPCODE;);
     case 0xF0: // LDH A, (0xFF00 + n) (12 cycles)
         GET_OPERAND_8();
-        CLOCK(cpu->accumulator = mmu_read(gb, IO + cpu->operand));
+        CLOCK(cpu->accumulator = mmu_read(gb, MMU_IO + cpu->operand));
         CLOCK(cpu->registers.a = cpu->accumulator; END_OPCODE;);
     case 0xF1: // POP AF (12 cycles)
         // also clear lower nibble of cpu->registers.f because it can only retreive its flags (most significant nibble)
         POP(&cpu->registers.af);
         CLOCK(cpu->registers.f &= 0xF0; END_OPCODE;);
     case 0xF2: // LDH A,(0xFF00 + C) (8 cycles)
-        CLOCK(cpu->accumulator = mmu_read(gb, IO + cpu->registers.c););
+        CLOCK(cpu->accumulator = mmu_read(gb, MMU_IO + cpu->registers.c););
         CLOCK(cpu->registers.a = cpu->accumulator; END_OPCODE;);
     case 0xF3: // DI (4 cycles)
         CLOCK(cpu->ime = IME_DISABLED; END_OPCODE;);
@@ -2259,20 +2259,20 @@ static void push_interrupt(gb_t *gb) {
         CLOCK(
             byte_t old_ie = mmu->ie; // in case the mmu_write below overwrites the IE register
             mmu_write(gb, --cpu->registers.sp, cpu->registers.pc & 0xFF);
-            if (CHECK_BIT(mmu->io_registers[IF - IO], IRQ_VBLANK) && CHECK_BIT(old_ie, IRQ_VBLANK)) {
-                RESET_BIT(mmu->io_registers[IF - IO], IRQ_VBLANK);
+            if (CHECK_BIT(mmu->io_registers[IO_IF], IRQ_VBLANK) && CHECK_BIT(old_ie, IRQ_VBLANK)) {
+                RESET_BIT(mmu->io_registers[IO_IF], IRQ_VBLANK);
                 cpu->registers.pc = IRQ_VBLANK_VECTOR;
-            } else if (CHECK_BIT(mmu->io_registers[IF - IO], IRQ_STAT) && CHECK_BIT(old_ie, IRQ_STAT)) {
-                RESET_BIT(mmu->io_registers[IF - IO], IRQ_STAT);
+            } else if (CHECK_BIT(mmu->io_registers[IO_IF], IRQ_STAT) && CHECK_BIT(old_ie, IRQ_STAT)) {
+                RESET_BIT(mmu->io_registers[IO_IF], IRQ_STAT);
                 cpu->registers.pc = IRQ_STAT_VECTOR;
-            } else if (CHECK_BIT(mmu->io_registers[IF - IO], IRQ_TIMER) && CHECK_BIT(old_ie, IRQ_TIMER)) {
-                RESET_BIT(mmu->io_registers[IF - IO], IRQ_TIMER);
+            } else if (CHECK_BIT(mmu->io_registers[IO_IF], IRQ_TIMER) && CHECK_BIT(old_ie, IRQ_TIMER)) {
+                RESET_BIT(mmu->io_registers[IO_IF], IRQ_TIMER);
                 cpu->registers.pc = IRQ_TIMER_VECTOR;
-            } else if (CHECK_BIT(mmu->io_registers[IF - IO], IRQ_SERIAL) && CHECK_BIT(old_ie, IRQ_SERIAL)) {
-                RESET_BIT(mmu->io_registers[IF - IO], IRQ_SERIAL);
+            } else if (CHECK_BIT(mmu->io_registers[IO_IF], IRQ_SERIAL) && CHECK_BIT(old_ie, IRQ_SERIAL)) {
+                RESET_BIT(mmu->io_registers[IO_IF], IRQ_SERIAL);
                 cpu->registers.pc = IRQ_SERIAL_VECTOR;
-            } else if (CHECK_BIT(mmu->io_registers[IF - IO], IRQ_JOYPAD) && CHECK_BIT(old_ie, IRQ_JOYPAD)) {
-                RESET_BIT(mmu->io_registers[IF - IO], IRQ_JOYPAD);
+            } else if (CHECK_BIT(mmu->io_registers[IO_IF], IRQ_JOYPAD) && CHECK_BIT(old_ie, IRQ_JOYPAD)) {
+                RESET_BIT(mmu->io_registers[IO_IF], IRQ_JOYPAD);
                 cpu->registers.pc = IRQ_JOYPAD_VECTOR;
             } else {
                 // an overwrite of the IE register happened during the previous CLOCK() and disabled all interrupts

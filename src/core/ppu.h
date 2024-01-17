@@ -5,17 +5,17 @@
 #include "cpu.h"
 #include "serialize.h"
 
-#define PPU_STAT_GET_MODE(gb) ((gb)->mmu->io_registers[STAT - IO] & 0x03)
+#define PPU_STAT_GET_MODE(gb) ((gb)->mmu->io_registers[IO_STAT] & 0x03)
 #define PPU_STAT_IS_MODE(gb, mode) (PPU_STAT_GET_MODE(gb) == (mode))
 
-#define IS_LCD_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[LCDC - IO], 7))
+#define IS_LCD_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[IO_LCDC], 7))
 
-#define IS_LY_LYC_IRQ_STAT_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[STAT - IO], 6))
-#define IS_OAM_IRQ_STAT_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[STAT - IO], 5))
-#define IS_VBLANK_IRQ_STAT_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[STAT - IO], 4))
-#define IS_HBLANK_IRQ_STAT_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[STAT - IO], 3))
+#define IS_LY_LYC_IRQ_STAT_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[IO_STAT], 6))
+#define IS_OAM_IRQ_STAT_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[IO_STAT], 5))
+#define IS_VBLANK_IRQ_STAT_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[IO_STAT], 4))
+#define IS_HBLANK_IRQ_STAT_ENABLED(gb) (CHECK_BIT((gb)->mmu->io_registers[IO_STAT], 3))
 
-#define UPDATE_STAT_LY_LYC_BIT(gb) CHANGE_BIT(gb->mmu->io_registers[STAT - IO], 2, (gb)->mmu->io_registers[LY - IO] == (gb)->mmu->io_registers[LYC - IO])
+#define UPDATE_STAT_LY_LYC_BIT(gb) CHANGE_BIT(gb->mmu->io_registers[IO_STAT], 2, (gb)->mmu->io_registers[IO_LY] == (gb)->mmu->io_registers[IO_LYC])
 
 typedef enum {
     PPU_MODE_HBLANK,

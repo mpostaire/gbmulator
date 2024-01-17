@@ -240,7 +240,7 @@ static int save_and_check_result(test_t *test, gb_t *gb, char *rom_path) {
     }
 
     if (test->is_gbmicrotest)
-        return gb->mmu->io_registers[0xFF82 - HRAM] == 0x01;
+        return gb->mmu->hram[0xFF82 - MMU_HRAM] == 0x01;
 
     gb_registers_t regs = gb->cpu->registers;
     return regs.bc == 0x0305 && regs.de == 0x080D && regs.hl == 0x1522;

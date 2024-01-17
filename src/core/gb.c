@@ -481,8 +481,8 @@ void gb_set_joypad_state(gb_t *gb, byte_t state) {
     byte_t action = (state >> 4) & 0x0F;
 
     // request interrupt if it is enabled and any button bit goes from released to pressed (1 -> 0)
-    byte_t direction_changed = (joypad->direction & ~direction) && !CHECK_BIT(gb->mmu->io_registers[P1 - IO], 4);
-    byte_t action_changed = (joypad->action & ~action) && !CHECK_BIT(gb->mmu->io_registers[P1 - IO], 5);
+    byte_t direction_changed = (joypad->direction & ~direction) && !CHECK_BIT(gb->mmu->io_registers[IO_P1], 4);
+    byte_t action_changed = (joypad->action & ~action) && !CHECK_BIT(gb->mmu->io_registers[IO_P1], 5);
     if (direction_changed || action_changed)
         CPU_REQUEST_INTERRUPT(gb, IRQ_JOYPAD);
  

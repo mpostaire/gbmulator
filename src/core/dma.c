@@ -11,21 +11,21 @@ static inline byte_t gdma_hdma_copy_step(gb_t *gb) {
 
         // printf("copy %x from %x to %x\n", data, mmu->hdma.src_address - 1, mmu->hdma.dest_address - 1);
 
-        if (mmu->hdma.dest_address >= ERAM) { // vram overflow stops prematurely the transfer
+        if (mmu->hdma.dest_address >= MMU_ERAM) { // vram overflow stops prematurely the transfer
             mmu->hdma.progress = 0;
             break;
         }
     }
 
     if (!(mmu->hdma.src_address & 0x000F)) { // a block of 0x10 bytes has been copied
-        mmu->io_registers[HDMA5 - IO] = (GBC_GDMA_HDMA_LENGTH(mmu) - 1) & 0x7F;
+        mmu->io_registers[IO_HDMA5] = (GBC_GDMA_HDMA_LENGTH(mmu) - 1) & 0x7F;
         mmu->hdma.progress--;
 
         // HDMA src and dest registers need to increase as the transfer progresses
-        mmu->io_registers[HDMA1 - IO] = mmu->hdma.src_address >> 8;
-        mmu->io_registers[HDMA2 - IO] = mmu->hdma.src_address & 0xF0;
-        mmu->io_registers[HDMA3 - IO] = (mmu->hdma.dest_address >> 8) & 0x1F;
-        mmu->io_registers[HDMA4 - IO] = mmu->hdma.dest_address & 0xF0;
+        mmu->io_registers[IO_HDMA1] = mmu->hdma.src_address >> 8;
+        mmu->io_registers[IO_HDMA2] = mmu->hdma.src_address & 0xF0;
+        mmu->io_registers[IO_HDMA3] = (mmu->hdma.dest_address >> 8) & 0x1F;
+        mmu->io_registers[IO_HDMA4] = mmu->hdma.dest_address & 0xF0;
 
         return 1;
     }
@@ -51,7 +51,7 @@ static inline void gdma_hdma_step(gb_t *gb) {
 
         if (mmu->hdma.progress == 0) { // finished copying?
             mmu->hdma.lock_cpu = 0;
-            mmu->io_registers[HDMA5 - IO] = 0xFF;
+            mmu->io_registers[IO_HDMA5] = 0xFF;
         }
         break;
     case HDMA:
@@ -67,7 +67,7 @@ static inline void gdma_hdma_step(gb_t *gb) {
             mmu->hdma.allow_hdma_block = 0;
 
             if (mmu->hdma.progress == 0) // finished copying?
-                mmu->io_registers[HDMA5 - IO] = 0xFF;
+                mmu->io_registers[IO_HDMA5] = 0xFF;
         }
         break;
     }
@@ -90,7 +90,7 @@ static inline void oam_dma_step(gb_t *gb) {
         case OAM_DMA_STARTING:
             mmu->oam_dma.starting_statuses[i] = OAM_DMA_NO_INIT;
             mmu->oam_dma.progress = 0;
-            mmu->oam_dma.src_address = mmu->io_registers[DMA - IO] << 8;
+            mmu->oam_dma.src_address = mmu->io_registers[IO_DMA] << 8;
             mmu->oam_dma.starting_count--;
             break;
         }

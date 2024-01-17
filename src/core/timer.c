@@ -20,18 +20,18 @@ void timer_set_div_timer(gb_t *gb, word_t value) {
 
     timer->div_timer = value;
     // DIV register incremented at 16384 Hz (every 256 cycles)
-    mmu->io_registers[DIV - IO] = timer->div_timer >> 8;
+    mmu->io_registers[IO_DIV] = timer->div_timer >> 8;
 
-    byte_t tima_signal = CHECK_BIT(timer->div_timer, timer->tima_increase_div_bit) && CHECK_BIT(mmu->io_registers[TAC - IO], 2);
+    byte_t tima_signal = CHECK_BIT(timer->div_timer, timer->tima_increase_div_bit) && CHECK_BIT(mmu->io_registers[IO_TAC], 2);
     if (falling_edge_detector(timer, tima_signal)) {
         // increase TIMA (and handle its overflow)
-        if (mmu->io_registers[TIMA - IO] == 0xFF) { // TIMA is about to overflow
+        if (mmu->io_registers[IO_TIMA] == 0xFF) { // TIMA is about to overflow
             // TIMA has a value of 0x00 for 4 cycles. Delay TIMA loading until next timer_step() call.
             // Timer interrupt is also delayed for 4 cycles.
             gb->timer->tima_state = TIMA_LOADING;
-            mmu->io_registers[TIMA - IO] = 0x00;
+            mmu->io_registers[IO_TIMA] = 0x00;
         } else {
-            mmu->io_registers[TIMA - IO]++;
+            mmu->io_registers[IO_TIMA]++;
         }
     }
 }
@@ -45,12 +45,12 @@ void timer_step(gb_t *gb) {
         timer->tima_state = TIMA_COUNTING;
         break;
     case TIMA_LOADING:
-        mmu->io_registers[TIMA - IO] = mmu->io_registers[TMA - IO];
+        mmu->io_registers[IO_TIMA] = mmu->io_registers[IO_TMA];
         CPU_REQUEST_INTERRUPT(gb, IRQ_TIMER);
         timer->tima_state = TIMA_LOADING_END;
         break;
     case TIMA_LOADING_CANCELLED:
-        mmu->io_registers[TIMA - IO] = timer->tima_cancelled_value;
+        mmu->io_registers[IO_TIMA] = timer->tima_cancelled_value;
         timer->tima_state = TIMA_LOADING_END;
         break;
     }

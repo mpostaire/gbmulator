@@ -16,12 +16,12 @@ byte_t joypad_get_input(gb_t *gb) {
     gb_joypad_t *joypad = gb->joypad;
     gb_mmu_t *mmu = gb->mmu;
 
-    if (!CHECK_BIT(mmu->io_registers[P1 - IO], 4))
-        return 0xC0 | (mmu->io_registers[P1 - IO] & 0xF0) | joypad->direction;
-    else if (!CHECK_BIT(mmu->io_registers[P1 - IO], 5))
-        return 0xC0 | (mmu->io_registers[P1 - IO] & 0xF0) | joypad->action;
-    else if (!CHECK_BIT(mmu->io_registers[P1 - IO], 4) && (!CHECK_BIT(mmu->io_registers[P1 - IO], 5)))
-        return 0xC0 | (mmu->io_registers[P1 - IO] & 0xF0) | joypad->direction | joypad->action;
+    if (!CHECK_BIT(mmu->io_registers[IO_P1], 4))
+        return 0xC0 | (mmu->io_registers[IO_P1] & 0xF0) | joypad->direction;
+    else if (!CHECK_BIT(mmu->io_registers[IO_P1], 5))
+        return 0xC0 | (mmu->io_registers[IO_P1] & 0xF0) | joypad->action;
+    else if (!CHECK_BIT(mmu->io_registers[IO_P1], 4) && (!CHECK_BIT(mmu->io_registers[IO_P1], 5)))
+        return 0xC0 | (mmu->io_registers[IO_P1] & 0xF0) | joypad->direction | joypad->action;
     else
         return 0xFF;
 }
@@ -36,7 +36,7 @@ void joypad_press(gb_t *gb, gb_joypad_button_t key) {
     case JOYPAD_UP:
     case JOYPAD_DOWN:
         RESET_BIT(joypad->direction, key);
-        if (!CHECK_BIT(mmu->io_registers[P1 - IO], 4))
+        if (!CHECK_BIT(mmu->io_registers[IO_P1], 4))
             CPU_REQUEST_INTERRUPT(gb, IRQ_JOYPAD);
         break;
     case JOYPAD_A:
@@ -44,7 +44,7 @@ void joypad_press(gb_t *gb, gb_joypad_button_t key) {
     case JOYPAD_SELECT:
     case JOYPAD_START:
         RESET_BIT(joypad->action, key - 4);
-        if (!CHECK_BIT(mmu->io_registers[P1 - IO], 5))
+        if (!CHECK_BIT(mmu->io_registers[IO_P1], 5))
             CPU_REQUEST_INTERRUPT(gb, IRQ_JOYPAD);
         break;
     }

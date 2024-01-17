@@ -149,11 +149,11 @@ static float channel_dac(gb_t *gb, gb_channel_t *c) {
         break;
     case APU_CHANNEL_3:
         if ((*c->NRx0 >> 7) /*&& APU_IS_CHANNEL_ENABLED(c->id)*/) { // if dac enabled and channel enabled -- TODO check why channel 3 enabled flag is not working properly
-            byte_t sample = gb->mmu->io_registers[(WAVE_RAM - IO) + (c->wave_position / 2)];
+            byte_t sample = gb->mmu->io_registers[IO_WAVE_RAM + (c->wave_position / 2)];
             if (c->wave_position % 2 == 0) // TODO check if this works properly (I think it always reads the 2 nibbles as the same values)
                 sample >>= 4;
             sample &= 0x0F;
-            switch ((gb->mmu->io_registers[NR32 - IO] >> 5) & 0x03) {
+            switch ((gb->mmu->io_registers[IO_NR32] >> 5) & 0x03) {
             case 0:
                 sample >>= 4; // mute
                 break;
@@ -236,16 +236,16 @@ void apu_step(gb_t *gb) {
         if (apu->take_sample_cycles_count >= (GB_CPU_FREQ / apu->dynamic_sampling_rate) * gb->apu_speed) {
             apu->take_sample_cycles_count = 0;
 
-            float S01_volume = ((mmu->io_registers[NR50 - IO] & 0x07) + 1) / 8.0f; // keep it between 0.0f and 1.0f
-            float S02_volume = (((mmu->io_registers[NR50 - IO] & 0x70) >> 4) + 1) / 8.0f; // keep it between 0.0f and 1.0f
-            float S01_output = ((CHECK_BIT(mmu->io_registers[NR51 - IO], APU_CHANNEL_1) ? channel_dac(gb, &apu->channel1) : 0.0f)
-                                + (CHECK_BIT(mmu->io_registers[NR51 - IO], APU_CHANNEL_2) ? channel_dac(gb, &apu->channel2) : 0.0f)
-                                + (CHECK_BIT(mmu->io_registers[NR51 - IO], APU_CHANNEL_3) ? channel_dac(gb, &apu->channel3) : 0.0f)
-                                + (CHECK_BIT(mmu->io_registers[NR51 - IO], APU_CHANNEL_4) ? channel_dac(gb, &apu->channel4) : 0.0f)) / 4.0f;
-            float S02_output = ((CHECK_BIT(mmu->io_registers[NR51 - IO], APU_CHANNEL_1 + 4) ? channel_dac(gb, &apu->channel1) : 0.0f)
-                                + (CHECK_BIT(mmu->io_registers[NR51 - IO], APU_CHANNEL_2 + 4) ? channel_dac(gb, &apu->channel2) : 0.0f)
-                                + (CHECK_BIT(mmu->io_registers[NR51 - IO], APU_CHANNEL_3 + 4) ? channel_dac(gb, &apu->channel3) : 0.0f)
-                                + (CHECK_BIT(mmu->io_registers[NR51 - IO], APU_CHANNEL_4 + 4) ? channel_dac(gb, &apu->channel4) : 0.0f)) / 4.0f;
+            float S01_volume = ((mmu->io_registers[IO_NR50] & 0x07) + 1) / 8.0f; // keep it between 0.0f and 1.0f
+            float S02_volume = (((mmu->io_registers[IO_NR50] & 0x70) >> 4) + 1) / 8.0f; // keep it between 0.0f and 1.0f
+            float S01_output = ((CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_1) ? channel_dac(gb, &apu->channel1) : 0.0f)
+                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_2) ? channel_dac(gb, &apu->channel2) : 0.0f)
+                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_3) ? channel_dac(gb, &apu->channel3) : 0.0f)
+                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_4) ? channel_dac(gb, &apu->channel4) : 0.0f)) / 4.0f;
+            float S02_output = ((CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_1 + 4) ? channel_dac(gb, &apu->channel1) : 0.0f)
+                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_2 + 4) ? channel_dac(gb, &apu->channel2) : 0.0f)
+                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_3 + 4) ? channel_dac(gb, &apu->channel3) : 0.0f)
+                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_4 + 4) ? channel_dac(gb, &apu->channel4) : 0.0f)) / 4.0f;
 
             // apply channel volume and global volume to its output
             S01_output = S01_output * S01_volume * gb->apu_sound_level;
@@ -261,33 +261,33 @@ void apu_init(gb_t *gb) {
     apu->dynamic_sampling_rate = gb->apu_sampling_rate;
 
     apu->channel1 = (gb_channel_t) {
-        .NRx0 = &gb->mmu->io_registers[NR10 - IO],
-        .NRx1 = &gb->mmu->io_registers[NR11 - IO],
-        .NRx2 = &gb->mmu->io_registers[NR12 - IO],
-        .NRx3 = &gb->mmu->io_registers[NR13 - IO],
-        .NRx4 = &gb->mmu->io_registers[NR14 - IO],
+        .NRx0 = &gb->mmu->io_registers[IO_NR10],
+        .NRx1 = &gb->mmu->io_registers[IO_NR11],
+        .NRx2 = &gb->mmu->io_registers[IO_NR12],
+        .NRx3 = &gb->mmu->io_registers[IO_NR13],
+        .NRx4 = &gb->mmu->io_registers[IO_NR14],
         .id = APU_CHANNEL_1
     };
     apu->channel2 = (gb_channel_t) { 
-        .NRx1 = &gb->mmu->io_registers[NR21 - IO],
-        .NRx2 = &gb->mmu->io_registers[NR22 - IO],
-        .NRx3 = &gb->mmu->io_registers[NR23 - IO],
-        .NRx4 = &gb->mmu->io_registers[NR24 - IO],
+        .NRx1 = &gb->mmu->io_registers[IO_NR21],
+        .NRx2 = &gb->mmu->io_registers[IO_NR22],
+        .NRx3 = &gb->mmu->io_registers[IO_NR23],
+        .NRx4 = &gb->mmu->io_registers[IO_NR24],
         .id = APU_CHANNEL_2
     };
     apu->channel3 = (gb_channel_t) {
-        .NRx0 = &gb->mmu->io_registers[NR30 - IO],
-        .NRx1 = &gb->mmu->io_registers[NR31 - IO],
-        .NRx2 = &gb->mmu->io_registers[NR32 - IO],
-        .NRx3 = &gb->mmu->io_registers[NR33 - IO],
-        .NRx4 = &gb->mmu->io_registers[NR34 - IO],
+        .NRx0 = &gb->mmu->io_registers[IO_NR30],
+        .NRx1 = &gb->mmu->io_registers[IO_NR31],
+        .NRx2 = &gb->mmu->io_registers[IO_NR32],
+        .NRx3 = &gb->mmu->io_registers[IO_NR33],
+        .NRx4 = &gb->mmu->io_registers[IO_NR34],
         .id = APU_CHANNEL_3
     };
     apu->channel4 = (gb_channel_t) { 
-        .NRx1 = &gb->mmu->io_registers[NR41 - IO],
-        .NRx2 = &gb->mmu->io_registers[NR42 - IO],
-        .NRx3 = &gb->mmu->io_registers[NR43 - IO],
-        .NRx4 = &gb->mmu->io_registers[NR44 - IO],
+        .NRx1 = &gb->mmu->io_registers[IO_NR41],
+        .NRx2 = &gb->mmu->io_registers[IO_NR42],
+        .NRx3 = &gb->mmu->io_registers[IO_NR43],
+        .NRx4 = &gb->mmu->io_registers[IO_NR44],
         .LFSR = 0,
         .id = APU_CHANNEL_4
     };
