@@ -723,7 +723,7 @@ int gb_load_savestate(gb_t *gb, const byte_t *data, size_t length) {
             savestate_data_len = dest_len;
             savestate_data = dest;
         } else {
-            eprintf("uncompress failure");
+            eprintf("uncompress failure\n");
             free(dest);
             free(savestate_header);
             free(savestate_data);

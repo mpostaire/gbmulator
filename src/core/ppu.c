@@ -25,7 +25,7 @@
 #define IS_CGB_COMPAT_MODE(gb) ((((gb)->mmu->io_registers[KEY0 - IO] >> 2) & 0x03) == 1)
 
 #define IS_INSIDE_WINDOW(gb) \
-    (ppu->win_actually_enabled && (gb)->mmu->io_registers[WY - IO] <= (gb)->mmu->io_registers[LY - IO] && (gb)->mmu->io_registers[WX - IO] - 7 <= (gb)->ppu->lcd_x)
+    (ppu->win_actually_enabled && (gb)->mmu->io_registers[WY - IO] <= (gb)->mmu->io_registers[LY - IO] && ppu->is_wx_triggered)
 
 #define SET_PIXEL_DMG(gb, x, y, color)                                                                                \
     do {                                                                                                              \
@@ -229,7 +229,7 @@ static inline void reset_pixel_fetcher(gb_ppu_t *ppu) {
     ppu->pixel_fetcher.step = 0;
     ppu->pixel_fetcher.mode = FETCH_BG;
     ppu->pixel_fetcher.old_mode = FETCH_BG;
-    ppu->pixel_fetcher.init_delay_done = 0;
+    ppu->pixel_fetcher.is_dummy_fetch_done = 0;
     ppu->discarded_pixels = 0;
 }
 
@@ -419,7 +419,7 @@ static inline gb_pixel_t *select_pixel(gb_t *gb, gb_pixel_t *bg_win_pixel, gb_pi
         return bg_win_pixel;
     } else {
         if (!IS_BG_WIN_ENABLED(gb)) {
-            bg_win_pixel->color = DMG_WHITE;
+            bg_win_pixel->color = DMG_WHITE; // in some cases, this can overwrite color of glitched_pixel but glitched_pixel color is DMG_WHITE so it's not a problem
             // TODO keep palette / change palette / force white?
         }
 
@@ -435,12 +435,9 @@ static inline gb_pixel_t *select_pixel(gb_t *gb, gb_pixel_t *bg_win_pixel, gb_pi
     }
 }
 
-static inline void handle_window(gb_t *gb) {
-    // TODO this is almost accurate (check links below: some are handled some are not)
-    // https://github.com/shonumi/gbe-plus/commit/15df53c83677062f98915293fc03620af65bd7c4
-    // https://www.reddit.com/r/EmuDev/comments/6q2tom/gb_changing_window_registers_midframe/
-    // https://github.com/LIJI32/SameBoy/commit/cbbaf2ee843870d96e72380e2dedbdbda471ca76
-    // https://github.com/LIJI32/SameBoy/issues/278
+// https://github.com/mattcurrie/mealybug-tearoom-tests/blob/70e88fb90b59d19dfbb9c3ac36c64105202bb1f4/the-comprehensive-game-boy-ppu-documentation.md#win_en-bit-5
+static inline gb_pixel_t *handle_window(gb_t *gb) {
+    static gb_pixel_t glitched_pixel = { 0 };
 
     gb_mmu_t *mmu = gb->mmu;
     gb_ppu_t *ppu = gb->ppu;
@@ -457,18 +454,14 @@ static inline void handle_window(gb_t *gb) {
         ppu->pixel_fetcher.step = 0;
     }
 
-    // a glitched pixel can be drawn if the window is disabled but it was enabled before in the same frame and we are on DMG 
-    byte_t wx = mmu->io_registers[WX - IO];
-    byte_t scx = mmu->io_registers[SCX - IO];
-    byte_t is_wx_hit = wx - 7 == (gb)->ppu->lcd_x;
-    if (ppu->saved_wly != -1 && gb->mode == GB_MODE_DMG && !IS_WIN_ENABLED(gb) && is_wx_hit && ((wx & 7) == 7 - (scx & 7))) {
-        // TODO is this really instantaneous? push it into the fifo? what are the timings for this?
-        // this links says there's no added delay except in some cases:
-        // https://github.com/LIJI32/SameBoy/issues/278#issuecomment-1189712129
-        gb_pixel_t glitched_pixel = {.color = DMG_WHITE, .palette = 0};
-        SET_PIXEL_DMG(gb, ppu->lcd_x, mmu->io_registers[LY - IO], dmg_get_color(mmu, &glitched_pixel, 0));
-        ppu->lcd_x++;
-    }
+    // a glitched pixel can be drawn if the window is disabled but it was enabled before in the same frame and we are on DMG
+    // https://github.com/LIJI32/SameBoy/issues/278#issuecomment-1189712129
+    // https://github.com/shonumi/gbe-plus/commit/15df53c83677062f98915293fc03620af65bd7c4
+    // https://www.reddit.com/r/EmuDev/comments/6q2tom/gb_changing_window_registers_midframe/
+    // https://github.com/LIJI32/SameBoy/commit/cbbaf2ee843870d96e72380e2dedbdbda471ca76
+    byte_t wx_scx_compare = ((mmu->io_registers[WX - IO] & 7) == 7 - (mmu->io_registers[SCX - IO] & 7));
+    if (ppu->saved_wly != -1 && gb->mode == GB_MODE_DMG && !IS_WIN_ENABLED(gb) && ppu->is_wx_triggered && wx_scx_compare)
+        return &glitched_pixel;
 
     if (ppu->pixel_fetcher.mode == FETCH_BG && IS_INSIDE_WINDOW(gb)) {
         // the fetcher must switch to window mode for the remaining of the scanline (except when an object needs to be drawn)
@@ -478,19 +471,18 @@ static inline void handle_window(gb_t *gb) {
         ppu->pixel_fetcher.x = 0;
 
         if (ppu->saved_wly != -1) {
+            // restore old wly if window was disabled and re-enabled now
             ppu->wly = ppu->saved_wly + 1; // + 1 because wly increments before every new LY where the window is drawn
             ppu->saved_wly = -1;
         } else if (ppu->wly == -1) {
-            // THIS IS WHAT I THINK IS THE BEST EXPLANATION:
-            // BUT what about the case where window was triggered but there is a WY write outside VBLANK?
             // if WY is written outside VBLANK and window was not triggered, wly becomes LY - WY
             //     --> it's as if the window was enabled since the beginning when LY was equal to WY
             // see example (this is what happens in pokemon gold/silver battle intro slide animation):
-            //     ly=106, read wy=144 --> window not triggered
-            //     ly=106, write wy=0 during VBLANK --> window not triggered
-            //     ly=107, read wy=0 during DRAWING --> window triggered (because wy <= ly) but it should have been triggered at ly == wy -> ly == 0
-            //                                      --> to catch up we set wly to ly - wy: it's as if wy was 0 at the beginning of the frame
-            //                                      --> BUT because we can't go back, the window above won't be visible
+            //     LY == 106, read WY == 144              --> window not triggered
+            //     LY == 106, write WY = 0 during VBLANK  --> window not triggered
+            //     LY == 107, read WY == 0 during DRAWING --> window triggered (because WY <= LY) but it should have been triggered at LY == WY -> LY == 0
+            //                                            --> to catch up we set wly to LY - WY: it's as if WY was 0 at the beginning of the frame
+            //                                            --> BUT because we can't go backwards, the window above won't be visible
             ppu->wly = mmu->io_registers[LY - IO] - mmu->io_registers[WY - IO];
         } else {
             ppu->wly++; // wly increments before every new LY where the window is drawn
@@ -498,20 +490,15 @@ static inline void handle_window(gb_t *gb) {
 
         ppu->discarded_pixels = 0;
         pixel_fifo_clear(&ppu->bg_win_fifo);
-
-        // eprintf("ly=%d lcd_x=%d wy=%d wx=%d wly=%d | lcdc_bg_win=%d lcdc_win=%d\n",
-        //     mmu->io_registers[LY - IO],
-        //     ppu->lcd_x,
-        //     mmu->io_registers[WX - IO],
-        //     mmu->io_registers[WY - IO],
-        //     ppu->wly,
-        //     GET_BIT(mmu->io_registers[LCDC - IO], 0),
-        //     GET_BIT(mmu->io_registers[LCDC - IO], 5)
-        // );
     }
+
+    return NULL;
 }
 
-static inline void handle_obj(gb_t *gb) {
+/**
+ * @returns 1 if a an OBJ fetch is in progress, 0 otherwise 
+ */
+static inline byte_t handle_obj(gb_t *gb) {
     gb_ppu_t *ppu = gb->ppu;
 
     if (ppu->bg_win_fifo.size > 0 && ppu->pixel_fetcher.mode != FETCH_OBJ && ppu->oam_scan.index < ppu->oam_scan.size && ppu->oam_scan.objs[ppu->oam_scan.index].x <= ppu->lcd_x + 8) {
@@ -527,11 +514,23 @@ static inline void handle_obj(gb_t *gb) {
         }
         ppu->oam_scan.index++;
     }
+
+    return ppu->pixel_fetcher.mode == FETCH_OBJ;
 }
 
 static inline void drawing_step(gb_t *gb) {
     gb_mmu_t *mmu = gb->mmu;
     gb_ppu_t *ppu = gb->ppu;
+
+    if (!ppu->pixel_fetcher.is_dummy_fetch_done) {
+        ppu->is_wx_triggered = mmu->io_registers[WX - IO] == ppu->pixel_fetcher.step;
+    } else if (ppu->lcd_x == 0 && ppu->pixel_fetcher.step == 0) {
+        // in this current cycle we just finished the dummy fetch
+        // ppu->pixel_fetcher.step == 0 here but it should be equivalent to 6
+        ppu->is_wx_triggered = mmu->io_registers[WX - IO] == 6;
+    } else {
+        ppu->is_wx_triggered = mmu->io_registers[WX - IO] - 7 == ppu->lcd_x;
+    }
 
     // 1. FETCHING PIXELS
 
@@ -548,8 +547,8 @@ static inline void drawing_step(gb_t *gb) {
         break;
     case GET_TILE_SLICE_HIGH:
         fetch_tileslice_high(gb);
-        if (!ppu->pixel_fetcher.init_delay_done) {
-            ppu->pixel_fetcher.init_delay_done = 1;
+        if (!ppu->pixel_fetcher.is_dummy_fetch_done) {
+            ppu->pixel_fetcher.is_dummy_fetch_done = 1;
             ppu->pixel_fetcher.step = 0;
         }
         break;
@@ -558,20 +557,18 @@ static inline void drawing_step(gb_t *gb) {
         break;
     }
 
-    handle_window(gb);
+    if (handle_obj(gb)) // pause pixel fetching while an obj fetch is in progress
+        return;
 
-    handle_obj(gb);
+    gb_pixel_t *glitched_pixel = handle_window(gb);
 
     // 2. SHIFTING PIXELS OUT TO THE LCD
 
-    if (ppu->pixel_fetcher.mode == FETCH_OBJ)
-        return;
-
-    gb_pixel_t *bg_win_pixel = pixel_fifo_pop(&ppu->bg_win_fifo);
+    gb_pixel_t *bg_win_pixel = glitched_pixel ? glitched_pixel : pixel_fifo_pop(&ppu->bg_win_fifo);
     if (!bg_win_pixel)
         return;
 
-    // discards pixels if needed, due either to SCX or window starting before screen (WX < 7)
+    // discards pixels if needed, either due to SCX or window starting before screen (WX < 7)
     switch (ppu->pixel_fetcher.mode) {
     case FETCH_BG:
         if (ppu->discarded_pixels < mmu->io_registers[SCX - IO] % 8) {
@@ -604,6 +601,7 @@ static inline void drawing_step(gb_t *gb) {
     } else {
         SET_PIXEL_DMG(gb, ppu->lcd_x, mmu->io_registers[LY - IO], dmg_get_color(mmu, selected_pixel, selected_is_obj));
     }
+
     ppu->lcd_x++;
 
     if (ppu->lcd_x >= GB_SCREEN_WIDTH) {
@@ -859,17 +857,17 @@ void ppu_quit(gb_t *gb) {
     X(fifo.head)               \
     X(fifo.tail)
 
-#define SERIALIZED_FETCHER              \
-    Y(pixel_fetcher.pixels, color)      \
-    Y(pixel_fetcher.pixels, palette)    \
-    Y(pixel_fetcher.pixels, attributes) \
-    Y(pixel_fetcher.pixels, oam_pos)    \
-    X(pixel_fetcher.mode)               \
-    X(pixel_fetcher.old_mode)           \
-    X(pixel_fetcher.step)               \
-    X(pixel_fetcher.curr_oam_index)     \
-    X(pixel_fetcher.init_delay_done)    \
-    X(pixel_fetcher.current_tile_id)    \
+#define SERIALIZED_FETCHER               \
+    Y(pixel_fetcher.pixels, color)       \
+    Y(pixel_fetcher.pixels, palette)     \
+    Y(pixel_fetcher.pixels, attributes)  \
+    Y(pixel_fetcher.pixels, oam_pos)     \
+    X(pixel_fetcher.mode)                \
+    X(pixel_fetcher.old_mode)            \
+    X(pixel_fetcher.step)                \
+    X(pixel_fetcher.curr_oam_index)      \
+    X(pixel_fetcher.is_dummy_fetch_done) \
+    X(pixel_fetcher.current_tile_id)     \
     X(pixel_fetcher.x)
 
 #define SERIALIZED_MEMBERS       \
@@ -879,6 +877,7 @@ void ppu_quit(gb_t *gb) {
     X(cycles)                    \
     X(discarded_pixels)          \
     X(lcd_x)                     \
+    X(is_wx_triggered)           \
     X(wly)                       \
     X(saved_wly)                 \
     X(win_actually_enabled)      \
