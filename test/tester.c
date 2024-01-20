@@ -32,7 +32,7 @@ typedef struct {
     char *reference_image_filename; // relative to the dir of the rom_path
     char *result_diff_image_suffix;
     gb_mode_t mode;
-    int running_frames;
+    int running_ms;
     byte_t exit_opcode;
     char *input_sequence;
     int is_gbmicrotest;
@@ -286,8 +286,6 @@ static void exec_input_sequence(gb_t *gb, char *input_sequence) {
 }
 
 static int run_test(test_t *test) {
-    MagickWandGenesis();
-
     char rom_path[BUF_SIZE];
     if (snprintf(rom_path, BUF_SIZE, "%s/%s", root_path, test->rom_path) < 0)
         exit(EXIT_FAILURE);
@@ -331,13 +329,11 @@ static int run_test(test_t *test) {
         }
     }
     if (timeout_cycles > 0)
-        gb_run_frames(gb, test->running_frames);
+        gb_run_steps(gb, test->running_ms * (GB_CPU_STEPS_PER_FRAME / 16));
 
     // take screenshot, save it and compare to the reference
     int ret = save_and_check_result(test, gb, rom_path);
     gb_quit(gb);
-
-    MagickWandTerminus();
 
     if (!ret && timeout_cycles <= 0)
         ret = -1;
@@ -346,6 +342,8 @@ static int run_test(test_t *test) {
 
 static void run_tests() {
     fclose(stderr); // close stderr to prevent error messages from the emulator to mess with the tests' output
+
+    MagickWandGenesis();
 
     printf(BOLD "---- TESTING ----\n" COLOR_OFF);
     mkdir("results", 0744);
@@ -372,6 +370,8 @@ static void run_tests() {
             fprintf(f, "%s:%s:%s:failed\n", label, test.rom_path, suffix);
         }
     }
+
+    MagickWandTerminus();
 
     fclose(f);
     rename("results/summary.txt.tmp", "results/summary.txt");

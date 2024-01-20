@@ -706,7 +706,12 @@ static inline void vblank_step(gb_t *gb) {
         if (ppu->is_last_vblank_line)
             ppu_update_stat_irq_line(gb);
     } else if (ppu->cycles == SCANLINE_CYCLES) {
-        if (ppu->is_last_vblank_line) {
+        // Also check for LY == 0 even if it should be useless because a strange bug happens when using the tester binary
+        // with gbmicrotest/is_if_set_during_ime0.gb: ppu->is_last_vblank_line can be 1 while LY is 144 which
+        // causes the ppu to enter OAM too early and starting at LY == 144 instead of LY == 0 which causes
+        // the LY to eventually go beyond its normal bounds and the ppu to draw outside its pixels buffer --> segfault
+        // This bug only happens with the tester binary and is non reproducible inside GDB.
+        if (ppu->is_last_vblank_line && mmu->io_registers[IO_LY] == 0) {
             // we actually are on line 153 but LY reads 0
             ppu->is_last_vblank_line = 0;
             ppu->oam_scan.size = 0;
