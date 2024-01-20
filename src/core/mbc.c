@@ -106,7 +106,7 @@ static inline void mbc1_set_bank_addrs(gb_mmu_t *mmu, byte_t bank1_size) {
         mmu->eram_bank_addr = eram_bank * ERAM_BANK_SIZE;
     } else { // ROM mode
         // NOTE: this is not really a BANK0 pointer: it's actually a BANKN pointer that happens to be mapped
-        // in the memory address region ROM_BANK0. (IS THIS STILL TRUE? --> read docs)
+        // in the memory address region MMU_ROM_BANK0. (IS THIS STILL TRUE? --> read docs)
         mmu->rom_bank0_addr = 0;
         mmu->eram_bank_addr = 0;
     }
@@ -280,6 +280,22 @@ void mbc_write_registers(gb_t *gb, word_t address, byte_t data) {
             break;
         }
         break;
+    case CAMERA:
+        switch (address & 0xE000) {
+        case 0x0000:
+            mbc->eram_enabled = (data & 0x0F) == 0x0A; // ERAM reads are always enabled: this only enable/disable ERAM writes
+            break;
+        case 0x2000:
+            mbc->camera.rom_bank = data & 0x3F;
+            mbc->camera.rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to mbc->camera.rom_bank %= rom_banks but avoid division by 0
+            mmu->rom_bankn_addr = (mbc->camera.rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
+            break;
+        case 0x4000:;
+            mbc->camera.cam_regs_enabled = CHECK_BIT(data, 4);
+            mbc->camera.eram_bank = data & 0x0F;
+            break;
+        }
+        break;
     }
 }
 
@@ -289,7 +305,7 @@ byte_t mbc_read_eram(gb_t *gb, word_t address) {
 
     if (mbc->type == MBC7) {
         // both mbc7 ram enable registers must be set and everything from ERAM + 0x1000 is unused (always reads 0xFF)
-        if (!mbc->eram_enabled || !mbc->mbc7.eram_enabled2 || address >= ERAM + 0x1000)
+        if (!mbc->eram_enabled || !mbc->mbc7.eram_enabled2 || address >= MMU_ERAM + 0x1000)
             return 0xFF;
 
         switch (address & 0x00F0) {
@@ -317,15 +333,23 @@ byte_t mbc_read_eram(gb_t *gb, word_t address) {
         return 0xC0;
     }
 
+    if (mbc->type == CAMERA) {
+        if (mbc->camera.cam_regs_enabled)
+            return camera_read_reg(gb, address);
+        if (CHECK_BIT(mmu->mbc.camera.regs[0], 0)) // camera capture in progress
+            return 0x00;
+        if (mbc->camera.eram_bank == 0 && address >= MMU_ERAM + 0x0100 && address < MMU_ERAM + 0x0F00)
+            return gb_camera_read_image(gb, address - (MMU_ERAM + 0x0100));
+        return mmu->eram[mmu->eram_bank_addr + (address - MMU_ERAM)];
+    }
+
     byte_t can_access_rtc = (mbc->type == MBC3 || mbc->type == MBC30) && mbc->mbc3.rtc_mapped; // mbc->mbc3.rtc_mapped implies that mmu->has_rtc is true
     if (mbc->eram_enabled && !can_access_rtc) {
         if (mbc->type == MBC2) {
             // wrap around from 0xA200 to 0xBFFF (eg: address 0xA200 reads as address 0xA000)
-            // return mmu->eram_bank_pointer[ERAM + (address & 0x1FF)] | 0xF0;
-            return mmu->eram[mmu->eram_bank_addr + ((address - ERAM) & 0x1FF)] | 0xF0;
-        } else {
-            return mmu->eram[mmu->eram_bank_addr + (address - ERAM)];
+            return mmu->eram[mmu->eram_bank_addr + ((address - MMU_ERAM) & 0x1FF)] | 0xF0;
         }
+        return mmu->eram[mmu->eram_bank_addr + (address - MMU_ERAM)];
     }
 
     if (mbc->mbc3.rtc.enabled) { // mbc->mbc3.rtc.enabled implies that mmu->has_rtc is true
@@ -348,7 +372,7 @@ void mbc_write_eram(gb_t *gb, word_t address, byte_t data) {
 
     if (mbc->type == MBC7) {
         // both mbc7 ram enable registers must be set and everything from ERAM + 0x1000 is unused
-        if (!mbc->eram_enabled || !mbc->mbc7.eram_enabled2 || address >= ERAM + 0x1000)
+        if (!mbc->eram_enabled || !mbc->mbc7.eram_enabled2 || address >= MMU_ERAM + 0x1000)
             return;
 
         switch (address & 0x00F0) {
@@ -379,15 +403,21 @@ void mbc_write_eram(gb_t *gb, word_t address, byte_t data) {
     }
 
     if (mbc->type == HuC1 && mbc->huc1.ir_mode) {
-        data &= 0x01;
-        if (mbc->huc1.ir_led != data)
-            mbc->huc1.ir_led = data;
+        mbc->huc1.ir_led = data & 0x01;
+        return;
+    }
+
+    if (mbc->type == CAMERA) {
+        if (mbc->camera.cam_regs_enabled)
+            camera_write_reg(gb, address, data);
+        else if (mbc->eram_enabled && !CHECK_BIT(mmu->mbc.camera.regs[0], 0)) // eram enabled and camera capture not in progress
+            mmu->eram[mmu->eram_bank_addr + (address - MMU_ERAM)] = data;
         return;
     }
 
     byte_t can_access_rtc = (mbc->type == MBC3 || mbc->type == MBC30) && mbc->mbc3.rtc_mapped; // mbc->mbc3.rtc_mapped implies that mmu->has_rtc is true
     if (mbc->eram_enabled && !can_access_rtc) {
-        mmu->eram[mmu->eram_bank_addr + (address - ERAM)] = data;
+        mmu->eram[mmu->eram_bank_addr + (address - MMU_ERAM)] = data;
     } else if (mbc->mbc3.rtc.enabled) { // mbc->mbc3.rtc.enabled implies that mmu->has_rtc is true
         switch (mbc->mbc3.rtc.reg) {
         case 0x08:

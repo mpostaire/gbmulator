@@ -8,8 +8,8 @@
 #include "boot.h"
 #include "mbc.h"
 
-#define GBC_CURRENT_VRAM_BANK(mmu) ((mmu)->io_registers[VBK - IO] & 0x01)
-#define GBC_CURRENT_WRAM_BANK(mmu) (((mmu)->io_registers[SVBK - IO] & 0x07) == 0 ? 1 : ((mmu)->io_registers[SVBK - IO] & 0x07))
+#define GBC_CURRENT_VRAM_BANK(mmu) ((mmu)->io_registers[IO_VBK] & 0x01)
+#define GBC_CURRENT_WRAM_BANK(mmu) (((mmu)->io_registers[IO_SVBK] & 0x07) == 0 ? 1 : ((mmu)->io_registers[IO_SVBK] & 0x07))
 
 int parse_header_mbc_byte(byte_t mbc_byte, byte_t *mbc_type, byte_t *has_eram, byte_t *has_battery, byte_t *has_rtc, byte_t *has_rumble) {
     byte_t tmp_mbc_type, tmp_has_eram, tmp_has_battery, tmp_has_rtc, tmp_has_rumble;
@@ -94,9 +94,9 @@ int parse_header_mbc_byte(byte_t mbc_byte, byte_t *mbc_type, byte_t *has_eram, b
     case 0x22:
         tmp_mbc_type = MBC7;
         break;
-    // case 0xFC:
-    //     tmp_mbc_type = CAMERA;
-    //     break;
+    case 0xFC:
+        tmp_mbc_type = CAMERA;
+        break;
     // case 0xFD:
     //     tmp_mbc_type = TAMA5;
     //     break;
@@ -184,7 +184,7 @@ static int parse_cartridge(gb_t *gb) {
     // get rom title
     memcpy(gb->rom_title, (char *) &mmu->rom[0x0134], 16);
     gb->rom_title[16] = '\0';
-    byte_t cgb_flag = mmu->rom[0x0143] == 0xC0 || mmu->rom[0x0143] == 0x80;
+    byte_t cgb_flag = mmu->rom[0x0143] & 0xC0;
     if (cgb_flag)
         gb->rom_title[15] = '\0';
 
@@ -192,154 +192,207 @@ static int parse_cartridge(gb_t *gb) {
     for (char *c = &gb->rom_title[16]; c >= gb->rom_title && !isalnum(*c); c--)
         *c = '\0';
 
-    // TODO better understand and implement CGB's DMG compatbility mode
-    // byte_t cgb_dmg_compat = gb->mode == CGB && !cgb_flag;
-    // byte_t cgb_mode_enabled = gb->mode == CGB && cgb_flag;
-
     return 1;
 }
 
 int mmu_init(gb_t *gb, const byte_t *rom, size_t rom_size) {
-    gb_mmu_t *mmu = xcalloc(1, sizeof(gb_mmu_t));
+    gb_mmu_t *mmu = xcalloc(1, sizeof(*mmu));
     mmu->rom = xcalloc(1, rom_size);
+    mmu->rom_size = rom_size;
+    memcpy(mmu->rom, rom, mmu->rom_size);
+    gb->mmu = mmu;
+
+    if (!parse_cartridge(gb)) {
+        mmu_quit(gb);
+        return 0;
+    }
 
     mmu->mbc.mbc1.bank_lo = 1;
     // mmu->rom_bank0_addr = 0; // initialized to 0 by xcalloc
-    // mmu->rom_bankn_addr = 0; // initialized to ROM_BANKN - ROM_BANK_SIZE = 0 by xcalloc
+    // mmu->rom_bankn_addr = 0; // initialized to MMU_ROM_BANKN - ROM_BANK_SIZE = 0 by xcalloc
     // mmu->eram_bank_addr = 0; // initialized to 0 by xcalloc
-    mmu->wram_bankn_addr_offset = -WRAM_BANK0;
-    mmu->vram_bank_addr_offset = -VRAM;
+    mmu->wram_bankn_addr_offset = -MMU_WRAM_BANK0;
+    mmu->vram_bank_addr_offset = -MMU_VRAM;
 
     // mmu->mbc7.accelerometer.latched_x = 0x8000;
     // mmu->mbc7.accelerometer.latched_y = 0x8000;
     // mmu->mbc7.accelerometer.latch_ready = 1;
 
-    mmu->rom_size = rom_size;
-    memcpy(mmu->rom, rom, mmu->rom_size);
-    gb->mmu = mmu;
+    if (mmu->mbc.type == CAMERA) {
+        mmu->mbc.camera.sensor_image = xcalloc(GB_CAMERA_SENSOR_HEIGHT * GB_CAMERA_SENSOR_WIDTH, sizeof(*mmu->mbc.camera.sensor_image));
+    } else if (mmu->mbc.type == MBC7) {
+        mmu->mbc.mbc7.accelerometer.latched_x = 0x81D0;
+        mmu->mbc.mbc7.accelerometer.latched_y = 0x81D0;
+    }
 
-    if (parse_cartridge(gb))
-        return 1;
+    mmu->dmg_boot_rom = dmg_boot;
+    mmu->cgb_boot_rom = cgb_boot;
 
-    mmu_quit(gb);
-    return 0;
+    return 1;
 }
 
 void mmu_quit(gb_t *gb) {
     free(gb->mmu->rom);
+    if (gb->mmu->mbc.type == CAMERA)
+        free(gb->mmu->mbc.camera.sensor_image);
     free(gb->mmu);
 }
 
-static inline byte_t read_io_register(gb_t *gb, word_t address) {
-    gb_mmu_t *mmu = gb->mmu;
-    word_t io_reg_addr = address - IO;
+static inline byte_t is_oam_locked_for_cpu_read(gb_t *gb) {
+    // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
+    // but it has some quirks for the other memory regions (check links below):
+    // https://www.reddit.com/r/EmuDev/comments/5hahss/comment/daz9cbi/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
+    // https://github.com/Gekkio/mooneye-gb/issues/39#issuecomment-265953981
+    if (IS_OAM_DMA_RUNNING(gb->mmu))
+        return 1;
 
-    switch (address) {
-    case P1:
+    // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
+    return IS_LCD_ENABLED(gb) && (PPU_STAT_IS_MODE(gb, PPU_MODE_OAM) || PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING) || gb->ppu->pending_stat_mode == PPU_MODE_OAM);
+}
+
+static inline byte_t is_oam_locked_for_cpu_write(gb_t *gb) {
+    // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
+    // but it has some quirks for the other memory regions (check links below):
+    // https://www.reddit.com/r/EmuDev/comments/5hahss/comment/daz9cbi/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
+    // https://github.com/Gekkio/mooneye-gb/issues/39#issuecomment-265953981
+    if (IS_OAM_DMA_RUNNING(gb->mmu))
+        return 1;
+
+    if (!IS_LCD_ENABLED(gb))
+        return 0;
+
+    byte_t lcd_booting_up_into_drawing = PPU_STAT_IS_MODE(gb, PPU_MODE_HBLANK) && gb->ppu->pending_stat_mode == PPU_MODE_DRAWING;
+    byte_t starting_drawing = gb->ppu->mode == PPU_MODE_DRAWING && PPU_STAT_IS_MODE(gb, PPU_MODE_OAM);
+    if (starting_drawing || lcd_booting_up_into_drawing)
+        return 0;
+
+    return PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING) || PPU_STAT_IS_MODE(gb, PPU_MODE_OAM);
+}
+
+static inline byte_t is_vram_locked_for_cpu_read(gb_t *gb) {
+    // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
+    return IS_LCD_ENABLED(gb) && (PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING) || (PPU_STAT_IS_MODE(gb, PPU_MODE_OAM) && gb->ppu->pending_stat_mode == PPU_MODE_DRAWING));
+}
+
+static inline byte_t is_vram_locked_for_cpu_write(gb_t *gb) {
+    // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
+    return IS_LCD_ENABLED(gb) && PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING);
+}
+
+static inline byte_t read_io_register(gb_t *gb, byte_t io_reg_addr) {
+    gb_mmu_t *mmu = gb->mmu;
+
+    switch (io_reg_addr) {
+    case IO_P1:
         // Reading from P1 register returns joypad input state according to its current bit 4 or 5 value
         return joypad_get_input(gb);
-    case SB: return mmu->io_registers[io_reg_addr];
-    case SC: return mmu->io_registers[io_reg_addr] | (gb->mode == GB_MODE_CGB ? 0x7C : 0x7E);
-    case DIV_LSB: return 0xFF;
-    case DIV: return mmu->io_registers[io_reg_addr];
-    case TIMA: return mmu->io_registers[io_reg_addr];
-    case TMA: return mmu->io_registers[io_reg_addr];
-    case TAC: return mmu->io_registers[io_reg_addr] | 0xF8;
-    case 0xFF08 ... IF - 1: return 0xFF;
-    case IF: return mmu->io_registers[io_reg_addr] | 0xE0;
-    case NR10: return mmu->io_registers[io_reg_addr] | 0x80;
-    case NR11: return mmu->io_registers[io_reg_addr] | 0x3F;
-    case NR12: return mmu->io_registers[io_reg_addr];
-    case NR13: return 0xFF;
-    case NR14: return mmu->io_registers[io_reg_addr] | 0xBF;
-    case NR20: return 0xFF;
-    case NR21: return mmu->io_registers[io_reg_addr] | 0x3F;
-    case NR22: return mmu->io_registers[io_reg_addr];
-    case NR23: return 0xFF;
-    case NR24: return mmu->io_registers[io_reg_addr] | 0xBF;
-    case NR30: return mmu->io_registers[io_reg_addr] | 0x7F;
-    case NR31: return 0xFF;
-    case NR32: return mmu->io_registers[io_reg_addr] | 0x9F;
-    case NR33: return 0xFF;
-    case NR34: return mmu->io_registers[io_reg_addr] | 0xBF;
-    case NR40: return 0xFF;
-    case NR41: return 0xFF;
-    case NR42: return mmu->io_registers[io_reg_addr];
-    case NR43: return mmu->io_registers[io_reg_addr];
-    case NR44: return mmu->io_registers[io_reg_addr] | 0xBF;
-    case NR50: return mmu->io_registers[io_reg_addr];
-    case NR51: return mmu->io_registers[io_reg_addr];
-    case NR52: return mmu->io_registers[io_reg_addr] | 0x70;
-    case 0xFF27 ... WAVE_RAM - 1: return 0xFF;
-    case WAVE_RAM ... LCDC - 1: return mmu->io_registers[io_reg_addr];
-    case LCDC: return mmu->io_registers[io_reg_addr];
-    case STAT: return mmu->io_registers[io_reg_addr] | 0x80;
-    case SCY: return mmu->io_registers[io_reg_addr];
-    case SCX: return mmu->io_registers[io_reg_addr];
-    case LY: return mmu->io_registers[io_reg_addr];
-    case LYC: return mmu->io_registers[io_reg_addr];
-    case DMA: return mmu->io_registers[io_reg_addr];
-    case BGP: return mmu->io_registers[io_reg_addr];
-    case OBP0: return mmu->io_registers[io_reg_addr];
-    case OBP1: return mmu->io_registers[io_reg_addr];
-    case WY: return mmu->io_registers[io_reg_addr];
-    case WX: return mmu->io_registers[io_reg_addr];
-    case KEY0: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
-    case KEY1: return gb->mode == GB_MODE_CGB ? (mmu->io_registers[io_reg_addr] | 0x7E) : 0xFF;
-    case 0xFF4E: return 0xFF;
-    case VBK: return gb->mode == GB_MODE_CGB ? 0xFE | (mmu->io_registers[io_reg_addr] & 0x01) : 0xFF;
-    case BANK: return 0xFF;
-    case HDMA1 ... HDMA4: return 0xFF;
-    case HDMA5: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
-    case RP:
-        if (gb->mode == GB_MODE_CGB) {
+    case IO_SB: return mmu->io_registers[io_reg_addr];
+    case IO_SC: return mmu->io_registers[io_reg_addr] | (gb->cgb_mode_enabled ? 0x7C : 0x7E);
+    case 0x03: return 0xFF;
+    case IO_DIV: return gb->timer->div_timer >> 8;
+    case IO_TIMA: return mmu->io_registers[io_reg_addr];
+    case IO_TMA: return mmu->io_registers[io_reg_addr];
+    case IO_TAC: return mmu->io_registers[io_reg_addr] | 0xF8;
+    case 0x08 ... IO_IF - 1: return 0xFF;
+    case IO_IF: return mmu->io_registers[io_reg_addr] | 0xE0;
+    case IO_NR10: return mmu->io_registers[io_reg_addr] | 0x80;
+    case IO_NR11: return mmu->io_registers[io_reg_addr] | 0x3F;
+    case IO_NR12: return mmu->io_registers[io_reg_addr];
+    case IO_NR13: return 0xFF;
+    case IO_NR14: return mmu->io_registers[io_reg_addr] | 0xBF;
+    case IO_NR20: return 0xFF;
+    case IO_NR21: return mmu->io_registers[io_reg_addr] | 0x3F;
+    case IO_NR22: return mmu->io_registers[io_reg_addr];
+    case IO_NR23: return 0xFF;
+    case IO_NR24: return mmu->io_registers[io_reg_addr] | 0xBF;
+    case IO_NR30: return mmu->io_registers[io_reg_addr] | 0x7F;
+    case IO_NR31: return 0xFF;
+    case IO_NR32: return mmu->io_registers[io_reg_addr] | 0x9F;
+    case IO_NR33: return 0xFF;
+    case IO_NR34: return mmu->io_registers[io_reg_addr] | 0xBF;
+    case IO_NR40: return 0xFF;
+    case IO_NR41: return 0xFF;
+    case IO_NR42: return mmu->io_registers[io_reg_addr];
+    case IO_NR43: return mmu->io_registers[io_reg_addr];
+    case IO_NR44: return mmu->io_registers[io_reg_addr] | 0xBF;
+    case IO_NR50: return mmu->io_registers[io_reg_addr];
+    case IO_NR51: return mmu->io_registers[io_reg_addr];
+    case IO_NR52: return mmu->io_registers[io_reg_addr] | 0x70;
+    case 0x27 ... IO_WAVE_RAM - 1: return 0xFF;
+    case IO_WAVE_RAM ... IO_LCDC - 1: return mmu->io_registers[io_reg_addr];
+    case IO_LCDC: return mmu->io_registers[io_reg_addr];
+    case IO_STAT: return mmu->io_registers[io_reg_addr] | 0x80;
+    case IO_SCY: return mmu->io_registers[io_reg_addr];
+    case IO_SCX: return mmu->io_registers[io_reg_addr];
+    case IO_LY: return mmu->io_registers[io_reg_addr];
+    case IO_LYC: return mmu->io_registers[io_reg_addr];
+    case IO_DMA: return mmu->io_registers[io_reg_addr];
+    case IO_BGP: return mmu->io_registers[io_reg_addr];
+    case IO_OBP0: return mmu->io_registers[io_reg_addr];
+    case IO_OBP1: return mmu->io_registers[io_reg_addr];
+    case IO_WY: return mmu->io_registers[io_reg_addr];
+    case IO_WX: return mmu->io_registers[io_reg_addr];
+    case IO_KEY0: return 0xFF;
+    case IO_KEY1: return gb->cgb_mode_enabled ? (mmu->io_registers[io_reg_addr] | 0x7E) : 0xFF;
+    case 0x4E: return 0xFF;
+    case IO_VBK: return gb->mode == GB_MODE_CGB ? 0xFE | (mmu->io_registers[io_reg_addr] & 0x01) : 0xFF;
+    case IO_BANK: return 0xFF;
+    case IO_HDMA1 ... IO_HDMA4: return 0xFF;
+    case IO_HDMA5: return gb->cgb_mode_enabled ? mmu->io_registers[io_reg_addr] : 0xFF;
+    case IO_RP:
+        if (gb->cgb_mode_enabled) {
             if (!gb->ir_gb)
                 return mmu->io_registers[io_reg_addr] | 0x3E;
 
-            byte_t other_gb_led = gb->ir_gb->mmu->io_registers[RP - IO] & 0x01;
+            byte_t other_gb_led = gb->ir_gb->mmu->io_registers[IO_RP] & 0x01;
             byte_t read_bit = (mmu->io_registers[io_reg_addr] & 0xC0) == 0xC0 ? !other_gb_led : 0x01;
             CHANGE_BIT(mmu->io_registers[io_reg_addr], 1, read_bit);
             return mmu->io_registers[io_reg_addr] | 0x3C;
         }
         return 0xFF;
-    case 0xFF57 ... 0xFF67: return 0xFF;
-    case BGPI: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
-    case BGPD: {
-        if (gb->mode == GB_MODE_DMG || PPU_IS_MODE(gb, PPU_MODE_DRAWING))
+    case 0x57 ... 0x67: return 0xFF;
+    case IO_BGPI: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] | 0x40 : 0xFF;
+    case IO_BGPD: {
+        if (gb->mode == GB_MODE_DMG || gb->ppu->mode == PPU_MODE_DRAWING)
             return 0xFF;
 
-        byte_t cram_address = mmu->io_registers[BGPI - IO] & 0x3F;
+        byte_t cram_address = mmu->io_registers[IO_BGPI] & 0x3F;
         return mmu->cram_bg[cram_address];
     }
-    case OBPI: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
-    case OBPD: {
-        if (gb->mode == GB_MODE_DMG || PPU_IS_MODE(gb, PPU_MODE_DRAWING))
+    case IO_OBPI: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] | 0x40 : 0xFF;
+    case IO_OBPD: {
+        if (!gb->cgb_mode_enabled || gb->ppu->mode == PPU_MODE_DRAWING)
             return 0xFF;
 
-        byte_t cram_address = mmu->io_registers[OBPI - IO] & 0x3F;
+        byte_t cram_address = mmu->io_registers[IO_OBPI] & 0x3F;
         return mmu->cram_obj[cram_address];
     }
-    case 0xFF6C ... 0xFF6F: return 0xFF;
-    case SVBK: return gb->mode == GB_MODE_CGB ? 0xF8 | (mmu->io_registers[io_reg_addr] & 0x07) : 0xFF;
-    case 0xFF71 ... 0xFF74: return 0xFF;
-    case 0xFF75: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] & 0x70 : 0xFF;
-    case 0xFF76 ... 0xFF7F: return 0xFF;
+    case 0x6C ... 0x6F: return 0xFF;
+    case IO_SVBK: return gb->cgb_mode_enabled ? 0xF8 | (mmu->io_registers[io_reg_addr] & 0x07) : 0xFF;
+    case 0x71: return 0xFF;
+    case 0x72 ... 0x73: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
+    case 0x74: return gb->cgb_mode_enabled ? mmu->io_registers[io_reg_addr] : 0xFF;
+    case 0x75: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] | 0x8F : 0xFF;
+    case IO_PCM12:
+    case IO_PCM34:
+        // not emulated because it appears to be never used
+        return gb->mode == GB_MODE_CGB ? 0x00 : 0xFF;
+    case 0x78 ... 0x7F: return 0xFF;
     default:
-        eprintf("invalid read at 0x%04X\n", address);
+        eprintf("invalid read at 0xFF%02X\n", io_reg_addr);
         exit(EXIT_FAILURE);
     }
 }
 
-static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
+static inline void write_io_register(gb_t *gb, byte_t io_reg_addr, byte_t data) {
     gb_mmu_t *mmu = gb->mmu;
-    word_t io_reg_addr = address - IO;
 
-    switch (address) {
-    case P1:
-        // prevent writes to the lower nibble of the P1 register (joypad)
+    switch (io_reg_addr) {
+    case IO_P1:
+        // prevent writes to the lower nibble of the IO_P1 register (joypad)
         mmu->io_registers[io_reg_addr] = data & 0xF0;
         break;
-    case SC:
+    case IO_SC:
         if (CHECK_BIT(mmu->io_registers[io_reg_addr], 1) != CHECK_BIT(data, 1)) {
             mmu->io_registers[io_reg_addr] = data & 0x83;
             link_set_clock(gb);
@@ -347,26 +400,24 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
             mmu->io_registers[io_reg_addr] = data & 0x83;
         }
         break;
-    case DIV_LSB:
-    case DIV:
+    case IO_DIV:
         // writing to DIV resets it to 0
-        mmu->io_registers[DIV_LSB - IO] = 0;
-        mmu->io_registers[DIV - IO] = 0;
-        mmu->io_registers[TIMA - IO] = mmu->io_registers[TMA - IO];
+        timer_set_div_timer(gb, 0);
         break;
-    case TIMA:
-        if (gb->timer->tima_loading_value == -1)
-            mmu->io_registers[io_reg_addr] = mmu->io_registers[TMA - IO];
-        else
+    case IO_TIMA:
+        if (gb->timer->tima_state == TIMA_LOADING) {
+            gb->timer->tima_cancelled_value = data;
+            gb->timer->tima_state = TIMA_LOADING_CANCELLED;
+        } else if (gb->timer->tima_state != TIMA_LOADING_END) {
             mmu->io_registers[io_reg_addr] = data;
+        }
         break;
-    case TMA:
-        if (gb->timer->tima_loading_value == -1)
-            mmu->io_registers[TIMA - IO] = data;
-        gb->timer->old_tma = mmu->io_registers[io_reg_addr];
+    case IO_TMA:
         mmu->io_registers[io_reg_addr] = data;
+        if (gb->timer->tima_state != TIMA_COUNTING)
+            mmu->io_registers[IO_TIMA] = data;
         break;
-    case TAC:
+    case IO_TAC:
         mmu->io_registers[io_reg_addr] = data;
         switch (data & 0x03) {
         case 0x00: gb->timer->tima_increase_div_bit = 9; break;
@@ -375,155 +426,189 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
         case 0x03: gb->timer->tima_increase_div_bit = 7; break;
         }
         break;
-    case NR10:
+    case IO_NR10:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
-    case NR11:
+    case IO_NR11:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         gb->apu->channel1.length_counter = 64 - (data & 0x3F);
         break;
-    case NR12:
+    case IO_NR12:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         if (!(data >> 3)) // if dac disabled
             APU_DISABLE_CHANNEL(gb, APU_CHANNEL_1);
         break;
-    case NR13:
+    case IO_NR13:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
-    case NR14:
+    case IO_NR14:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         if (CHECK_BIT(data, 7) && (data >> 3)) // if trigger requested and dac enabled
             apu_channel_trigger(gb, &gb->apu->channel1);
         break;
-    case NR20:
+    case IO_NR20:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
-    case NR21:
+    case IO_NR21:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         gb->apu->channel2.length_counter = 64 - (data & 0x3F);
         break;
-    case NR22:
+    case IO_NR22:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         if (!(data >> 3)) // if dac disabled
             APU_DISABLE_CHANNEL(gb, APU_CHANNEL_2);
         break;
-    case NR23:
+    case IO_NR23:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
-    case NR24:
+    case IO_NR24:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         if (CHECK_BIT(data, 7) && (data >> 3)) // if trigger requested and dac enabled
             apu_channel_trigger(gb, &gb->apu->channel2);
         break;
-    case NR30:
+    case IO_NR30:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         if (!(data >> 7)) // if dac disabled
             APU_DISABLE_CHANNEL(gb, APU_CHANNEL_3);
         break;
-    case NR31:
+    case IO_NR31:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         gb->apu->channel3.length_counter = 256 - data;
         break;
-    case NR32:
+    case IO_NR32:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
-    case NR33:
+    case IO_NR33:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
-    case NR34:
+    case IO_NR34:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         if (CHECK_BIT(data, 7) && (data >> 7)) // if trigger requested and dac enabled
             apu_channel_trigger(gb, &gb->apu->channel3);
         break;
-    case NR40:
+    case IO_NR40:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
-    case NR41:
+    case IO_NR41:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         gb->apu->channel4.length_counter = 64 - (data & 0x3F);
         break;
-    case NR42:
+    case IO_NR42:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         if (!(data >> 3)) // if dac disabled
             APU_DISABLE_CHANNEL(gb, APU_CHANNEL_4);
         break;
-    case NR43:
+    case IO_NR43:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
-    case NR44:
+    case IO_NR44:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         if (CHECK_BIT(data, 7) && (data >> 3)) // if trigger requested and dac enabled
             apu_channel_trigger(gb, &gb->apu->channel4);
         break;
-    case NR50:
+    case IO_NR50:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
-    case NR51:
+    case IO_NR51:
         if (!IS_APU_ENABLED(gb))
             return;
         mmu->io_registers[io_reg_addr] = data;
         break;
-    case NR52:
-        CHANGE_BIT(mmu->io_registers[NR52 - IO], 7, data >> 7);
+    case IO_NR52:
+        CHANGE_BIT(mmu->io_registers[IO_NR52], 7, data >> 7);
         if (!IS_APU_ENABLED(gb))
-            memset(&mmu->io_registers[NR10 - IO], 0x00, 32 * sizeof(byte_t)); // clear all registers
+            memset(&mmu->io_registers[IO_NR10], 0x00, 32 * sizeof(byte_t)); // clear all registers
         break;
-    case WAVE_RAM ... LCDC - 1:
-        if (!CHECK_BIT(mmu->io_registers[NR30 - IO], 7))
+    case IO_WAVE_RAM ... IO_LCDC - 1:
+        if (!CHECK_BIT(mmu->io_registers[IO_NR30], 7))
             mmu->io_registers[io_reg_addr] = data;
         break;
-    case STAT:
-        mmu->io_registers[io_reg_addr] = 0x80 | (data & 0x78) | (mmu->io_registers[io_reg_addr] & 0x07);
-        break;
-    case LY: break; // read only
-    case LYC:
-        // a write to LYC triggers an immediate LY=LYC comparison
+    case IO_LCDC: {
+        byte_t old_lcd_enabled = IS_LCD_ENABLED(gb);
         mmu->io_registers[io_reg_addr] = data;
-        ppu_ly_lyc_compare(gb);
+
+        if (!old_lcd_enabled && IS_LCD_ENABLED(gb)) // lcd turned on
+            ppu_enable_lcd(gb);
+        else if (old_lcd_enabled && !IS_LCD_ENABLED(gb)) // lcd turned off
+            ppu_disable_lcd(gb);
         break;
-    case DMA:
+    }
+    case IO_STAT: {
+        // check for STAT interrupt only if in VBLANK, HBLANK or LY=LYC STAT bit is set
+        // (not sure if the LY=LYC condition is accurate: this passes wilbertpol's stat_write_if-GS test
+        // but maybe only due to other inaccuracies in the emulation)
+        byte_t update_irq_line =
+                PPU_STAT_IS_MODE(gb, PPU_MODE_VBLANK) || PPU_STAT_IS_MODE(gb, PPU_MODE_HBLANK) ||
+                CHECK_BIT(gb->mmu->io_registers[IO_STAT], 2);
+
+        if (gb->mode == GB_MODE_DMG) {
+            // on DMG hardware, writing any data to STAT is like writing 0xFF, then 4 cycles later, the actual data is written into STAT
+            // the 4 cycles delay is not emulated because it this only relevant for STAT interrupts
+            // so we check for a STAT interrupt then immediately set STAT to its actual value
+            mmu->io_registers[io_reg_addr] = 0xF8 | (mmu->io_registers[io_reg_addr] & 0x07);
+
+            if (update_irq_line)
+                ppu_update_stat_irq_line(gb);
+        }
+
+        mmu->io_registers[io_reg_addr] =
+                0x80 | (data & 0x78) | (mmu->io_registers[io_reg_addr] & 0x07);
+
+        if (gb->mode == GB_MODE_CGB && update_irq_line)
+            ppu_update_stat_irq_line(gb);
+        break;
+    }
+    case IO_LY: break; // read only
+    case IO_LYC:
+        mmu->io_registers[IO_LYC] = data;
+        if (IS_LCD_ENABLED(gb)) {
+            UPDATE_STAT_LY_LYC_BIT(gb);
+            ppu_update_stat_irq_line(gb);
+        }
+        break;
+    case IO_DMA:
         // writing to this register starts an OAM DMA transfer
         mmu->io_registers[io_reg_addr] = data;
         for (unsigned int i = 0; i < sizeof(mmu->oam_dma.starting_statuses); i++) {
@@ -534,23 +619,29 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
             }
         }
         break;
-    case KEY1:
-        mmu->io_registers[io_reg_addr] |= data & 0x01;
-        break;
-    case VBK:
-        if (gb->mode == GB_MODE_CGB) {
-            mmu->io_registers[io_reg_addr] = data & 0x01;
-            mmu->vram_bank_addr_offset = (GBC_CURRENT_VRAM_BANK(mmu) * VRAM_BANK_SIZE) - VRAM;
+    case IO_KEY0:
+        if (gb->mode == GB_MODE_CGB && !mmu->boot_finished) {
+            gb->cgb_mode_enabled = !(data & 0x0C);
+            mmu->io_registers[io_reg_addr] = data;
         }
         break;
-    case BANK:
+    case IO_KEY1:
+        mmu->io_registers[io_reg_addr] |= data & 0x01;
+        break;
+    case IO_VBK:
+        if (gb->mode == GB_MODE_CGB) {
+            mmu->io_registers[io_reg_addr] = data & 0x01;
+            mmu->vram_bank_addr_offset = (GBC_CURRENT_VRAM_BANK(mmu) * VRAM_BANK_SIZE) - MMU_VRAM;
+        }
+        break;
+    case IO_BANK:
         // disable boot rom
         if ((gb->mode == GB_MODE_DMG && data == 0x01) || (gb->mode == GB_MODE_CGB && data == 0x11))
             mmu->boot_finished = 1;
         mmu->io_registers[io_reg_addr] = data;
         break;
-    case HDMA5:
-        if (gb->mode == GB_MODE_DMG)
+    case IO_HDMA5:
+        if (!gb->cgb_mode_enabled)
             break;
 
         // writing to this register starts a VRAM DMA transfer
@@ -575,11 +666,11 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
         } else { // HDMA
             // Start HDMA now if we are in ppu HBLANK mode or if LCD is disabled.
             // In the latter case, only the first 0x10 bytes block are copied, the rest are done at HBLANK once LCD turns on.
-            mmu->hdma.allow_hdma_block = PPU_IS_MODE(gb, PPU_MODE_HBLANK) || !IS_LCD_ENABLED(gb);
+            mmu->hdma.allow_hdma_block = gb->ppu->mode == PPU_MODE_HBLANK || !IS_LCD_ENABLED(gb);
         }
 
-        mmu->hdma.src_address = ((mmu->io_registers[HDMA1 - IO] << 8) | mmu->io_registers[HDMA2 - IO]) & 0xFFF0;
-        mmu->hdma.dest_address = 0x8000 | (((mmu->io_registers[HDMA3 - IO] << 8) | mmu->io_registers[HDMA4 - IO]) & 0x1FF0);
+        mmu->hdma.src_address = ((mmu->io_registers[IO_HDMA1] << 8) | mmu->io_registers[IO_HDMA2]) & 0xFFF0;
+        mmu->hdma.dest_address = 0x8000 | (((mmu->io_registers[IO_HDMA3] << 8) | mmu->io_registers[IO_HDMA4]) & 0x1FF0);
 
         mmu->hdma.initializing = 1;
 
@@ -588,65 +679,73 @@ static inline void write_io_register(gb_t *gb, word_t address, byte_t data) {
         // else // General purpose DMA (GDMA)
         //     printf("GDMA size=%d (%d blocs), vram bank=%d, wram bank n=%d, src=%x, dest=%x\n", (mmu->io_registers[io_reg_addr] + 1) * 0x10, mmu->io_registers[io_reg_addr] + 1, GBC_CURRENT_VRAM_BANK(mmu), GBC_CURRENT_WRAM_BANK(mmu), mmu->hdma.src_address, mmu->hdma.dest_address);
         break;
-    case RP:
-        mmu->io_registers[io_reg_addr] = gb->mode == GB_MODE_CGB ? data & 0xC1 : 0xFF;
+    case IO_RP:
+        mmu->io_registers[io_reg_addr] = gb->cgb_mode_enabled ? data & 0xC1 : 0xFF;
         break;
-    case BGPD:
+    case IO_BGPI:
+        if (gb->mode == GB_MODE_CGB)
+            mmu->io_registers[io_reg_addr] = data;
+        break;
+    case IO_BGPD:
         if (gb->mode == GB_MODE_DMG)
             break;
 
-        if (!PPU_IS_MODE(gb, PPU_MODE_DRAWING)) {
-            byte_t cram_address = mmu->io_registers[BGPI - IO] & 0x3F;
+        if (gb->ppu->mode != PPU_MODE_DRAWING) {
+            byte_t cram_address = mmu->io_registers[IO_BGPI] & 0x3F;
             mmu->cram_bg[cram_address] = data;
             // printf("write %d in cram_bg %d\n", data, cram_address);
         }
 
         // increment BGPI address if auto increment (bit.7) of BGPI is set
-        if (CHECK_BIT(mmu->io_registers[BGPI - IO], 7)) {
-            byte_t new_bgpi_address = (mmu->io_registers[BGPI - IO] & 0x3F) + 1;
+        if (CHECK_BIT(mmu->io_registers[IO_BGPI], 7)) {
+            byte_t new_bgpi_address = (mmu->io_registers[IO_BGPI] & 0x3F) + 1;
             if (new_bgpi_address > 0x3F)
                 new_bgpi_address = 0;
-            mmu->io_registers[BGPI - IO] = new_bgpi_address;
-            SET_BIT(mmu->io_registers[BGPI - IO], 7);
+            mmu->io_registers[IO_BGPI] = new_bgpi_address;
+            SET_BIT(mmu->io_registers[IO_BGPI], 7);
         }
         break;
-    case OBPD:
+    case IO_OBPI:
+        if (gb->mode == GB_MODE_CGB)
+            mmu->io_registers[io_reg_addr] = data;
+        break;
+    case IO_OBPD:
         if (gb->mode == GB_MODE_DMG)
             break;
 
-        if (!PPU_IS_MODE(gb, PPU_MODE_DRAWING)) {
-            byte_t cram_address = mmu->io_registers[OBPI - IO] & 0x3F;
+        if (gb->ppu->mode != PPU_MODE_DRAWING) {
+            byte_t cram_address = mmu->io_registers[IO_OBPI] & 0x3F;
             mmu->cram_obj[cram_address] = data;
             // printf("write %d in cram_obj %d\n", data, cram_address);
         }
 
         // increment OBPI address if auto increment (bit.7) of OBPI is set
-        if (CHECK_BIT(mmu->io_registers[OBPI - IO], 7)) {
-            byte_t new_obpi_address = (mmu->io_registers[OBPI - IO] & 0x3F) + 1;
+        if (CHECK_BIT(mmu->io_registers[IO_OBPI], 7)) {
+            byte_t new_obpi_address = (mmu->io_registers[IO_OBPI] & 0x3F) + 1;
             if (new_obpi_address > 0x3F)
                 new_obpi_address = 0;
-            mmu->io_registers[OBPI - IO] = new_obpi_address;
-            SET_BIT(mmu->io_registers[OBPI - IO], 7);
+            mmu->io_registers[IO_OBPI] = new_obpi_address;
+            SET_BIT(mmu->io_registers[IO_OBPI], 7);
         }
         break;
-    case SVBK:
-        if (gb->mode == GB_MODE_CGB) {
+    case IO_SVBK:
+        if (gb->cgb_mode_enabled) {
             mmu->io_registers[io_reg_addr] = data & 0x07;
-            mmu->wram_bankn_addr_offset = ((GBC_CURRENT_WRAM_BANK(mmu) - 1) * WRAM_BANK_SIZE) - WRAM_BANK0;
+            mmu->wram_bankn_addr_offset = ((GBC_CURRENT_WRAM_BANK(mmu) - 1) * WRAM_BANK_SIZE) - MMU_WRAM_BANK0;
         }
         break;
-    case 0xFF74:
+    case 0x74:
         if (gb->mode == GB_MODE_CGB)
             mmu->io_registers[io_reg_addr] = data; // only writable in CGB mode
         break;
-    case 0xFF75:
+    case 0x75:
         mmu->io_registers[io_reg_addr] = gb->mode == GB_MODE_CGB ? data & 0x70 : data;
         break;
-    case 0xFF76:
+    case 0x76:
         if (gb->mode == GB_MODE_DMG)
             mmu->io_registers[io_reg_addr] = data; // only writable in DMG mode
         break;
-    case 0xFF77:
+    case 0x77:
         if (gb->mode == GB_MODE_DMG)
             mmu->io_registers[io_reg_addr] = data; // only writable in DMG mode
         break;
@@ -660,70 +759,61 @@ byte_t mmu_read_io_src(gb_t *gb, word_t address, gb_io_source_t io_src) {
     gb_mmu_t *mmu = gb->mmu;
 
     switch (address & 0xF000) {
-    case ROM_BANK0:
+    case MMU_ROM_BANK0:
         if (!mmu->boot_finished) {
             if (gb->mode == GB_MODE_DMG && address < 0x100)
-                return dmg_boot[address];
+                return mmu->dmg_boot_rom[address];
             if (gb->mode == GB_MODE_CGB && (address < 0x100 || (address >= 0x200 && address < sizeof(cgb_boot))))
-                return cgb_boot[address];
+                return mmu->cgb_boot_rom[address];
         }
         // fallthrough
-    case ROM_BANK0 + 0x1000:
-    case ROM_BANK0 + 0x2000:
-    case ROM_BANK0 + 0x3000:
+    case MMU_ROM_BANK0 + 0x1000:
+    case MMU_ROM_BANK0 + 0x2000:
+    case MMU_ROM_BANK0 + 0x3000:
         return mmu->rom[mmu->rom_bank0_addr + address];
-    case ROM_BANKN:
-    case ROM_BANKN + 0x1000:
-    case ROM_BANKN + 0x2000:
-    case ROM_BANKN + 0x3000:
+    case MMU_ROM_BANKN:
+    case MMU_ROM_BANKN + 0x1000:
+    case MMU_ROM_BANKN + 0x2000:
+    case MMU_ROM_BANKN + 0x3000:
         return mmu->rom[mmu->rom_bankn_addr + address];
-    case VRAM:
-    case VRAM + 0x1000:
+    case MMU_VRAM:
+    case MMU_VRAM + 0x1000:
         if (io_src == IO_SRC_GDMA_HDMA)
             return 0xFF; // src can be inside vram but it reads incorrect data: see TCAGBD.pdf for more details
-        if (io_src == IO_SRC_CPU && IS_LCD_ENABLED(gb) && PPU_IS_MODE(gb, PPU_MODE_DRAWING))
-            return 0xFF; // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
+        if (io_src == IO_SRC_CPU && is_vram_locked_for_cpu_read(gb))
+            return 0xFF;
         return mmu->vram[mmu->vram_bank_addr_offset + address];
-    case ERAM:
-    case ERAM + 0x1000:
+    case MMU_ERAM:
+    case MMU_ERAM + 0x1000:
         return mbc_read_eram(gb, address);
-    case WRAM_BANK0:
-        return mmu->wram[address - WRAM_BANK0];
-    case WRAM_BANKN:
+    case MMU_WRAM_BANK0:
+        return mmu->wram[address - MMU_WRAM_BANK0];
+    case MMU_WRAM_BANKN:
         return mmu->wram[mmu->wram_bankn_addr_offset + address];
-    case ECHO:
-        return mmu->wram[address - ECHO];
+    case MMU_ECHO:
+        return mmu->wram[address - MMU_ECHO];
     case 0xF000:
         // From CasualPokePlayer (https://github.com/skylersaleh/SkyEmu/blob/52a08105c06f1a4f1e9215b2f9ab83fe04ee6236/src/gb.h#L1267):
         // in most cases echo ram is only E000-FDFF. 
         // oam dma is one of the exceptions here which have the entire E000-FFFF
         // region as echo ram for dma source (therefore only for memory reads by the oam dma)
-        if (address < OAM || io_src == IO_SRC_OAM_DMA || io_src == IO_SRC_GDMA_HDMA) // we are still in ECHO ram
-            return mmu->wram[(mmu->wram_bankn_addr_offset - (ECHO - WRAM_BANK0)) + address];
+        if (address < MMU_OAM || io_src == IO_SRC_OAM_DMA || io_src == IO_SRC_GDMA_HDMA) // we are still in ECHO ram
+            return mmu->wram[(mmu->wram_bankn_addr_offset - (MMU_ECHO - MMU_WRAM_BANK0)) + address];
 
-        if (address < UNUSABLE) { // we are in OAM
-            // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
-            if (io_src == IO_SRC_CPU && IS_LCD_ENABLED(gb) && ((PPU_IS_MODE(gb, PPU_MODE_OAM) || PPU_IS_MODE(gb, PPU_MODE_DRAWING))))
+        if (address < MMU_UNUSABLE) { // we are in MMU_OAM
+            if (io_src == IO_SRC_CPU && is_oam_locked_for_cpu_read(gb))
                 return 0xFF;
-
-            // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
-            // but it has some quirks for the other memory regions (check links below):
-            // https://www.reddit.com/r/EmuDev/comments/5hahss/comment/daz9cbi/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
-            // https://github.com/Gekkio/mooneye-gb/issues/39#issuecomment-265953981
-            if (io_src == IO_SRC_CPU && IS_OAM_DMA_RUNNING(mmu))
-                return 0xFF;
-
-            return mmu->oam[address - OAM];
+            return mmu->oam[address - MMU_OAM];
         }
 
-        if (address < IO) // we are in UNUSABLE
+        if (address < MMU_IO) // we are in MMU_UNUSABLE
             return 0xFF;
 
-        if (address < HRAM)
-            return read_io_register(gb, address);
+        if (address < MMU_HRAM)
+            return read_io_register(gb, address & 0x00FF);
 
-        if (address < IE)
-            return mmu->hram[address - HRAM];
+        if (address < MMU_IE)
+            return mmu->hram[address - MMU_HRAM];
 
         return mmu->ie;
     default:
@@ -736,58 +826,48 @@ void mmu_write_io_src(gb_t *gb, word_t address, byte_t data, gb_io_source_t io_s
     gb_mmu_t *mmu = gb->mmu;
 
     switch (address & 0xF000) {
-    case ROM_BANK0:
-    case ROM_BANK0 + 0x1000:
-    case ROM_BANK0 + 0x2000:
-    case ROM_BANK0 + 0x3000:
-    case ROM_BANKN:
-    case ROM_BANKN + 0x1000:
-    case ROM_BANKN + 0x2000:
-    case ROM_BANKN + 0x3000:
+    case MMU_ROM_BANK0:
+    case MMU_ROM_BANK0 + 0x1000:
+    case MMU_ROM_BANK0 + 0x2000:
+    case MMU_ROM_BANK0 + 0x3000:
+    case MMU_ROM_BANKN:
+    case MMU_ROM_BANKN + 0x1000:
+    case MMU_ROM_BANKN + 0x2000:
+    case MMU_ROM_BANKN + 0x3000:
         mbc_write_registers(gb, address, data);
         break;
-    case VRAM:
-    case VRAM + 0x1000:
-        // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
-        if (io_src == IO_SRC_CPU && IS_LCD_ENABLED(gb) && PPU_IS_MODE(gb, PPU_MODE_DRAWING))
-            return;
+    case MMU_VRAM:
+    case MMU_VRAM + 0x1000:
+        if (io_src == IO_SRC_CPU && is_vram_locked_for_cpu_write(gb))
+            break;
         mmu->vram[mmu->vram_bank_addr_offset + address] = data;
         break;
-    case ERAM:
-    case ERAM + 0x1000:
+    case MMU_ERAM:
+    case MMU_ERAM + 0x1000:
         mbc_write_eram(gb, address, data);
         break;
-    case WRAM_BANK0:
-        mmu->wram[address - WRAM_BANK0] = data;
+    case MMU_WRAM_BANK0:
+        mmu->wram[address - MMU_WRAM_BANK0] = data;
         break;
-    case WRAM_BANKN:
+    case MMU_WRAM_BANKN:
         mmu->wram[mmu->wram_bankn_addr_offset + address] = data;
         break;
-    case ECHO:
-        mmu->wram[address - ECHO] = data;
+    case MMU_ECHO:
+        mmu->wram[address - MMU_ECHO] = data;
         break;
     case 0xF000:
-        if (address < OAM) { // we are still in echo ram
-            mmu->wram[(mmu->wram_bankn_addr_offset - (ECHO - WRAM_BANK0)) + address] = data;
-        } else if (address < UNUSABLE) {
-            // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
-            if (io_src == IO_SRC_CPU && IS_LCD_ENABLED(gb) && ((PPU_IS_MODE(gb, PPU_MODE_OAM) || PPU_IS_MODE(gb, PPU_MODE_DRAWING))))
+        if (address < MMU_OAM) { // we are still in echo ram
+            mmu->wram[(mmu->wram_bankn_addr_offset - (MMU_ECHO - MMU_WRAM_BANK0)) + address] = data;
+        } else if (address < MMU_UNUSABLE) {
+            if (io_src == IO_SRC_CPU && is_oam_locked_for_cpu_write(gb))
                 break;
-
-            // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
-            // but it has some quirks for the other memory regions (check links below):
-            // https://www.reddit.com/r/EmuDev/comments/5hahss/comment/daz9cbi/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
-            // https://github.com/Gekkio/mooneye-gb/issues/39#issuecomment-265953981
-            if (io_src == IO_SRC_CPU && IS_OAM_DMA_RUNNING(mmu))
-                break;
-
-            mmu->oam[address - OAM] = data;
-        } else if (address < IO) {
-            // UNUSABLE memory is unusable
-        } else if (address < HRAM) {
-            write_io_register(gb, address, data);
-        } else if (address < IE) {
-            mmu->hram[address - HRAM] = data;
+            mmu->oam[address - MMU_OAM] = data;
+        } else if (address < MMU_IO) {
+            // MMU_UNUSABLE memory is unusable
+        } else if (address < MMU_HRAM) {
+            write_io_register(gb, address & 0x00FF, data);
+        } else if (address < MMU_IE) {
+            mmu->hram[address - MMU_HRAM] = data;
         } else {
             mmu->ie = data;
         }

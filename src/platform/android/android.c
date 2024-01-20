@@ -59,6 +59,9 @@ static SDL_Texture *link_texture, *link_pressed_texture;
 
 static int steps_per_frame;
 
+static byte_t *camera_data;
+static int camera_width, camera_height, camera_row_stride, camera_rotation;
+
 static button_t buttons[] = {
     {
         .shape = {
@@ -511,8 +514,97 @@ static void start_emulation_loop(void) {
         gb_quit(gb);
     }
 
+    if (camera_data)
+        free(camera_data);
+
     SDL_DestroyTexture(ppu_texture);
     SDL_CloseAudioDevice(audio_device);
+}
+
+static void init_camera(void) {
+    JNIEnv *env = (JNIEnv *) SDL_AndroidGetJNIEnv();
+    jobject activity = (jobject) SDL_AndroidGetActivity();
+    jclass clazz = (*env)->GetObjectClass(env, activity);
+
+    jmethodID method_id = (*env)->GetMethodID(env, clazz, "initCamera", "()V");
+
+    (*env)->CallVoidMethod(env, activity, method_id);
+
+    (*env)->DeleteLocalRef(env, activity);
+    (*env)->DeleteLocalRef(env, clazz);
+}
+
+JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_updateCameraBuffer(
+        JNIEnv* env,
+        jobject thiz,
+        jbyteArray data,
+        jsize width,
+        jsize height,
+        jsize row_stride,
+        jsize rotation)
+{
+    jboolean is_copy;
+    jbyte *image = (*env)->GetByteArrayElements(env, data, &is_copy);
+
+    size_t sz = width * height * sizeof(*camera_data);
+    if (!camera_data)
+        camera_data = xmalloc(sz);
+    memcpy(camera_data, image, sz);
+    camera_width = width;
+    camera_height = height;
+    camera_row_stride = row_stride;
+    camera_rotation = rotation;
+
+    (*env)->ReleaseByteArrayElements(env, data, image, JNI_ABORT);
+
+    // log("received image %p w=%d h=%d rs=%d rot=%d", camera_data, width, height, row_stride, rotation);
+}
+
+/**
+ * resize, crop (keep center) and rotate `src` to fit into `dst` where `dst` is the gb camera sensor buffer
+ */
+static void fit_image(byte_t *dst, const byte_t *src, int src_width, int src_height, int row_stride, int rotation) {
+    // crop top and bottom of largest dimension to get a 1:1 aspect ratio (adjust scale_x or scale_y accordingly)
+    int src_start_x, src_start_y;
+    int src_dim_diff = src_width - src_height;
+    if (src_dim_diff < 0) {
+        src_height = src_width - (src_dim_diff / 2);
+        src_start_y = src_dim_diff / 2;
+    }
+    else if (src_dim_diff > 0) {
+        src_width = src_height - (src_dim_diff / 2);
+        src_start_x = src_dim_diff / 2;
+    }
+
+    // scale and rotate
+    int dst_width = GB_CAMERA_SENSOR_WIDTH;
+    int dst_height = GB_CAMERA_SENSOR_HEIGHT;
+
+    float scale_x = (float) src_width / (float) dst_width;
+    float scale_y = (float) src_height / (float) dst_height;
+
+    for (int y = 0; y < dst_height; y++) {
+        for (int x = 0; x < dst_width; x++) {
+            int src_index = ((int) ((y + src_start_y) * scale_y) * row_stride) + (int) ((x + src_start_x) * scale_x);
+
+            if (rotation == 0)
+                dst[y * dst_width + x] = src[src_index];
+            else if (rotation == 90)
+                dst[x * dst_height + ((dst_height - 1) - y)] = src[src_index];
+            else if (rotation == 180)
+                dst[((dst_height - 1) - y) * dst_width + ((dst_width - 1) - x)] = src[src_index];
+            else // if (rotation == 270)
+                dst[((dst_width - 1) - x) * dst_height + y] = src[src_index];
+        }
+    }
+}
+
+static byte_t camera_capture_image_cb(byte_t *pixels) {
+    if (camera_data) {
+        fit_image(pixels, camera_data, camera_width, camera_height, camera_row_stride, camera_rotation);
+        return 1;
+    }
+    return 0;
 }
 
 static void load_cartridge(const byte_t *rom, size_t rom_size, int resume, int emu_mode, int palette, float emu_speed, float sound) {
@@ -523,10 +615,14 @@ static void load_cartridge(const byte_t *rom, size_t rom_size, int resume, int e
         .apu_speed = emu_speed,
         .apu_sampling_rate = SAMPLING_RATE,
         .apu_sound_level = sound,
+        .on_camera_capture_image = camera_capture_image_cb,
         .palette = palette
     };
     gb = gb_init(rom, rom_size, &opts);
     if (!gb) return;
+
+    if (gb_has_camera(gb))
+        init_camera();
 
     if (resume) {
         char buf[512];
@@ -543,9 +639,7 @@ static void load_cartridge(const byte_t *rom, size_t rom_size, int resume, int e
 
 static void ready(void) {
     JNIEnv *env = (JNIEnv *) SDL_AndroidGetJNIEnv();
-
     jobject activity = (jobject) SDL_AndroidGetActivity();
-
     jclass clazz = (*env)->GetObjectClass(env, activity);
 
     jmethodID method_id = (*env)->GetMethodID(env, clazz, "onNativeAppReady", "()V");
@@ -787,6 +881,7 @@ int main(int argc, char **argv) {
     linked_gb = NULL;
     link_sfd = -1;
     init_handshake = SDL_FALSE;
+    camera_data = NULL;
 
     // initialize global variables here and not at their initialization as they can still have their
     // previous values because of android's activities lifecycle

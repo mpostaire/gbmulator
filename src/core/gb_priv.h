@@ -10,19 +10,23 @@
 #include "joypad.h"
 #include "link.h"
 #include "printer.h"
+#include "camera.h"
 
 #define PRINTER_CHUNK_SIZE 0x280
 
 struct gb_t {
     gb_mode_t mode;
+    byte_t cgb_mode_enabled; // this is 1 if CGB is in CGB mode, 0 if it is in DMG compatibility mode // TODO understand this better
+
     byte_t disable_cgb_color_correction;
+    byte_t dmg_palette;
     float apu_sound_level;
     float apu_speed;
     uint32_t apu_sampling_rate;
-    byte_t dmg_palette;
     gb_new_frame_cb_t on_new_frame;
     gb_new_sample_cb_t on_new_sample;
     gb_accelerometer_request_cb_t on_accelerometer_request;
+    gb_camera_capture_image_cb_t on_camera_capture_image;
 
     char rom_title[17];
 

@@ -16,6 +16,6 @@ typedef enum {
 } gb_oam_dma_starting_state_t;
 
 #define IS_OAM_DMA_RUNNING(mmu) ((mmu)->oam_dma.progress >= 0 && (mmu)->oam_dma.progress < 0xA0)
-#define GBC_GDMA_HDMA_LENGTH(mmu) ((mmu)->io_registers[HDMA5 - IO] & 0x7F)
+#define GBC_GDMA_HDMA_LENGTH(mmu) ((mmu)->io_registers[IO_HDMA5] & 0x7F)
 
 void dma_step(gb_t *gb);

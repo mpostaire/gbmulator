@@ -4,14 +4,14 @@
 
 void link_set_clock(gb_t *gb) {
     // double speed is handled by the gb_step() function
-    if (gb->mode == GB_MODE_CGB && CHECK_BIT(gb->mmu->io_registers[SC - IO], 1))
+    if (gb->mode == GB_MODE_CGB && CHECK_BIT(gb->mmu->io_registers[IO_SC], 1))
         gb->link->max_clock_cycles = GB_CPU_FREQ / 262144;
     else
         gb->link->max_clock_cycles = GB_CPU_FREQ / 8192;
 }
 
 void link_init(gb_t *gb) {
-    gb->link = xcalloc(1, sizeof(gb_link_t));
+    gb->link = xcalloc(1, sizeof(*gb->link));
     link_set_clock(gb);
 }
 
@@ -23,15 +23,15 @@ void link_quit(gb_t *gb) {
 
 byte_t gb_linked_shift_bit(void *device, byte_t in_bit) {
     gb_t *gb = device;
-    byte_t out_bit = GET_BIT(gb->mmu->io_registers[SB - IO], 7);
-    gb->mmu->io_registers[SB - IO] <<= 1;
-    CHANGE_BIT(gb->mmu->io_registers[SB - IO], 0, in_bit);
+    byte_t out_bit = GET_BIT(gb->mmu->io_registers[IO_SB], 7);
+    gb->mmu->io_registers[IO_SB] <<= 1;
+    CHANGE_BIT(gb->mmu->io_registers[IO_SB], 0, in_bit);
     return out_bit;
 }
 
 void gb_linked_data_received(void *device) {
     gb_t *gb = device;
-    RESET_BIT(gb->mmu->io_registers[SC - IO], 7);
+    RESET_BIT(gb->mmu->io_registers[IO_SC], 7);
     CPU_REQUEST_INTERRUPT(gb, IRQ_SERIAL);
 }
 
@@ -46,7 +46,7 @@ void link_step(gb_t *gb) {
     // transfer requested / in progress with internal clock (this gb is the master of the connection)
     // --> the master emulator also does the work for the slave so we don't have to handle the case
     //     where this gb is the slave
-    byte_t master_transfer_request = CHECK_BIT(mmu->io_registers[SC - IO], 7) && CHECK_BIT(mmu->io_registers[SC - IO], 0);
+    byte_t master_transfer_request = CHECK_BIT(mmu->io_registers[IO_SC], 7) && CHECK_BIT(mmu->io_registers[IO_SC], 0);
     if (!master_transfer_request)
         return;
 
@@ -55,7 +55,7 @@ void link_step(gb_t *gb) {
 
         byte_t other_bit = 1; // this is 1 if no device is connected
         if (link->linked_device.type != LINK_TYPE_NONE) {
-            byte_t this_bit = GET_BIT(mmu->io_registers[SB - IO], 7);
+            byte_t this_bit = GET_BIT(mmu->io_registers[IO_SB], 7);
             // transfer this gb bit to linked device
             other_bit = link->linked_device.shift_bit(link->linked_device.device, this_bit);
         }

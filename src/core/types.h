@@ -48,13 +48,7 @@ typedef struct {
 typedef void (*gb_new_frame_cb_t)(const byte_t *pixels);
 typedef void (*gb_new_sample_cb_t)(const gb_apu_sample_t sample, uint32_t *dynamic_sampling_rate);
 typedef void (*gb_accelerometer_request_cb_t)(double *x, double *y);
-
-typedef void (*gb_new_printer_line_cb_t)(const byte_t *pixels, size_t height);
-typedef void (*gb_start_printing_cb_t)(const byte_t *pixels, size_t height);
-typedef void (*gb_finish_printing_cb_t)(const byte_t *pixels, size_t height);
-
-typedef byte_t (*linked_device_shift_bit_cb_t)(void *device, byte_t in_bit);
-typedef void (*linked_device_data_received_cb_t)(void *device);
+typedef byte_t (*gb_camera_capture_image_cb_t)(byte_t *image);
 
 typedef struct {
     gb_mode_t mode; // either `GB_MODE_DMG` for original game boy emulation or `GB_MODE_CGB` for game boy color emulation
@@ -66,4 +60,5 @@ typedef struct {
     gb_new_frame_cb_t on_new_frame; // the function called whenever the ppu has finished rendering a new frame
     gb_new_sample_cb_t on_new_sample; // the function called whenever a new audio sample is produced by the apu
     gb_accelerometer_request_cb_t on_accelerometer_request; // the function called whenever the MBC7 latches accelerometer data
+    gb_camera_capture_image_cb_t on_camera_capture_image; // the function called whenever the CAMERA requests image data
 } gb_options_t;

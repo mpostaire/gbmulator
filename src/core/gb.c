@@ -22,9 +22,11 @@ gb_options_t defaults_opts = {
     .palette = PPU_COLOR_PALETTE_ORIG,
     .apu_speed = 1.0f,
     .apu_sound_level = 1.0f,
+    .apu_sampling_rate = 44100,
     .on_new_sample = NULL,
     .on_new_frame = NULL,
-    .on_accelerometer_request = NULL
+    .on_accelerometer_request = NULL,
+    .on_camera_capture_image = NULL
 };
 
 const char *mbc_names[] = {
@@ -58,6 +60,8 @@ static inline int gb_step_linked(gb_t *gb, byte_t step_linked_device) {
 
     if (gb->mmu->has_rtc)
         rtc_step(gb);
+    if (gb->mmu->mbc.type == CAMERA)
+        camera_step(gb);
 
     // TODO during the time the cpu is blocked after a STOP opcode triggering a speed switch, the ppu and apu
     //      behave in a weird way: https://gbdev.io/pandocs/CGB_Registers.html?highlight=key1#ff4d--key1-cgb-mode-only-prepare-speed-switch
@@ -84,7 +88,7 @@ int gb_is_rom_valid(const byte_t *rom) {
 }
 
 gb_t *gb_init(const byte_t *rom, size_t rom_size, gb_options_t *opts) {
-    gb_t *gb = xcalloc(1, sizeof(gb_t));
+    gb_t *gb = xcalloc(1, sizeof(*gb));
     gb_set_options(gb, opts);
 
     if (!mmu_init(gb, rom, rom_size)) {
@@ -152,7 +156,6 @@ static const char *get_new_licensee(gb_t *gb) {
     byte_t code = ((gb->mmu->rom[0x0144] - 0x30) * 10) + (gb->mmu->rom[0x0145]) - 0x30;
 
     switch (code) {
-    case 0: return "None";
     case 1: return "Nintendo";
     case 8: return "Capcom";
     case 13: return "Electronic Arts";
@@ -213,13 +216,12 @@ static const char *get_new_licensee(gb_t *gb) {
     case 97: return "Kaneko";
     case 99: return "Pack in soft";
     case 0xA4: return "Konami (Yu-Gi-Oh!)";
-    default: return "Unknown";
+    default: return NULL;
     }
 }
 
 static const char *get_licensee(gb_t *gb) {
     switch (gb->mmu->rom[0x014B]) {
-    case 0x00: return "None";
     case 0x01: return "Nintendo";
     case 0x08: return "Capcom";
     case 0x09: return "Hot-B";
@@ -366,35 +368,36 @@ static const char *get_licensee(gb_t *gb) {
     case 0xF0: return "A Wave";
     case 0xF3: return "Extreme Entertainment";
     case 0xFF: return "LJN";
-    default: return "Unknown";
+    default: return NULL;
     }
 }
 
 void gb_print_status(gb_t *gb) {
     gb_mmu_t *mmu = gb->mmu;
+    char str_buf[30];
 
-    printf("[%s] Playing %s (v%d) by %s\n",
+    const char *licensee = get_licensee(gb);
+    if (licensee)
+        snprintf(str_buf, 30, " by %s", licensee);
+
+    printf("[%s] Playing %s (v%d)%s\n",
             gb->mode == GB_MODE_DMG ? "DMG" : "CGB",
             gb->rom_title,
             mmu->rom[0x014C],
-            get_licensee(gb)
+            licensee ? str_buf : ""
     );
 
-    char *ram_str = NULL;
-    if (mmu->eram_banks > 0) {
-        ram_str = xmalloc(18);
-        snprintf(ram_str, 17, " + %d RAM banks", mmu->eram_banks);
-    }
+    if (mmu->eram_banks > 0)
+        snprintf(str_buf, 17, " + %d RAM banks", mmu->eram_banks);
 
     printf("Cartridge using %s with %d ROM banks%s%s%s%s\n",
             mbc_names[mmu->mbc.type],
             mmu->rom_banks,
-            ram_str ? ram_str : "",
+            mmu->eram_banks > 0 ? str_buf : "",
             mmu->has_battery ? " + BATTERY" : "",
             mmu->has_rtc ? " + RTC" : "",
             mmu->has_rumble ? " + RUMBLE" : ""
     );
-    free(ram_str);
 }
 
 void gb_link_connect_gb(gb_t *gb, gb_t *other_gb) {
@@ -472,11 +475,19 @@ byte_t gb_get_joypad_state(gb_t *gb) {
 }
 
 void gb_set_joypad_state(gb_t *gb, byte_t state) {
-    gb->joypad->action = (state >> 4) & 0x0F;
-    gb->joypad->direction = state & 0x0F;
+    gb_joypad_t *joypad = gb->joypad;
 
-    if (!CHECK_BIT(gb->mmu->io_registers[P1 - IO], 4) || !CHECK_BIT(gb->mmu->io_registers[P1 - IO], 5))
+    byte_t direction = state & 0x0F;
+    byte_t action = (state >> 4) & 0x0F;
+
+    // request interrupt if it is enabled and any button bit goes from released to pressed (1 -> 0)
+    byte_t direction_changed = (joypad->direction & ~direction) && !CHECK_BIT(gb->mmu->io_registers[IO_P1], 4);
+    byte_t action_changed = (joypad->action & ~action) && !CHECK_BIT(gb->mmu->io_registers[IO_P1], 5);
+    if (direction_changed || action_changed)
         CPU_REQUEST_INTERRUPT(gb, IRQ_JOYPAD);
+ 
+    joypad->action = action;
+    joypad->direction = direction;
 }
 
 byte_t *gb_get_save(gb_t *gb, size_t *save_length) {
@@ -549,7 +560,10 @@ int gb_load_save(gb_t *gb, byte_t *save_data, size_t save_length) {
     if (eram_len > 0)
         memcpy(gb->mmu->eram, save_data, eram_len);
 
-    size_t rtc_len = gb->mmu->has_rtc ? save_length - eram_len : 0;
+    if (!gb->mmu->has_rtc)
+        return 1;
+
+    size_t rtc_len = save_length - eram_len;
     if (rtc_len != 44 && rtc_len != 48) {
         eprintf("Invalid rtc format\n");
         return 1;
@@ -605,7 +619,7 @@ byte_t *gb_get_savestate(gb_t *gb, size_t *length, byte_t compressed) {
 byte_t *gb_get_savestate(gb_t *gb, size_t *length, UNUSED byte_t compressed) {
 #endif
     // make savestate header
-    savestate_header_t *savestate_header = xmalloc(sizeof(savestate_header_t));
+    savestate_header_t *savestate_header = xmalloc(sizeof(*savestate_header));
     savestate_header->mode = gb->mode;
     memcpy(savestate_header->identifier, SAVESTATE_STRING, sizeof(savestate_header->identifier));
     memcpy(savestate_header->rom_title, gb->rom_title, sizeof(savestate_header->rom_title));
@@ -673,7 +687,7 @@ int gb_load_savestate(gb_t *gb, const byte_t *data, size_t length) {
         return 0;
     }
 
-    savestate_header_t *savestate_header = xmalloc(sizeof(savestate_header_t));
+    savestate_header_t *savestate_header = xmalloc(sizeof(*savestate_header));
     memcpy(savestate_header, data, sizeof(savestate_header_t));
 
     if (strncmp(savestate_header->identifier, SAVESTATE_STRING, sizeof(SAVESTATE_STRING))) {
@@ -709,7 +723,7 @@ int gb_load_savestate(gb_t *gb, const byte_t *data, size_t length) {
             savestate_data_len = dest_len;
             savestate_data = dest;
         } else {
-            eprintf("uncompress failure");
+            eprintf("uncompress failure\n");
             free(dest);
             free(savestate_header);
             free(savestate_data);
@@ -769,6 +783,7 @@ void gb_get_options(gb_t *gb, gb_options_t *opts) {
     opts->on_new_sample = gb->on_new_sample;
     opts->on_new_frame = gb->on_new_frame;
     opts->on_accelerometer_request = gb->on_accelerometer_request;
+    opts->on_camera_capture_image = gb->on_camera_capture_image;
 }
 
 void gb_set_options(gb_t *gb, gb_options_t *opts) {
@@ -778,7 +793,8 @@ void gb_set_options(gb_t *gb, gb_options_t *opts) {
     // allow changes of mode and apu_sampling_rate only once (inside gb_init())
     if (!gb->mode) {
         gb->mode = opts->mode >= GB_MODE_DMG && opts->mode <= GB_MODE_CGB ? opts->mode : defaults_opts.mode;
-        gb->apu_sampling_rate = opts->apu_sampling_rate == 0 ? 1 : opts->apu_sampling_rate;
+        gb->cgb_mode_enabled = gb->mode == GB_MODE_CGB;
+        gb->apu_sampling_rate = opts->apu_sampling_rate == 0 ? defaults_opts.apu_sampling_rate : opts->apu_sampling_rate;
     }
 
     gb->disable_cgb_color_correction = opts->disable_cgb_color_correction;
@@ -788,6 +804,7 @@ void gb_set_options(gb_t *gb, gb_options_t *opts) {
     gb->on_new_frame = opts->on_new_frame;
     gb->on_new_sample = opts->on_new_sample;
     gb->on_accelerometer_request = opts->on_accelerometer_request;
+    gb->on_camera_capture_image = opts->on_camera_capture_image;
 }
 
 gb_mode_t gb_is_cgb(gb_t *gb) {
@@ -824,4 +841,8 @@ void gb_set_palette(gb_t *gb, gb_color_palette_t palette) {
 
 byte_t gb_has_accelerometer(gb_t *gb) {
     return gb->mmu->mbc.type == MBC7;
+}
+
+byte_t gb_has_camera(gb_t *gb) {
+    return gb->mmu->mbc.type == CAMERA;
 }

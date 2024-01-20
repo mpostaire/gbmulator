@@ -39,6 +39,9 @@ public class SettingsMenu extends AppCompatActivity {
     LinearLayout settingModeButton;
     TextView settingModeTextView;
 
+    LinearLayout settingCameraButton;
+    TextView settingCameraTextView;
+
     LinearLayout settingPaletteButton;
     TextView settingPaletteTextView;
 
@@ -55,6 +58,7 @@ public class SettingsMenu extends AppCompatActivity {
     TextView opacityTextView;
 
     PopupMenu modePopup;
+    PopupMenu cameraPopup;
     PopupMenu palettePopup;
 
     SharedPreferences preferences;
@@ -85,6 +89,14 @@ public class SettingsMenu extends AppCompatActivity {
                 break;
         }
 
+        settingCameraButton = findViewById(R.id.settingCameraButton);
+        settingCameraTextView = findViewById(R.id.settingCameraTextView);
+
+        if (preferences.getBoolean(UserSettings.CAMERA_IS_FRONT, UserSettings.CAMERA_IS_FRONT_DEFAULT))
+            settingCameraTextView.setText(R.string.setting_camera_front);
+        else
+            settingCameraTextView.setText(R.string.setting_camera_back);
+
         settingPaletteButton = findViewById(R.id.settingColorPaletteButton);
         settingPaletteTextView = findViewById(R.id.settingPaletteTextView);
 
@@ -109,6 +121,25 @@ public class SettingsMenu extends AppCompatActivity {
                 case R.id.popup_menu_mode_cgb:
                     settingModeTextView.setText(R.string.setting_mode_cgb);
                     preferencesEditor.putInt(UserSettings.EMULATION_MODE, UserSettings.EMULATION_MODE_CGB);
+                    preferencesEditor.apply();
+                    return true;
+                default:
+                    return false;
+            }
+        });
+
+        cameraPopup = new PopupMenu(this, settingCameraTextView);
+        cameraPopup.inflate(R.menu.setting_camera_popup_menu);
+        cameraPopup.setOnMenuItemClickListener(menuItem -> {
+            switch (menuItem.getItemId()) {
+                case R.id.popup_menu_camera_back:
+                    settingCameraTextView.setText(R.string.setting_camera_back);
+                    preferencesEditor.putBoolean(UserSettings.CAMERA_IS_FRONT, false);
+                    preferencesEditor.apply();
+                    return true;
+                case R.id.popup_menu_camera_front:
+                    settingCameraTextView.setText(R.string.setting_camera_front);
+                    preferencesEditor.putBoolean(UserSettings.CAMERA_IS_FRONT, true);
                     preferencesEditor.apply();
                     return true;
                 default:
@@ -251,6 +282,10 @@ public class SettingsMenu extends AppCompatActivity {
 
     public void showModePopup(View view) {
         modePopup.show();
+    }
+
+    public void showCameraPopup(View view) {
+        cameraPopup.show();
     }
 
     public void showPalettePopup(View view) {

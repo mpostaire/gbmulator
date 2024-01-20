@@ -7,22 +7,22 @@ import re
 
 blargg_times = {
     "GB_MODE_DMG": {
-        "cpu_instrs.gb": 55 * 60,
-        "dmg_sound.gb": 36 * 60,
-        "halt_bug.gb": 2 * 60,
-        "instr_timing.gb": 1 * 60,
-        "interrupt_time.gb": 2 * 60,
-        "mem_timing.gb": 4 * 60,
-        "oam_bug.gb": 21 * 60
+        "cpu_instrs.gb": 55 * 1000,
+        "dmg_sound.gb": 36 * 1000,
+        "halt_bug.gb": 2 * 1000,
+        "instr_timing.gb": 1 * 1000,
+        "interrupt_time.gb": 2 * 1000,
+        "mem_timing.gb": 4 * 1000,
+        "oam_bug.gb": 21 * 1000
     },
     "GB_MODE_CGB": {
-        "cgb_sound.gb": 37 * 60,
-        "cpu_instrs.gb": 31 * 60,
-        "halt_bug.gb": 2 * 60,
-        "instr_timing.gb": 1 * 60,
-        "interrupt_time.gb": 2 * 60,
-        "mem_timing.gb": 4 * 60,
-        "oam_bug.gb": 21 * 60
+        "cgb_sound.gb": 37 * 1000,
+        "cpu_instrs.gb": 31 * 1000,
+        "halt_bug.gb": 2 * 1000,
+        "instr_timing.gb": 1 * 1000,
+        "interrupt_time.gb": 2 * 1000,
+        "mem_timing.gb": 4 * 1000,
+        "oam_bug.gb": 21 * 1000
     }
 }
 
@@ -38,26 +38,29 @@ def generate_acid_tests(output_file):
     output_file.write('{"dmg-acid2/dmg-acid2.gb", "dmg-acid2-cgb.png", NULL, GB_MODE_CGB, 0, 0x40, NULL, 0},\n')
 
 def generate_rtc3tests(output_file):
-    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-basic-tests-dmg.png", "basic-tests", GB_MODE_DMG, 780, 0, "1:a", 0},\n')
-    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-basic-tests-cgb.png", "basic-tests", GB_MODE_CGB, 780, 0, "1:a", 0},\n')
-    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-range-tests-dmg.png", "range-tests", GB_MODE_DMG, 480, 0, "1:down,1:a", 0},\n')
-    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-range-tests-cgb.png", "range-tests", GB_MODE_CGB, 480, 0, "1:down,1:a", 0},\n')
-    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-sub-second-writes-dmg.png", "sub-second-writes", GB_MODE_DMG, 1560, 0, "1:down,1:down,1:a", 0},\n')
-    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-sub-second-writes-cgb.png", "sub-second-writes", GB_MODE_CGB, 1560, 0, "1:down,1:down,1:a", 0},\n')
+    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-basic-tests-dmg.png", "basic-tests", GB_MODE_DMG, 13000, 0, "1:a", 0},\n')
+    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-basic-tests-cgb.png", "basic-tests", GB_MODE_CGB, 13000, 0, "1:a", 0},\n')
+    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-range-tests-dmg.png", "range-tests", GB_MODE_DMG, 8000, 0, "1:down,1:a", 0},\n')
+    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-range-tests-cgb.png", "range-tests", GB_MODE_CGB, 8000, 0, "1:down,1:a", 0},\n')
+    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-sub-second-writes-dmg.png", "sub-second-writes", GB_MODE_DMG, 26000, 0, "1:down,1:down,1:a", 0},\n')
+    output_file.write('{"rtc3test/rtc3test.gb", "rtc3test-sub-second-writes-cgb.png", "sub-second-writes", GB_MODE_CGB, 26000, 0, "1:down,1:down,1:a", 0},\n')
 
 def generate_bully_tests(output_file):
-    output_file.write('{"bully/bully.gb", "bully.png", NULL, GB_MODE_DMG, 60, 0, NULL, 0},\n')
-    output_file.write('{"bully/bully.gb", "bully.png", NULL, GB_MODE_CGB, 60, 0, NULL, 0},\n')
+    output_file.write('{"bully/bully.gb", "bully.png", NULL, GB_MODE_DMG, 500, 0, NULL, 0},\n')
+    output_file.write('{"bully/bully.gb", "bully.png", NULL, GB_MODE_CGB, 500, 0, NULL, 0},\n')
 
 def generate_little_things_tests(output_file):
-    output_file.write('{"little-things-gb/firstwhite.gb", "firstwhite-dmg-cgb.png", NULL, GB_MODE_DMG, 60, 0, NULL, 0},\n')
-    output_file.write('{"little-things-gb/firstwhite.gb", "firstwhite-dmg-cgb.png", NULL, GB_MODE_CGB, 60, 0, NULL, 0},\n')
-    output_file.write('{"little-things-gb/tellinglys.gb", "tellinglys-dmg.png", NULL, GB_MODE_DMG, 300, 0, "1:right,1:left,1:up,1:down,1:a,1:b,1:select,1:start", 0},\n')
-    output_file.write('{"little-things-gb/tellinglys.gb", "tellinglys-cgb.png", NULL, GB_MODE_CGB, 300, 0, "1:right,1:left,1:up,1:down,1:a,1:b,1:select,1:start", 0},\n')
+    output_file.write('{"little-things-gb/firstwhite.gb", "firstwhite-dmg-cgb.png", NULL, GB_MODE_DMG, 500, 0, NULL, 0},\n')
+    output_file.write('{"little-things-gb/firstwhite.gb", "firstwhite-dmg-cgb.png", NULL, GB_MODE_CGB, 500, 0, NULL, 0},\n')
+    output_file.write('{"little-things-gb/tellinglys.gb", "tellinglys-dmg.png", NULL, GB_MODE_DMG, 5000, 0, "1:right,1:left,1:up,1:down,1:a,1:b,1:select,1:start", 0},\n')
+    output_file.write('{"little-things-gb/tellinglys.gb", "tellinglys-cgb.png", NULL, GB_MODE_CGB, 5000, 0, "1:right,1:left,1:up,1:down,1:a,1:b,1:select,1:start", 0},\n')
 
 def generate_strikethrough_tests(output_file):
-    output_file.write('{"strikethrough/strikethrough.gb", "strikethrough-dmg.png", NULL, GB_MODE_DMG, 60, 0, NULL, 0},\n')
-    output_file.write('{"strikethrough/strikethrough.gb", "strikethrough-cgb.png", NULL, GB_MODE_CGB, 60, 0, NULL, 0},\n')
+    output_file.write('{"strikethrough/strikethrough.gb", "strikethrough-dmg.png", NULL, GB_MODE_DMG, 500, 0, NULL, 0},\n')
+    output_file.write('{"strikethrough/strikethrough.gb", "strikethrough-cgb.png", NULL, GB_MODE_CGB, 500, 0, NULL, 0},\n')
+
+def generate_other_tests(output_file):
+    output_file.write('{"other/windesync-validate/windesync-validate.gb", "windesync-reference-sgb.png", NULL, GB_MODE_DMG, 80, 0, NULL, 0},\n')
 
 
 def generate_tests(tests_root, category, max_depth, output_file,
@@ -137,11 +140,11 @@ def age_internal_state_test_generator(rom_path):
     rom_name = os.path.basename(rom_path)
     ret = []
     if re.match(".*-dmg.*C.*.gb$", rom_name):
-        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_DMG, 60, 0x40, NULL, 0}},\n')
+        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_DMG, 0, 0x40, NULL, 0}},\n')
     if re.match(".*-cgb.*C.*.gb$", rom_name):
-        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 60, 0x40, NULL, 0}},\n')
+        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 0, 0x40, NULL, 0}},\n')
     if re.match(".*-ncm.*C.*.gb$", rom_name):
-        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 60, 0x40, NULL, 0}},\n')
+        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 0, 0x40, NULL, 0}},\n')
     return ret
 
 
@@ -198,7 +201,7 @@ def mealybug_internal_state_test_generator(rom_path):
 
 
 def same_internal_state_test_generator(rom_path):
-    # CPU-GB_MODE_CGB-C fail most tests (useless to test them)
+    # CPU-CGB-C fail most tests (useless to test them)
     ret = []
     if "same-suite/sgb/" in rom_path or "apu/channel_1" in rom_path or "apu/channel_2" in rom_path or "apu/channel_4" in rom_path:
         return ret
@@ -211,6 +214,8 @@ def same_internal_state_test_generator(rom_path):
         ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 0, 0x40, NULL, 0}},\n')
     elif "same-suite/dma" in rom_path:
         ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 0, 0x40, NULL, 0}},\n')
+    elif "same-suite/ppu/blocking_bgpi_increase" in rom_path:
+        ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 0, 0x40, NULL, 0}},\n')
     else:
         ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_DMG, 0, 0x40, NULL, 0}},\n')
         ret.append(f'{{"{rom_path}", NULL, NULL, GB_MODE_CGB, 0, 0x40, NULL, 0}},\n')
@@ -220,8 +225,8 @@ def same_internal_state_test_generator(rom_path):
 
 def gbmicrotest_internal_state_test_generator(rom_path):
     if "is_if_set_during_ime0.gb" in rom_path:
-        return [f'{{"{rom_path}", NULL, NULL, GB_MODE_DMG, 60, 0, NULL, 1}},\n']
-    return [f'{{"{rom_path}", NULL, NULL, GB_MODE_DMG, 2, 0, NULL, 1}},\n']
+        return [f'{{"{rom_path}", NULL, NULL, GB_MODE_DMG, 380, 0, NULL, 1}},\n']
+    return [f'{{"{rom_path}", NULL, NULL, GB_MODE_DMG, 32, 0, NULL, 1}},\n']
 
 
 def main():
@@ -242,12 +247,13 @@ def main():
         generate_tests(tests_root, "mooneye-test-suite-wilbertpol", 2, f, None, None, mooneye_wilbertpol_internal_state_test_generator)
         generate_tests(tests_root, "mealybug-tearoom-tests", 1, f, mealybug_reference_image_getter, mealybug_screenshot_test_generator, mealybug_internal_state_test_generator)
         generate_tests(tests_root, "same-suite", 2, f, None, None, same_internal_state_test_generator)
-        # generate_tests(tests_root, "gbmicrotest", 1, f, None, None, gbmicrotest_internal_state_test_generator)
+        generate_tests(tests_root, "gbmicrotest", 1, f, None, None, gbmicrotest_internal_state_test_generator)
         generate_bully_tests(f)
         generate_acid_tests(f)
         generate_little_things_tests(f)
         generate_rtc3tests(f)
         generate_strikethrough_tests(f)
+        generate_other_tests(f)
 
 
 if __name__ == "__main__":

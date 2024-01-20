@@ -13,30 +13,46 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.Manifest;
 import android.content.pm.ActivityInfo;
-import android.database.ContentObserver;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.net.Uri;
 import java.io.InputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 import android.os.Bundle;
-import android.os.Handler;
 import android.os.ParcelFileDescriptor;
-import android.provider.Settings;
 import android.util.Log;
+import android.util.Size;
+import android.view.Surface;
 import android.view.View;
-import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
+import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.ImageProxy;
+import androidx.camera.core.resolutionselector.AspectRatioStrategy;
+import androidx.camera.core.resolutionselector.ResolutionSelector;
+import androidx.camera.core.resolutionselector.ResolutionStrategy;
+import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.constraintlayout.widget.ConstraintLayout;
+import androidx.core.content.ContextCompat;
+import androidx.lifecycle.Lifecycle;
+import androidx.lifecycle.LifecycleOwner;
+import androidx.lifecycle.LifecycleRegistry;
 
-import com.google.api.services.drive.model.User;
+import com.google.common.util.concurrent.ListenableFuture;
 
 import org.libsdl.app.SDLActivity;
 
@@ -45,7 +61,11 @@ import io.github.mpostaire.gbmulator.tcp.TCPClientConnectionThread;
 import io.github.mpostaire.gbmulator.tcp.TCPConnectionCallback;
 import io.github.mpostaire.gbmulator.tcp.TCPServerConnectionThread;
 
-public class Emulator extends SDLActivity {
+public class Emulator extends SDLActivity implements LifecycleOwner {
+
+    private LifecycleRegistry lifecycleRegistry;
+    private final Executor executor = Executors.newSingleThreadExecutor();
+    byte[] cameraGrayscaleData;
 
     SharedPreferences preferences;
     SharedPreferences.Editor preferencesEditor;
@@ -112,30 +132,16 @@ public class Emulator extends SDLActivity {
         float select_x, float select_y,
         float link_x, float link_y);
 
+    public native void updateCameraBuffer(byte[] data, int width, int height, int row_stride, int rotation);
+
     public native void tcpLinkReady(int sfd);
-
-    public boolean canRotate() {
-        try {
-            return Settings.System.getInt(getContentResolver(), Settings.System.ACCELEROMETER_ROTATION) == 1;
-        } catch (Settings.SettingNotFoundException e) {
-            return false;
-        }
-    }
-
-    public void setAllowedOrientations() {
-        if (canRotate()) {
-            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR);
-        } else {
-            if (mCurrentOrientation == SDL_ORIENTATION_PORTRAIT || mCurrentOrientation == SDL_ORIENTATION_PORTRAIT_FLIPPED || mCurrentOrientation == SDL_ORIENTATION_UNKNOWN)
-                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-            else
-                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
-        }
-    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        lifecycleRegistry = new LifecycleRegistry(this);
+        lifecycleRegistry.setCurrentState(Lifecycle.State.CREATED);
 
         Bundle extras = getIntent().getExtras();
         if (extras == null) {
@@ -193,16 +199,30 @@ public class Emulator extends SDLActivity {
         landscapeSelectY = preferences.getFloat(UserSettings.LANDSCAPE_SELECT_Y, UserSettings.LANDSCAPE_SELECT_Y_DEFAULT);
         landscapeLinkX = preferences.getFloat(UserSettings.LANDSCAPE_LINK_X, UserSettings.LANDSCAPE_LINK_X_DEFAULT);
         landscapeLinkY = preferences.getFloat(UserSettings.LANDSCAPE_LINK_Y, UserSettings.LANDSCAPE_LINK_Y_DEFAULT);
+    }
 
-        Uri uri = Settings.System.getUriFor(Settings.System.ACCELEROMETER_ROTATION);
-        ContentObserver rotationObserver = new ContentObserver(new Handler()) {
-            @Override
-            public void onChange(boolean selfChange) {
-                super.onChange(selfChange);
-                setAllowedOrientations();
-            }
-        };
-        getContentResolver().registerContentObserver(uri,true, rotationObserver);
+    @Override
+    public void onStart() {
+        super.onStart();
+        lifecycleRegistry.setCurrentState(Lifecycle.State.STARTED);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        lifecycleRegistry.setCurrentState(Lifecycle.State.RESUMED);
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        lifecycleRegistry.setCurrentState(Lifecycle.State.DESTROYED);
+    }
+
+    @NonNull
+    @Override
+    public Lifecycle getLifecycle() {
+        return lifecycleRegistry;
     }
 
     @Override
@@ -610,5 +630,65 @@ public class Emulator extends SDLActivity {
         }
         return buf;
     }
+    ImageAnalysis imgAnalyzer;
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        imgAnalyzer.setTargetRotation(getWindowManager().getDefaultDisplay().getRotation());
+    }
 
+    public void initImageAnalysis() {
+        ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(this);
+        cameraProviderFuture.addListener(() -> {
+            ProcessCameraProvider cameraProvider;
+            try {
+                cameraProvider = cameraProviderFuture.get();
+            } catch (ExecutionException | InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+
+            ResolutionSelector resolutionSelector = new ResolutionSelector.Builder()
+                    .setAllowedResolutionMode(ResolutionSelector.PREFER_CAPTURE_RATE_OVER_HIGHER_RESOLUTION)
+                    .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                    .setResolutionStrategy(new ResolutionStrategy(new Size(128, 128), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER))
+                    .build();
+
+            imgAnalyzer = new ImageAnalysis.Builder()
+                    .setResolutionSelector(resolutionSelector)
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .setTargetRotation(getWindowManager().getDefaultDisplay().getRotation())
+                    .build();
+
+            imgAnalyzer.setAnalyzer(executor, image -> {
+                cameraGrayscaleData = new byte[image.getWidth() * image.getHeight()];
+                ImageProxy.PlaneProxy yPlane = image.getPlanes()[0];
+                yPlane.getBuffer().get(cameraGrayscaleData);
+                updateCameraBuffer(cameraGrayscaleData, image.getWidth(), image.getHeight(), yPlane.getRowStride(), image.getImageInfo().getRotationDegrees());
+                image.close();
+            });
+
+            CameraSelector cameraSelector;
+            if (preferences.getBoolean(UserSettings.CAMERA_IS_FRONT, UserSettings.CAMERA_IS_FRONT_DEFAULT))
+                cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA;
+            else
+                cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
+            cameraProvider.unbindAll();
+            cameraProvider.bindToLifecycle(this, cameraSelector, imgAnalyzer);
+
+            Log.d("SDL", imgAnalyzer.toString());
+        }, ContextCompat.getMainExecutor(this));
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        if (requestCode == 42024 && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+            initImageAnalysis();
+    }
+
+    public void initCamera() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+            initImageAnalysis();
+        else
+            requestPermissions(new String[] { Manifest.permission.CAMERA }, 42024);
+    }
 }

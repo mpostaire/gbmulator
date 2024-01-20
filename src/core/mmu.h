@@ -12,102 +12,103 @@
 #define CRAM_OBJ_SIZE 0x0040
 
 typedef enum {
-    ROM_BANK0 = 0x0000, // From cartridge, usually a fixed bank.
-    ROM_BANKN = 0x4000, // From cartridge, switchable bank via MBC (if any).
-    VRAM = 0x8000,      // Only bank 0 in Non-CGB mode. Switchable bank 0/1 in CGB mode.
-    ERAM = 0xA000,
-    WRAM_BANK0 = 0xC000,
-    WRAM_BANKN = 0xD000, // Only bank 1 in Non-CGB mode. Switchable bank 1~7 in CGB mode.
-    ECHO = 0xE000,
-    OAM = 0xFE00,
-    UNUSABLE = 0xFEA0,
-    IO = 0xFF00,
-    P1 = 0xFF00, // Joypad
+    MMU_ROM_BANK0 = 0x0000, // From cartridge, usually a fixed bank.
+    MMU_ROM_BANKN = 0x4000, // From cartridge, switchable bank via MBC (if any).
+    MMU_VRAM = 0x8000,      // Only bank 0 in Non-CGB mode. Switchable bank 0/1 in CGB mode.
+    MMU_ERAM = 0xA000,
+    MMU_WRAM_BANK0 = 0xC000,
+    MMU_WRAM_BANKN = 0xD000, // Only bank 1 in Non-CGB mode. Switchable bank 1~7 in CGB mode.
+    MMU_ECHO = 0xE000,
+    MMU_OAM = 0xFE00,
+    MMU_UNUSABLE = 0xFEA0,
+    MMU_IO = 0xFF00,
+    MMU_HRAM = 0xFF80,
+    MMU_IE = 0xFFFF // Interrupt Enable
+} gb_mmu_map_t;
+
+typedef enum {
+    IO_P1 = 0x00, // Joypad
 
     // Serial Data Transfer
-    SB = 0xFF01, // Serial transfer data
-    SC = 0xFF02, // Serial transfer control
+    IO_SB = 0x01, // Serial transfer data
+    IO_SC = 0x02, // Serial transfer control
 
     // Timer
-    DIV_LSB = 0xFF03, // Lower byte of the Divider Register
-    DIV = 0xFF04,  // Divider Register
-    TIMA = 0xFF05, // Timer counter
-    TMA = 0xFF06,  // Timer Modulo
-    TAC = 0xFF07,  // Timer Control
+    IO_DIV = 0x04,  // Divider Register
+    IO_TIMA = 0x05, // Timer counter
+    IO_TMA = 0x06,  // Timer Modulo
+    IO_TAC = 0x07,  // Timer Control
 
-    IF = 0xFF0F, // Interrupt Flag
+    IO_IF = 0x0F, // Interrupt Flag
 
     // Sound
-    NR10 = 0xFF10, // Channel 1 Sweep register
-    NR11 = 0xFF11, // Channel 1 Sound Length/Wave Pattern Duty
-    NR12 = 0xFF12, // Channel 1 Volume Envelope
-    NR13 = 0xFF13, // Channel 1 Frequency lo data
-    NR14 = 0xFF14, // Channel 1 Frequency hi data
-    NR20 = 0xFF15, // Unused
-    NR21 = 0xFF16, // Channel 2 Sound Length/Wave Pattern Duty
-    NR22 = 0xFF17, // Channel 2 Volume Envelope
-    NR23 = 0xFF18, // Channel 2 Frequency lo data
-    NR24 = 0xFF19, // Channel 2 Frequency hi data
-    NR30 = 0xFF1A, // Channel 3 Sound on/off
-    NR31 = 0xFF1B, // Channel 3 Sound Length
-    NR32 = 0xFF1C, // Channel 3 Select output level
-    NR33 = 0xFF1D, // Channel 3 Frequency lo data
-    NR34 = 0xFF1E, // Channel 3 Frequency hi data
-    NR40 = 0xFF1F, // Unused
-    NR41 = 0xFF20, // Channel 4 Sound Length
-    NR42 = 0xFF21, // Channel 4 Volume Envelope
-    NR43 = 0xFF22, // Channel 4 Polynomial Counter
-    NR44 = 0xFF23, // Channel 4 Counter/consecutive; Initial
-    NR50 = 0xFF24, // Channel control / ON-OFF / Volume
-    NR51 = 0xFF25, // Selection of Sound output terminal
-    NR52 = 0xFF26, // Sound on/off
+    IO_NR10 = 0x10, // Channel 1 Sweep register
+    IO_NR11 = 0x11, // Channel 1 Sound Length/Wave Pattern Duty
+    IO_NR12 = 0x12, // Channel 1 Volume Envelope
+    IO_NR13 = 0x13, // Channel 1 Frequency lo data
+    IO_NR14 = 0x14, // Channel 1 Frequency hi data
+    IO_NR20 = 0x15, // Unused
+    IO_NR21 = 0x16, // Channel 2 Sound Length/Wave Pattern Duty
+    IO_NR22 = 0x17, // Channel 2 Volume Envelope
+    IO_NR23 = 0x18, // Channel 2 Frequency lo data
+    IO_NR24 = 0x19, // Channel 2 Frequency hi data
+    IO_NR30 = 0x1A, // Channel 3 Sound on/off
+    IO_NR31 = 0x1B, // Channel 3 Sound Length
+    IO_NR32 = 0x1C, // Channel 3 Select output level
+    IO_NR33 = 0x1D, // Channel 3 Frequency lo data
+    IO_NR34 = 0x1E, // Channel 3 Frequency hi data
+    IO_NR40 = 0x1F, // Unused
+    IO_NR41 = 0x20, // Channel 4 Sound Length
+    IO_NR42 = 0x21, // Channel 4 Volume Envelope
+    IO_NR43 = 0x22, // Channel 4 Polynomial Counter
+    IO_NR44 = 0x23, // Channel 4 Counter/consecutive; Initial
+    IO_NR50 = 0x24, // Channel control / ON-OFF / Volume
+    IO_NR51 = 0x25, // Selection of Sound output terminal
+    IO_NR52 = 0x26, // Sound on/off
 
-    WAVE_RAM = 0xFF30, // Wave Pattern RAM
+    IO_WAVE_RAM = 0x30, // Wave Pattern RAM
 
     // Pixel Processing Unit (PPU)
-    LCDC = 0xFF40, // LCD Control
-    STAT = 0xFF41, // LCDC Status
-    SCY = 0xFF42,  // Scroll Y
-    SCX = 0xFF43,  // Scroll X
-    LY = 0xFF44,   // LCD Y-Coordinate
-    LYC = 0xFF45,  // LY Compare
-    DMA = 0xFF46,  // DMA Transfer and Start Address
-    BGP = 0xFF47,  // BG Palette Data
-    OBP0 = 0xFF48, // Object Palette 0 Data
-    OBP1 = 0xFF49, // Object Palette 1 Data
-    WY = 0xFF4A,   // Window Y Position
-    WX = 0xFF4B,   // Window X Position + 7
+    IO_LCDC = 0x40, // LCD Control
+    IO_STAT = 0x41, // LCD Status
+    IO_SCY = 0x42,  // Scroll Y
+    IO_SCX = 0x43,  // Scroll X
+    IO_LY = 0x44,   // LCD Y-Coordinate
+    IO_LYC = 0x45,  // LY Compare
+    IO_DMA = 0x46,  // DMA Transfer and Start Address
+    IO_BGP = 0x47,  // BG Palette Data
+    IO_OBP0 = 0x48, // Object Palette 0 Data
+    IO_OBP1 = 0x49, // Object Palette 1 Data
+    IO_WY = 0x4A,   // Window Y Position
+    IO_WX = 0x4B,   // Window X Position + 7
 
-    KEY0 = 0xFF4C,
-    KEY1 = 0xFF4D, // Prepare Speed Switch (CGB-only)
+    IO_KEY0 = 0x4C,
+    IO_KEY1 = 0x4D, // Prepare Speed Switch (CGB-only)
 
-    VBK = 0xFF4F, // VRAM Bank (CGB-only)
+    IO_VBK = 0x4F, // VRAM Bank (CGB-only)
 
-    BANK = 0xFF50,
+    IO_BANK = 0x50,
 
-    HDMA1 = 0xFF51, // New DMA Source, High (CGB-only)
-    HDMA2 = 0xFF52, // New DMA Source, Low (CGB-only)
-    HDMA3 = 0xFF53, // New DMA Destination, High (CGB-only)
-    HDMA4 = 0xFF54, // New DMA Destination, Low (CGB-only)
-    HDMA5 = 0xFF55, // New DMA Length/Mode/Start (CGB-only)
+    IO_HDMA1 = 0x51, // New DMA Source, High (CGB-only)
+    IO_HDMA2 = 0x52, // New DMA Source, Low (CGB-only)
+    IO_HDMA3 = 0x53, // New DMA Destination, High (CGB-only)
+    IO_HDMA4 = 0x54, // New DMA Destination, Low (CGB-only)
+    IO_HDMA5 = 0x55, // New DMA Length/Mode/Start (CGB-only)
 
-    RP = 0xFF56, // Infrared Communication Port (CGB-only)
+    IO_RP = 0x56, // Infrared Communication Port (CGB-only)
 
-    BGPI = 0xFF68, // Background Palette Index (CGB-only)
-    BGPD = 0xFF69, // Background Palette Data (CGB-only)
-    OBPI = 0xFF6A, // Object Palette Index (CGB-only)
-    OBPD = 0xFF6B, // Object Palette Data (CGB-only)
+    IO_BGPI = 0x68, // Background Palette Index (CGB-only)
+    IO_BGPD = 0x69, // Background Palette Data (CGB-only)
+    IO_OBPI = 0x6A, // Object Palette Index (CGB-only)
+    IO_OBPD = 0x6B, // Object Palette Data (CGB-only)
 
-    OPRI = 0xFF6C, // Object Priority Mode (CGB-only)
+    IO_OPRI = 0x6C, // Object Priority Mode (CGB-only)
 
-    SVBK = 0xFF70, // WRAM Bank (CGB-only)
+    IO_SVBK = 0x70, // WRAM Bank (CGB-only)
 
-    PCM12 = 0xFF76, // PCM amplitudes 1 & 2 (CGB-only)
-    PCM34 = 0xFF77, // PCM amplitudes 3 & 4 (CGB-only)
-
-    HRAM = 0xFF80,
-    IE = 0xFFFF // Interrupt Enable
-} gb_memory_map_t;
+    IO_PCM12 = 0x76, // PCM amplitudes 1 & 2 (CGB-only)
+    IO_PCM34 = 0x77 // PCM amplitudes 3 & 4 (CGB-only)
+} gb_io_reg_map_t;
 
 typedef enum {
     IO_SRC_CPU,
@@ -116,9 +117,12 @@ typedef enum {
 } gb_io_source_t;
 
 typedef struct {
-    size_t rom_size;
+    byte_t *dmg_boot_rom;
+    byte_t *cgb_boot_rom;
 
+    size_t rom_size;
     byte_t *rom; // max size: 8400000
+
     byte_t vram[2 * VRAM_BANK_SIZE]; // DMG: 1 bank / CGB: 2 banks of size 0x2000
     byte_t eram[16 * ERAM_BANK_SIZE]; // max 16 banks of size 0x2000
     byte_t wram[8 * WRAM_BANK_SIZE]; // DMG: 2 banks / CGB: 8 banks of size 0x1000 (bank 0 non switchable)
@@ -133,7 +137,7 @@ typedef struct {
 
     struct {
         byte_t initializing; // 4 cycles of initialization delay
-        byte_t allow_hdma_block; // set to 1 while the current 0x10 bytes block of HDMA can be copied, else 0 (emu->mode == CGB is assumed)
+        byte_t allow_hdma_block; // set to 1 while the current 0x10 bytes block of HDMA can be copied, else 0 (gb->mode == CGB is assumed)
         byte_t lock_cpu;
         byte_t type;
         byte_t progress;
@@ -187,11 +191,11 @@ void mmu_write_io_src(gb_t *gb, word_t address, byte_t data, gb_io_source_t io_s
 /**
  * like mmu_read_io_src but using IO_SRC_CPU as io_src
  */
-#define mmu_read(emu, address) mmu_read_io_src((emu), (address), IO_SRC_CPU)
+#define mmu_read(gb, address) mmu_read_io_src((gb), (address), IO_SRC_CPU)
 
 /**
  * like mmu_write_io_src but using IO_SRC_CPU as io_src
  */
-#define mmu_write(emu, address, data) mmu_write_io_src((emu), (address), (data), IO_SRC_CPU)
+#define mmu_write(gb, address, data) mmu_write_io_src((gb), (address), (data), IO_SRC_CPU)
 
 SERIALIZE_FUNCTION_DECLS(mmu);

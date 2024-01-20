@@ -60,8 +60,8 @@ typedef struct {
     word_t accumulator; // storage used for an easier implementation of some opcodes
 } gb_cpu_t;
 
-#define CPU_REQUEST_INTERRUPT(emu, irq) SET_BIT((emu)->mmu->io_registers[IF - IO], (irq))
-#define IS_DOUBLE_SPEED(emu) ((emu)->mmu->io_registers[KEY1 - IO] >> 7)
+#define CPU_REQUEST_INTERRUPT(gb, irq) SET_BIT((gb)->mmu->io_registers[IO_IF], (irq))
+#define IS_DOUBLE_SPEED(gb) ((gb)->mmu->io_registers[IO_KEY1] >> 7)
 
 void cpu_step(gb_t *gb);
 
