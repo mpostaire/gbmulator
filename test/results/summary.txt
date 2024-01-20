@@ -955,3 +955,4 @@ DMG:rtc3test/rtc3test.gb:sub-second-writes:success
 CGB:rtc3test/rtc3test.gb:sub-second-writes:success
 DMG:strikethrough/strikethrough.gb::failed
 CGB:strikethrough/strikethrough.gb::failed
+DMG:other/windesync-validate/windesync-validate.gb::success
