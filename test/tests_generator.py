@@ -59,6 +59,9 @@ def generate_strikethrough_tests(output_file):
     output_file.write('{"strikethrough/strikethrough.gb", "strikethrough-dmg.png", NULL, GB_MODE_DMG, 500, 0, NULL, 0},\n')
     output_file.write('{"strikethrough/strikethrough.gb", "strikethrough-cgb.png", NULL, GB_MODE_CGB, 500, 0, NULL, 0},\n')
 
+def generate_other_tests(output_file):
+    output_file.write('{"other/windesync-validate/windesync-validate.gb", "windesync-reference-sgb.png", NULL, GB_MODE_DMG, 80, 0, NULL, 0},\n')
+
 
 def generate_tests(tests_root, category, max_depth, output_file,
                    reference_image_getter=None, screenshot_test_generator=None,
@@ -250,6 +253,7 @@ def main():
         generate_little_things_tests(f)
         generate_rtc3tests(f)
         generate_strikethrough_tests(f)
+        generate_other_tests(f)
 
 
 if __name__ == "__main__":
