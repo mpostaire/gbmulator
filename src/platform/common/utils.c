@@ -262,3 +262,38 @@ char *get_savestate_path(const char *rom_filepath, int slot) {
     free(xdg_data);
     return save_path;
 }
+
+void fit_image(byte_t *dst, const byte_t *src, int src_width, int src_height, int row_stride, int rotation) {
+    // crop top and bottom of largest dimension to get a 1:1 aspect ratio (adjust scale_x or scale_y accordingly)
+    int src_start_x = 0, src_start_y = 0;
+    int src_dim_diff = src_width - src_height;
+    if (src_dim_diff < 0) {
+        src_height = src_width - (src_dim_diff / 2);
+        src_start_y = src_dim_diff / 2;
+    } else if (src_dim_diff > 0) {
+        src_width = src_height - (src_dim_diff / 2);
+        src_start_x = src_dim_diff / 2;
+    }
+
+    // scale and rotate
+    int dst_width = GB_CAMERA_SENSOR_WIDTH;
+    int dst_height = GB_CAMERA_SENSOR_HEIGHT;
+
+    float scale_x = (float) src_width / (float) dst_width;
+    float scale_y = (float) src_height / (float) dst_height;
+
+    for (int y = 0; y < dst_height; y++) {
+        for (int x = 0; x < dst_width; x++) {
+            int src_index = ((int) ((y + src_start_y) * scale_y) * row_stride) + (int) ((x + src_start_x) * scale_x);
+
+            if (rotation == 0)
+                dst[y * dst_width + x] = src[src_index];
+            else if (rotation == 90)
+                dst[x * dst_height + ((dst_height - 1) - y)] = src[src_index];
+            else if (rotation == 180)
+                dst[((dst_height - 1) - y) * dst_width + ((dst_width - 1) - x)] = src[src_index];
+            else // if (rotation == 270)
+                dst[((dst_width - 1) - x) * dst_height + y] = src[src_index];
+        }
+    }
+}

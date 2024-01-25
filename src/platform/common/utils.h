@@ -43,3 +43,8 @@ char *get_config_path(void);
 char *get_save_path(const char *rom_filepath);
 
 char *get_savestate_path(const char *rom_filepath, int slot);
+
+/**
+ * resize, crop (keep center) and rotate `src` to fit into `dst` where `dst` is the gb camera sensor buffer
+ */
+void fit_image(byte_t *dst, const byte_t *src, int src_width, int src_height, int row_stride, int rotation);
