@@ -1,10 +1,7 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
-
-#ifdef __HAVE_ZLIB__
 #include <zlib.h>
-#endif
 
 #include "gb_priv.h"
 
@@ -613,11 +610,7 @@ int gb_load_save(gb_t *gb, byte_t *save_data, size_t save_length) {
     return 1;
 }
 
-#ifdef __HAVE_ZLIB__
 byte_t *gb_get_savestate(gb_t *gb, size_t *length, byte_t compressed) {
-#else
-byte_t *gb_get_savestate(gb_t *gb, size_t *length, UNUSED byte_t compressed) {
-#endif
     // make savestate header
     savestate_header_t *savestate_header = xmalloc(sizeof(*savestate_header));
     savestate_header->mode = gb->mode;
@@ -652,7 +645,6 @@ byte_t *gb_get_savestate(gb_t *gb, size_t *length, UNUSED byte_t compressed) {
     free(ppu);
     free(mmu);
 
-    #ifdef __HAVE_ZLIB__
     // compress savestate data if specified
     if (compressed) {
         uLongf dest_len = compressBound(savestate_data_len);
@@ -667,7 +659,6 @@ byte_t *gb_get_savestate(gb_t *gb, size_t *length, UNUSED byte_t compressed) {
             free(dest);
         }
     }
-    #endif
 
     // assemble savestate header and savestate data
     *length = sizeof(savestate_header_t) + savestate_data_len;
@@ -715,7 +706,6 @@ int gb_load_savestate(gb_t *gb, const byte_t *data, size_t length) {
     size_t expected_len = cpu_len + timer_len + ppu_len + mmu_len;
 
     if (CHECK_BIT(savestate_header->mode, 7)) {
-        #ifdef __HAVE_ZLIB__
         byte_t *dest = xmalloc(expected_len);
         uLongf dest_len = expected_len;
         if (uncompress(dest, &dest_len, savestate_data, savestate_data_len) == Z_OK) {
@@ -729,12 +719,6 @@ int gb_load_savestate(gb_t *gb, const byte_t *data, size_t length) {
             free(savestate_data);
             return 0;
         }
-        #else
-        eprintf("This binary isn't compiled with support for compressed savestates\n");
-        free(savestate_header);
-        free(savestate_data);
-        return 0;
-        #endif
     }
 
     if (savestate_data_len != expected_len) {

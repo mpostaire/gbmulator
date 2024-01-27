@@ -158,9 +158,7 @@ static int exchange_info(int sfd, gb_t *gb, gb_mode_t *mode, int *can_compress, 
     pkt[1] = gb_is_cgb(gb);
     SET_BIT(pkt[1], 1); // cable-link
     SET_BIT(pkt[1], 2); // ir-link
-    #ifdef __HAVE_ZLIB__
-    SET_BIT(pkt[1], 7);
-    #endif
+    SET_BIT(pkt[1], 7); // compress
     memcpy(&pkt[2], &checksum, 2);
 
     send(sfd, pkt, 4, 0);
@@ -177,9 +175,7 @@ static int exchange_info(int sfd, gb_t *gb, gb_mode_t *mode, int *can_compress, 
     *mode = CHECK_BIT(pkt[1], 0) ? GB_MODE_CGB : GB_MODE_DMG;
     *is_cable_link = CHECK_BIT(pkt[1], 1); // cable-link
     *is_ir_link = CHECK_BIT(pkt[1], 2); // ir-link
-    #ifdef __HAVE_ZLIB__
-    *can_compress = GET_BIT(pkt[1], 7);
-    #endif
+    *can_compress = GET_BIT(pkt[1], 7); // compress
 
     word_t received_checksum = 0;
     memcpy(&received_checksum, &pkt[2], 2);

@@ -6,11 +6,10 @@
 #include <ctype.h>
 #include <netdb.h>
 #include <string.h>
-#include <gst/gst.h>
 
 #include "glrenderer.h"
 #include "alrenderer.h"
-#include "utils.h"
+#include "camera.h"
 #include "../common/link.h"
 #include "../common/utils.h"
 #include "../common/config.h"
@@ -370,11 +369,6 @@ static void ppu_vblank_cb(const byte_t *pixels) {
     glrenderer_update_texture(emu_renderer, 0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, pixels);
 }
 
-byte_t camera_capture_image(byte_t *image) {
-    // TODO use gstreamer
-    return 0;
-}
-
 static void printer_new_line_cb(const byte_t *pixels, size_t height) {
     if (!printer_renderer)
         return; // segfault if printer gl area was not realized (printer window not shown at least once before printing)
@@ -552,7 +546,7 @@ static int load_cartridge(char *path) {
         .apu_sampling_rate = alrenderer_get_sampling_rate(),
         .apu_sound_level = config.sound,
         .palette = config.color_palette,
-        .on_camera_capture_image = camera_capture_image
+        .on_camera_capture_image = gb_camera_capture_image_cb
     };
     gb_t *new_emu = gb_init(rom, rom_size, &opts);
     free(rom);
@@ -590,38 +584,10 @@ static int load_cartridge(char *path) {
         motion_event_handler = 0;
     }
 
-    if (gb_has_camera(gb)) {
-        // TODO init_gstreamer
-        // Create the GStreamer pipeline
-        GstElement *pipeline = gst_pipeline_new("webcam-pipeline");
-        GstElement *src = gst_element_factory_make("v4l2src", "video-source");
-        GstElement *filter = gst_element_factory_make("videoconvert", "video-filter");
-        GstElement *sink = gst_element_factory_make("autovideosink", "video-sink");
-
-        if (!pipeline || !src || !filter || !sink) {
-            eprintf("Failed creating gstreamer pipeline\n");
-            // return 1;
-        } else {
-            // Set the video device for the v4l2src element
-            g_object_set(src, "device", "/dev/video0", NULL); // TODO select multiple devices
-
-            // Add elements to the pipeline
-            gst_bin_add_many(GST_BIN(pipeline), src, filter, sink, NULL);
-            if (!gst_element_link_many(src, filter, sink, NULL)) {
-                eprintf("Failed linking elements to the gstreamer source\n");
-            }
-
-            // // Add a pad probe to capture each frame
-            // GstPad *sinkpad = gst_element_get_static_pad(filter, "sink");
-            // gst_pad_add_probe(sinkpad, GST_PAD_PROBE_TYPE_BUFFER, buffer_probe_cb, NULL, NULL);
-
-            // // Create a bus to watch for messages
-            // GstBus *bus = gst_element_get_bus(pipeline);
-            // gst_bus_add_watch(bus, bus_callback, NULL);
-        }
-    } else {
-        // TODO deinit_gstreamer_if_it_was_inited_before
-    }
+    if (gb_has_camera(gb))
+        camera_play();
+    else
+        camera_pause();
 
     gamepad_state = GAMEPAD_PLAYING;
     start_loop();
@@ -727,6 +693,18 @@ static void link_mode_setter_server_toggled(GtkToggleButton *self, gpointer user
 
 static void set_mode(AdwComboRow *self, GParamSpec *pspec, gpointer user_data) {
     config.mode = adw_combo_row_get_selected(self) + 1;
+}
+
+static void set_camera(AdwComboRow *self, GParamSpec *pspec, gpointer user_data) {
+    guint selected_camera = adw_combo_row_get_selected(self);
+    gsize len;
+    gchar ***paths = camera_get_devices_paths(&len);
+    if (selected_camera < len) {
+        camera_quit();
+        camera_init((*paths)[selected_camera]);
+        if (gb_has_camera(gb))
+            camera_play();
+    }
 }
 
 static void key_setter_activated(AdwActionRow *self, gpointer user_data) {
@@ -1192,6 +1170,19 @@ static void activate_cb(GtkApplication *app) {
         g_signal_connect(widget, "activated", G_CALLBACK(gamepad_setter_activated), (gpointer) &gamepad_handlers[i].id);
         gamepad_handlers[i].widget = GTK_WIDGET(gtk_builder_get_object(builder, gamepad_handlers[i].label_name));
         gtk_label_set_label(GTK_LABEL(gamepad_handlers[i].widget), gamepad_gamepad_button_parser(config.gamepad_bindings[i]));
+    }
+
+    if (camera_find_devices()) {
+        AdwComboRow *pref_camera_device = ADW_COMBO_ROW(gtk_builder_get_object(builder, "pref_camera_device"));
+        gsize len;
+
+        adw_combo_row_set_model(pref_camera_device, G_LIST_MODEL(camera_get_devices_names(&len)));
+        guint selected_camera = adw_combo_row_get_selected(pref_camera_device);
+        gchar ***camera_paths = camera_get_devices_paths(&len);
+        if (selected_camera < len) {
+            g_signal_connect(pref_camera_device, "notify::selected", G_CALLBACK(set_camera), NULL);
+            camera_init((*camera_paths)[selected_camera]);
+        }
     }
 
     g_object_unref(builder);

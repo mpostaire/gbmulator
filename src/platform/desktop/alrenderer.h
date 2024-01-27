@@ -5,7 +5,7 @@
 #include "../../core/gb.h"
 
 /**
- * @param sampling_rate If > 0, this sets the sampling rate of the audio. It detected automatically if set to 0.
+ * @param sampling_rate If > 0, this sets the sampling rate of the audio. It is detected automatically if set to 0.
  */
 ALboolean alrenderer_init(ALsizei sampling_rate);
 
