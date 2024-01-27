@@ -585,9 +585,9 @@ static int load_cartridge(char *path) {
     }
 
     if (gb_has_camera(gb))
-        camera_init();
+        camera_play();
     else
-        camera_quit();
+        camera_pause();
 
     gamepad_state = GAMEPAD_PLAYING;
     start_loop();
@@ -693,6 +693,18 @@ static void link_mode_setter_server_toggled(GtkToggleButton *self, gpointer user
 
 static void set_mode(AdwComboRow *self, GParamSpec *pspec, gpointer user_data) {
     config.mode = adw_combo_row_get_selected(self) + 1;
+}
+
+static void set_camera(AdwComboRow *self, GParamSpec *pspec, gpointer user_data) {
+    guint selected_camera = adw_combo_row_get_selected(self);
+    gsize len;
+    gchar ***paths = camera_get_devices_paths(&len);
+    if (selected_camera < len) {
+        camera_quit();
+        camera_init((*paths)[selected_camera]);
+        if (gb_has_camera(gb))
+            camera_play();
+    }
 }
 
 static void key_setter_activated(AdwActionRow *self, gpointer user_data) {
@@ -1158,6 +1170,19 @@ static void activate_cb(GtkApplication *app) {
         g_signal_connect(widget, "activated", G_CALLBACK(gamepad_setter_activated), (gpointer) &gamepad_handlers[i].id);
         gamepad_handlers[i].widget = GTK_WIDGET(gtk_builder_get_object(builder, gamepad_handlers[i].label_name));
         gtk_label_set_label(GTK_LABEL(gamepad_handlers[i].widget), gamepad_gamepad_button_parser(config.gamepad_bindings[i]));
+    }
+
+    if (camera_find_devices()) {
+        AdwComboRow *pref_camera_device = ADW_COMBO_ROW(gtk_builder_get_object(builder, "pref_camera_device"));
+        gsize len;
+
+        adw_combo_row_set_model(pref_camera_device, G_LIST_MODEL(camera_get_devices_names(&len)));
+        guint selected_camera = adw_combo_row_get_selected(pref_camera_device);
+        gchar ***camera_paths = camera_get_devices_paths(&len);
+        if (selected_camera < len) {
+            g_signal_connect(pref_camera_device, "notify::selected", G_CALLBACK(set_camera), NULL);
+            camera_init((*camera_paths)[selected_camera]);
+        }
     }
 
     g_object_unref(builder);

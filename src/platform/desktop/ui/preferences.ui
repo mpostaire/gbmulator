@@ -59,6 +59,13 @@
                                 </property>
                             </object>
                         </child>
+
+                        <child>
+                            <object class="AdwComboRow" id="pref_camera_device">
+                                <property name="title">Camera device</property>
+                                <property name="subtitle">Sets the camera to use for the Game Boy Camera.</property>
+                            </object>
+                        </child>
                     </object>
                 </child>
 
