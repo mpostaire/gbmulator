@@ -651,8 +651,8 @@ ReadCGBLogoHalfTile:
 ; byte, where each bit (MSB to LSB) is 0 for literal or 1 for repeat
 ; previous, followed by the literals in that block.
 
-SameBoyLogo_dst = $8080
-SameBoyLogo_length = (128 * 24) / 64
+DEF SameBoyLogo_dst = $8080
+DEF SameBoyLogo_length = (128 * 24) / 64
 
 LoadTileset:
     ld hl, SameBoyLogo
