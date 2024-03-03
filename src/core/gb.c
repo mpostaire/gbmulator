@@ -44,7 +44,50 @@ const char *mbc_names[] = {
     STRINGIFY(TAMA5)
 };
 
+#define N_REWIND_STATES (8 * GB_FRAMES_PER_SECOND)
+static size_t get_savestate_expected_len(gb_t *gb, size_t *cpu_len, size_t *timer_len, size_t *ppu_len, size_t *mmu_len);
+
+void rewind_push(gb_t *gb) {
+    // eprintf("rewind_push\n");
+    gb->rewind_stack.head = (gb->rewind_stack.head + 1) % N_REWIND_STATES;
+    if (gb->rewind_stack.len < N_REWIND_STATES)
+        gb->rewind_stack.len++;
+
+    byte_t *savestate_data = gb_get_savestate(gb, &gb->rewind_stack.state_size, 0); // TODO specify the dest buffer to avoid redundant memcpy
+    // eprintf("gb_get_savestate push head=%ld sz=%ld expected_sz=%ld\n", gb->rewind_stack.head, gb->rewind_stack.state_size, get_savestate_expected_len(gb, NULL, NULL, NULL, NULL));
+    memcpy(&gb->rewind_stack.states[gb->rewind_stack.head * gb->rewind_stack.state_size], savestate_data, gb->rewind_stack.state_size);
+    free(savestate_data);
+    // eprintf("ok push %ld\n", gb->rewind_stack.head);
+}
+
+void rewind_pop(gb_t *gb) {
+    eprintf("rewind pop\n");
+    if (gb->rewind_stack.len == 0)
+        return;
+
+    eprintf("gb_load_savestate pop %ld\n", gb->rewind_stack.head);
+    gb_load_savestate(gb, &gb->rewind_stack.states[gb->rewind_stack.head * gb->rewind_stack.state_size], gb->rewind_stack.state_size);
+
+    gb->rewind_stack.head = gb->rewind_stack.head == 0 ? (N_REWIND_STATES - 1) : gb->rewind_stack.head - 1;
+    gb->rewind_stack.len--;
+    // if len == 0, set head back to -1??
+}
+
+void gb_rewind(gb_t *gb) {
+    // TODO while rewind button is pressed, pause the emulation (do not step)
+    rewind_pop(gb);
+}
+
 static inline int gb_step_linked(gb_t *gb, byte_t step_linked_device) {
+    if (gb->rewind_stack.states) {
+        static size_t step_counter = 0;
+        step_counter++;
+        if (step_counter == GB_CPU_STEPS_PER_FRAME) {
+            step_counter = 0;
+            rewind_push(gb);
+        }
+    }
+
     byte_t double_speed = IS_DOUBLE_SPEED(gb);
     for (int i = double_speed + 1; i; i--) {
         // stop execution of the program while a GDMA or HDMA is active
@@ -84,6 +127,25 @@ int gb_is_rom_valid(const byte_t *rom) {
     return parse_header_mbc_byte(rom[0x0147], NULL, NULL, NULL, NULL, NULL) && validate_header_checksum(rom);
 }
 
+static size_t get_savestate_expected_len(gb_t *gb, size_t *cpu_len, size_t *timer_len, size_t *ppu_len, size_t *mmu_len) {
+    size_t cpu, timer, ppu, mmu;
+    cpu = cpu_serialized_length(gb);
+    timer = timer_serialized_length(gb);
+    ppu = ppu_serialized_length(gb);
+    mmu = mmu_serialized_length(gb);
+
+    if (cpu_len)
+        *cpu_len = cpu;
+    if (timer_len)
+        *timer_len = timer;
+    if (ppu_len)
+        *ppu_len = ppu;
+    if (mmu_len)
+        *mmu_len = mmu;
+
+    return cpu + timer + ppu + mmu + sizeof(savestate_header_t);
+}
+
 gb_t *gb_init(const byte_t *rom, size_t rom_size, gb_options_t *opts) {
     gb_t *gb = xcalloc(1, sizeof(*gb));
     gb_set_options(gb, opts);
@@ -99,6 +161,9 @@ gb_t *gb_init(const byte_t *rom, size_t rom_size, gb_options_t *opts) {
     link_init(gb);
     joypad_init(gb);
 
+    gb->rewind_stack.states = xmalloc(N_REWIND_STATES * get_savestate_expected_len(gb, NULL, NULL, NULL, NULL));
+    gb->rewind_stack.head = -1;
+
     return gb;
 }
 
@@ -110,6 +175,10 @@ void gb_quit(gb_t *gb) {
     timer_quit(gb);
     link_quit(gb);
     joypad_quit(gb);
+
+    if (gb->rewind_stack.states)
+        free(gb->rewind_stack.states);
+
     free(gb);
 }
 
@@ -149,224 +218,54 @@ void gb_reset(gb_t *gb, gb_mode_t mode) {
     free(rom);
 }
 
+static const char *old_licensees[] = {
+    [0x01] = "Nintendo",[0x08] = "Capcom",[0x09] = "Hot-B",[0x0A] = "Jaleco",[0x0B] = "Coconuts Japan",[0x0C] = "Elite Systems",
+    [0x13] = "EA (Electronic Arts)",[0x18] = "Hudsonsoft",[0x19] = "ITC Entertainment",[0x1A] = "Yanoman",[0x1D] = "Japan Clary",[0x1F] = "Virgin Interactive",
+    [0x24] = "PCM Complete",[0x25] = "San-X",[0x28] = "Kotobuki Systems",[0x29] = "Seta",[0x30] = "Infogrames",[0x31] = "Nintendo",
+    [0x32] = "Bandai",[0x34] = "Konami",[0x35] = "HectorSoft",[0x38] = "Capcom",[0x39] = "Banpresto",[0x3C] = ".Entertainment i",
+    [0x3E] = "Gremlin",[0x41] = "Ubisoft",[0x42] = "Atlus",[0x44] = "Malibu",[0x46] = "Angel",[0x47] = "Spectrum Holoby",
+    [0x49] = "Irem",[0x4A] = "Virgin Interactive",[0x4D] = "Malibu",[0x4F] = "U.S. Gold",[0x50] = "Absolute",[0x51] = "Acclaim",
+    [0x52] = "Activision",[0x53] = "American Sammy",[0x54] = "GameTek",[0x55] = "Park Place",[0x56] = "LJN",[0x57] = "Matchbox",
+    [0x59] = "Milton Bradley",[0x5A] = "Mindscape",[0x5B] = "Romstar",[0x5C] = "Naxat Soft",[0x5D] = "Tradewest",[0x60] = "Titus",
+    [0x61] = "Virgin Interactive",[0x67] = "Ocean Interactive",[0x69] = "EA (Electronic Arts)",[0x6E] = "Elite Systems",[0x6F] = "Electro Brain",[0x70] = "Infogrames",
+    [0x71] = "Interplay",[0x72] = "Broderbund",[0x73] = "Sculptered Soft",[0x75] = "The Sales Curve",[0x78] = "t.hq",[0x79] = "Accolade",
+    [0x7A] = "Triffix Entertainment",[0x7C] = "Microprose",[0x7F] = "Kemco",[0x80] = "Misawa Entertainment",[0x83] = "Lozc",[0x86] = "Tokuma Shoten Intermedia",
+    [0x8B] = "Bullet-Proof Software",[0x8C] = "Vic Tokai",[0x8E] = "Ape",[0x8F] = "I’Max",[0x91] = "Chunsoft Co.",[0x92] = "Video System",
+    [0x93] = "Tsubaraya Productions Co.",[0x95] = "Varie Corporation",[0x96] = "Yonezawa/S’Pal",[0x97] = "Kaneko",[0x99] = "Arc",[0x9A] = "Nihon Bussan",
+    [0x9B] = "Tecmo",[0x9C] = "Imagineer",[0x9D] = "Banpresto",[0x9F] = "Nova",[0xA1] = "Hori Electric",[0xA2] = "Bandai",
+    [0xA4] = "Konami",[0xA6] = "Kawada",[0xA7] = "Takara",[0xA9] = "Technos Japan",[0xAA] = "Broderbund",[0xAC] = "Toei Animation",
+    [0xAD] = "Toho",[0xAF] = "Namco",[0xB0] = "acclaim",[0xB1] = "ASCII or Nexsoft",[0xB2] = "Bandai",[0xB4] = "Square Enix",
+    [0xB6] = "HAL Laboratory",[0xB7] = "SNK",[0xB9] = "Pony Canyon",[0xBA] = "Culture Brain",[0xBB] = "Sunsoft",[0xBD] = "Sony Imagesoft",
+    [0xBF] = "Sammy",[0xC0] = "Taito",[0xC2] = "Kemco",[0xC3] = "Squaresoft",[0xC4] = "Tokuma Shoten Intermedia",[0xC5] = "Data East",
+    [0xC6] = "Tonkinhouse",[0xC8] = "Koei",[0xC9] = "UFL",[0xCA] = "Ultra",[0xCB] = "Vap",[0xCC] = "Use Corporation",
+    [0xCD] = "Meldac",[0xCE] = ".Pony Canyon or",[0xCF] = "Angel",[0xD0] = "Taito",[0xD1] = "Sofel",[0xD2] = "Quest",
+    [0xD3] = "Sigma Enterprises",[0xD4] = "ASK Kodansha Co.",[0xD6] = "Naxat Soft",[0xD7] = "Copya System",[0xD9] = "Banpresto",[0xDA] = "Tomy",
+    [0xDB] = "LJN",[0xDD] = "NCS",[0xDE] = "Human",[0xDF] = "Altron",[0xE0] = "Jaleco",[0xE1] = "Towa Chiki",
+    [0xE2] = "Yutaka",[0xE3] = "Varie",[0xE5] = "Epcoh",[0xE7] = "Athena",[0xE8] = "Asmik ACE Entertainment",[0xE9] = "Natsume",
+    [0xEA] = "King Records",[0xEB] = "Atlus",[0xEC] = "Epic/Sony Records",[0xEE] = "IGS",[0xF0] = "A Wave",[0xF3] = "Extreme Entertainment", [0xFF] = "LJN"
+};
+
+static const char *new_licensees[] = {
+    [1] = "Nintendo", [8] = "Capcom", [13] = "Electronic Arts", [18] = "Hudson Soft", [19] = "b-ai", [20] = "kss",
+    [22] = "pow", [24] = "PCM Complete", [25] = "san-x", [28] = "Kemco Japan", [29] = "seta", [30] = "Viacom",
+    [31] = "Nintendo", [32] = "Bandai", [33] = "Ocean/Acclaim", [34] = "Konami", [35] = "Hector", [37] = "Taito",
+    [38] = "Hudson", [39] = "Banpresto", [41] = "Ubi Soft", [42] = "Atlus", [44] = "Malibu", [46] = "angel",
+    [47] = "Bullet-Proof", [49] = "irem", [50] = "Absolute", [51] = "Acclaim", [52] = "Activision", [53] = "American sammy",
+    [54] = "Konami", [55] = "Hi tech entertainment", [56] = "LJN", [57] = "Matchbox", [58] = "Mattel", [59] = "Milton Bradley",
+    [60] = "Titus", [61] = "Virgin", [64] = "LucasArts", [67] = "Ocean", [69] = "Electronic Arts", [70] = "Infogrames",
+    [71] = "Interplay", [72] = "Broderbund", [73] = "sculptured", [75] = "sci", [78] = "THQ", [79] = "Accolade",
+    [80] = "misawa", [83] = "lozc", [86] = "Tokuma Shoten Intermedia", [87] = "Tsukuda Original", [91] = "Chunsoft", [92] = "Video system",
+    [93] = "Ocean/Acclaim", [95] = "Varie", [96] = "Yonezawa/s’pal", [97] = "Kaneko", [99] = "Pack in soft", [0xA4] = "Konami (Yu-Gi-Oh!)"
+};
+
 static const char *get_new_licensee(gb_t *gb) {
     byte_t code = ((gb->mmu->rom[0x0144] - 0x30) * 10) + (gb->mmu->rom[0x0145]) - 0x30;
-
-    switch (code) {
-    case 1: return "Nintendo";
-    case 8: return "Capcom";
-    case 13: return "Electronic Arts";
-    case 18: return "Hudson Soft";
-    case 19: return "b-ai";
-    case 20: return "kss";
-    case 22: return "pow";
-    case 24: return "PCM Complete";
-    case 25: return "san-x";
-    case 28: return "Kemco Japan";
-    case 29: return "seta";
-    case 30: return "Viacom";
-    case 31: return "Nintendo";
-    case 32: return "Bandai";
-    case 33: return "Ocean/Acclaim";
-    case 34: return "Konami";
-    case 35: return "Hector";
-    case 37: return "Taito";
-    case 38: return "Hudson";
-    case 39: return "Banpresto";
-    case 41: return "Ubi Soft";
-    case 42: return "Atlus";
-    case 44: return "Malibu";
-    case 46: return "angel";
-    case 47: return "Bullet-Proof";
-    case 49: return "irem";
-    case 50: return "Absolute";
-    case 51: return "Acclaim";
-    case 52: return "Activision";
-    case 53: return "American sammy";
-    case 54: return "Konami";
-    case 55: return "Hi tech entertainment";
-    case 56: return "LJN";
-    case 57: return "Matchbox";
-    case 58: return "Mattel";
-    case 59: return "Milton Bradley";
-    case 60: return "Titus";
-    case 61: return "Virgin";
-    case 64: return "LucasArts";
-    case 67: return "Ocean";
-    case 69: return "Electronic Arts";
-    case 70: return "Infogrames";
-    case 71: return "Interplay";
-    case 72: return "Broderbund";
-    case 73: return "sculptured";
-    case 75: return "sci";
-    case 78: return "THQ";
-    case 79: return "Accolade";
-    case 80: return "misawa";
-    case 83: return "lozc";
-    case 86: return "Tokuma Shoten Intermedia";
-    case 87: return "Tsukuda Original";
-    case 91: return "Chunsoft";
-    case 92: return "Video system";
-    case 93: return "Ocean/Acclaim";
-    case 95: return "Varie";
-    case 96: return "Yonezawa/s’pal";
-    case 97: return "Kaneko";
-    case 99: return "Pack in soft";
-    case 0xA4: return "Konami (Yu-Gi-Oh!)";
-    default: return NULL;
-    }
+    return new_licensees[code];
 }
 
 static const char *get_licensee(gb_t *gb) {
-    switch (gb->mmu->rom[0x014B]) {
-    case 0x01: return "Nintendo";
-    case 0x08: return "Capcom";
-    case 0x09: return "Hot-B";
-    case 0x0A: return "Jaleco";
-    case 0x0B: return "Coconuts Japan";
-    case 0x0C: return "Elite Systems";
-    case 0x13: return "EA (Electronic Arts)";
-    case 0x18: return "Hudsonsoft";
-    case 0x19: return "ITC Entertainment";
-    case 0x1A: return "Yanoman";
-    case 0x1D: return "Japan Clary";
-    case 0x1F: return "Virgin Interactive";
-    case 0x24: return "PCM Complete";
-    case 0x25: return "San-X";
-    case 0x28: return "Kotobuki Systems";
-    case 0x29: return "Seta";
-    case 0x30: return "Infogrames";
-    case 0x31: return "Nintendo";
-    case 0x32: return "Bandai";
-    case 0x33: return get_new_licensee(gb);
-    case 0x34: return "Konami";
-    case 0x35: return "HectorSoft";
-    case 0x38: return "Capcom";
-    case 0x39: return "Banpresto";
-    case 0x3C: return ".Entertainment i";
-    case 0x3E: return "Gremlin";
-    case 0x41: return "Ubisoft";
-    case 0x42: return "Atlus";
-    case 0x44: return "Malibu";
-    case 0x46: return "Angel";
-    case 0x47: return "Spectrum Holoby";
-    case 0x49: return "Irem";
-    case 0x4A: return "Virgin Interactive";
-    case 0x4D: return "Malibu";
-    case 0x4F: return "U.S. Gold";
-    case 0x50: return "Absolute";
-    case 0x51: return "Acclaim";
-    case 0x52: return "Activision";
-    case 0x53: return "American Sammy";
-    case 0x54: return "GameTek";
-    case 0x55: return "Park Place";
-    case 0x56: return "LJN";
-    case 0x57: return "Matchbox";
-    case 0x59: return "Milton Bradley";
-    case 0x5A: return "Mindscape";
-    case 0x5B: return "Romstar";
-    case 0x5C: return "Naxat Soft";
-    case 0x5D: return "Tradewest";
-    case 0x60: return "Titus";
-    case 0x61: return "Virgin Interactive";
-    case 0x67: return "Ocean Interactive";
-    case 0x69: return "EA (Electronic Arts)";
-    case 0x6E: return "Elite Systems";
-    case 0x6F: return "Electro Brain";
-    case 0x70: return "Infogrames";
-    case 0x71: return "Interplay";
-    case 0x72: return "Broderbund";
-    case 0x73: return "Sculptered Soft";
-    case 0x75: return "The Sales Curve";
-    case 0x78: return "t.hq";
-    case 0x79: return "Accolade";
-    case 0x7A: return "Triffix Entertainment";
-    case 0x7C: return "Microprose";
-    case 0x7F: return "Kemco";
-    case 0x80: return "Misawa Entertainment";
-    case 0x83: return "Lozc";
-    case 0x86: return "Tokuma Shoten Intermedia";
-    case 0x8B: return "Bullet-Proof Software";
-    case 0x8C: return "Vic Tokai";
-    case 0x8E: return "Ape";
-    case 0x8F: return "I’Max";
-    case 0x91: return "Chunsoft Co.";
-    case 0x92: return "Video System";
-    case 0x93: return "Tsubaraya Productions Co.";
-    case 0x95: return "Varie Corporation";
-    case 0x96: return "Yonezawa/S’Pal";
-    case 0x97: return "Kaneko";
-    case 0x99: return "Arc";
-    case 0x9A: return "Nihon Bussan";
-    case 0x9B: return "Tecmo";
-    case 0x9C: return "Imagineer";
-    case 0x9D: return "Banpresto";
-    case 0x9F: return "Nova";
-    case 0xA1: return "Hori Electric";
-    case 0xA2: return "Bandai";
-    case 0xA4: return "Konami";
-    case 0xA6: return "Kawada";
-    case 0xA7: return "Takara";
-    case 0xA9: return "Technos Japan";
-    case 0xAA: return "Broderbund";
-    case 0xAC: return "Toei Animation";
-    case 0xAD: return "Toho";
-    case 0xAF: return "Namco";
-    case 0xB0: return "acclaim";
-    case 0xB1: return "ASCII or Nexsoft";
-    case 0xB2: return "Bandai";
-    case 0xB4: return "Square Enix";
-    case 0xB6: return "HAL Laboratory";
-    case 0xB7: return "SNK";
-    case 0xB9: return "Pony Canyon";
-    case 0xBA: return "Culture Brain";
-    case 0xBB: return "Sunsoft";
-    case 0xBD: return "Sony Imagesoft";
-    case 0xBF: return "Sammy";
-    case 0xC0: return "Taito";
-    case 0xC2: return "Kemco";
-    case 0xC3: return "Squaresoft";
-    case 0xC4: return "Tokuma Shoten Intermedia";
-    case 0xC5: return "Data East";
-    case 0xC6: return "Tonkinhouse";
-    case 0xC8: return "Koei";
-    case 0xC9: return "UFL";
-    case 0xCA: return "Ultra";
-    case 0xCB: return "Vap";
-    case 0xCC: return "Use Corporation";
-    case 0xCD: return "Meldac";
-    case 0xCE: return ".Pony Canyon or";
-    case 0xCF: return "Angel";
-    case 0xD0: return "Taito";
-    case 0xD1: return "Sofel";
-    case 0xD2: return "Quest";
-    case 0xD3: return "Sigma Enterprises";
-    case 0xD4: return "ASK Kodansha Co.";
-    case 0xD6: return "Naxat Soft";
-    case 0xD7: return "Copya System";
-    case 0xD9: return "Banpresto";
-    case 0xDA: return "Tomy";
-    case 0xDB: return "LJN";
-    case 0xDD: return "NCS";
-    case 0xDE: return "Human";
-    case 0xDF: return "Altron";
-    case 0xE0: return "Jaleco";
-    case 0xE1: return "Towa Chiki";
-    case 0xE2: return "Yutaka";
-    case 0xE3: return "Varie";
-    case 0xE5: return "Epcoh";
-    case 0xE7: return "Athena";
-    case 0xE8: return "Asmik ACE Entertainment";
-    case 0xE9: return "Natsume";
-    case 0xEA: return "King Records";
-    case 0xEB: return "Atlus";
-    case 0xEC: return "Epic/Sony Records";
-    case 0xEE: return "IGS";
-    case 0xF0: return "A Wave";
-    case 0xF3: return "Extreme Entertainment";
-    case 0xFF: return "LJN";
-    default: return NULL;
-    }
+    byte_t code = gb->mmu->rom[0x014B];
+    return code == 0x33 ? get_new_licensee(gb) : old_licensees[code];
 }
 
 void gb_print_status(gb_t *gb) {
@@ -669,7 +568,7 @@ byte_t *gb_get_savestate(gb_t *gb, size_t *length, byte_t compressed) {
     free(savestate_header);
     free(savestate_data);
 
-    return (byte_t *) savestate;
+    return savestate;
 }
 
 int gb_load_savestate(gb_t *gb, const byte_t *data, size_t length) {
@@ -682,7 +581,7 @@ int gb_load_savestate(gb_t *gb, const byte_t *data, size_t length) {
     memcpy(savestate_header, data, sizeof(savestate_header_t));
 
     if (strncmp(savestate_header->identifier, SAVESTATE_STRING, sizeof(SAVESTATE_STRING))) {
-        eprintf("invalid format\n");
+        eprintf("invalid format %s\n", savestate_header->identifier);
         free(savestate_header);
         return 0;
     }
@@ -699,15 +598,12 @@ int gb_load_savestate(gb_t *gb, const byte_t *data, size_t length) {
     byte_t *savestate_data = xmalloc(savestate_data_len);
     memcpy(savestate_data, data + sizeof(savestate_header_t), savestate_data_len);
 
-    size_t cpu_len = cpu_serialized_length(gb);
-    size_t timer_len = timer_serialized_length(gb);
-    size_t ppu_len = ppu_serialized_length(gb);
-    size_t mmu_len = mmu_serialized_length(gb);
-    size_t expected_len = cpu_len + timer_len + ppu_len + mmu_len;
+    size_t cpu_len, timer_len, ppu_len, mmu_len;
+    size_t expected_data_len = get_savestate_expected_len(gb, &cpu_len, &timer_len, &ppu_len, &mmu_len) - sizeof(savestate_header_t);
 
     if (CHECK_BIT(savestate_header->mode, 7)) {
-        byte_t *dest = xmalloc(expected_len);
-        uLongf dest_len = expected_len;
+        byte_t *dest = xmalloc(expected_data_len);
+        uLongf dest_len = expected_data_len;
         if (uncompress(dest, &dest_len, savestate_data, savestate_data_len) == Z_OK) {
             free(savestate_data);
             savestate_data_len = dest_len;
@@ -721,8 +617,8 @@ int gb_load_savestate(gb_t *gb, const byte_t *data, size_t length) {
         }
     }
 
-    if (savestate_data_len != expected_len) {
-        eprintf("invalid savestate data length (expected: %zu; got: %zu)\n", expected_len, savestate_data_len);
+    if (savestate_data_len != expected_data_len) {
+        eprintf("invalid savestate data length (expected: %zu; got: %zu)\n", expected_data_len, savestate_data_len);
         free(savestate_header);
         free(savestate_data);
         return 0;

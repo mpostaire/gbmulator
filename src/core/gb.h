@@ -18,6 +18,8 @@
 #define GB_CAMERA_SENSOR_WIDTH 128
 #define GB_CAMERA_SENSOR_HEIGHT 128
 
+void gb_rewind(gb_t *gb);
+
 /**
  * Runs the emulator for one cpu step. If `gb` is linked to another device, it is also run for one step.
  * @returns the amount of cycles the emulator has run for

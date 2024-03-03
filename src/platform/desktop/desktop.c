@@ -901,6 +901,13 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
         return TRUE;
     }
 
+    if (keyval == GDK_KEY_r && gb) {
+        // TODO check that gb is not linked here
+        gb_rewind(gb);
+        stop_loop();
+        return TRUE;
+    }
+ 
     if (!gb || is_paused) return FALSE;
 
     switch (keyval) {
@@ -939,6 +946,12 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
 }
 
 static gboolean key_released_main(GtkEventControllerKey *self, guint keyval, guint keycode, GdkModifierType state, gpointer user_data) {
+    if (keyval == GDK_KEY_r && gb) {
+        // TODO check that gb is not linked here
+        start_loop();
+        return TRUE;
+    }
+
     if (!gb || is_paused) return FALSE;
 
     // don't use gb_joypad_release() here as we want to keep track of the joypad state and set it once per loop for link cable synchronization

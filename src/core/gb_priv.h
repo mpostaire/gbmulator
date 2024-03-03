@@ -38,6 +38,20 @@ struct gb_t {
     gb_joypad_t *joypad;
     gb_link_t *link;
     gb_t *ir_gb; // this is a pointer to an IR-linked emulator or NULL
+
+// TODO
+// - rollback netplay: don't wait other emu inputs, predict them (keep the previously received input), then when we received the inputs, rollback to the last known synchronized state for both the local emu and the local copy of the remote emu --> last known sync state is the state just BEFORE we started predicting, THEN we apply the input we just received by the remote
+//   WHAT happens if then, the remote doesn't reveive the inputs of the emulator that is ahead? it has to wait? or it just does the same: predict input + rollback
+//     won't this cause deadlocks/loops of rollbacks without progressing/high cpu usage?
+
+// - TO do this, add rewind gameplay feature when R key held, rewind until 16 seconds ??? (fine tune this value: maybe less is preferable)
+//     for rollback netplay, disallow rewind gameplay BUT use the same code / mechanism to rollback (once we have more than max buffer of previous states, sleep the emulation to wait for the other one to finally respond)
+    struct {
+        byte_t *states;
+        ssize_t head;
+        size_t len;
+        size_t state_size; // all states for a same ROM are the same size
+    } rewind_stack;
 };
 
 struct gb_printer_t {
