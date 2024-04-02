@@ -92,7 +92,7 @@ debug_web: web
 	emrun web_build/index.html
 
 web_build/index.html: $(SDIR)/platform/web/template.html $(OBJ)
-	$(CC) -o $@ $(OBJ) $(CFLAGS) -sABORTING_MALLOC=0 -sINITIAL_MEMORY=32MB -sWASM=1 -sEXPORTED_RUNTIME_METHODS=[ccall] -sASYNCIFY --shell-file $<
+	$(CC) -o $@ $(OBJ) $(CFLAGS) -sABORTING_MALLOC=0 -sINITIAL_MEMORY=96MB -sWASM=1 -sEXPORTED_RUNTIME_METHODS=[ccall] -sASYNCIFY --shell-file $<
 
 test:
 	$(MAKE) -C test
