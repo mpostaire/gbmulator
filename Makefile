@@ -92,7 +92,7 @@ debug_web: web
 	emrun web_build/index.html
 
 web_build/index.html: $(SDIR)/platform/web/template.html $(OBJ)
-	$(CC) -o $@ $(OBJ) $(CFLAGS) -sABORTING_MALLOC=0 -sINITIAL_MEMORY=32MB -sWASM=1 -sEXPORTED_RUNTIME_METHODS=[ccall] -sASYNCIFY --shell-file $<
+	$(CC) -o $@ $(OBJ) $(CFLAGS) -sABORTING_MALLOC=0 -sINITIAL_MEMORY=96MB -sWASM=1 -sEXPORTED_RUNTIME_METHODS=[ccall] -sASYNCIFY --shell-file $<
 
 test:
 	$(MAKE) -C test
@@ -123,7 +123,7 @@ $(ODIR)/bootroms/pb8: $(SDIR)/bootroms/pb8.c
 
 $(ODIR)/bootroms/%: $(SDIR)/bootroms/%.asm $(ODIR)/bootroms/gbmulator_logo.pb8 $(SDIR)/bootroms/hardware.inc
 	-@mkdir -p $(dir $@)
-	rgbasm -i $(ODIR)/bootroms/ -i $(SDIR)/bootroms/ -o $@.tmp $<
+	rgbasm -I $(ODIR)/bootroms/ -I $(SDIR)/bootroms/ -o $@.tmp $<
 	rgblink -o $@.tmp2 $@.tmp
 	dd if=$@.tmp2 of=$@ count=1 bs=$(if $(findstring dmg,$@),256,2304)
 	@rm $@.tmp $@.tmp2

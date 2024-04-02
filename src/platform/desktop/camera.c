@@ -5,6 +5,8 @@
 #include "../common/utils.h"
 
 static byte_t *camera_data = NULL;
+static guint new_sample_src_id;
+static guint bus_error_src_id;
 
 static GstFlowReturn gstreamer_new_sample_cb(GstElement *sink, gpointer userdata) {
     GstSample *sample;
@@ -102,11 +104,13 @@ gboolean camera_find_devices(void) {
 }
 
 void camera_play(void) {
-    gst_element_set_state(pipeline, GST_STATE_PLAYING);
+    if (pipeline)
+        gst_element_set_state(pipeline, GST_STATE_PLAYING);
 }
 
 void camera_pause(void) {
-    gst_element_set_state(pipeline, GST_STATE_PAUSED);
+    if (pipeline)
+        gst_element_set_state(pipeline, GST_STATE_PAUSED);
 }
 
 GtkStringList *camera_get_devices_names(gsize *len) {
@@ -119,8 +123,6 @@ gchar ***camera_get_devices_paths(gsize *len) {
     return &devices_paths;
 }
 
-static guint new_sample_src_id;
-static guint bus_error_src_id;
 gboolean camera_init(gchar *device_path) {
     pipeline = gst_pipeline_new("webcam-pipeline");
     GstElement *src = gst_element_factory_make("v4l2src", "video-source");
@@ -170,8 +172,10 @@ void camera_quit(void) {
         camera_data = NULL;
     }
 
-    gst_element_set_state(pipeline, GST_STATE_NULL);
-    gst_object_unref(GST_OBJECT(pipeline));
-    g_source_remove(new_sample_src_id);
-    g_source_remove(bus_error_src_id);
+    if (pipeline) {
+        gst_element_set_state(pipeline, GST_STATE_NULL);
+        gst_object_unref(GST_OBJECT(pipeline));
+        g_source_remove(new_sample_src_id);
+        g_source_remove(bus_error_src_id);
+    }
 }

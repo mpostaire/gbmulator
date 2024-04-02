@@ -3,6 +3,7 @@
 #include "gb_priv.h"
 
 // FIXME rare audible pops
+// TODO https://gbdev.io/pandocs/Audio.html has been rewritten since I implemented this and there are new details that should be implemented
 
 const byte_t duty_cycles[4][8] = {
     { 0, 0, 0, 0, 0, 0, 0, 1 },
@@ -141,11 +142,12 @@ void apu_channel_trigger(gb_t *gb, gb_channel_t *c) {
 }
 
 static float channel_dac(gb_t *gb, gb_channel_t *c) {
+    // DAC digital range from 0x00 to 0x0F is translated in analog range from 1 to -1 (0x00 is 1, 0x0F is -1)
     switch (c->id) {
     case APU_CHANNEL_1:
     case APU_CHANNEL_2:
         if ((*c->NRx2 >> 3) && APU_IS_CHANNEL_ENABLED(gb, c->id)) // if dac enabled and channel enabled
-            return ((c->duty * c->envelope_volume) / 7.5f) - 1.0f;
+            return -(((c->duty * c->envelope_volume) / 7.5f) - 1.0f);
         break;
     case APU_CHANNEL_3:
         if ((*c->NRx0 >> 7) /*&& APU_IS_CHANNEL_ENABLED(c->id)*/) { // if dac enabled and channel enabled -- TODO check why channel 3 enabled flag is not working properly
@@ -164,12 +166,12 @@ static float channel_dac(gb_t *gb, gb_channel_t *c) {
                 sample >>= 2; // 25% volume
                 break;
             }
-            return (sample / 7.5f) - 1.0f; // divide by 7.5 then substract 1.0 to make it between -1.0 and 1.0
+            return -((sample / 7.5f) - 1.0f); // divide by 7.5 then substract 1.0 to make it between -1.0 and 1.0
         }
         break;
     case APU_CHANNEL_4: // TODO works but it seems (in Tetris) this channel volume is a bit too loud
         if ((*c->NRx2 >> 3) && APU_IS_CHANNEL_ENABLED(gb, c->id)) // if dac enabled and channel enabled
-            return ((!(c->LFSR & 0x01) * c->envelope_volume) / 7.5f) - 1.0f;
+            return -(((!(c->LFSR & 0x01) * c->envelope_volume) / 7.5f) - 1.0f);
         break;
     }
     return 0.0f;
