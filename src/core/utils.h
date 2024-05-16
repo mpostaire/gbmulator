@@ -33,8 +33,22 @@
 #define XSTRINGIFY(x) #x
 #define STRINGIFY(x) XSTRINGIFY(x)
 
-#define eprintf(format, ...) fprintf(stderr, "ERROR - %s:%d - %s() - "format, __FILE__, __LINE__, __func__, ##__VA_ARGS__)
-#define errnoprintf(format, ...) eprintf(format": %s\n", ##__VA_ARGS__, strerror(errno));
+#define eprintf(format, ...) fprintf(stderr, "[ERROR] %s:%d - %s() - "format"\n", __FILE__, __LINE__, __func__, ##__VA_ARGS__)
+#define errnoprintf(format, ...) eprintf(format": %s", ##__VA_ARGS__, strerror(errno));
+
+#define todo(format, ...)               \
+    do {                                \
+        eprintf(format, ##__VA_ARGS__); \
+        exit(42);                       \
+    } while (0)
+
+// #ifdef DEBUG
+// #   define LOG_DEBUG(format, ...) eprintf(format, ##__VA_ARGS__)
+// #else
+// #   define LOG_DEBUG(format, ...)
+// #endif
+
+// #define LOG(level, format, ...) LOG_##level(format, ##__VA_ARGS__)
 
 void *xmalloc(size_t size);
 
