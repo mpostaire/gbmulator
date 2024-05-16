@@ -2,7 +2,7 @@
 
 #include <gst/gst.h>
 
-#include "../../core/gb.h"
+#include "../../core/gb/gb.h"
 
 byte_t gb_camera_capture_image_cb(byte_t *pixels);
 

@@ -4,7 +4,7 @@
 #include "../common/config.h"
 #include "../common/utils.h"
 #include "ui.h"
-#include "../../core/gb.h"
+#include "../../core/gb/gb.h"
 
 // TODO fix this file (it's ugly code with lots of copy pasted repetitions).
 

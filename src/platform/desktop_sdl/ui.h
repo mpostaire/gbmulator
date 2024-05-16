@@ -6,7 +6,7 @@
 #include <SDL2/SDL.h>
 #endif
 
-#include "../../core/gb.h"
+#include "../../core/gb/gb.h"
 #include "../common/config.h"
 
 typedef struct menu_t menu_t;

@@ -1,7 +1,7 @@
 #include <gst/gst.h>
 #include <adwaita.h>
 
-#include "../../core/gb.h"
+#include "../../core/gb/gb.h"
 #include "../common/utils.h"
 
 static byte_t *camera_data = NULL;

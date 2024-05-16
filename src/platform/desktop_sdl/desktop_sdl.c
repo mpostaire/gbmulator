@@ -6,7 +6,7 @@
 #include "../common/link.h"
 #include "../common/config.h"
 #include "../common/utils.h"
-#include "../../core/gb.h"
+#include "../../core/gb/gb.h"
 #include "../../core/gb_priv.h"
 
 static int keycode_filter(SDL_Keycode key);
