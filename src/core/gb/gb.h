@@ -1,7 +1,7 @@
 #pragma once
 
 #include "types.h"
-#include "utils.h"
+#include "../utils.h"
 #include "printer.h"
 
 #define EMULATOR_NAME "GBmulator"

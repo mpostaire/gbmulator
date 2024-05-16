@@ -22,7 +22,7 @@ PLATFORM_ODIR=$(ODIR)/desktop
 OBJ=$(PLATFORM_ODIR)/platform/desktop/resources.o
 endif
 
-EXCLUDES+=$(wildcard $(SDIR)/bootroms/*)
+EXCLUDES+=$(wildcard $(SDIR)/bootroms/gb/*)
 
 SRC=$(filter-out $(EXCLUDES),$(call rwildcard,$(SDIR),*.c))
 OBJ+=$(SRC:$(SDIR)/%.c=$(PLATFORM_ODIR)/%.o)
@@ -107,23 +107,23 @@ $(PLATFORM_ODIR_STRUCTURE):
 	mkdir -p $@
 
 # Build boot roms (taken and modified from SameBoy emulator)
-$(SDIR)/core/boot.c: $(ODIR)/bootroms/dmg_boot $(ODIR)/bootroms/cgb_boot
+$(SDIR)/core/boot.c: $(ODIR)/bootroms/gb/dmg_boot $(ODIR)/bootroms/gb/cgb_boot
 	cd $(ODIR)/bootroms && xxd -i dmg_boot > ../../$(SDIR)/core/boot.c && xxd -i cgb_boot >> ../../$(SDIR)/core/boot.c
 
-$(ODIR)/bootroms/gbmulator_logo.1bpp: $(SDIR)/bootroms/gbmulator_logo.png
+$(ODIR)/bootroms/gb/gbmulator_logo.1bpp: $(SDIR)/bootroms/gb/gbmulator_logo.png
 	-@mkdir -p $(dir $@)
 	rgbgfx -d 1 -Z -o $@ $<
 
-$(ODIR)/bootroms/gbmulator_logo.pb8: $(ODIR)/bootroms/gbmulator_logo.1bpp $(ODIR)/bootroms/pb8
-	$(ODIR)/bootroms/pb8 -l 384 $< $@
+$(ODIR)/bootroms/gb/gbmulator_logo.pb8: $(ODIR)/bootroms/gb/gbmulator_logo.1bpp $(ODIR)/bootroms/gb/pb8
+	$(ODIR)/bootroms/gb/pb8 -l 384 $< $@
 
 # force gcc here to avoid compiling with emcc
-$(ODIR)/bootroms/pb8: $(SDIR)/bootroms/pb8.c
+$(ODIR)/bootroms/gb/pb8: $(SDIR)/bootroms/gb/pb8.c
 	gcc $< -o $@
 
-$(ODIR)/bootroms/%: $(SDIR)/bootroms/%.asm $(ODIR)/bootroms/gbmulator_logo.pb8 $(SDIR)/bootroms/hardware.inc
+$(ODIR)/bootroms/gb/%: $(SDIR)/bootroms/gb/%.asm $(ODIR)/bootroms/gb/gbmulator_logo.pb8 $(SDIR)/bootroms/gb/hardware.inc
 	-@mkdir -p $(dir $@)
-	rgbasm -I $(ODIR)/bootroms/ -I $(SDIR)/bootroms/ -o $@.tmp $<
+	rgbasm -I $(ODIR)/bootroms/gb/ -I $(SDIR)/bootroms/gb/ -o $@.tmp $<
 	rgblink -o $@.tmp2 $@.tmp
 	dd if=$@.tmp2 of=$@ count=1 bs=$(if $(findstring dmg,$@),256,2304)
 	@rm $@.tmp $@.tmp2
