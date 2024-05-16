@@ -2,7 +2,7 @@
 #include <jni.h>
 #include <android/log.h>
 
-#include "../../core/gb.h"
+#include "../../core/gb/gb.h"
 #include "layout_editor.h"
 
 #define log(...) __android_log_print(ANDROID_LOG_INFO, "GBmulator", __VA_ARGS__)
