@@ -7,7 +7,7 @@
 #include "../common/utils.h"
 #include "../common/link.h"
 #include "layout_editor.h"
-#include "../../core/gb.h"
+#include "../../core/gb/gb.h"
 
 #define log(...) __android_log_print(ANDROID_LOG_WARN, "GBmulator", __VA_ARGS__)
 
