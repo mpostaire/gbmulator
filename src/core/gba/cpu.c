@@ -26,16 +26,17 @@
 #define PIPELINE_FETCHING 0
 #define PIPELINE_DECODING 1
 
-#define CPSR_T (1 << 5) // State bit
-#define CPSR_F (1 << 6) // FIQ disable
-#define CPSR_I (1 << 7) // IRQ disable
-#define CPSR_MODE 0x0000000F // Mode bits
-#define CPSR_V (1 << 28) // Overflow
-#define CPSR_C (1 << 29) // Carry or borrow or extend
-#define CPSR_Z (1 << 30) // Zero
 #define CPSR_N (1 << 31) // Negative or less than
+#define CPSR_Z (1 << 30) // Zero
+#define CPSR_C (1 << 29) // Carry or borrow or extend
+#define CPSR_V (1 << 28) // Overflow
+#define CPSR_MODE 0x0000000F // Mode bits
+#define CPSR_I (1 << 7) // IRQ disable
+#define CPSR_F (1 << 6) // FIQ disable
+#define CPSR_T (1 << 5) // State bit
 
 #define CPSR_CHECK_FLAG(cpu, flag) ((cpu)->cpsr & (flag))
+#define CPSR_CHANGE_FLAG(cpu, pos, value) ((cpu)->cpsr ^= (-(value) ^ (cpu)->cpsr) & (pos))
 
 #define RESET_VECTOR 0x00000000
 
@@ -84,7 +85,7 @@ uint8_t arm_handlers[1 << 12];
 uint8_t thumb_handlers[1 << 8]; // TODO not sure of this size
 
 static void not_implemented_handler(UNUSED gba_t *gba, uint32_t instr) {
-    todo("not implemented instruction: 0x%08X", instr);
+    todo("not implemented instruction: 0x%08X (0b%032b)", instr, instr);
 }
 
 static void data_processing_begin(gba_t *gba, uint32_t instr, uint8_t *rd, uint32_t *op1, uint32_t *op2) {
@@ -98,8 +99,8 @@ static void data_processing_begin(gba_t *gba, uint32_t instr, uint8_t *rd, uint3
 
     fprintf(stderr, "%c%c rd=0x%02X op1=0x%08X op2=0x%08X\n", i ? 'i' : '-', s ? 's' : '-', *rd, *op1, *op2);
 
-    if (s)
-        todo("data processing 's' bit");
+    // if (s)
+    //     todo("data processing 's' bit");
 
     // TODO it seems that there is a special case if rd is register 15 (REG_PC)
 
@@ -141,8 +142,20 @@ static void and_handler(gba_t *gba, uint32_t instr) {
 }
 
 static void cmp_handler(gba_t *gba, uint32_t instr) {
-    // TODO 's' bit s always set for cmp, cmnn tst and teq instructions
-    todo("cmp_handler: 0x%08X", instr);
+    fprintf(stderr, "(0x%08X) CMP%s ", instr, cond_names[INSTR_GET_COND(instr)]);
+
+    uint32_t op1;
+    uint32_t op2;
+    uint8_t rd;
+    data_processing_begin(gba, instr, &rd, &op1, &op2);
+
+    uint32_t res = op1 - op2;
+
+    // TODO update ARM CPSR flags: https://www.dmulholl.com/notes/arm-condition-flags.html
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_N, res >> 31);
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_Z, res == 0);
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, op1 >= op2);
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (((op1 ^ op2) & (op1 ^ res)) >> 31));
 }
 
 static void branch_handler(gba_t *gba, uint32_t instr) {
@@ -209,7 +222,11 @@ static inline bool verif_cond(gba_cpu_t *cpu, cond_t cond) {
 void gba_cpu_step(gba_t *gba) {
     gba_cpu_t *cpu = gba->cpu;
 
-    puts("-------");
+    char N = CPSR_CHECK_FLAG(cpu, CPSR_N) ? 'N' : '-';
+    char Z = CPSR_CHECK_FLAG(cpu, CPSR_Z) ? 'Z' : '-';
+    char C = CPSR_CHECK_FLAG(cpu, CPSR_C) ? 'C' : '-';
+    char V = CPSR_CHECK_FLAG(cpu, CPSR_V) ? 'V' : '-';
+    fprintf(stderr, "--------\n[PC=0x%08X] [CPSR=%c%c%c%c]\n", cpu->regs[REG_PC], N, Z, C, V);
 
     uint32_t instr = cpu->pipeline[PIPELINE_DECODING];
 
@@ -219,19 +236,19 @@ void gba_cpu_step(gba_t *gba) {
     cpu->pipeline[PIPELINE_FETCHING] = gba_bus_read_word(gba);
     // TODO bus_read can stall CPU (nop instruction inserted) while reading memory (depends on waitstates)
     //      while this stalls, the decode and execute stages continue their operation
-    printf("[PC=0x%08X] fetch: 0x%08X\n", cpu->regs[REG_PC] & 0xFFFFFFFC, cpu->pipeline[PIPELINE_FETCHING]);
+    fprintf(stderr, "fetch:   0x%08X\n", cpu->pipeline[PIPELINE_FETCHING]);
 
     // decode
-    printf("[PC=0x%08X] decode: 0x%08X\n", cpu->regs[REG_PC], cpu->pipeline[PIPELINE_DECODING]);
+    fprintf(stderr, "decode:  0x%08X\n", cpu->pipeline[PIPELINE_DECODING]);
 
     // execute
     // TODO
     // if (cpu->stall) {
         // cpu->stall--;
-        // printf("CPU stalled, remaining: %d\n", cpu->stall);
+        // fprintf(stderr, "CPU stalled, remaining: %d\n", cpu->stall);
         // return;
     // }
-    printf("[PC=0x%08X] execute: 0x%08X\n", cpu->regs[REG_PC], instr);
+    fprintf(stderr, "execute: 0x%08X\n", instr);
     if (verif_cond(gba->cpu, INSTR_GET_COND(instr))) {
         uint_fast16_t instr_hash = ((instr & 0x0FF00000) >> 16) | ((instr & 0x000000F0) >> 4);
         handlers[arm_handlers[instr_hash]](gba, instr);
