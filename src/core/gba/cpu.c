@@ -97,7 +97,7 @@ static void data_processing_begin(gba_t *gba, uint32_t instr, uint8_t *rd, uint3
     *op1 = gba->cpu->regs[rn];
     *op2 = instr & 0x00000FFF;
 
-    fprintf(stderr, "%c%c rd=0x%02X op1=0x%08X op2=0x%08X\n", i ? 'i' : '-', s ? 's' : '-', *rd, *op1, *op2);
+    // fprintf(stderr, "%c%c rd=0x%02X op1=0x%08X op2=0x%08X\n", i ? 'i' : '-', s ? 's' : '-', *rd, *op1, *op2);
 
     // if (s)
     //     todo("data processing 's' bit");
@@ -132,22 +132,37 @@ static void data_processing_begin(gba_t *gba, uint32_t instr, uint8_t *rd, uint3
 }
 
 static void and_handler(gba_t *gba, uint32_t instr) {
-    fprintf(stderr, "(0x%08X) AND%s ", instr, cond_names[INSTR_GET_COND(instr)]);
+    uint8_t rn = (instr & 0x000F0000) >> 16;
+    bool s = CHECK_BIT(instr, 20);
 
     uint32_t op1;
     uint32_t op2;
     uint8_t rd;
     data_processing_begin(gba, instr, &rd, &op1, &op2);
+
+    fprintf(stderr, "(0x%08X) AND%s%s R%d, R%d, 0x%X\n", instr, cond_names[INSTR_GET_COND(instr)], s ? "S" : "", rd, rn, op2);
+
     gba->cpu->regs[rd] = op1 & op2;
+
+    if (s) {
+        todo("s");
+
+        CPSR_CHANGE_FLAG(gba->cpu, CPSR_N, gba->cpu->regs[rd] >> 31);
+        CPSR_CHANGE_FLAG(gba->cpu, CPSR_Z, gba->cpu->regs[rd] == 0);
+        // CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, op1 >= op2);
+        // CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (((op1 ^ op2) & (op1 ^ res)) >> 31));
+    }
 }
 
 static void cmp_handler(gba_t *gba, uint32_t instr) {
-    fprintf(stderr, "(0x%08X) CMP%s ", instr, cond_names[INSTR_GET_COND(instr)]);
+    uint8_t rn = (instr & 0x000F0000) >> 16;
 
     uint32_t op1;
     uint32_t op2;
     uint8_t rd;
     data_processing_begin(gba, instr, &rd, &op1, &op2);
+
+    fprintf(stderr, "(0x%08X) CMP%s R%d, 0x%X\n", instr, cond_names[INSTR_GET_COND(instr)], rn, op2);
 
     uint32_t res = op1 - op2;
 
@@ -156,6 +171,40 @@ static void cmp_handler(gba_t *gba, uint32_t instr) {
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_Z, res == 0);
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, op1 >= op2);
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (((op1 ^ op2) & (op1 ^ res)) >> 31));
+}
+
+static void mov_handler(gba_t *gba, uint32_t instr) {
+    bool s = CHECK_BIT(instr, 20);
+
+    uint32_t op1;
+    uint32_t op2;
+    uint8_t rd;
+    data_processing_begin(gba, instr, &rd, &op1, &op2);
+
+    fprintf(stderr, "(0x%08X) MOV%s%s R%d, 0x%X\n", instr, cond_names[INSTR_GET_COND(instr)], s ? "S" : "", rd, op2);
+
+    gba->cpu->regs[rd] = op2;
+
+    if (s) {
+        todo("s");
+
+        CPSR_CHANGE_FLAG(gba->cpu, CPSR_N, gba->cpu->regs[rd] >> 31);
+        CPSR_CHANGE_FLAG(gba->cpu, CPSR_Z, gba->cpu->regs[rd] == 0);
+        // CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, op1 >= op2);
+        // CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (((op1 ^ op2) & (op1 ^ res)) >> 31));
+    }
+}
+
+static void str_handler(gba_t *gba, uint32_t instr) {
+    todo("str_handler: 0x%08X", instr);
+}
+
+static void ldr_handler(gba_t *gba, uint32_t instr) {
+    bool b = CHECK_BIT(instr, 22);
+    bool w = CHECK_BIT(instr, 21);
+    uint8_t rn = (instr >> 16) & 0x0F;
+    uint32_t addr = 0;
+    todo("(0x%08X) LDR%s%s%s R%d, 0x%X", instr, cond_names[INSTR_GET_COND(instr)], b ? "B" : "", w ? "T" : "", rn, addr);
 }
 
 static void branch_handler(gba_t *gba, uint32_t instr) {
@@ -261,6 +310,9 @@ void gba_cpu_step(gba_t *gba) {
     X(not_implemented_handler) \
     X(and_handler)             \
     X(cmp_handler)             \
+    X(mov_handler)             \
+    X(str_handler)             \
+    X(ldr_handler)             \
     X(branch_handler)          \
     X(branch_link_handler)
 #define HANDLER_ID(name) name##_id
@@ -277,30 +329,31 @@ handler_t handlers[] = {
 
 typedef struct {
     const char match_string[32]; // '1': bit MUST be set, '0': bit MUST be reset, '*': bit can be set OR reset
-    const char *name;
     uint8_t handler_id;
 } decoder_rule_t;
 // decoder_rules definition order is important: they are matched in the order they are defined in the decoder_rules array
 // TODO '_' == '*' for now, its to visually help me find relevant bits: '_' are alway ignored because they are not relevant in the instruction hash
 decoder_rule_t decoder_rules[] = {
-    {"____00*0000*________________****", "AND", HANDLER_ID(and_handler)}, // Data processing
-    // {"____00*0001*________________****", "EOR", HANDLER_ID(eor_handler)}, // Data processing
-    // {"____00*0010*________________****", "SUB", HANDLER_ID(sub_handler)}, // Data processing
-    // {"____00*0011*________________****", "RSB", HANDLER_ID(rsb_handler)}, // Data processing
-    // {"____00*0100*________________****", "ADD", HANDLER_ID(add_handler)}, // Data processing
-    // {"____00*0101*________________****", "ADC", HANDLER_ID(adc_handler)}, // Data processing
-    // {"____00*0110*________________****", "SBC", HANDLER_ID(sbc_handler)}, // Data processing
-    // {"____00*0111*________________****", "RSC", HANDLER_ID(rsc_handler)}, // Data processing
-    // {"____00*10001________________****", "TST", HANDLER_ID(TST_handler)}, // Data processing
-    // {"____00*10011________________****", "TEQ", HANDLER_ID(teq_handler)}, // Data processing
-    {"____00*10101________________****", "CMP", HANDLER_ID(cmp_handler)}, // Data processing
-    // {"____00*10111________________****", "CMN", HANDLER_ID(cmn_handler)}, // Data processing
-    // {"____00*1100*________________****", "ORR", HANDLER_ID(orr_handler)}, // Data processing
-    // {"____00*1101*________________****", "MOV", HANDLER_ID(mov_handler)}, // Data processing
-    // {"____00*1110*________________****", "BIC", HANDLER_ID(bic_handler)}, // Data processing
-    // {"____00*1111*________________****", "MVN", HANDLER_ID(mvn_handler)}, // Data processing
-    {"____1010****________________****", "B", HANDLER_ID(branch_handler)},
-    {"____1011****________________****", "BL", HANDLER_ID(branch_link_handler)},
+    {"____00*0000*________________****", HANDLER_ID(and_handler)}, // Data processing
+    // {"____00*0001*________________****", HANDLER_ID(eor_handler)}, // Data processing
+    // {"____00*0010*________________****", HANDLER_ID(sub_handler)}, // Data processing
+    // {"____00*0011*________________****", HANDLER_ID(rsb_handler)}, // Data processing
+    // {"____00*0100*________________****", HANDLER_ID(add_handler)}, // Data processing
+    // {"____00*0101*________________****", HANDLER_ID(adc_handler)}, // Data processing
+    // {"____00*0110*________________****", HANDLER_ID(sbc_handler)}, // Data processing
+    // {"____00*0111*________________****", HANDLER_ID(rsc_handler)}, // Data processing
+    // {"____00*10001________________****", HANDLER_ID(tst_handler)}, // Data processing
+    // {"____00*10011________________****", HANDLER_ID(teq_handler)}, // Data processing
+    {"____00*10101________________****", HANDLER_ID(cmp_handler)}, // Data processing
+    // {"____00*10111________________****", HANDLER_ID(cmn_handler)}, // Data processing
+    // {"____00*1100*________________****", HANDLER_ID(orr_handler)}, // Data processing
+    {"____00*1101*________________****", HANDLER_ID(mov_handler)}, // Data processing
+    // {"____00*1110*________________****", HANDLER_ID(bic_handler)}, // Data processing
+    // {"____00*1111*________________****", HANDLER_ID(mvn_handler)}, // Data processing
+    // {"____01*****0________________****", HANDLER_ID(str_handler)}, // Single Data Transfer
+    {"____01*****1________________****", HANDLER_ID(ldr_handler)}, // Single Data Transfer
+    {"____1010****________________****", HANDLER_ID(branch_handler)}, // Branch
+    {"____1011****________________****", HANDLER_ID(branch_link_handler)}, // Branch
 };
 uint8_t get_handler(uint32_t instr) {
     // TODO
@@ -328,10 +381,8 @@ uint8_t get_handler(uint32_t instr) {
             }
         }
 
-        if (match) {
-            printf("0x%08X (0b%032b) --> %s\n", instr, instr, rule.name);
+        if (match)
             return rule.handler_id;
-        }
     }
 
     return HANDLER_ID(not_implemented_handler);
