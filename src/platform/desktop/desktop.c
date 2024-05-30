@@ -14,12 +14,16 @@
 #include "../common/utils.h"
 #include "../common/config.h"
 
+#ifndef VERSION
+#   define VERSION ""
+#endif
+
 #define APP_NAME EMULATOR_NAME
 #define APP_ICON "gbmulator"
-#define APP_VERSION "0.2"
+#define APP_VERSION STRINGIFY(VERSION)
+#define APP_COPYRIGHT_YEAR "2024"
 
 #define CASE_THEN_STRING(x) case x: return #x
-#define STRING(x) #x
 
 #define XPM_WHITE " "
 #define XPM_LIGHT_GRAY "."
@@ -197,44 +201,44 @@ static const char *gamepad_gamepad_button_parser(guint16 button) {
 }
 
 static int gamepad_button_name_parser(const char *button_name) {
-    size_t max_len = sizeof(STRING(BTN_DPAD_RIGHT));
-    if (!strncmp(button_name, STRING(BTN_A), max_len))
+    size_t max_len = sizeof(XSTRINGIFY(BTN_DPAD_RIGHT));
+    if (!strncmp(button_name, XSTRINGIFY(BTN_A), max_len))
         return BTN_A;
-    if (!strncmp(button_name, STRING(BTN_B), max_len))
+    if (!strncmp(button_name, XSTRINGIFY(BTN_B), max_len))
         return BTN_B;
-    if (!strncmp(button_name, STRING(BTN_C), max_len))
+    if (!strncmp(button_name, XSTRINGIFY(BTN_C), max_len))
         return BTN_C;
-    if (!strncmp(button_name, STRING(BTN_X), max_len))
+    if (!strncmp(button_name, XSTRINGIFY(BTN_X), max_len))
         return BTN_X;
-    if (!strncmp(button_name, STRING(BTN_Y), max_len))
+    if (!strncmp(button_name, XSTRINGIFY(BTN_Y), max_len))
         return BTN_Y;
-    if (!strncmp(button_name, STRING(BTN_Z), max_len))
+    if (!strncmp(button_name, XSTRINGIFY(BTN_Z), max_len))
         return BTN_Z;
-    if (!strncmp(button_name, STRING(BTN_TL), max_len))
+    if (!strncmp(button_name, XSTRINGIFY(BTN_TL), max_len))
         return BTN_TL;
-    if (!strncmp(button_name, STRING(BTN_TR), max_len))
+    if (!strncmp(button_name, XSTRINGIFY(BTN_TR), max_len))
         return BTN_TR;
-    if (!strncmp(button_name, STRING(BTN_TL2), max_len))
+    if (!strncmp(button_name, XSTRINGIFY(BTN_TL2), max_len))
         return BTN_TL2;
-    if (!strncmp(button_name, STRING(BTN_TR2), max_len))
+    if (!strncmp(button_name, XSTRINGIFY(BTN_TR2), max_len))
         return BTN_TR2;
-    if (!strncmp(button_name, STRING(BTN_SELECT), max_len))
+    if (!strncmp(button_name, XSTRINGIFY(BTN_SELECT), max_len))
         return BTN_SELECT;
-    if (!strncmp(button_name, STRING(BTN_START), max_len))
+    if (!strncmp(button_name, XSTRINGIFY(BTN_START), max_len))
         return BTN_START;
-    if (!strncmp(button_name, STRING(BTN_MODE), max_len))
+    if (!strncmp(button_name, XSTRINGIFY(BTN_MODE), max_len))
         return BTN_MODE;
-    if (!strncmp(button_name, STRING(BTN_THUMBL), max_len))
+    if (!strncmp(button_name, XSTRINGIFY(BTN_THUMBL), max_len))
         return BTN_THUMBL;
-    if (!strncmp(button_name, STRING(BTN_THUMBR), max_len))
+    if (!strncmp(button_name, XSTRINGIFY(BTN_THUMBR), max_len))
         return BTN_THUMBR;
-    if (!strncmp(button_name, STRING(BTN_DPAD_UP), max_len))
+    if (!strncmp(button_name, XSTRINGIFY(BTN_DPAD_UP), max_len))
         return BTN_DPAD_UP;
-    if (!strncmp(button_name, STRING(BTN_DPAD_DOWN), max_len))
+    if (!strncmp(button_name, XSTRINGIFY(BTN_DPAD_DOWN), max_len))
         return BTN_DPAD_DOWN;
-    if (!strncmp(button_name, STRING(BTN_DPAD_LEFT), max_len))
+    if (!strncmp(button_name, XSTRINGIFY(BTN_DPAD_LEFT), max_len))
         return BTN_DPAD_LEFT;
-    if (!strncmp(button_name, STRING(BTN_DPAD_RIGHT), max_len))
+    if (!strncmp(button_name, XSTRINGIFY(BTN_DPAD_RIGHT), max_len))
         return BTN_DPAD_RIGHT;
     return 0;
 }
@@ -743,7 +747,7 @@ static void show_about(GSimpleAction *action, GVariant *parameter, gpointer app)
                           "application-name", APP_NAME,
                           "application-icon", APP_ICON,
                           "version", APP_VERSION,
-                          "copyright", "© 2022 Maxime Postaire",
+                          "copyright", "© " APP_COPYRIGHT_YEAR " Maxime Postaire",
                           "issue-url", "https://github.com/mpostaire/gbmulator/issues/new",
                           "license-type", GTK_LICENSE_MIT_X11, 
                           "developers", developers,

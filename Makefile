@@ -1,7 +1,7 @@
 SDIR=src
 ODIR=out
 IDIR=$(SDIR)
-CFLAGS=-std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wno-cast-function-type -O3 -I$(IDIR)
+CFLAGS=-std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wno-cast-function-type -O3 -I$(IDIR) -DVERSION=$(shell git rev-parse --short HEAD)
 LDLIBS=
 CC=gcc
 BIN=gbmulator
