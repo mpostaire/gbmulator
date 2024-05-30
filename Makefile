@@ -157,6 +157,7 @@ install:
 	install -m 0644 $(ICONDIR)/48x48/$(BIN).png /usr/share/icons/hicolor/48x48/apps
 	install -m 0644 $(ICONDIR)/32x32/$(BIN).png /usr/share/icons/hicolor/32x32/apps
 	install -m 0644 $(ICONDIR)/16x16/$(BIN).png /usr/share/icons/hicolor/16x16/apps
+	install -m 0644 $(ICONDIR)/128x128/$(BIN).png /usr/share/icons
 	gtk-update-icon-cache
 	update-desktop-database
 
