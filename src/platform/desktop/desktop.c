@@ -331,7 +331,7 @@ static inline gboolean loop(gpointer user_data) {
 static void on_emu_realize(GtkGLArea *area, gpointer user_data) {
     gtk_gl_area_make_current(area);
     if (gtk_gl_area_get_error(area) != NULL) {
-        fprintf(stderr, "Unknown error\n");
+        eprintf("Unknown error\n");
         return;
     }
 
@@ -351,7 +351,7 @@ static gboolean on_emu_render(GtkGLArea *area, GdkGLContext *context, gpointer u
 static void on_printer_realize(GtkGLArea *area, gpointer user_data) {
     gtk_gl_area_make_current(area);
     if (gtk_gl_area_get_error(area) != NULL) {
-        fprintf(stderr, "Unknown error\n");
+        eprintf("Unknown error\n");
         return;
     }
 
@@ -406,7 +406,7 @@ static void set_accelerometer_data(double *x, double *y) {
 }
 
 static void toggle_pause(GSimpleAction *action, GVariant *parameter, gpointer app) {
-    if (!linked_gb && !link_task) {
+    if (gb && !linked_gb && !link_task) {
         show_toast(is_paused ? "Resumed" : "Paused");
         toggle_loop();
     }
@@ -491,11 +491,17 @@ static void link_dialog_response(GtkDialog *self, gint response_id, gpointer use
 }
 
 static void show_link_emu_dialog(GSimpleAction *action, GVariant *parameter, gpointer app) {
+    if (!gb)
+        return;
+
     gamepad_state = GAMEPAD_DISABLED;
     gtk_window_present(GTK_WINDOW(link_emu_dialog));
 }
 
 static void show_printer_window(GSimpleAction *action, GVariant *parameter, gpointer app) {
+    if (!gb)
+        return;
+
     printer = gb_printer_init(printer_new_line_cb, printer_start_cb, printer_finish_cb);
     gb_link_connect_printer(gb, printer);
     set_link_gui_actions(FALSE, FALSE);
