@@ -79,6 +79,7 @@
                                                 <property name="width-request">320</property>
                                                 <property name="height-request">288</property>
                                                 <property name="focusable">true</property>
+                                                <property name="allowed-apis">GDK_GL_API_GL</property>
                                             </object>
                                         </child>
                                     </object>
