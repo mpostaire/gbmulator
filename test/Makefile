@@ -2,8 +2,8 @@ ODIR=../out/test/core
 EMU_SDIR=../src/core
 CC=gcc
 CFLAGS=-std=gnu11 -Wall -Wextra -O3 -I$(EMU_SDIR)
-EXTRA_CFLAGS=$(shell pkg-config --cflags MagickWand)
-LDLIBS=$(shell pkg-config --libs MagickWand)
+EXTRA_CFLAGS=$(shell pkg-config --cflags zlib MagickWand)
+LDLIBS=$(shell pkg-config --libs zlib MagickWand)
 BIN=tester
 
 EMU_SRC=$(wildcard $(EMU_SDIR)/*.c)
