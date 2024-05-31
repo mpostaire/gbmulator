@@ -1,5 +1,5 @@
 # GBmulator
-A Game Boy Color emulator with sound and wireless link cable support.
+A Game Boy Color emulator with fast Link Cable and IR sensor support over TCP. 
 
 You can compile and run it on your linux machine or use it in your browser [here](https://mpostaire.github.io/gbmulator) (Note: the browser version does not have support for the link cable).
 
@@ -15,7 +15,7 @@ You can compile and run it on your linux machine or use it in your browser [here
 - GameBoy and GameBoy Color emulator
 - PPU implements fifo rendering
 - Audio with dynamic rate control
-- Wireless link cable and IR sensor
+- Fast TCP Link Cable and IR sensor
 - Support for MBC1, MBC1M, MBC2, MBC3, MBC30, MBC5, MBC7 and HuC1 cartridges
 - Battery saves and savestates
 - Game Boy Printer
