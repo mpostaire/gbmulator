@@ -157,6 +157,26 @@ static void and_handler(gba_t *gba, uint32_t instr) {
     }
 }
 
+static void teq_handler(gba_t *gba, uint32_t instr) {
+    uint8_t rn = (instr & 0x000F0000) >> 16;
+    bool s = CHECK_BIT(instr, 20);
+
+    uint32_t op1;
+    uint32_t op2;
+    uint8_t rd;
+    data_processing_begin(gba, instr, &rd, &op1, &op2);
+
+    fprintf(stderr, "(0x%08X) TEQ%s R%d, 0x%X\n", instr, cond_names[INSTR_GET_COND(instr)], rn, op2);
+
+    uint32_t res = op1 ^ op2;
+
+    // TODO update ARM CPSR flags: https://www.dmulholl.com/notes/arm-condition-flags.html
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_N, res >> 31);
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_Z, res == 0);
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, op1 >= op2);
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (((op1 ^ op2) & (op1 ^ res)) >> 31));
+}
+
 static void cmp_handler(gba_t *gba, uint32_t instr) {
     uint8_t rn = (instr & 0x000F0000) >> 16;
 
@@ -245,8 +265,6 @@ static void ldr_handler(gba_t *gba, uint32_t instr) {
 
     uint8_t rd = (instr >> 12) & 0x0F;
     gba->cpu->regs[rd] = res;
-
-    todo();
 }
 
 static void branch_handler(gba_t *gba, uint32_t instr) {
@@ -351,6 +369,7 @@ void gba_cpu_step(gba_t *gba) {
 #define FOREACH_HANDLER(X)     \
     X(not_implemented_handler) \
     X(and_handler)             \
+    X(teq_handler)             \
     X(cmp_handler)             \
     X(mov_handler)             \
     X(str_handler)             \
@@ -385,7 +404,7 @@ decoder_rule_t decoder_rules[] = {
     // {"____00*0110*________________****", HANDLER_ID(sbc_handler)}, // Data processing
     // {"____00*0111*________________****", HANDLER_ID(rsc_handler)}, // Data processing
     // {"____00*10001________________****", HANDLER_ID(tst_handler)}, // Data processing
-    // {"____00*10011________________****", HANDLER_ID(teq_handler)}, // Data processing
+    {"____00*10011________________****", HANDLER_ID(teq_handler)}, // Data processing
     {"____00*10101________________****", HANDLER_ID(cmp_handler)}, // Data processing
     // {"____00*10111________________****", HANDLER_ID(cmn_handler)}, // Data processing
     // {"____00*1100*________________****", HANDLER_ID(orr_handler)}, // Data processing
