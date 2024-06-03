@@ -66,16 +66,19 @@
     X(LT)          \
     X(GT)          \
     X(LE)          \
-    X(AL)
+    Y(AL)
 #define COND_GENERATOR(name) COND_##name,
 #define COND_NAME_GENERATOR(name) STRINGIFY(name),
 
+#define Y COND_GENERATOR
 typedef enum {
     FOREACH_COND(COND_GENERATOR)
 } cond_t;
+#define Y(name) ""
 static const char *cond_names[] = {
     FOREACH_COND(COND_NAME_GENERATOR)
 };
+#undef Y
 
 typedef void (*handler_t)(gba_t *gba, uint32_t instr);
 handler_t handlers[];
@@ -203,8 +206,47 @@ static void ldr_handler(gba_t *gba, uint32_t instr) {
     bool b = CHECK_BIT(instr, 22);
     bool w = CHECK_BIT(instr, 21);
     uint8_t rn = (instr >> 16) & 0x0F;
-    uint32_t addr = 0;
-    todo("(0x%08X) LDR%s%s%s R%d, 0x%X", instr, cond_names[INSTR_GET_COND(instr)], b ? "B" : "", w ? "T" : "", rn, addr);
+
+    uint32_t addr = gba->cpu->regs[rn];
+    uint32_t offset;
+
+    fprintf(stderr, "(0x%08X) LDR%s%s%s R%d, 0x%X\n", instr, cond_names[INSTR_GET_COND(instr)], b ? "B" : "", w ? "T" : "", rn, addr);
+
+    // TODO split this into 2 different handler functions to avoid branching (also do this to all other branches in any instruction)
+
+    if (w)
+        todo();
+
+    bool i = CHECK_BIT(instr, 25);
+    if (i) {
+        uint8_t rm = instr & 0x0F;
+        uint8_t shift = (instr >> 4) & 0xFF;
+        todo();
+    } else {
+        offset = instr & 0x0FFF;
+    }
+
+    bool u = GET_BIT(instr, 23);
+    offset *= -1 * -u;
+
+    bool p = CHECK_BIT(instr, 24);
+    if (p)
+        addr += offset;
+    else
+        todo();
+
+    gba_bus_select(gba, addr);
+
+    uint32_t res;
+    if (b)
+        res = gba_bus_read_byte(gba);
+    else
+        res = gba_bus_read_word(gba);
+
+    uint8_t rd = (instr >> 12) & 0x0F;
+    gba->cpu->regs[rd] = res;
+
+    todo();
 }
 
 static void branch_handler(gba_t *gba, uint32_t instr) {
@@ -351,8 +393,8 @@ decoder_rule_t decoder_rules[] = {
     // {"____00*1110*________________****", HANDLER_ID(bic_handler)}, // Data processing
     // {"____00*1111*________________****", HANDLER_ID(mvn_handler)}, // Data processing
     // {"____01*****0________________****", HANDLER_ID(str_handler)}, // Single Data Transfer
-    {"____01*****1________________****", HANDLER_ID(ldr_handler)}, // Single Data Transfer
-    {"____1010****________________****", HANDLER_ID(branch_handler)}, // Branch
+    {"____01*****1________________****", HANDLER_ID(ldr_handler)},         // Single Data Transfer
+    {"____1010****________________****", HANDLER_ID(branch_handler)},      // Branch
     {"____1011****________________****", HANDLER_ID(branch_link_handler)}, // Branch
 };
 uint8_t get_handler(uint32_t instr) {
