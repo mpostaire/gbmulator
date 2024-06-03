@@ -11,6 +11,9 @@ void gba_bus_select(gba_t *gba, uint32_t address) {
     //         break;
     // }
 
+    if (address >= BUS_IO_REGS && address < BUS_IO_REGS_UNUSED)
+        return;
+
     if (address >= BUS_BIOS_ROM_UNUSED) {
         eprintf("cannot access data at address 0x%08X", gba->bus->address);
         exit(42);
