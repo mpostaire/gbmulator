@@ -142,7 +142,8 @@ clean:
 
 cleaner: clean
 	rm -rf $(BIN) $(SDIR)/platform/desktop/resources.c $(patsubst %/$(BIN).png,%,$(ICONS))
-	cd $(SDIR)/platform/android/android-project && ./gradlew clean
+	$(MAKE) -C test cleaner
+	cd $(SDIR)/platform/android/android-project && ./gradlew clean || true
 
 install:
 	install -m 0755 $(BIN) /usr/bin

@@ -3,6 +3,9 @@
  * https://github.com/c-sp/gameboy-test-roms
  */
 
+#define _GNU_SOURCE
+#include <sched.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -20,6 +23,11 @@
 
 #define BUF_SIZE 256
 
+size_t num_cpus;
+FILE *output_file;
+size_t next_test = 0;
+pthread_mutex_t next_test_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 static char root_path[BUF_SIZE];
 
 static byte_t dmg_boot_found;
@@ -29,7 +37,7 @@ static byte_t cgb_boot[0x900];
 
 typedef struct {
     char *rom_path;                 // relative the the root_path given in the program's argument
-    char *reference_image_filename; // relative to the dir of the rom_path
+    char *reference_image_filename; // relative the the root_path given in the program's argument
     char *result_diff_image_suffix;
     gb_mode_t mode;
     int running_ms;
@@ -160,7 +168,6 @@ static int save_and_check_result(test_t *test, gb_t *gb, char *rom_path) {
     char *path_from_category = strchr(rom_path, '/') + 1;
     char *rom_name = strrchr(rom_path, '/') + 1;
     int path_until_extension_len = strrchr(rom_path, '.') - path_from_category;
-    int dir_path_len = rom_name - 1 - rom_path;
     int new_dir_path_len = rom_name - 1 - path_from_category;
 
     char *reference_old_path = NULL;
@@ -173,15 +180,16 @@ static int save_and_check_result(test_t *test, gb_t *gb, char *rom_path) {
     snprintf(result_path, sizeof(result_path), "results/%.*s-%s%s.result.png", path_until_extension_len, path_from_category, suffix, label);
 
     if (test->reference_image_filename) {
-        reference_old_path = xmalloc(BUF_SIZE);
+        reference_old_path = xmalloc(BUF_SIZE + 2);
         reference_new_path = xmalloc(BUF_SIZE);
         diff_path = xmalloc(BUF_SIZE);
 
-        snprintf(reference_old_path, BUF_SIZE, "%.*s/%s", dir_path_len, rom_path, test->reference_image_filename);
+        snprintf(reference_old_path, BUF_SIZE + 2, "%s/%s", root_path, test->reference_image_filename);
 
         char *reference_extension = strrchr(test->reference_image_filename, '.');
-        int new_path_until_extension_len = reference_extension - test->reference_image_filename;
-        snprintf(reference_new_path, BUF_SIZE, "results/%.*s/%.*s.expected.png", new_dir_path_len, path_from_category, new_path_until_extension_len, test->reference_image_filename);
+        char *reference_last_slash = strrchr(test->reference_image_filename, '/');
+        int new_path_until_extension_len = reference_extension - reference_last_slash;
+        snprintf(reference_new_path, BUF_SIZE, "results/%.*s/%.*s.expected.png", new_dir_path_len, path_from_category, new_path_until_extension_len, reference_last_slash);
 
         snprintf(diff_path, BUF_SIZE, "results/%.*s-%s%s.diff.png", path_until_extension_len, path_from_category, suffix, label);
     }
@@ -267,10 +275,14 @@ static gb_joypad_button_t str_to_joypad(char *str) {
 }
 
 static void exec_input_sequence(gb_t *gb, char *input_sequence) {
+    static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_lock(&mutex);
+
     char cpy[BUF_SIZE];
     strncpy(cpy, input_sequence, sizeof(cpy) - 1);
     char *delay_str = strtok(cpy, ":");
     char *input_str = strtok(NULL, ",");
+
     while (delay_str && input_str) {
         int delay = atoi(delay_str);
         gb_joypad_button_t input = str_to_joypad(input_str);
@@ -283,6 +295,8 @@ static void exec_input_sequence(gb_t *gb, char *input_sequence) {
         delay_str = strtok(NULL, ":");
         input_str = strtok(NULL, ",");
     }
+
+    pthread_mutex_unlock(&mutex);
 }
 
 static int run_test(test_t *test) {
@@ -311,7 +325,7 @@ static int run_test(test_t *test) {
         gb->mmu->cgb_boot_rom = cgb_boot;
 
     // run until the boot sequence is done
-    while (gb->cpu->registers.pc != 0x100)
+    while (gb->mmu->io_registers[IO_BANK] == 0)
         gb_step(gb);
 
     if (test->input_sequence) {
@@ -340,41 +354,34 @@ static int run_test(test_t *test) {
     return ret;
 }
 
-static void run_tests() {
-    fclose(stderr); // close stderr to prevent error messages from the emulator to mess with the tests' output
-
-    MagickWandGenesis();
-
-    printf(BOLD "---- TESTING ----\n" COLOR_OFF);
-    mkdir("results", 0744);
-    FILE *f = fopen("results/summary.txt.tmp", "w");
-
+static void *run_tests(UNUSED void *arg) {
     size_t num_tests = sizeof(tests) / sizeof(*tests);
 
-    for (size_t i = 0; i < num_tests; i++) {
-        test_t test = tests[i];
+    pthread_mutex_lock(&next_test_mutex);
+    while (next_test < num_tests) {
+        test_t test = tests[next_test++];
+        pthread_mutex_unlock(&next_test_mutex);
+
         char *label = test.mode == GB_MODE_CGB ? "CGB" : "DMG";
         char *suffix = test.result_diff_image_suffix ? test.result_diff_image_suffix : "";
-        printf(COLOR_BLUE "[TEST %ld/%ld]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s" COLOR_OFF, i + 1, num_tests, label, test.rom_path, suffix);
-        fflush(stdout);
 
         int success = run_test(&test);
         if (success == 1) {
-            printf(COLOR_GREEN "\r[PASS]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s%*s\n" COLOR_OFF, label, test.rom_path, suffix, 8, "");
-            fprintf(f, "%s:%s:%s:success\n", label, test.rom_path, suffix);
+            printf(COLOR_GREEN "[PASS]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s%*s\n" COLOR_OFF, label, test.rom_path, suffix, 10, "");
+            fprintf(output_file, "%s:%s:%s:success\n", label, test.rom_path, suffix);
         } else if (success == -1) {
-            printf(COLOR_RED "\r[FAIL]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s%*s\n" COLOR_OFF, label, test.rom_path, suffix, 8, "");
-            fprintf(f, "%s:%s:%s:timeout\n", label, test.rom_path, suffix);
+            printf(COLOR_RED "[FAIL]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s%*s\n" COLOR_OFF, label, test.rom_path, suffix, 10, "");
+            fprintf(output_file, "%s:%s:%s:timeout\n", label, test.rom_path, suffix);
         } else {
-            printf(COLOR_RED "\r[FAIL]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s%*s\n" COLOR_OFF, label, test.rom_path, suffix, 8, "");
-            fprintf(f, "%s:%s:%s:failed\n", label, test.rom_path, suffix);
+            printf(COLOR_RED "[FAIL]" COLOR_OFF " (%s) %s" COLOR_YELLOW " %s%*s\n" COLOR_OFF, label, test.rom_path, suffix, 10, "");
+            fprintf(output_file, "%s:%s:%s:failed\n", label, test.rom_path, suffix);
         }
+
+        pthread_mutex_lock(&next_test_mutex);
     }
+    pthread_mutex_unlock(&next_test_mutex);
 
-    MagickWandTerminus();
-
-    fclose(f);
-    rename("results/summary.txt.tmp", "results/summary.txt");
+    return NULL;
 }
 
 int main(int argc, char **argv) {
@@ -383,6 +390,10 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    cpu_set_t cpuset;
+    sched_getaffinity(0, sizeof(cpuset), &cpuset);
+    num_cpus = CPU_COUNT(&cpuset);
+
     size_t root_path_len = strlen(argv[1]);
     while (argv[1][root_path_len - 1] == '/')
         root_path_len--;
@@ -390,5 +401,33 @@ int main(int argc, char **argv) {
     snprintf(root_path, sizeof(root_path), "%.*s", (int) root_path_len, argv[1]);
 
     load_bootroms();
-    run_tests();
+
+    fclose(stderr); // close stderr to prevent error messages from the emulator to mess with the tests' output
+
+    setvbuf(stdout, NULL, _IONBF, 0);
+
+    printf(BOLD "---- TESTING ----\n" COLOR_OFF);
+    mkdir("results", 0744);
+    output_file = fopen("results/summary.txt.tmp", "w");
+
+    MagickWandGenesis();
+
+    pthread_t *threads = xcalloc(num_cpus, sizeof(*threads));
+    for (size_t i = 0; i < num_cpus; i++) {
+        if (pthread_create(&threads[i], NULL, run_tests, NULL)) {
+            errnoprintf("");
+            return EXIT_FAILURE;
+        }
+    }
+
+    for (size_t i = 0; i < num_cpus; i++)
+        pthread_join(threads[i], NULL);
+
+    free(threads);
+    MagickWandTerminus();
+
+    fclose(output_file);
+    rename("results/summary.txt.tmp", "results/summary.txt");
+
+    return EXIT_SUCCESS;
 }
