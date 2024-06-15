@@ -16,6 +16,7 @@ all: $(ODIR)
 	$(MAKE) $(BIN)
 	cp results/summary.txt results/summary_old.txt || true
 	./$(BIN) $(TEST_ROMS)
+	sort -o results/summary.txt results/summary.txt
 	python3 compare_results.py || true
 
 tests.txt: tests_generator.py $(TEST_ROMS)

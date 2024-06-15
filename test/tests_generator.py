@@ -107,7 +107,7 @@ def generate_tests(tests_root, category, max_depth, output_file,
                     if test is not None:
                         output.append(test)
 
-    output_file.writelines(sorted(output))
+    output_file.writelines(output)
 
 
 def blargg_reference_image_getter(mode, full_rom_path):
