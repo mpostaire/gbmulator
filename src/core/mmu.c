@@ -12,7 +12,7 @@
 #define GBC_CURRENT_WRAM_BANK(mmu) (((mmu)->io_registers[IO_SVBK] & 0x07) == 0 ? 1 : ((mmu)->io_registers[IO_SVBK] & 0x07))
 
 int parse_header_mbc_byte(byte_t mbc_byte, byte_t *mbc_type, byte_t *has_eram, byte_t *has_battery, byte_t *has_rtc, byte_t *has_rumble) {
-    byte_t tmp_mbc_type, tmp_has_eram, tmp_has_battery, tmp_has_rtc, tmp_has_rumble;
+    byte_t tmp_mbc_type = 0, tmp_has_eram = 0, tmp_has_battery = 0, tmp_has_rtc = 0, tmp_has_rumble = 0;
 
     switch (mbc_byte) {
     case 0x00:
