@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
     <requires lib="gtk" version="4.0"/>
-    <requires lib="libadwaita" version="1.2"/>
+    <requires lib="libadwaita" version="1.6"/>
 
     <object class="AdwWindow" id="window">
         <property name="content">
@@ -66,8 +66,8 @@
                                                 <property name="description">Open/Drag and drop ROM</property>
                                                 <property name="vexpand">true</property>
                                                 <property name="hexpand">true</property>
-                                                <property name="width-request">320</property>
-                                                <property name="height-request">288</property>
+                                                <property name="width-request">480</property>
+                                                <property name="height-request">432</property>
                                             </object>
                                         </child>
 
@@ -76,8 +76,8 @@
                                                 <property name="visible">false</property>
                                                 <property name="vexpand">true</property>
                                                 <property name="hexpand">true</property>
-                                                <property name="width-request">320</property>
-                                                <property name="height-request">288</property>
+                                                <property name="width-request">480</property>
+                                                <property name="height-request">432</property>
                                                 <property name="focusable">true</property>
                                                 <property name="allowed-apis">GDK_GL_API_GL</property>
                                             </object>

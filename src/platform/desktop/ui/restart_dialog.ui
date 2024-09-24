@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+    <requires lib="gtk" version="4.0"/>
+    <requires lib="libadwaita" version="1.6"/>
+
+    <object class="AdwAlertDialog" id="dialog">
+        <property name="heading">Restart emulator?</property>
+        <property name="body">This will restart the emulator and any unsaved progress will be lost.</property>
+        <property name="default-response">restart</property>
+        <property name="close-response">cancel</property>
+        <responses>
+            <response id="cancel">Cancel</response>
+            <response id="restart" appearance="destructive">Restart</response>
+        </responses>
+    </object>
+
+</interface>

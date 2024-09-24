@@ -5,6 +5,8 @@
         <file>src/platform/desktop/ui/preferences.ui</file>
         <file>src/platform/desktop/ui/link.ui</file>
         <file>src/platform/desktop/ui/printer.ui</file>
+        <file>src/platform/desktop/ui/printer_dialog.ui</file>
+        <file>src/platform/desktop/ui/restart_dialog.ui</file>
         <file>src/platform/desktop/ui/bind_setter.ui</file>
         <file>src/platform/desktop/ui/default.fs.glsl</file>
         <file>src/platform/desktop/ui/default.vs.glsl</file>

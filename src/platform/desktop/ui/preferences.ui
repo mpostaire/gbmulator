@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
     <requires lib="gtk" version="4.0"/>
-    <requires lib="libadwaita" version="1.2"/>
+    <requires lib="libadwaita" version="1.6"/>
 
-    <object class="AdwPreferencesWindow" id="window">
-        <property name="modal">true</property>
-        <property name="hide-on-close">true</property>
+    <object class="AdwPreferencesDialog" id="dialog">
         <child>
             <object class="AdwPreferencesPage">
                 <property name="icon-name">applications-system-symbolic</property>

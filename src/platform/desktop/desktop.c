@@ -129,9 +129,10 @@ static int binding_setter_handler = -1;
 static int gamepad_state = GAMEPAD_DISABLED;
 
 static AdwApplication *app;
-static GtkWidget *main_window, *preferences_window, *window_title, *toast_overlay, *emu_gl_area, *printer_gl_area, *keybind_dialog;
-static GtkWidget *joypad_name, *restart_dialog, *link_emu_dialog, *printer_window, *status, *bind_value, *mode_setter, *printer_save_btn;
+static GtkWidget *main_window, *window_title, *toast_overlay, *emu_gl_area, *printer_gl_area, *keybind_dialog;
+static GtkWidget *joypad_name, *link_emu_dialog, *printer_window, *status, *bind_value, *mode_setter, *printer_save_btn;
 static GtkWidget *printer_clear_btn, *speed_slider_container, *open_btn, *link_spinner_revealer, *link_spinner;
+static AdwDialog *restart_dialog, *printer_dialog, *preferences_dialog;
 static GtkAdjustment *printer_scroll_adj;
 static GtkEventController *motion_event_controller;
 static glong motion_event_handler = 0;
@@ -412,7 +413,7 @@ static void toggle_pause(GSimpleAction *action, GVariant *parameter, gpointer ap
     }
 }
 
-static void restart_emulator(AdwMessageDialog *self, gchar *response, gpointer user_data) {
+static void restart_emulator(AdwAlertDialog *self, gchar *response, gpointer user_data) {
     if (!strncmp(response, "restart", 8)) {
         start_loop();
         gb_reset(gb, config.mode);
@@ -424,7 +425,7 @@ static void restart_emulator(AdwMessageDialog *self, gchar *response, gpointer u
 static void ask_restart_emulator(GSimpleAction *action, GVariant *parameter, gpointer app) {
     if (gb && !linked_gb && !link_task) {
         gamepad_state = GAMEPAD_DISABLED;
-        gtk_window_present(GTK_WINDOW(restart_dialog));
+        adw_dialog_present(restart_dialog, main_window);
     }
 }
 
@@ -740,7 +741,7 @@ static void gamepad_setter_activated(AdwActionRow *self, gpointer user_data) {
 
 static void show_preferences(GSimpleAction *action, GVariant *parameter, gpointer app) {
     gamepad_state = GAMEPAD_DISABLED;
-    gtk_window_present(GTK_WINDOW(preferences_window));
+    adw_dialog_present(preferences_dialog, main_window);
 }
 
 static void show_about(GSimpleAction *action, GVariant *parameter, gpointer app) {
@@ -749,13 +750,13 @@ static void show_about(GSimpleAction *action, GVariant *parameter, gpointer app)
         NULL
     };
 
-    adw_show_about_window(gtk_application_get_active_window(GTK_APPLICATION(app)),
+    adw_show_about_dialog(GTK_WIDGET(gtk_application_get_active_window(GTK_APPLICATION(app))),
                           "application-name", APP_NAME,
                           "application-icon", APP_ICON,
                           "version", APP_VERSION,
                           "copyright", "© " APP_COPYRIGHT_YEAR " Maxime Postaire",
                           "issue-url", "https://github.com/mpostaire/gbmulator/issues/new",
-                          "license-type", GTK_LICENSE_MIT_X11, 
+                          "license-type", GTK_LICENSE_MIT_X11,
                           "developers", developers,
                           "website", "https://github.com/mpostaire/gbmulator",
                           "comments", "A Game Boy Color emulator with sound and Link Cable / IR sensor support over tcp.",
@@ -917,7 +918,7 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
         stop_loop();
         return TRUE;
     }
- 
+
     if (!gb || is_paused) return FALSE;
 
     switch (keyval) {
@@ -1069,12 +1070,13 @@ static void secondary_window_hide_cb(GtkWidget *self, gpointer user_data) {
     gamepad_state = (!gb || is_paused) ? GAMEPAD_DISABLED : GAMEPAD_PLAYING;
 }
 
-static gboolean printer_window_close_request_cb(GtkWidget *self, gpointer user_data) {
+static gboolean printer_window_close_request_cb(GtkWindow *self, gpointer user_data) {
     if (printer_window_allowed_to_close) {
         printer_window_allowed_to_close = FALSE;
         return FALSE;
     }
-    gtk_window_present(GTK_WINDOW(user_data));
+
+    adw_dialog_present(printer_dialog, printer_window);
     return TRUE;
 }
 
@@ -1149,11 +1151,9 @@ static void activate_cb(GtkApplication *app) {
 
     // Preferences window
     builder = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/preferences.ui");
-    preferences_window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
-    g_signal_connect(preferences_window, "hide", G_CALLBACK(secondary_window_hide_cb), NULL);
-
-    gtk_window_set_application(GTK_WINDOW(preferences_window), GTK_APPLICATION(app));
-    gtk_window_set_transient_for(GTK_WINDOW(preferences_window), GTK_WINDOW(main_window));
+    preferences_dialog = ADW_DIALOG(gtk_builder_get_object(builder, "dialog"));
+    g_object_ref(preferences_dialog);
+    g_signal_connect(preferences_dialog, "hide", G_CALLBACK(secondary_window_hide_cb), NULL);
 
     GtkWidget *widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_sound"));
     GtkAdjustment *sound_adjustment = gtk_adjustment_new(config.sound, 0.0, 1.0, 0.05, 0.25, 0.0);
@@ -1212,8 +1212,8 @@ static void activate_cb(GtkApplication *app) {
 
     // Keybind dialog
     builder = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/bind_setter.ui");
-    keybind_dialog = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
-    gtk_window_set_transient_for(GTK_WINDOW(keybind_dialog), GTK_WINDOW(preferences_window));
+    keybind_dialog = GTK_WIDGET(gtk_builder_get_object(builder, "dialog"));
+    gtk_window_set_transient_for(GTK_WINDOW(keybind_dialog), GTK_WINDOW(main_window));
     g_signal_connect(keybind_dialog, "hide", G_CALLBACK(keybind_dialog_hide_cb), NULL);
     bind_value = GTK_WIDGET(gtk_builder_get_object(builder, "bind_value"));
     joypad_name = GTK_WIDGET(gtk_builder_get_object(builder, "joypad_name"));
@@ -1221,15 +1221,13 @@ static void activate_cb(GtkApplication *app) {
     g_object_unref(builder);
 
     // Restart dialog
-    restart_dialog = adw_message_dialog_new(GTK_WINDOW(main_window), "Restart emulator?", NULL);
-    adw_message_dialog_format_body(ADW_MESSAGE_DIALOG(restart_dialog), "This will restart the emulator and any unsaved progress will be lost.");
-    adw_message_dialog_add_responses(ADW_MESSAGE_DIALOG(restart_dialog), "cancel", "Cancel", "restart", "Restart", NULL);
-    adw_message_dialog_set_response_appearance(ADW_MESSAGE_DIALOG(restart_dialog), "restart", ADW_RESPONSE_DESTRUCTIVE);
-    adw_message_dialog_set_default_response(ADW_MESSAGE_DIALOG(restart_dialog), "cancel");
-    adw_message_dialog_set_close_response(ADW_MESSAGE_DIALOG(restart_dialog), "cancel");
-    gtk_window_set_hide_on_close(GTK_WINDOW(restart_dialog), TRUE);
+    builder = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/restart_dialog.ui");
+    restart_dialog = ADW_DIALOG(gtk_builder_get_object(builder, "dialog"));
+    g_object_ref(restart_dialog);
     g_signal_connect(restart_dialog, "hide", G_CALLBACK(secondary_window_hide_cb), NULL);
     g_signal_connect(restart_dialog, "response", G_CALLBACK(restart_emulator), NULL);
+
+    g_object_unref(builder);
 
     // Link with another emulator dialog
     builder = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/link.ui");
@@ -1261,6 +1259,7 @@ static void activate_cb(GtkApplication *app) {
     // Printer window
     builder = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/printer.ui");
     printer_window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
+    g_object_ref(printer_window);
     g_signal_connect(printer_window, "hide", G_CALLBACK(secondary_window_hide_cb), NULL);
 
     printer_gl_area = GTK_WIDGET(gtk_builder_get_object(builder, "printer_gl_area"));
@@ -1277,17 +1276,16 @@ static void activate_cb(GtkApplication *app) {
     GtkScrolledWindow *printer_scroll = GTK_SCROLLED_WINDOW(gtk_builder_get_object(builder, "printer_scroll"));
     printer_scroll_adj = gtk_scrolled_window_get_vadjustment(printer_scroll);
 
-    // Printer quit dialog
-    widget = adw_message_dialog_new(GTK_WINDOW(printer_window), "Disconnect printer?", NULL);
-    g_signal_connect(widget, "response", G_CALLBACK(printer_quit_dialog_response_cb), NULL);
-    adw_message_dialog_format_body(ADW_MESSAGE_DIALOG(widget), "This will disconnect the Game Boy Printer from the emulator.");
-    adw_message_dialog_add_responses(ADW_MESSAGE_DIALOG(widget), "cancel", "Cancel", "disconnect", "Disconnect", NULL);
-    adw_message_dialog_set_response_appearance(ADW_MESSAGE_DIALOG(widget), "disconnect", ADW_RESPONSE_DESTRUCTIVE);
-    adw_message_dialog_set_default_response(ADW_MESSAGE_DIALOG(widget), "cancel");
-    adw_message_dialog_set_close_response(ADW_MESSAGE_DIALOG(widget), "cancel");
-    gtk_window_set_hide_on_close(GTK_WINDOW(widget), TRUE);
+    g_object_unref(builder);
 
-    g_signal_connect(printer_window, "close-request", G_CALLBACK(printer_window_close_request_cb), widget);
+    // Printer quit dialog
+    builder = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/printer_dialog.ui");
+    printer_dialog = ADW_DIALOG(gtk_builder_get_object(builder, "dialog"));
+    g_object_ref(printer_dialog);
+    g_signal_connect(printer_dialog, "hide", G_CALLBACK(secondary_window_hide_cb), NULL);
+    g_signal_connect(printer_dialog, "response", G_CALLBACK(printer_quit_dialog_response_cb), NULL);
+
+    g_signal_connect(printer_window, "close-request", G_CALLBACK(printer_window_close_request_cb), NULL);
 
     g_object_unref(builder);
 
@@ -1361,7 +1359,7 @@ int main(int argc, char **argv) {
     g_signal_connect(app, "shutdown", G_CALLBACK(shutdown_cb), NULL);
     g_signal_connect(app, "command-line", G_CALLBACK(command_line_cb), NULL);
 
-    g_autoptr(ManetteMonitor) monitor = manette_monitor_new(); 
+    g_autoptr(ManetteMonitor) monitor = manette_monitor_new();
     g_autoptr(ManetteMonitorIter) iter = manette_monitor_iterate(monitor);
 
     g_signal_connect_object(G_OBJECT(monitor), "device-connected", G_CALLBACK(gamepad_connected_cb), NULL, 0);

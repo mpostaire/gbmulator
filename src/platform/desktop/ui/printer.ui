@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
     <requires lib="gtk" version="4.0"/>
-    <requires lib="libadwaita" version="1.2"/>
+    <requires lib="libadwaita" version="1.6"/>
 
     <object class="AdwWindow" id="window">
+        <property name="width-request">320</property>
+        <property name="height-request">288</property>
         <property name="hide-on-close">true</property>
         <property name="content">
             <object class="AdwToolbarView">

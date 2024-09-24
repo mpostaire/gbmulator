@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+    <requires lib="gtk" version="4.0"/>
+    <requires lib="libadwaita" version="1.6"/>
+
+    <object class="AdwAlertDialog" id="dialog">
+        <property name="heading">Disconnect printer?</property>
+        <property name="body">This will disconnect the Game Boy Printer from the emulator.</property>
+        <property name="default-response">disconnect</property>
+        <property name="close-response">cancel</property>
+        <responses>
+            <response id="cancel">Cancel</response>
+            <response id="disconnect" appearance="destructive">Disconnect</response>
+        </responses>
+    </object>
+
+</interface>
