@@ -1,5 +1,5 @@
 SDIR=src
-ODIR=out
+ODIR=build
 IDIR=$(SDIR)
 CFLAGS=-std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wno-cast-function-type -O3 -I$(IDIR) -DVERSION=$(shell git rev-parse --short HEAD)
 LDLIBS=
@@ -101,7 +101,7 @@ $(BIN): $(OBJ)
 	$(CC) -o $(BIN) $^ $(CFLAGS) $(LDLIBS)
 
 $(PLATFORM_ODIR)/%.o: $(SDIR)/%.c
-	$(CC) -o $@ -c $< $(CFLAGS) -MMD $(LDLIBS)
+	$(CC) -o $@ -c $< $(CFLAGS) -MMD -MP $(LDLIBS)
 
 $(PLATFORM_ODIR_STRUCTURE):
 	mkdir -p $@
@@ -171,6 +171,6 @@ uninstall:
 	gtk-update-icon-cache
 	update-desktop-database
 
--include $(foreach d,$(PLATFORM_ODIR_STRUCTURE),$d/*.d)
+-include $(OBJ:.o=.d)
 
 .PHONY: all clean run install uninstall debug web debug_web android debug_android test
