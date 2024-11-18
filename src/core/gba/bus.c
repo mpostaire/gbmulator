@@ -4,11 +4,13 @@
 
 // TODO there are multiple buses (1 for each diff memory regions? maybe some memory regions use same bus?)
 void gba_bus_select(gba_t *gba, uint32_t address) {
+    printf("bus addr select: 0x%08X\n", address);
+
     gba->bus->address = address;
 
     // switch (address & 0x0) {
-    //     case 0x0:
-    //         break;
+    // case 0x0:
+    //     break;
     // }
 
     if (address >= BUS_IO_REGS && address < BUS_IO_REGS_UNUSED)
@@ -49,7 +51,13 @@ uint32_t gba_bus_read_word(gba_t *gba) {
 // TODO data type may be wrong
 void gba_bus_write(gba_t *gba, uint32_t data) {
     // TODO needs converting address to corresponding bus memory region using the bus memory map
-    gba->bus->bios_rom[gba->bus->address] = data;
+
+    // switch (gba->bus->address) {
+    // case 0x0:
+    //     break;
+    // }
+
+    printf("bus write of 0x%08X ignored at 0x%08X\n", data, gba->bus->address);
 }
 
 gba_bus_t *gba_bus_init(uint8_t *rom, size_t rom_size, uint8_t *bios, size_t bios_size) {
