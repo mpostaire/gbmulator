@@ -1451,9 +1451,11 @@ int main(int argc, char **argv) {
     if (!gba)
         return EXIT_FAILURE;
 
-    for (int i = 0; i < 32; i++)
+    int max_step_count = 64;
+    for (int i = 0; i < max_step_count; i++)
         gba_step(gba);
 
+    printf("EXECUTED FIRST %d STEPS\n", max_step_count);
     gba_quit(gba);
 
     return EXIT_SUCCESS;
