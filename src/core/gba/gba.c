@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "gba_priv.h"
@@ -17,23 +18,23 @@ bool gba_is_rom_valid(uint8_t *rom, size_t rom_size) {
     title[12] = '\0';
 
     uint8_t game_type = rom[0xAC];
-    switch (game_type) {
-        case 'A':
-        case 'B':
-        case 'C':
-            break;
-        case 'F':
-        case 'K':
-        case 'P':
-        case 'R':
-        case 'U':
-        case 'V':
-            eprintf("game type '%c' is not implemented yet", game_type);
-            return false;
-        default:
-            eprintf("invalid game type: %c", game_type);
-            return false;
-    }
+    // switch (game_type) {
+    //     case 'A':
+    //     case 'B':
+    //     case 'C':
+    //         break;
+    //     case 'F':
+    //     case 'K':
+    //     case 'P':
+    //     case 'R':
+    //     case 'U':
+    //     case 'V':
+    //         eprintf("game type '%c' is not implemented yet", game_type);
+    //         return false;
+    //     default:
+    //         eprintf("invalid game type: %c", game_type);
+    //         return false;
+    // }
 
     char short_title[3]; // short_title is 2 chars
     memcpy(short_title, &rom[0xAD], sizeof(short_title));
@@ -71,8 +72,35 @@ bool gba_is_rom_valid(uint8_t *rom, size_t rom_size) {
     if (!maker_name)
         maker_name = "Unknown";
 
+    char *language_str;
+    switch (language) {
+    case 'J':
+        language_str = "Japan";
+        break;
+    case 'P':
+        language_str = "Europe/Elsewhere";
+        break;
+    case 'F':
+        language_str = "French";
+        break;
+    case 'S':
+        language_str = "Spanish";
+        break;
+    case 'E':
+        language_str = "USA/English";
+        break;
+    case 'D':
+        language_str = "German";
+        break;
+    case 'I':
+        language_str = "Italian";
+        break;
+    default:
+        language_str = "Unknown";
+    }
+
     // TODO this should not be in this function
-    printf("Playing %s (%s v%d) by %s (language: %c)\n", title, short_title, version, maker_name, language);
+    printf("Playing %s (%s v%d) by %s (language: %s)\n", title, short_title, version, maker_name, language_str);
 
     return true;
 }
