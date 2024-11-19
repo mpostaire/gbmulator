@@ -36,6 +36,7 @@
 
 #define RESET_VECTOR 0x00000000
 
+// TODO this only works in ARM mode
 #define INSTR_GET_COND(instr) ((instr) >> 28)
 
 // shift left
@@ -103,7 +104,8 @@ uint8_t arm_handlers[1 << 12];
 uint8_t thumb_handlers[1 << 8]; // TODO not sure of this size
 
 static void not_implemented_handler(UNUSED gba_t *gba, uint32_t instr) {
-    todo("not implemented instruction: 0x%08X (0b%032b)", instr, instr);
+    int instr_size = CPSR_CHECK_FLAG(gba->cpu, CPSR_T) ? 2 : 4;
+    todo("not implemented instruction: 0x%0.*X (0b%0.*b)", instr_size * 2, instr, instr_size * 8, instr);
 }
 
 static void data_processing_begin(gba_t *gba, uint32_t instr, uint8_t *rd, uint32_t *op1, uint32_t *op2) {
@@ -151,7 +153,6 @@ static void data_processing_begin(gba_t *gba, uint32_t instr, uint8_t *rd, uint3
 
 static void bx_handler(gba_t *gba, uint32_t instr) {
     uint8_t rn = instr & 0x0F;
-    fprintf(stderr, "(0x%08X) BX%s %s\n", instr, cond_names[INSTR_GET_COND(instr)], reg_names[rn]);
 
     if (rn == REG_PC)
         todo("undefined behaviour");
@@ -162,7 +163,14 @@ static void bx_handler(gba_t *gba, uint32_t instr) {
     // TODO 2S + 1N cycles --> does this take into account the pipeline flush (1 cycle to execute, 2 cycles to fill pipeline until next instruction execution)?
     //                       ------> NO BUT IT COINCIDES BECAUSE IT THE SAME TIME
 
-    gba->cpu->regs[REG_PC] = gba->cpu->regs[rn] - 4; // -4 here to counterbalance the REG_PC += 4 at the end of cpu_step()
+    uint32_t pc_dest = gba->cpu->regs[rn];
+    if (CPSR_CHECK_FLAG(gba->cpu, CPSR_T))
+        pc_dest -= 1;
+
+    fprintf(stderr, "(0x%08X) BX%s %s (0x%08X)\n", instr, cond_names[INSTR_GET_COND(instr)], reg_names[rn], pc_dest);
+
+    gba->cpu->regs[REG_PC] = pc_dest - 4; // -4 here to counterbalance the REG_PC += 4 at the end of cpu_step()
+
     // TODO flush pipeline? --> should be filled with 0: this is an andeq r0, r0, r0 and is equivalent to a nop
     gba->cpu->pipeline[PIPELINE_FETCHING] = 0x00000000;
     gba->cpu->pipeline[PIPELINE_DECODING] = 0x00000000;
@@ -550,7 +558,7 @@ static void thumb_lsl_handler(gba_t *gba, uint32_t instr) {
     // CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, op1 >= op2);
     // CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (((op1 ^ op2) & (op1 ^ res)) >> 31));
 
-    fprintf(stderr, "(0x%04X) LSL %s, %s, #%01X\n", instr, reg_names[rd], reg_names[rs], offset5);
+    fprintf(stderr, "(0x%04X) LSL %s, %s, #0x%01X\n", instr, reg_names[rd], reg_names[rs], offset5);
 }
 
 static void thumb_lsr_handler(gba_t *gba, uint32_t instr) {
@@ -563,10 +571,32 @@ static void thumb_asr_handler(gba_t *gba, uint32_t instr) {
     todo();
 }
 
+static void thumb_add_handler(gba_t *gba, uint32_t instr) {
+    uint8_t rd = instr & 0x07;
+    uint8_t rs = (instr >> 3) & 0x07;
+    uint8_t rn_offset3 = (instr >> 6) & 0x07;
+
+    if (CHECK_BIT(instr, 10)) {
+        fprintf(stderr, "(0x%04X) ADD %s, %s, #0x%01X\n", instr, reg_names[rd], reg_names[rs], rn_offset3);
+
+        gba->cpu->regs[rd] = gba->cpu->regs[rs] + rn_offset3;
+    } else {
+        fprintf(stderr, "(0x%04X) ADD %s, %s, %s\n", instr, reg_names[rd], reg_names[rs], reg_names[rn_offset3]);
+
+        gba->cpu->regs[rd] = gba->cpu->regs[rs] + gba->cpu->regs[rn_offset3];
+    }
+
+    // TODO
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_N, gba->cpu->regs[rd] >> 31);
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_Z, gba->cpu->regs[rd] == 0);
+    // CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, op1 >= op2);
+    // CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (((op1 ^ op2) & (op1 ^ res)) >> 31));
+}
+
 static void thumb_mov_handler(gba_t *gba, uint32_t instr) {
     // ignore upper 16 bits of instr
     uint8_t offset8 = instr & 0x0F;
-    uint8_t rd = instr & 0x700 >> 8;
+    uint8_t rd = (instr & 0x700) >> 8;
 
     gba->cpu->regs[rd] = offset8;
 
@@ -576,26 +606,74 @@ static void thumb_mov_handler(gba_t *gba, uint32_t instr) {
     // CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, op1 >= op2);
     // CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (((op1 ^ op2) & (op1 ^ res)) >> 31));
 
-    fprintf(stderr, "(0x%04X) MOV %s, #%01X\n", instr, reg_names[rd], offset8);
+    fprintf(stderr, "(0x%04X) MOV %s, #0x%01X\n", instr, reg_names[rd], offset8);
 }
 
-#define FOREACH_HANDLER(X)     \
-    X(not_implemented_handler) \
-    X(and_handler)             \
-    X(mrs_handler)             \
-    X(msr_bx_dispatcher)       \
-    X(add_handler)             \
-    X(teq_handler)             \
-    X(cmp_handler)             \
-    X(mov_handler)             \
-    X(str_handler)             \
-    X(ldr_handler)             \
-    X(b_handler)               \
-    X(bl_handler)              \
-    X(thumb_lsl_handler)       \
-    X(thumb_lsr_handler)       \
-    X(thumb_asr_handler)       \
-    X(thumb_mov_handler)
+static void thumb_pc_relative_ldr_handler(gba_t *gba, uint32_t instr) {
+    uint32_t word8 = (instr & 0x0F) << 2;
+    uint8_t rd = (instr & 0x700) >> 8;
+
+    gba_bus_select(gba, gba->cpu->regs[REG_PC] + word8);
+
+    gba->cpu->regs[rd] = gba_bus_read_word(gba);
+
+    fprintf(stderr, "(0x%04X) LDR %s, [PC, #0x%08X]\n", instr, reg_names[rd], word8);
+}
+
+static void thumb_reg_str_handler(gba_t *gba, uint32_t instr) {
+    uint8_t rd = instr & 0x0007;
+    uint8_t rb = (instr & 0x0038) >> 3;
+    uint8_t ro = (instr & 0x01c0) >> 6;
+
+    gba_bus_select(gba, gba->cpu->regs[rb] + gba->cpu->regs[ro]);
+
+    uint32_t b = CHECK_BIT(instr, 10);
+
+    fprintf(stderr, "(0x%04X) STR%s %s, [%s, %s]\n", instr, b ? "B" : "", reg_names[rd], reg_names[rb], reg_names[ro]);
+
+    if (b)
+        gba_bus_write(gba, gba->cpu->regs[rd] & 0x0000000F);
+    else
+        gba_bus_write(gba, gba->cpu->regs[rd]);
+}
+
+static void thumb_b_handler(gba_t *gba, uint32_t instr) {
+    int8_t soffset8 = ((int8_t) (instr & 0xFF)) << 1;
+    uint8_t cond = (instr >> 8) & 0x0F;
+    fprintf(stderr, "(0x%04X) B%s Lxx_#0x%04X\n", instr, cond_names[cond], soffset8);
+
+    // TODO this should be done in cpu_step() ?
+    if (!verif_cond(gba->cpu, cond))
+        return;
+
+    gba->cpu->regs[REG_PC] += soffset8 - 4; // -4 here to counterbalance the REG_PC += 4 at the end of cpu_step()
+    // TODO flush pipeline? --> should be filled with 0: this is an andeq r0, r0, r0 and is equivalent to a nop
+    gba->cpu->pipeline[PIPELINE_FETCHING] = 0x00000000;
+    gba->cpu->pipeline[PIPELINE_DECODING] = 0x00000000;
+
+}
+
+#define FOREACH_HANDLER(X)           \
+    X(not_implemented_handler)       \
+    X(and_handler)                   \
+    X(mrs_handler)                   \
+    X(msr_bx_dispatcher)             \
+    X(add_handler)                   \
+    X(teq_handler)                   \
+    X(cmp_handler)                   \
+    X(mov_handler)                   \
+    X(str_handler)                   \
+    X(ldr_handler)                   \
+    X(b_handler)                     \
+    X(bl_handler)                    \
+    X(thumb_lsl_handler)             \
+    X(thumb_lsr_handler)             \
+    X(thumb_asr_handler)             \
+    X(thumb_add_handler)             \
+    X(thumb_mov_handler)             \
+    X(thumb_pc_relative_ldr_handler) \
+    X(thumb_reg_str_handler)         \
+    X(thumb_b_handler)
 #define HANDLER_ID(name) name##_id
 #define HANDLER_ID_GENERATOR(name) HANDLER_ID(name),
 #define HANDLER_FUNC_PTR_GENERATOR(name) name,
@@ -688,12 +766,12 @@ decoder_rule_t thumb_decoder_rules[] = {
     // TODO bx handler and msr handler are confondus
     // --> needs another way to distinguish them
     {"0000000*________", HANDLER_ID(thumb_lsl_handler)}, // Move shifted register
-    // {"0000100*________", HANDLER_ID(thumb_lsr_handler)}, // Move shifted register
-    // {"0001100*________", HANDLER_ID(thumb_asr_handler)}, // Move shifted register
+    {"00011*0*________", HANDLER_ID(thumb_add_handler)}, // Add/substract
     {"00100***________", HANDLER_ID(thumb_mov_handler)}, // Move/compare/add/substract immediate
-    // {"00101***________", HANDLER_ID(thumb_cmp_handler)}, // Move/compare/add/substract immediate
-    // {"00110***________", HANDLER_ID(thumb_add_handler)}, // Move/compare/add/substract immediate
-    // {"00111***________", HANDLER_ID(thumb_sub_handler)}, // Move/compare/add/substract immediate
+    {"01001***________", HANDLER_ID(thumb_pc_relative_ldr_handler)}, // PC-relative load
+    {"01010*0*________", HANDLER_ID(thumb_reg_str_handler)}, // Load/store with register offset
+    {"1101****________", HANDLER_ID(thumb_b_handler)}, // Conditonal branch
+    // {"11011111________", HANDLER_ID(thumb_sw_int_handler)}, // Software interrupt
 };
 uint8_t get_thumb_handler(uint32_t instr) {
     // TODO
@@ -730,7 +808,6 @@ static void thumb_handlers_init(void) {
     for (size_t i = 0; i < sizeof(thumb_handlers) / sizeof(*thumb_handlers); i++) {
         uint32_t instr = i << 8;
         thumb_handlers[i] = get_thumb_handler(instr);
-        printf("%016b %04X %d\n", instr, instr, thumb_handlers[i]);
     }
 }
 
