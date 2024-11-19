@@ -169,6 +169,9 @@ typedef struct {
     uint8_t game_sram[BUS_GAME_UNUSED - BUS_GAME_SRAM];
 
     uint32_t address; // current selected address on the bus
+    uint32_t selected_mem_offset; // offset to substract to address to index selected_mem_ptr array
+    uint8_t *selected_mem_ptr; // pointer to start of one of memory regions currently selected on bus
+    bool is_writeable;
 } gba_bus_t;
 
 void gba_bus_select(gba_t *gba, uint32_t address);
