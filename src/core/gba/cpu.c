@@ -153,17 +153,17 @@ static void data_processing_begin(gba_t *gba, uint32_t instr, uint8_t *rd, uint3
 
 static void bx_handler(gba_t *gba, uint32_t instr) {
     uint8_t rn = instr & 0x0F;
+    uint32_t pc_dest = gba->cpu->regs[rn];
 
     if (rn == REG_PC)
         todo("undefined behaviour");
 
     // change cpu state to THUMB/ARM
-    CPSR_CHANGE_FLAG(gba->cpu, CPSR_T, !GET_BIT(rn, 0));
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_T, GET_BIT(pc_dest, 0));
 
     // TODO 2S + 1N cycles --> does this take into account the pipeline flush (1 cycle to execute, 2 cycles to fill pipeline until next instruction execution)?
     //                       ------> NO BUT IT COINCIDES BECAUSE IT THE SAME TIME
 
-    uint32_t pc_dest = gba->cpu->regs[rn];
     if (CPSR_CHECK_FLAG(gba->cpu, CPSR_T))
         pc_dest -= 1;
 
