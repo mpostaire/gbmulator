@@ -807,6 +807,10 @@ static void printer_save_as_xpm(gb_printer_t *printer, char *file_path) {
     byte_t *image_data = gb_printer_get_image(printer, &height);
 
     FILE *f = fopen(file_path, "w+");
+    if (!f) {
+        errnoprintf("fopen()");
+        return;
+    }
 
     fprintf(f, "/* XPM */\nstatic char *image = {\n");
     fprintf(f, "\"%d %lu 4 1\",\n", GB_PRINTER_IMG_WIDTH, height);

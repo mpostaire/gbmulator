@@ -84,6 +84,9 @@ gboolean camera_find_devices(void) {
 
         const gchar *path = gst_structure_get_string(props, "object.path");
         path = strchr(path, '/');
+        if (!path)
+            return FALSE;
+
         const gchar *name = gst_structure_get_string(props, "node.description");
 
         devices_len++;

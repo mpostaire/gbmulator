@@ -116,8 +116,10 @@ void load_battery_from_file(gb_t *gb, const char *path) {
     if (!f) return;
 
     long save_length = fsize(f);
-    if (save_length < 0)
+    if (save_length < 0) {
+        fclose(f);
         return;
+    }
 
     byte_t *save_data = xmalloc(save_length);
     fread(save_data, save_length, 1, f);
@@ -159,7 +161,10 @@ int load_state_from_file(gb_t *gb, const char *path) {
 
     long len = fsize(f);
     if (len < 0)
+    {
+        fclose(f);
         return 0;
+    }
 
     byte_t *buf = xmalloc(len);
     if (!fread(buf, len, 1, f)) {
