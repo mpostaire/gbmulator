@@ -21,6 +21,7 @@ jobs:
 
       - name: Get and compile rgbds
         run: |
+          apt-get update && apt-get install https://packages.ubuntu.com/focal/libpng-dev
           git clone https://github.com/gbdev/rgbds.git
           cd rgbds
           make
