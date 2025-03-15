@@ -26,15 +26,33 @@
 #define CPSR_Z (1 << 30) // Zero
 #define CPSR_C (1 << 29) // Carry or borrow or extend
 #define CPSR_V (1 << 28) // Overflow
-#define CPSR_MODE 0x0000000F // Mode bits
 #define CPSR_I (1 << 7) // IRQ disable
 #define CPSR_F (1 << 6) // FIQ disable
 #define CPSR_T (1 << 5) // State bit
 
-#define CPSR_CHECK_FLAG(cpu, flag) ((cpu)->cpsr & (flag))
-#define CPSR_CHANGE_FLAG(cpu, pos, value) ((cpu)->cpsr ^= (-(value) ^ (cpu)->cpsr) & (pos))
+#define CPSR_MODE_USR 0b10000 // User (usr): The normal ARM program execution state
+#define CPSR_MODE_FIQ 0b10001 // FIQ (fiq): Designed to support a data transfer or channel process
+#define CPSR_MODE_IRQ 0b10010 // IRQ (irq): Used for general-purpose interrupt handling
+#define CPSR_MODE_SVC 0b10011 // Supervisor (svc): Protected mode for the operating system
+#define CPSR_MODE_ABT 0b10111 // Abort mode (abt): Entered after a data or instruction prefetch abort
+#define CPSR_MODE_UND 0b11011 // Undefined (und): Entered when an undefined instruction is executed
+#define CPSR_MODE_SYS 0b11111 // System (sys): A privileged user mode for the operating system
 
-#define RESET_VECTOR 0x00000000
+#define CPSR_CHECK_FLAG(cpu, flag) ((cpu)->cpsr & (flag))
+#define CPSR_CHANGE_FLAG(cpu, flag, value) ((cpu)->cpsr ^= (-(value) ^ (cpu)->cpsr) & (flag))
+
+#define CPSR_MODE_MASK 0x0000001F // Mode bits
+#define CPSR_GET_MODE(cpu) ((cpu)->cpsr & CPSR_MODE_MASK)
+#define CPSR_SET_MODE(cpu, mode) CHANGE_BITS((cpu)->cpsr, CPSR_MODE_MASK, mode)
+
+#define VECTOR_RESET 0x00000000 // Reset --> mode on entry: CPSR_MODE_SVC
+#define VECTOR_UNDEFINED_INSTR 0x00000004 // Undefined instruction --> mode on entry: CPSR_MODE_UND
+#define VECTOR_SOFTWARE_INTERRUPT 0x00000008 // Software interrupt --> mode on entry: CPSR_MODE_SVC
+#define VECTOR_ABORT_PREFETCH 0x0000000C // Abort (prefetch) --> mode on entry: CPSR_MODE_ABT
+#define VECTOR_ABORT_DATA 0x00000010 // Abort (data) --> mode on entry: CPSR_MODE_ABT
+#define VECTOR_RESERVED 0x00000014 // Reserved Reserved
+#define VECTOR_IRQ 0x00000018 // IRQ --> mode on entry: CPSR_MODE_IRQ
+#define VECTOR_FIQ 0x0000001C // FIQ --> mode on entry: CPSR_MODE_FIQ
 
 // TODO this only works in ARM mode
 #define INSTR_GET_COND(instr) ((instr) >> 28)
@@ -71,6 +89,7 @@
 typedef enum {
     FOREACH_COND(COND_GENERATOR)
 } cond_t;
+#undef Y
 #define Y(name) ""
 static const char *cond_names[] = {
     FOREACH_COND(COND_NAME_GENERATOR)
@@ -94,6 +113,35 @@ static const char *reg_names[] = {
     "R13",
     "R14",
     "PC"
+};
+
+typedef enum {
+    REG_IDX_USR_SYS = 0,
+    REG_IDX_FIQ,
+    REG_IDX_IRQ,
+    REG_IDX_SVC,
+    REG_IDX_ABT,
+    REG_IDX_UND,
+    REG_IDX_INVALID_MODE
+} cpu_mode_reg_indexes_t;
+
+static uint8_t regs_mode_hashes[] = {
+    REG_IDX_USR_SYS,
+    REG_IDX_FIQ,
+    REG_IDX_IRQ,
+    REG_IDX_SVC,
+    REG_IDX_INVALID_MODE,
+    REG_IDX_INVALID_MODE,
+    REG_IDX_INVALID_MODE,
+    REG_IDX_ABT,
+    REG_IDX_INVALID_MODE,
+    REG_IDX_INVALID_MODE,
+    REG_IDX_INVALID_MODE,
+    REG_IDX_UND,
+    REG_IDX_INVALID_MODE,
+    REG_IDX_INVALID_MODE,
+    REG_IDX_INVALID_MODE,
+    REG_IDX_USR_SYS
 };
 
 typedef void (*handler_t)(gba_t *gba, uint32_t instr);
@@ -194,8 +242,8 @@ static void and_handler(gba_t *gba, uint32_t instr) {
 
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_N, gba->cpu->regs[rd] >> 31);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_Z, gba->cpu->regs[rd] == 0);
-        // CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, op1 >= op2);
-        // CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (((op1 ^ op2) & (op1 ^ res)) >> 31));
+        // CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, res < op1);
+        // CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (~(op1 ^ op2) & (op2 ^ res)) >> 31);
     }
 }
 
@@ -203,27 +251,113 @@ static void mrs_handler(gba_t *gba, uint32_t instr) {
     todo();
 }
 
+static inline void bank_registers(gba_cpu_t *cpu, uint8_t new_mode) {
+    uint8_t old_mode = CPSR_GET_MODE(cpu);
+
+    if (old_mode == new_mode)
+        return;
+
+    // TODO if old_mode == CPSR_MODE_USR, only cond flags of cpsr reg can be changed
+
+    uint8_t old_mode_reg_index = regs_mode_hashes[old_mode & 0x0F];
+    uint8_t new_mode_reg_index = regs_mode_hashes[new_mode & 0x0F];
+
+    if (new_mode_reg_index == REG_IDX_INVALID_MODE)
+        todo("undefined behaviour: switching to invalid CPSR mode");
+
+    if (old_mode == CPSR_MODE_FIQ || new_mode == CPSR_MODE_FIQ) {
+        // backup old regs
+        cpu->banked_regs_8_12[old_mode_reg_index][0] = cpu->regs[8];
+        cpu->banked_regs_8_12[old_mode_reg_index][1] = cpu->regs[9];
+        cpu->banked_regs_8_12[old_mode_reg_index][2] = cpu->regs[10];
+        cpu->banked_regs_8_12[old_mode_reg_index][3] = cpu->regs[11];
+        cpu->banked_regs_8_12[old_mode_reg_index][4] = cpu->regs[12];
+
+        // use new regs
+        cpu->regs[8] = cpu->banked_regs_8_12[new_mode_reg_index][0];
+        cpu->regs[9] = cpu->banked_regs_8_12[new_mode_reg_index][1];
+        cpu->regs[10] = cpu->banked_regs_8_12[new_mode_reg_index][2];
+        cpu->regs[11] = cpu->banked_regs_8_12[new_mode_reg_index][3];
+        cpu->regs[12] = cpu->banked_regs_8_12[new_mode_reg_index][4];
+
+        todo("more register banking");
+    }
+
+    // backup old regs
+    cpu->banked_regs_13_14[old_mode_reg_index][0] = cpu->regs[13];
+    cpu->banked_regs_13_14[old_mode_reg_index][1] = cpu->regs[14];
+
+    // use new regs
+    cpu->regs[13] = cpu->banked_regs_13_14[new_mode_reg_index][0];
+    cpu->regs[14] = cpu->banked_regs_13_14[new_mode_reg_index][1];
+
+    // // TODO maybe use 2D array transision table instead of this (takes values from mode hash to check if a transition is allowed)
+    // // --> maybe bad idea because it will be an array of size 256
+    // switch (new_mode) {
+    // case CPSR_MODE_USR:
+    //     todo("mode changed to CPSR_MODE_USR\n");
+    //     break;
+    // case CPSR_MODE_FIQ:
+    //     todo("mode changed to CPSR_MODE_FIQ\n");
+    //     break;
+    // case CPSR_MODE_IRQ:
+    //     todo("mode changed to CPSR_MODE_IRQ\n");
+    //     break;
+    // case CPSR_MODE_SVC:
+    //     //todo("mode changed to CPSR_MODE_SVC\n");
+    //     break;
+    // case CPSR_MODE_ABT:
+    //     todo("mode changed to CPSR_MODE_ABT\n");
+    //     break;
+    // case CPSR_MODE_SYS:
+    //     if (old_mode == CPSR_MODE_USR) {
+    //         todo("attempt mode change to CPSR_MODE_SYS (maybe illegal?)");
+    //         break;
+    //     }
+
+    //     // todo("mode changed to CPSR_MODE_SYS");
+    //     break;
+    // case CPSR_MODE_UND:
+    //     todo("mode changed to CPSR_MODE_UND\n");
+    //     break;
+    // default:
+    //     todo("undefined behaviour");
+    //     break;
+    // }
+}
+
 static void msr_handler(gba_t *gba, uint32_t instr) {
     uint32_t pd = CHECK_BIT(instr, 22);
     // TODO handle R15
+    // TODO add undefined behaviour if CPSR_T bit is changed
+    // TODO what happens when reserved bits are changed/user mode tries to change mode bits?
 
     if (CHECK_BIT(instr, 16)) { // transfer register contents to PSR
         uint8_t rm = instr & 0x0F;
 
         if (pd) {
-            fprintf(stderr, "(0x%08X) MSR%s SPSR, %s\n", instr, cond_names[INSTR_GET_COND(instr)], reg_names[rm]);
-            gba->cpu->spsr = gba->cpu->regs[rm] >> 28;
+            fprintf(stderr, "(0x%08X) MSR%s SPSR_fc, %s\n", instr, cond_names[INSTR_GET_COND(instr)], reg_names[rm]);
+            // gba->cpu->spsr = CHANGE_BITS(gba->cpu->cpsr, 0xF0000000, gba->cpu->regs[rm]);
+            if (CPSR_GET_MODE(gba->cpu) == CPSR_MODE_USR)
+                todo("undefined behaviour");
+
+            gba->cpu->spsr[regs_mode_hashes[CPSR_GET_MODE(gba->cpu) & 0x0F]] = gba->cpu->regs[rm];
         } else {
-            fprintf(stderr, "(0x%08X) MSR%s CPSR, %s\n", instr, cond_names[INSTR_GET_COND(instr)], reg_names[rm]);
-            gba->cpu->cpsr = gba->cpu->regs[rm] >> 28;
+            fprintf(stderr, "(0x%08X) MSR%s CPSR_fc, %s\n", instr, cond_names[INSTR_GET_COND(instr)], reg_names[rm]);
+            bank_registers(gba->cpu, gba->cpu->regs[rm] & CPSR_MODE_MASK);
+            gba->cpu->cpsr = gba->cpu->regs[rm];
         }
 
     } else { // transfer register contents or immediate value to PSR flag bits only
-        if (CHECK_BIT(instr, 16)) { // source operand is an immediate value
-            fprintf(stderr, "(0x%08X) MSR%s <psrf>, <expression>\n", instr, cond_names[INSTR_GET_COND(instr)]);
+        if (CHECK_BIT(instr, 25)) { // source operand is an immediate value
+            fprintf(stderr, "(0x%08X) MSR%s <psrf>_flg, <expression>\n", instr, cond_names[INSTR_GET_COND(instr)]);
+            todo();
+            // gba->cpu->cpsr = CHANGE_BITS(gba->cpu->cpsr, 0xF0000000, gba->cpu->regs[rm]);
         } else { // source operand is a register
             uint8_t rm = instr & 0x0F;
-            fprintf(stderr, "(0x%08X) MSR%s <psrf>, %s\n", instr, cond_names[INSTR_GET_COND(instr)], reg_names[rm]);
+            fprintf(stderr, "(0x%08X) MSR%s <psrf>_flg, %s\n", instr, cond_names[INSTR_GET_COND(instr)], reg_names[rm]);
+            todo();
+            // gba->cpu->cpsr = CHANGE_BITS(gba->cpu->cpsr, 0xF0000000, gba->cpu->regs[rm]);
         }
         todo();
     }
@@ -255,8 +389,8 @@ static void add_handler(gba_t *gba, uint32_t instr) {
 
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_N, gba->cpu->regs[rd] >> 31);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_Z, gba->cpu->regs[rd] == 0);
-        // CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, op1 >= op2);
-        // CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (((op1 ^ op2) & (op1 ^ res)) >> 31));
+        // CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, res < op1);
+        // CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (~(op1 ^ op2) & (op2 ^ res)) >> 31);
     }
 }
 
@@ -273,11 +407,10 @@ static void teq_handler(gba_t *gba, uint32_t instr) {
 
     uint32_t res = op1 ^ op2;
 
-    // TODO update ARM CPSR flags: https://www.dmulholl.com/notes/arm-condition-flags.html
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_N, res >> 31);
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_Z, res == 0);
-    CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, op1 >= op2);
-    CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (((op1 ^ op2) & (op1 ^ res)) >> 31));
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, res < op1);
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (~(op1 ^ op2) & (op2 ^ res)) >> 31);
 }
 
 static void cmp_handler(gba_t *gba, uint32_t instr) {
@@ -292,11 +425,10 @@ static void cmp_handler(gba_t *gba, uint32_t instr) {
 
     uint32_t res = op1 - op2;
 
-    // TODO update ARM CPSR flags: https://www.dmulholl.com/notes/arm-condition-flags.html
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_N, res >> 31);
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_Z, res == 0);
-    CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, op1 >= op2);
-    CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (((op1 ^ op2) & (op1 ^ res)) >> 31));
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, res < op1);
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (~(op1 ^ op2) & (op2 ^ res)) >> 31);
 }
 
 static void mov_handler(gba_t *gba, uint32_t instr) {
@@ -316,8 +448,8 @@ static void mov_handler(gba_t *gba, uint32_t instr) {
 
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_N, gba->cpu->regs[rd] >> 31);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_Z, gba->cpu->regs[rd] == 0);
-        // CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, op1 >= op2);
-        // CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (((op1 ^ op2) & (op1 ^ res)) >> 31));
+        // CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, res < op1);
+        // CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (~(op1 ^ op2) & (op2 ^ res)) >> 31);
     }
 }
 
@@ -361,7 +493,7 @@ static void str_handler(gba_t *gba, uint32_t instr) {
     fprintf(stderr, "(0x%08X) STR%s%s%s %s, [%s, #0x%X]\n", instr, cond_names[INSTR_GET_COND(instr)], b ? "B" : "", w ? "T" : "", reg_names[rd], reg_names[rn], offset);
 
     if (b)
-        gba_bus_write(gba, gba->cpu->regs[rd] & 0x0F); // TODO maybe this is wrong because data bus should be 8 MSB repeated in all 32 bits
+        gba_bus_write(gba, gba->cpu->regs[rd] & 0xFF); // TODO maybe this is wrong because data bus should be 8 MSB repeated in all 32 bits
     else
         gba_bus_write(gba, gba->cpu->regs[rd]);
 }
@@ -497,7 +629,12 @@ void gba_cpu_step(gba_t *gba) {
     char Z = CPSR_CHECK_FLAG(cpu, CPSR_Z) ? 'Z' : '-';
     char C = CPSR_CHECK_FLAG(cpu, CPSR_C) ? 'C' : '-';
     char V = CPSR_CHECK_FLAG(cpu, CPSR_V) ? 'V' : '-';
-    fprintf(stderr, "--------\n[PC=0x%08X] [CPSR=%c%c%c%c]\n", cpu->regs[REG_PC], N, Z, C, V);
+
+    char I = CPSR_CHECK_FLAG(cpu, CPSR_I) ? 'I' : '-';
+    char F = CPSR_CHECK_FLAG(cpu, CPSR_F) ? 'F' : '-';
+    char T = CPSR_CHECK_FLAG(cpu, CPSR_T) ? 'T' : '-';
+
+    fprintf(stderr, "--------\n[PC=0x%08X] [COND=%c%c%c%c %c%c%c]\n", cpu->regs[REG_PC], N, Z, C, V, I, F, T);
 
     gba_bus_select(gba, cpu->regs[REG_PC]);
 
@@ -531,6 +668,7 @@ void gba_cpu_step(gba_t *gba) {
         // return;
     // }
     fprintf(stderr, "execute: 0x%0.*X\n", pc_increment * 2, instr);
+    fprintf(stderr, "LR=0x%08X\n", gba->cpu->regs[REG_LR]);
 
     if (CPSR_CHECK_FLAG(gba->cpu, CPSR_T)) {
         uint_fast8_t instr_hash = instr >> 8;
@@ -550,13 +688,14 @@ static void thumb_lsl_handler(gba_t *gba, uint32_t instr) {
     uint8_t rs = (instr & 0x38) >> 2;
     uint8_t rd = instr & 0x7;
 
-    gba->cpu->regs[rd] = gba->cpu->regs[rs] << offset5;
+    uint32_t res = gba->cpu->regs[rs] << offset5;
 
-    // TODO
-    CPSR_CHANGE_FLAG(gba->cpu, CPSR_N, gba->cpu->regs[rd] >> 31);
-    CPSR_CHANGE_FLAG(gba->cpu, CPSR_Z, gba->cpu->regs[rd] == 0);
-    // CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, op1 >= op2);
-    // CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (((op1 ^ op2) & (op1 ^ res)) >> 31));
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_N, res >> 31);
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_Z, res == 0);
+    if (offset5 != 0)
+        CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, GET_BIT(gba->cpu->regs[rd], 31));
+
+    gba->cpu->regs[rd] = res;
 
     fprintf(stderr, "(0x%04X) LSL %s, %s, #0x%01X\n", instr, reg_names[rd], reg_names[rs], offset5);
 }
@@ -576,63 +715,110 @@ static void thumb_add_handler(gba_t *gba, uint32_t instr) {
     uint8_t rs = (instr >> 3) & 0x07;
     uint8_t rn_offset3 = (instr >> 6) & 0x07;
 
+    uint32_t op1 = gba->cpu->regs[rs];
+    uint32_t op2;
+
     if (CHECK_BIT(instr, 10)) {
         fprintf(stderr, "(0x%04X) ADD %s, %s, #0x%01X\n", instr, reg_names[rd], reg_names[rs], rn_offset3);
 
-        gba->cpu->regs[rd] = gba->cpu->regs[rs] + rn_offset3;
+        op2 = rn_offset3;
     } else {
         fprintf(stderr, "(0x%04X) ADD %s, %s, %s\n", instr, reg_names[rd], reg_names[rs], reg_names[rn_offset3]);
 
-        gba->cpu->regs[rd] = gba->cpu->regs[rs] + gba->cpu->regs[rn_offset3];
+        op2 = gba->cpu->regs[rn_offset3];
     }
 
-    // TODO
-    CPSR_CHANGE_FLAG(gba->cpu, CPSR_N, gba->cpu->regs[rd] >> 31);
-    CPSR_CHANGE_FLAG(gba->cpu, CPSR_Z, gba->cpu->regs[rd] == 0);
-    // CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, op1 >= op2);
-    // CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (((op1 ^ op2) & (op1 ^ res)) >> 31));
+    uint32_t res = op1 + op2;
+
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_N, res >> 31);
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_Z, res == 0);
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, res < op1);
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (~(op1 ^ op2) & (op2 ^ res)) >> 31);
+
+    gba->cpu->regs[rd] = res;
+
+printf("0x%08X + 0x%08X = 0x%08X --> %s = 0x%08X\n", op1, op2, res, reg_names[rd], gba->cpu->regs[rd]);
+
 }
 
 static void thumb_mov_handler(gba_t *gba, uint32_t instr) {
     // ignore upper 16 bits of instr
-    uint8_t offset8 = instr & 0x0F;
-    uint8_t rd = (instr & 0x700) >> 8;
+    uint8_t offset8 = instr & 0xFF;
+    uint8_t rd = (instr >> 8) & 0x07;
 
     gba->cpu->regs[rd] = offset8;
 
     // TODO
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_N, gba->cpu->regs[rd] >> 31);
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_Z, gba->cpu->regs[rd] == 0);
-    // CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, op1 >= op2);
     // CPSR_CHANGE_FLAG(gba->cpu, CPSR_V, (((op1 ^ op2) & (op1 ^ res)) >> 31));
 
     fprintf(stderr, "(0x%04X) MOV %s, #0x%01X\n", instr, reg_names[rd], offset8);
 }
 
+static void thumb_bx_handler(gba_t *gba, uint32_t instr) {
+    if (CHECK_BIT(instr, 7))
+        todo("undefined behaviour");
+
+    uint8_t rd = (instr >> 3) & 0x07;
+    uint8_t rn = CHECK_BIT(instr, 6) ? rd + 8 : rd;
+
+    uint32_t pc_dest = gba->cpu->regs[rn];
+
+    // TODO this should be undefined behaviour only if jumping from a non word aligned address (with -4 or -2 offset? or none?) AND rn == REG_PC
+    if (rn == REG_PC)
+        todo("undefined behaviour");
+
+    // change cpu state to THUMB/ARM
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_T, GET_BIT(pc_dest, 0));
+
+    // TODO 2S + 1N cycles --> does this take into account the pipeline flush (1 cycle to execute, 2 cycles to fill pipeline until next instruction execution)?
+    //                       ------> NO BUT IT COINCIDES BECAUSE IT THE SAME TIME
+
+    if (!CPSR_CHECK_FLAG(gba->cpu, CPSR_T))
+        pc_dest &= 0xFFFFFFFC;
+
+    fprintf(stderr, "(0x%04X) BX %s (0x%08X)\n", instr, reg_names[rn], pc_dest);
+
+// todo("lr register should contain 0x000000A0 but got --> 0x%08X", pc_dest);
+
+//     todo("really -4 here ? it should already be offset by 4 when stored in LR register? check implem of BL");
+    gba->cpu->regs[REG_PC] = pc_dest - 4; // -4 here to counterbalance the REG_PC += 4 at the end of cpu_step()
+
+    // TODO flush pipeline? --> should be filled with 0: this is an andeq r0, r0, r0 and is equivalent to a nop
+    gba->cpu->pipeline[PIPELINE_FETCHING] = 0x00000000;
+    gba->cpu->pipeline[PIPELINE_DECODING] = 0x00000000;
+}
+
 static void thumb_pc_relative_ldr_handler(gba_t *gba, uint32_t instr) {
-    uint32_t word8 = (instr & 0x0F) << 2;
+    uint32_t word8 = (instr & 0xFF) << 2;
     uint8_t rd = (instr & 0x700) >> 8;
 
-    gba_bus_select(gba, gba->cpu->regs[REG_PC] + word8);
+    gba_bus_select(gba, gba->cpu->regs[REG_PC] - 2 + word8);
 
     gba->cpu->regs[rd] = gba_bus_read_word(gba);
 
     fprintf(stderr, "(0x%04X) LDR %s, [PC, #0x%08X]\n", instr, reg_names[rd], word8);
+
+    fprintf(stderr, "0x%08X 0x%08X\n", gba->cpu->regs[rd], gba->cpu->regs[REG_PC] - 2 + word8);
 }
 
 static void thumb_reg_str_handler(gba_t *gba, uint32_t instr) {
-    uint8_t rd = instr & 0x0007;
-    uint8_t rb = (instr & 0x0038) >> 3;
-    uint8_t ro = (instr & 0x01c0) >> 6;
-
-    gba_bus_select(gba, gba->cpu->regs[rb] + gba->cpu->regs[ro]);
+    uint8_t rd = instr & 0x07;
+    uint8_t rb = (instr >> 3) & 0x07;
+    uint8_t ro = (instr >> 6) & 0x07;
 
     uint32_t b = CHECK_BIT(instr, 10);
 
     fprintf(stderr, "(0x%04X) STR%s %s, [%s, %s]\n", instr, b ? "B" : "", reg_names[rd], reg_names[rb], reg_names[ro]);
 
+    gba_bus_select(gba, gba->cpu->regs[rb] + gba->cpu->regs[ro]);
+
+    fprintf(stderr, "%d %d %X\n", gba->cpu->regs[rb], gba->cpu->regs[rb], (int) gba->cpu->regs[rb]);
+    // todo("%u %d %X", (unsigned int) gba->cpu->regs[ro], gba->cpu->regs[ro], (int) gba->cpu->regs[ro]);
+
     if (b)
-        gba_bus_write(gba, gba->cpu->regs[rd] & 0x0000000F);
+        gba_bus_write(gba, gba->cpu->regs[rd] & 0xFF);
     else
         gba_bus_write(gba, gba->cpu->regs[rd]);
 }
@@ -646,11 +832,10 @@ static void thumb_b_handler(gba_t *gba, uint32_t instr) {
     if (!verif_cond(gba->cpu, cond))
         return;
 
-    gba->cpu->regs[REG_PC] += soffset8 - 4; // -4 here to counterbalance the REG_PC += 4 at the end of cpu_step()
+    gba->cpu->regs[REG_PC] += soffset8 - 2; // -2 here to counterbalance the REG_PC += 2 at the end of cpu_step()
     // TODO flush pipeline? --> should be filled with 0: this is an andeq r0, r0, r0 and is equivalent to a nop
     gba->cpu->pipeline[PIPELINE_FETCHING] = 0x00000000;
     gba->cpu->pipeline[PIPELINE_DECODING] = 0x00000000;
-
 }
 
 #define FOREACH_HANDLER(X)           \
@@ -671,6 +856,7 @@ static void thumb_b_handler(gba_t *gba, uint32_t instr) {
     X(thumb_asr_handler)             \
     X(thumb_add_handler)             \
     X(thumb_mov_handler)             \
+    X(thumb_bx_handler)              \
     X(thumb_pc_relative_ldr_handler) \
     X(thumb_reg_str_handler)         \
     X(thumb_b_handler)
@@ -768,6 +954,7 @@ decoder_rule_t thumb_decoder_rules[] = {
     {"0000000*________", HANDLER_ID(thumb_lsl_handler)}, // Move shifted register
     {"00011*0*________", HANDLER_ID(thumb_add_handler)}, // Add/substract
     {"00100***________", HANDLER_ID(thumb_mov_handler)}, // Move/compare/add/substract immediate
+    {"01000111________", HANDLER_ID(thumb_bx_handler)}, // Hi register operations/branch exchange
     {"01001***________", HANDLER_ID(thumb_pc_relative_ldr_handler)}, // PC-relative load
     {"01010*0*________", HANDLER_ID(thumb_reg_str_handler)}, // Load/store with register offset
     {"1101****________", HANDLER_ID(thumb_b_handler)}, // Conditonal branch
@@ -814,7 +1001,11 @@ static void thumb_handlers_init(void) {
 gba_cpu_t *gba_cpu_init(void) {
     gba_cpu_t *cpu = xcalloc(1, sizeof(*cpu));
 
-    cpu->regs[REG_PC] = RESET_VECTOR;
+    CPSR_CHANGE_FLAG(cpu, CPSR_I, 1);
+    CPSR_CHANGE_FLAG(cpu, CPSR_F, 1);
+    CPSR_SET_MODE(cpu, CPSR_MODE_SVC);
+
+    cpu->regs[REG_PC] = VECTOR_RESET;
 
     // fill pipeline with impossible conditions to emulate the 2 cycles it takes to fill the pipeline
     // TODO flush pipeline? --> should be filled with 0: this is an andeq r0, r0, r0 and is equivalent to a nop
