@@ -17,6 +17,7 @@
 #define GET_BIT(var, pos) (((var) >> (pos)) & 1)
 #define TOGGLE_BIT(var, pos) ((var) ^= 1UL << (pos))
 #define CHANGE_BIT(var, pos, value) ((var) ^= (-(value) ^ (var)) & (1UL << (pos)))
+#define CHANGE_BITS(var, mask, value) ((var) = ((var) & (~(mask)) | ((value) & (mask))))
 
 #ifndef MIN
 #   define MIN(x, y) ((x) < (y) ? (x) : (y))
