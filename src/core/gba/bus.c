@@ -233,7 +233,7 @@ gba_bus_t *gba_bus_init(const uint8_t *rom, size_t rom_size) {
         return NULL;
 
     // TODO do not load bios from hardcoded file path
-    FILE *f = fopen("", "r");
+    FILE *f = fopen("src/bootroms/gba/gba_bios.bin", "r");
     if (!f) {
         return NULL;
     }
