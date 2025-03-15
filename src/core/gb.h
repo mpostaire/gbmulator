@@ -43,7 +43,7 @@ static inline void gb_run_frames(gb_t *gb, long frames_limit) {
     gb_run_steps(gb, frames_limit * GB_CPU_STEPS_PER_FRAME);
 }
 
-int gb_is_rom_valid(const byte_t *rom);
+int gb_is_rom_valid(const uint8_t *rom);
 
 /**
  * Inits the emulator.
@@ -51,7 +51,7 @@ int gb_is_rom_valid(const byte_t *rom);
  * @param rom_size the size of the `rom`.
  * @param opts the initialization options of the emulator or NULL for defaults.
  */
-gb_t *gb_init(const byte_t *rom, size_t rom_size, gb_options_t *opts);
+gb_t *gb_init(const uint8_t *rom, size_t rom_size, gb_options_t *opts);
 
 /**
  * Quits the emulator gracefully (save eram into a '.sav' file, ...).
@@ -96,7 +96,7 @@ void gb_link_disconnect(gb_t *gb);
  * @param other_gb the second emulator.
  * @returns 1 if success, 0 if failed (`gb` and/or `other_gb` have no IR sensor)
 */
-byte_t gb_ir_connect(gb_t *gb, gb_t *other_gb);
+uint8_t gb_ir_connect(gb_t *gb, gb_t *other_gb);
 
 /**
  * Disconnects any device connected with IR to `gb`.
@@ -109,17 +109,17 @@ void gb_joypad_press(gb_t *gb, gb_joypad_button_t key);
 
 void gb_joypad_release(gb_t *gb, gb_joypad_button_t key);
 
-byte_t gb_get_joypad_state(gb_t *gb);
+uint8_t gb_get_joypad_state(gb_t *gb);
 
-void gb_set_joypad_state(gb_t *gb, byte_t state);
+void gb_set_joypad_state(gb_t *gb, uint8_t state);
 
-byte_t *gb_get_save(gb_t *gb, size_t *save_length);
+uint8_t *gb_get_save(gb_t *gb, size_t *save_length);
 
-int gb_load_save(gb_t *gb, byte_t *save_data, size_t save_length);
+int gb_load_save(gb_t *gb, uint8_t *save_data, size_t save_length);
 
-byte_t *gb_get_savestate(gb_t *gb, size_t *length, byte_t compressed);
+uint8_t *gb_get_savestate(gb_t *gb, size_t *length, uint8_t compressed);
 
-int gb_load_savestate(gb_t *gb, const byte_t *data, size_t length);
+int gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length);
 
 /**
  * @returns the ROM title (you must not free the returned pointer).
@@ -129,7 +129,7 @@ char *gb_get_rom_title(gb_t *gb);
 /**
  * @returns a pointer to the ROM (you must not free the returned pointer).
  */
-byte_t *gb_get_rom(gb_t *gb, size_t *rom_size);
+uint8_t *gb_get_rom(gb_t *gb, size_t *rom_size);
 
 void gb_get_options(gb_t *gb, gb_options_t *opts);
 
@@ -137,7 +137,7 @@ void gb_set_options(gb_t *gb, gb_options_t *opts);
 
 gb_mode_t gb_is_cgb(gb_t *gb);
 
-word_t gb_get_cartridge_checksum(gb_t *gb);
+uint16_t gb_get_cartridge_checksum(gb_t *gb);
 
 void gb_set_apu_speed(gb_t *gb, float speed);
 
@@ -145,6 +145,6 @@ void gb_set_apu_sound_level(gb_t *gb, float level);
 
 void gb_set_palette(gb_t *gb, gb_color_palette_t palette);
 
-byte_t gb_has_accelerometer(gb_t *gb);
+uint8_t gb_has_accelerometer(gb_t *gb);
 
-byte_t gb_has_camera(gb_t *gb);
+uint8_t gb_has_camera(gb_t *gb);

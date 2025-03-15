@@ -11,13 +11,10 @@ rwildcard=$(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(su
 
 # exclude $(SDIR)/platform/{desktop,android}/* if 'make web' or 'make debug_web' is called, else exclude $(SDIR)/platform/{web,android}/*, etc.
 ifneq (,$(findstring web,$(MAKECMDGOALS)))
-EXCLUDES:=$(call rwildcard,$(SDIR)/platform/desktop,*) $(wildcard $(SDIR)/platform/desktop_sdl/*) $(call rwildcard,$(SDIR)/platform/android,*)
+EXCLUDES:=$(call rwildcard,$(SDIR)/platform/desktop,*) $(call rwildcard,$(SDIR)/platform/android,*)
 PLATFORM_ODIR=$(ODIR)/web
-else ifneq (,$(findstring desktop_sdl,$(MAKECMDGOALS)))
-EXCLUDES:=$(wildcard $(SDIR)/platform/desktop/*) $(wildcard $(SDIR)/platform/web/*) $(call rwildcard,$(SDIR)/platform/android,*)
-PLATFORM_ODIR=$(ODIR)/desktop_sdl
 else
-EXCLUDES:=$(wildcard $(SDIR)/platform/web/*) $(call rwildcard,$(SDIR)/platform/android,*) $(call rwildcard,$(SDIR)/platform/desktop_sdl,*)
+EXCLUDES:=$(wildcard $(SDIR)/platform/web/*) $(call rwildcard,$(SDIR)/platform/android,*)
 PLATFORM_ODIR=$(ODIR)/desktop
 OBJ=$(PLATFORM_ODIR)/platform/desktop/resources.o
 endif
@@ -58,10 +55,6 @@ desktop: $(PLATFORM_ODIR_STRUCTURE) $(BIN) $(ICONS)
 
 $(SDIR)/platform/desktop/resources.c: $(SDIR)/platform/desktop/ui/gbmulator.gresource.xml $(UI) $(SHADERS)
 	glib-compile-resources $< --target=$@ --generate-source
-
-desktop_sdl: CFLAGS+=$(shell pkg-config --cflags zlib sdl2) -fanalyzer
-desktop_sdl: LDLIBS+=$(shell pkg-config --libs zlib sdl2)
-desktop_sdl: $(PLATFORM_ODIR_STRUCTURE) $(BIN) $(ICONS)
 
 profile: CFLAGS+=-pg
 profile: run

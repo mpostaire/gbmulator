@@ -4,7 +4,7 @@
 #include "../../core/gb.h"
 #include "../common/utils.h"
 
-static byte_t *camera_data = NULL;
+static uint8_t *camera_data = NULL;
 static guint new_sample_src_id;
 static guint bus_error_src_id;
 
@@ -42,7 +42,7 @@ static void gstreamer_error_cb(GstBus *bus, GstMessage *msg, gpointer userdata) 
     g_free(debug_info);
 }
 
-byte_t gb_camera_capture_image_cb(byte_t *pixels) {
+uint8_t gb_camera_capture_image_cb(uint8_t *pixels) {
     // camera_data is YUV 4:2:0 format so to get a grayscale image we just take
     // the Y channel: the first GB_CAMERA_SENSOR_WIDTH * GB_CAMERA_SENSOR_HEIGHT bytes
     if (camera_data) {

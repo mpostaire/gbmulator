@@ -59,7 +59,7 @@ static SDL_Texture *link_texture, *link_pressed_texture;
 
 static int steps_per_frame;
 
-static byte_t *camera_data;
+static uint8_t *camera_data;
 static int camera_width, camera_height, camera_row_stride, camera_rotation;
 
 static button_t buttons[] = {
@@ -159,7 +159,7 @@ static button_t buttons[] = {
 
 // ---
 
-static inline s_byte_t is_finger_over_button(float x, float y) {
+static inline int8_t is_finger_over_button(float x, float y) {
     if (is_landscape) {
         x *= screen_height;
         y *= screen_width;
@@ -196,7 +196,7 @@ static inline s_byte_t is_finger_over_button(float x, float y) {
         }
     }
 
-    for (s_byte_t i = 1; i < 6; i++) {
+    for (int8_t i = 1; i < 6; i++) {
         SDL_Rect *hitbox = &buttons[i].shape;
         if (x > hitbox->x && x < hitbox->x + hitbox->w && y > hitbox->y && y < hitbox->y + hitbox->h)
             return buttons[i].button;
@@ -288,7 +288,7 @@ static void button_release(SDL_TouchID touch_id) {
     for (int i = 0; i < SDL_GetNumTouchFingers(touch_id); i++) {
         SDL_Finger *f = SDL_GetTouchFinger(touch_id, i);
         if (!f) continue;
-        s_byte_t hovered = is_finger_over_button(f->x, f->y);
+        int8_t hovered = is_finger_over_button(f->x, f->y);
         if (hovered >= 0)
             button_press(gb, hovered);
     }
@@ -312,20 +312,20 @@ static void button_release(SDL_TouchID touch_id) {
 }
 
 static inline void touch_press(SDL_TouchFingerEvent *event) {
-    s_byte_t hovered = is_finger_over_button(event->x, event->y);
+    int8_t hovered = is_finger_over_button(event->x, event->y);
     if (hovered >= 0)
         button_press(gb, hovered);
 }
 
 static inline void touch_release(SDL_TouchFingerEvent *event) {
-    s_byte_t hovered = is_finger_over_button(event->x, event->y);
+    int8_t hovered = is_finger_over_button(event->x, event->y);
     if (hovered >= 0)
         button_release(event->touchId);
 }
 
 static inline void touch_motion(SDL_TouchFingerEvent *event) {
-    s_byte_t previous = is_finger_over_button(event->x - event->dx, event->y - event->dy);
-    s_byte_t hovered = is_finger_over_button(event->x, event->y);
+    int8_t previous = is_finger_over_button(event->x - event->dx, event->y - event->dy);
+    int8_t hovered = is_finger_over_button(event->x, event->y);
 
     if (previous != hovered) {
         if (previous >= 0) {
@@ -385,7 +385,7 @@ static void set_layout(int layout) {
     }
 }
 
-static void ppu_vblank_cb(const byte_t *pixels) {
+static void ppu_vblank_cb(const uint8_t *pixels) {
     SDL_UpdateTexture(ppu_texture, NULL, pixels, ppu_texture_pitch);
 }
 
@@ -455,7 +455,7 @@ static void handle_input(void) {
 
 static void start_emulation_loop(void) {
     ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
+    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(uint8_t) * 4;
 
     SDL_AudioSpec audio_settings = {
         .freq = SAMPLING_RATE,
@@ -560,7 +560,7 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_updateCameraB
     // log("received image %p w=%d h=%d rs=%d rot=%d", camera_data, width, height, row_stride, rotation);
 }
 
-static byte_t camera_capture_image_cb(byte_t *pixels) {
+static uint8_t camera_capture_image_cb(uint8_t *pixels) {
     if (camera_data) {
         fit_image(pixels, camera_data, camera_width, camera_height, camera_row_stride, camera_rotation);
         return 1;
@@ -568,7 +568,7 @@ static byte_t camera_capture_image_cb(byte_t *pixels) {
     return 0;
 }
 
-static void load_cartridge(const byte_t *rom, size_t rom_size, int resume, int emu_mode, int palette, float emu_speed, float sound) {
+static void load_cartridge(const uint8_t *rom, size_t rom_size, int resume, int emu_mode, int palette, float emu_speed, float sound) {
     gb_options_t opts = {
         .mode = emu_mode,
         .on_new_sample = apu_new_sample_cb,
@@ -651,7 +651,7 @@ JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_Emulator_receiveROMDat
     jboolean is_copy;
     jbyte *rom = (*env)->GetByteArrayElements(env, data, &is_copy);
 
-    load_cartridge((byte_t *) rom, size, resume, emu_mode, palette, emu_speed, sound);
+    load_cartridge((uint8_t *) rom, size, resume, emu_mode, palette, emu_speed, sound);
     frame_skip = emu_frame_skip;
 
     (*env)->ReleaseByteArrayElements(env, data, rom, JNI_ABORT);

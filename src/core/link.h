@@ -2,13 +2,13 @@
 
 #include "types.h"
 
-typedef byte_t (*linked_device_shift_bit_cb_t)(void *device, byte_t in_bit);
+typedef uint8_t (*linked_device_shift_bit_cb_t)(void *device, uint8_t in_bit);
 typedef void (*linked_device_data_received_cb_t)(void *device);
 
 typedef struct {
-    word_t cycles;
-    word_t max_clock_cycles;
-    byte_t bit_shift_counter;
+    uint16_t cycles;
+    uint16_t max_clock_cycles;
+    uint8_t bit_shift_counter;
 
     struct {
         void *device;
@@ -30,6 +30,6 @@ void link_quit(gb_t *gb);
 
 void link_step(gb_t *gb);
 
-byte_t gb_linked_shift_bit(void *device, byte_t in_bit);
+uint8_t gb_linked_shift_bit(void *device, uint8_t in_bit);
 
 void gb_linked_data_received(void *device);

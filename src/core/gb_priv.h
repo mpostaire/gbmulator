@@ -16,10 +16,10 @@
 
 struct gb_t {
     gb_mode_t mode;
-    byte_t cgb_mode_enabled; // this is 1 if CGB is in CGB mode, 0 if it is in DMG compatibility mode // TODO understand this better
+    uint8_t cgb_mode_enabled; // this is 1 if CGB is in CGB mode, 0 if it is in DMG compatibility mode // TODO understand this better
 
-    byte_t disable_cgb_color_correction;
-    byte_t dmg_palette;
+    uint8_t disable_cgb_color_correction;
+    uint8_t dmg_palette;
     float apu_sound_level;
     float apu_speed;
     uint32_t apu_sampling_rate;
@@ -47,7 +47,7 @@ struct gb_t {
 // - TO do this, add rewind gameplay feature when R key held, rewind until 16 seconds ??? (fine tune this value: maybe less is preferable)
 //     for rollback netplay, disallow rewind gameplay BUT use the same code / mechanism to rollback (once we have more than max buffer of previous states, sleep the emulation to wait for the other one to finally respond)
     struct {
-        byte_t *states;
+        uint8_t *states;
         ssize_t head;
         size_t len;
         size_t state_size; // all states for a same ROM are the same size
@@ -55,25 +55,25 @@ struct gb_t {
 };
 
 struct gb_printer_t {
-    byte_t ram[0x2000];
-    word_t ram_len; // keep track of how much ram is used (ram writes are contiguous, starting from the previous ram_len)
-    byte_t sb; // Serial transfer data
-    byte_t state;
-    byte_t got_eof;
-    byte_t cmd;
-    byte_t compress_flag;
-    word_t cmd_data_len;
-    word_t cmd_data_recv_index;
-    byte_t cmd_data[PRINTER_CHUNK_SIZE]; // max data_len is 0x280
-    word_t checksum;
-    byte_t status;
-    byte_t delayed_status;
+    uint8_t ram[0x2000];
+    uint16_t ram_len; // keep track of how much ram is used (ram writes are contiguous, starting from the previous ram_len)
+    uint8_t sb; // Serial transfer data
+    uint8_t state;
+    uint8_t got_eof;
+    uint8_t cmd;
+    uint8_t compress_flag;
+    uint16_t cmd_data_len;
+    uint16_t cmd_data_recv_index;
+    uint8_t cmd_data[PRINTER_CHUNK_SIZE]; // max data_len is 0x280
+    uint16_t checksum;
+    uint8_t status;
+    uint8_t delayed_status;
 
-    word_t ram_printing_line_index; // when printing, keeps track of which line inside the ram we currently are on (reset to 0 every time the ram is cleared)
+    uint16_t ram_printing_line_index; // when printing, keeps track of which line inside the ram we currently are on (reset to 0 every time the ram is cleared)
     uint32_t printing_line_time_remaining;
 
     struct {
-        byte_t *data;
+        uint8_t *data;
         size_t height;
         size_t allocated_height; // allocated height of data (this is also the total height of the image once it has finished printing)
     } image;

@@ -3,11 +3,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-typedef unsigned char byte_t;
-typedef signed char s_byte_t;
-typedef unsigned short word_t;
-typedef signed short s_word_t;
-
 typedef struct gb_t gb_t;
 typedef struct gb_printer_t gb_printer_t;
 
@@ -45,14 +40,14 @@ typedef struct {
     int16_t r;
 } gb_apu_sample_t;
 
-typedef void (*gb_new_frame_cb_t)(const byte_t *pixels);
+typedef void (*gb_new_frame_cb_t)(const uint8_t *pixels);
 typedef void (*gb_new_sample_cb_t)(const gb_apu_sample_t sample, uint32_t *dynamic_sampling_rate);
 typedef void (*gb_accelerometer_request_cb_t)(double *x, double *y);
-typedef byte_t (*gb_camera_capture_image_cb_t)(byte_t *image);
+typedef uint8_t (*gb_camera_capture_image_cb_t)(uint8_t *image);
 
 typedef struct {
     gb_mode_t mode; // either `GB_MODE_DMG` for original game boy emulation or `GB_MODE_CGB` for game boy color emulation
-    byte_t disable_cgb_color_correction;
+    uint8_t disable_cgb_color_correction;
     gb_color_palette_t palette;
     float apu_speed;
     float apu_sound_level;

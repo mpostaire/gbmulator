@@ -96,7 +96,7 @@ void make_parent_dirs(const char *filepath) {
 
 void save_battery_to_file(gb_t *gb, const char *path) {
     size_t save_length;
-    byte_t *save_data = gb_get_save(gb, &save_length);
+    uint8_t *save_data = gb_get_save(gb, &save_length);
     if (!save_data) return;
 
     make_parent_dirs(path);
@@ -121,7 +121,7 @@ void load_battery_from_file(gb_t *gb, const char *path) {
         return;
     }
 
-    byte_t *save_data = xmalloc(save_length);
+    uint8_t *save_data = xmalloc(save_length);
     fread(save_data, save_length, 1, f);
     gb_load_save(gb, save_data, save_length);
     fclose(f);
@@ -132,7 +132,7 @@ int save_state_to_file(gb_t *gb, const char *path, int compressed) {
     make_parent_dirs(path);
 
     size_t len;
-    byte_t *buf = gb_get_savestate(gb, &len, compressed);
+    uint8_t *buf = gb_get_savestate(gb, &len, compressed);
 
     FILE *f = fopen(path, "wb");
     if (!f) {
@@ -166,7 +166,7 @@ int load_state_from_file(gb_t *gb, const char *path) {
         return 0;
     }
 
-    byte_t *buf = xmalloc(len);
+    uint8_t *buf = xmalloc(len);
     if (!fread(buf, len, 1, f)) {
         errnoprintf("reading savestate from %s", path);
         fclose(f);
@@ -180,7 +180,7 @@ int load_state_from_file(gb_t *gb, const char *path) {
     return ret;
 }
 
-byte_t *get_rom(const char *path, size_t *rom_size) {
+uint8_t *get_rom(const char *path, size_t *rom_size) {
     const char *dot = strrchr(path, '.');
     if (!dot || (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) && strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))))) {
         eprintf("%s: wrong file extension (expected .gb or .gbc)\n", path);
@@ -197,7 +197,7 @@ byte_t *get_rom(const char *path, size_t *rom_size) {
     size_t len = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    byte_t *rom = xmalloc(len);
+    uint8_t *rom = xmalloc(len);
     if (!fread(rom, len, 1, f)) {
         errnoprintf("reading %s", path);
         fclose(f);
@@ -268,7 +268,7 @@ char *get_savestate_path(const char *rom_filepath, int slot) {
     return save_path;
 }
 
-void fit_image(byte_t *dst, const byte_t *src, int src_width, int src_height, int row_stride, int rotation) {
+void fit_image(uint8_t *dst, const uint8_t *src, int src_width, int src_height, int row_stride, int rotation) {
     // crop top and bottom of largest dimension to get a 1:1 aspect ratio (adjust scale_x or scale_y accordingly)
     int src_start_x = 0, src_start_y = 0;
     int src_dim_diff = src_width - src_height;

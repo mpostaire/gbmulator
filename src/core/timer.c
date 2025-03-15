@@ -8,13 +8,13 @@
 // https://gbdev.io/pandocs/Timer_Obscure_Behaviour.html
 // TODO wilbertpol timer_if rounds 4 and 6 not working
 
-static inline byte_t falling_edge_detector(gb_timer_t *timer, byte_t tima_signal) {
-    byte_t out = !tima_signal && timer->old_tima_signal;
+static inline uint8_t falling_edge_detector(gb_timer_t *timer, uint8_t tima_signal) {
+    uint8_t out = !tima_signal && timer->old_tima_signal;
     timer->old_tima_signal = tima_signal;
     return out;
 }
 
-void timer_set_div_timer(gb_t *gb, word_t value) {
+void timer_set_div_timer(gb_t *gb, uint16_t value) {
     gb_timer_t *timer = gb->timer;
     gb_mmu_t *mmu = gb->mmu;
 
@@ -22,7 +22,7 @@ void timer_set_div_timer(gb_t *gb, word_t value) {
     // DIV register incremented at 16384 Hz (every 256 cycles)
     mmu->io_registers[IO_DIV] = timer->div_timer >> 8;
 
-    byte_t tima_signal = CHECK_BIT(timer->div_timer, timer->tima_increase_div_bit) && CHECK_BIT(mmu->io_registers[IO_TAC], 2);
+    uint8_t tima_signal = CHECK_BIT(timer->div_timer, timer->tima_increase_div_bit) && CHECK_BIT(mmu->io_registers[IO_TAC], 2);
     if (falling_edge_detector(timer, tima_signal)) {
         // increase TIMA (and handle its overflow)
         if (mmu->io_registers[IO_TIMA] == 0xFF) { // TIMA is about to overflow

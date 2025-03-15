@@ -5,7 +5,7 @@
 // FIXME rare audible pops
 // TODO https://gbdev.io/pandocs/Audio.html has been rewritten since I implemented this and there are new details that should be implemented
 
-const byte_t duty_cycles[4][8] = {
+const uint8_t duty_cycles[4][8] = {
     { 0, 0, 0, 0, 0, 0, 0, 1 },
     { 1, 0, 0, 0, 0, 0, 0, 1 },
     { 1, 0, 0, 0, 0, 1, 1, 1 },
@@ -16,11 +16,11 @@ static void channel_step(gb_channel_t *c) {
     c->freq_timer--;
     if (c->freq_timer <= 0) {
         if (c->id == APU_CHANNEL_4) {
-            byte_t divisor = *c->NRx3 & 0x07;
+            uint8_t divisor = *c->NRx3 & 0x07;
             c->freq_timer = divisor ? divisor << 4 : 8;
             c->freq_timer <<= (*c->NRx3 >> 4);
 
-            byte_t xor_ret = (c->LFSR & 0x01) ^ ((c->LFSR & 0x02) >> 1);
+            uint8_t xor_ret = (c->LFSR & 0x01) ^ ((c->LFSR & 0x02) >> 1);
             c->LFSR = (c->LFSR >> 1) | (xor_ret << 14);
 
             if ((*c->NRx3 >> 3) & 0x01) {
@@ -30,7 +30,7 @@ static void channel_step(gb_channel_t *c) {
             return;
         }
 
-        word_t freq = ((*c->NRx4 & 0x07) << 8) | *c->NRx3;
+        uint16_t freq = ((*c->NRx4 & 0x07) << 8) | *c->NRx3;
         if (c->id == APU_CHANNEL_3) {
             c->freq_timer = (2048 - freq) * 2;
             c->wave_position = (c->wave_position + 1) % 32;
@@ -40,7 +40,7 @@ static void channel_step(gb_channel_t *c) {
         c->duty_position = (c->duty_position + 1) % 8;
     }
 
-    byte_t wave_pattern_duty = (*c->NRx1 & 0xC0) >> 6;
+    uint8_t wave_pattern_duty = (*c->NRx1 & 0xC0) >> 6;
     c->duty = duty_cycles[wave_pattern_duty][c->duty_position];
 }
 
@@ -69,11 +69,11 @@ static int calc_sweep_freq(gb_t *gb, gb_channel_t *c) {
 static void channel_sweep(gb_t *gb, gb_channel_t *c) {
     c->sweep_timer--;
     if (c->sweep_timer <= 0) {
-        byte_t sweep_period = (*c->NRx0 & 0x70) >> 4;
+        uint8_t sweep_period = (*c->NRx0 & 0x70) >> 4;
         c->sweep_timer = sweep_period > 0 ? sweep_period : 8;
     
         if (c->sweep_enabled && sweep_period > 0) {
-            byte_t sweep_shift = *c->NRx0 & 0x07;
+            uint8_t sweep_shift = *c->NRx0 & 0x07;
             int new_freq = calc_sweep_freq(gb, c);
             
             if (new_freq < 2048 && sweep_shift > 0) {
@@ -95,7 +95,7 @@ static void channel_envelope(gb_channel_t *c) {
     c->envelope_period--;
     if (c->envelope_period <= 0) {
         c->envelope_period = *c->NRx2 & 0x07;
-        byte_t direction = (*c->NRx2 & 0x08) >> 3;
+        uint8_t direction = (*c->NRx2 & 0x08) >> 3;
         if (c->envelope_volume < 0x0F && direction)
             c->envelope_volume++;
         else if (c->envelope_volume > 0x00 && !direction)
@@ -110,7 +110,7 @@ void apu_channel_trigger(gb_t *gb, gb_channel_t *c) {
         c->length_counter = c->id == APU_CHANNEL_3 ? 256 : 64;
 
     // // TODO find out if this should really be done
-    // byte_t freq = ((*c->NRx4 & 0x03) << 8) | *c->NRx3;
+    // uint8_t freq = ((*c->NRx4 & 0x03) << 8) | *c->NRx3;
     // if (c->id == CHANNEL_3) {
     //     c->freq_timer = ((2048 - freq) * 2);
     //     c->wave_position = 0;
@@ -125,9 +125,9 @@ void apu_channel_trigger(gb_t *gb, gb_channel_t *c) {
 
     if (c->id == APU_CHANNEL_1) {
         c->sweep_freq = ((*c->NRx4 & 0x07) << 8) | *c->NRx3;
-        byte_t sweep_period = (*c->NRx0 & 0x70) >> 4;
+        uint8_t sweep_period = (*c->NRx0 & 0x70) >> 4;
         c->sweep_timer = sweep_period > 0 ? sweep_period : 8;
-        byte_t sweep_shift = *c->NRx0 & 0x07;
+        uint8_t sweep_shift = *c->NRx0 & 0x07;
         c->sweep_enabled = (sweep_period > 0) || (sweep_shift > 0);
 
         if (sweep_shift > 0)
@@ -151,7 +151,7 @@ static float channel_dac(gb_t *gb, gb_channel_t *c) {
         break;
     case APU_CHANNEL_3:
         if ((*c->NRx0 >> 7) /*&& APU_IS_CHANNEL_ENABLED(c->id)*/) { // if dac enabled and channel enabled -- TODO check why channel 3 enabled flag is not working properly
-            byte_t sample = gb->mmu->io_registers[IO_WAVE_RAM + (c->wave_position / 2)];
+            uint8_t sample = gb->mmu->io_registers[IO_WAVE_RAM + (c->wave_position / 2)];
             if (c->wave_position % 2 == 0) // TODO check if this works properly (I think it always reads the 2 nibbles as the same values)
                 sample >>= 4;
             sample &= 0x0F;
@@ -186,7 +186,7 @@ void apu_step(gb_t *gb) {
     apu_t *apu = gb->apu;
     gb_mmu_t *mmu = gb->mmu;
 
-    for (byte_t cycles = 0; cycles < 4; cycles++) { // 4 cycles per step
+    for (uint8_t cycles = 0; cycles < 4; cycles++) { // 4 cycles per step
         apu->frame_sequencer_cycles_count++;
         if (apu->frame_sequencer_cycles_count >= 8192) { // 512 Hz
             apu->frame_sequencer_cycles_count = 0;

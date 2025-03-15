@@ -34,7 +34,7 @@ int load_state_from_file(gb_t *gb, const char *path);
  * @returns the contents of the file at `path` or `NULL` if the contents are invalid or an unsupported ROM.
  *          gb_init() won't fail if the return value is not `NULL`.
  */
-byte_t *get_rom(const char *path, size_t *rom_size);
+uint8_t *get_rom(const char *path, size_t *rom_size);
 
 char *get_xdg_path(const char *xdg_variable, const char *fallback);
 
@@ -47,4 +47,4 @@ char *get_savestate_path(const char *rom_filepath, int slot);
 /**
  * resize, crop (keep center) and rotate `src` to fit into `dst` where `dst` is the gb camera sensor buffer
  */
-void fit_image(byte_t *dst, const byte_t *src, int src_width, int src_height, int row_stride, int rotation);
+void fit_image(uint8_t *dst, const uint8_t *src, int src_width, int src_height, int row_stride, int rotation);

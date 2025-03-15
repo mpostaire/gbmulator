@@ -16,24 +16,24 @@ typedef enum {
 } gb_channel_id_t;
 
 typedef struct {
-    byte_t wave_position;
-    byte_t duty_position;
-    byte_t duty;
+    uint8_t wave_position;
+    uint8_t duty_position;
+    uint8_t duty;
     int freq_timer;
     int length_counter; // length module
     int envelope_period; // envelope module
-    byte_t envelope_volume; // envelope module
+    uint8_t envelope_volume; // envelope module
     int sweep_timer; // sweep module
     int sweep_freq; // sweep module
-    byte_t sweep_enabled; // sweep module
+    uint8_t sweep_enabled; // sweep module
 
     // registers
-    byte_t *NRx0;
-    byte_t *NRx1;
-    byte_t *NRx2;
-    byte_t *NRx3;
-    byte_t *NRx4;
-    word_t LFSR;
+    uint8_t *NRx0;
+    uint8_t *NRx1;
+    uint8_t *NRx2;
+    uint8_t *NRx3;
+    uint8_t *NRx4;
+    uint16_t LFSR;
 
     gb_channel_id_t id;
 } gb_channel_t;
@@ -42,7 +42,7 @@ typedef struct {
     uint32_t take_sample_cycles_count;
     uint32_t dynamic_sampling_rate;
 
-    byte_t frame_sequencer;
+    uint8_t frame_sequencer;
     uint32_t frame_sequencer_cycles_count;
 
     gb_channel_t channel1;

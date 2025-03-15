@@ -10,7 +10,7 @@
 typedef struct __attribute__((packed)) {
     char identifier[sizeof(SAVESTATE_STRING)];
     char rom_title[16];
-    byte_t mode; // GB_MODE_DMG or GB_MODE_CGB
+    uint8_t mode; // GB_MODE_DMG or GB_MODE_CGB
 } savestate_header_t;
 
 gb_options_t defaults_opts = {
@@ -53,7 +53,7 @@ void rewind_push(gb_t *gb) {
     if (gb->rewind_stack.len < N_REWIND_STATES)
         gb->rewind_stack.len++;
 
-    byte_t *savestate_data = gb_get_savestate(gb, &gb->rewind_stack.state_size, 0); // TODO specify the dest buffer to avoid redundant memcpy
+    uint8_t *savestate_data = gb_get_savestate(gb, &gb->rewind_stack.state_size, 0); // TODO specify the dest buffer to avoid redundant memcpy
     // eprintf("gb_get_savestate push head=%ld sz=%ld expected_sz=%ld\n", gb->rewind_stack.head, gb->rewind_stack.state_size, get_savestate_expected_len(gb, NULL, NULL, NULL, NULL));
     memcpy(&gb->rewind_stack.states[gb->rewind_stack.head * gb->rewind_stack.state_size], savestate_data, gb->rewind_stack.state_size);
     free(savestate_data);
@@ -78,7 +78,7 @@ void gb_rewind(gb_t *gb) {
     rewind_pop(gb);
 }
 
-static inline int gb_step_linked(gb_t *gb, byte_t step_linked_device) {
+static inline int gb_step_linked(gb_t *gb, uint8_t step_linked_device) {
     if (gb->rewind_stack.states) {
         static size_t step_counter = 0;
         step_counter++;
@@ -88,7 +88,7 @@ static inline int gb_step_linked(gb_t *gb, byte_t step_linked_device) {
         }
     }
 
-    byte_t double_speed = IS_DOUBLE_SPEED(gb);
+    uint8_t double_speed = IS_DOUBLE_SPEED(gb);
     for (int i = double_speed + 1; i; i--) {
         // stop execution of the program while a GDMA or HDMA is active
         if (!gb->mmu->hdma.lock_cpu)
@@ -123,7 +123,7 @@ int gb_step(gb_t *gb) {
     return gb_step_linked(gb, 1);
 }
 
-int gb_is_rom_valid(const byte_t *rom) {
+int gb_is_rom_valid(const uint8_t *rom) {
     return parse_header_mbc_byte(rom[0x0147], NULL, NULL, NULL, NULL, NULL) && validate_header_checksum(rom);
 }
 
@@ -146,7 +146,7 @@ static size_t get_savestate_expected_len(gb_t *gb, size_t *cpu_len, size_t *time
     return cpu + timer + ppu + mmu + sizeof(savestate_header_t);
 }
 
-gb_t *gb_init(const byte_t *rom, size_t rom_size, gb_options_t *opts) {
+gb_t *gb_init(const uint8_t *rom, size_t rom_size, gb_options_t *opts) {
     gb_t *gb = xcalloc(1, sizeof(*gb));
     gb_set_options(gb, opts);
 
@@ -184,7 +184,7 @@ void gb_quit(gb_t *gb) {
 
 void gb_reset(gb_t *gb, gb_mode_t mode) {
     size_t rom_size = gb->mmu->rom_size;
-    byte_t *rom = xmalloc(rom_size);
+    uint8_t *rom = xmalloc(rom_size);
     memcpy(rom, gb->mmu->rom, rom_size);
 
     gb->mode = 0;
@@ -194,7 +194,7 @@ void gb_reset(gb_t *gb, gb_mode_t mode) {
     gb_set_options(gb, &opts);
 
     size_t save_len;
-    byte_t *save_data = gb_get_save(gb, &save_len);
+    uint8_t *save_data = gb_get_save(gb, &save_len);
 
     cpu_quit(gb);
     apu_quit(gb);
@@ -259,12 +259,12 @@ static const char *new_licensees[] = {
 };
 
 static const char *get_new_licensee(gb_t *gb) {
-    byte_t code = ((gb->mmu->rom[0x0144] - 0x30) * 10) + (gb->mmu->rom[0x0145]) - 0x30;
+    uint8_t code = ((gb->mmu->rom[0x0144] - 0x30) * 10) + (gb->mmu->rom[0x0145]) - 0x30;
     return new_licensees[code];
 }
 
 static const char *get_licensee(gb_t *gb) {
-    byte_t code = gb->mmu->rom[0x014B];
+    uint8_t code = gb->mmu->rom[0x014B];
     return code == 0x33 ? get_new_licensee(gb) : old_licensees[code];
 }
 
@@ -334,7 +334,7 @@ void gb_link_disconnect(gb_t *gb) {
     gb->link->linked_device.data_received = NULL;
 }
 
-byte_t gb_ir_connect(gb_t *gb, gb_t *other_gb) {
+uint8_t gb_ir_connect(gb_t *gb, gb_t *other_gb) {
     if (gb->mode == GB_MODE_DMG && gb->mmu->mbc.type != HuC1 && gb->mmu->mbc.type != HuC3)
         return 0;
     if (other_gb->mode == GB_MODE_DMG && other_gb->mmu->mbc.type != HuC1 && other_gb->mmu->mbc.type != HuC3)
@@ -366,19 +366,19 @@ void gb_joypad_release(gb_t *gb, gb_joypad_button_t key) {
     joypad_release(gb, key);
 }
 
-byte_t gb_get_joypad_state(gb_t *gb) {
+uint8_t gb_get_joypad_state(gb_t *gb) {
     return (gb->joypad->action & 0x0F) << 4 | (gb->joypad->direction & 0x0F);
 }
 
-void gb_set_joypad_state(gb_t *gb, byte_t state) {
+void gb_set_joypad_state(gb_t *gb, uint8_t state) {
     gb_joypad_t *joypad = gb->joypad;
 
-    byte_t direction = state & 0x0F;
-    byte_t action = (state >> 4) & 0x0F;
+    uint8_t direction = state & 0x0F;
+    uint8_t action = (state >> 4) & 0x0F;
 
     // request interrupt if it is enabled and any button bit goes from released to pressed (1 -> 0)
-    byte_t direction_changed = (joypad->direction & ~direction) && !CHECK_BIT(gb->mmu->io_registers[IO_P1], 4);
-    byte_t action_changed = (joypad->action & ~action) && !CHECK_BIT(gb->mmu->io_registers[IO_P1], 5);
+    uint8_t direction_changed = (joypad->direction & ~direction) && !CHECK_BIT(gb->mmu->io_registers[IO_P1], 4);
+    uint8_t action_changed = (joypad->action & ~action) && !CHECK_BIT(gb->mmu->io_registers[IO_P1], 5);
     if (direction_changed || action_changed)
         CPU_REQUEST_INTERRUPT(gb, IRQ_JOYPAD);
  
@@ -386,10 +386,10 @@ void gb_set_joypad_state(gb_t *gb, byte_t state) {
     joypad->direction = direction;
 }
 
-byte_t *gb_get_save(gb_t *gb, size_t *save_length) {
+uint8_t *gb_get_save(gb_t *gb, size_t *save_length) {
     if (gb->mmu->mbc.type == MBC7) {
         *save_length = sizeof(gb->mmu->mbc.mbc7.eeprom.data);
-        byte_t *save_data = xmalloc(*save_length);
+        uint8_t *save_data = xmalloc(*save_length);
         memcpy(save_data, gb->mmu->mbc.mbc7.eeprom.data, *save_length);
         return save_data;
     }
@@ -408,7 +408,7 @@ byte_t *gb_get_save(gb_t *gb, size_t *save_length) {
     if (total_len == 0)
         return NULL;
 
-    byte_t *save_data = xmalloc(total_len);
+    uint8_t *save_data = xmalloc(total_len);
 
     if (eram_len > 0)
         memcpy(save_data, gb->mmu->eram, eram_len);
@@ -437,7 +437,7 @@ byte_t *gb_get_save(gb_t *gb, size_t *save_length) {
     return save_data;
 }
 
-int gb_load_save(gb_t *gb, byte_t *save_data, size_t save_length) {
+int gb_load_save(gb_t *gb, uint8_t *save_data, size_t save_length) {
     if (gb->mmu->mbc.type == MBC7) {
         if (save_length != sizeof(gb->mmu->mbc.mbc7.eeprom.data))
             return 0;
@@ -466,11 +466,11 @@ int gb_load_save(gb_t *gb, byte_t *save_data, size_t save_length) {
     }
 
     // get saved rtc registers and timestamp
-    byte_t s = save_data[eram_len];
-    byte_t m = save_data[eram_len + 4];
-    byte_t h = save_data[eram_len + 8];
-    byte_t dl = save_data[eram_len + 12];
-    byte_t dh = save_data[eram_len + 16];
+    uint8_t s = save_data[eram_len];
+    uint8_t m = save_data[eram_len + 4];
+    uint8_t h = save_data[eram_len + 8];
+    uint8_t dl = save_data[eram_len + 12];
+    uint8_t dh = save_data[eram_len + 16];
     gb->mmu->mbc.mbc3.rtc.latched_s = save_data[eram_len + 20];
     gb->mmu->mbc.mbc3.rtc.latched_m = save_data[eram_len + 24];
     gb->mmu->mbc.mbc3.rtc.latched_h = save_data[eram_len + 28];
@@ -486,7 +486,7 @@ int gb_load_save(gb_t *gb, byte_t *save_data, size_t save_length) {
     rtc_registers_time += time(NULL) - rtc_timestamp;
 
     // convert elapsed time back into rtc registers
-    word_t d = rtc_registers_time / 86400;
+    uint16_t d = rtc_registers_time / 86400;
     rtc_registers_time %= 86400;
 
     // day overflow
@@ -509,7 +509,7 @@ int gb_load_save(gb_t *gb, byte_t *save_data, size_t save_length) {
     return 1;
 }
 
-byte_t *gb_get_savestate(gb_t *gb, size_t *length, byte_t compressed) {
+uint8_t *gb_get_savestate(gb_t *gb, size_t *length, uint8_t compressed) {
     // make savestate header
     savestate_header_t *savestate_header = xmalloc(sizeof(*savestate_header));
     savestate_header->mode = gb->mode;
@@ -518,18 +518,18 @@ byte_t *gb_get_savestate(gb_t *gb, size_t *length, byte_t compressed) {
 
     // make savestate data
     size_t cpu_len;
-    byte_t *cpu = cpu_serialize(gb, &cpu_len);
+    uint8_t *cpu = cpu_serialize(gb, &cpu_len);
     size_t timer_len;
-    byte_t *timer = timer_serialize(gb, &timer_len);
+    uint8_t *timer = timer_serialize(gb, &timer_len);
     size_t ppu_len;
-    byte_t *ppu = ppu_serialize(gb, &ppu_len);
+    uint8_t *ppu = ppu_serialize(gb, &ppu_len);
     size_t mmu_len;
-    byte_t *mmu = mmu_serialize(gb, &mmu_len);
+    uint8_t *mmu = mmu_serialize(gb, &mmu_len);
 
     // don't write each component length into the savestate as the only variable length is the mmu which is written
     // last and it's length can be computed using the eram_banks number and the mode (both in the header)
     size_t savestate_data_len = cpu_len + timer_len + ppu_len + mmu_len;
-    byte_t *savestate_data = xmalloc(savestate_data_len);
+    uint8_t *savestate_data = xmalloc(savestate_data_len);
     size_t offset = 0;
     memcpy(savestate_data, cpu, cpu_len);
     offset += cpu_len;
@@ -547,7 +547,7 @@ byte_t *gb_get_savestate(gb_t *gb, size_t *length, byte_t compressed) {
     // compress savestate data if specified
     if (compressed) {
         uLongf dest_len = compressBound(savestate_data_len);
-        byte_t *dest = xmalloc(dest_len);
+        uint8_t *dest = xmalloc(dest_len);
         if (compress(dest, &dest_len, savestate_data, savestate_data_len) == Z_OK) {
             SET_BIT(savestate_header->mode, 7);
             free(savestate_data);
@@ -561,7 +561,7 @@ byte_t *gb_get_savestate(gb_t *gb, size_t *length, byte_t compressed) {
 
     // assemble savestate header and savestate data
     *length = sizeof(savestate_header_t) + savestate_data_len;
-    byte_t *savestate = xmalloc(*length);
+    uint8_t *savestate = xmalloc(*length);
     memcpy(savestate, savestate_header, sizeof(savestate_header_t));
     memcpy(savestate + sizeof(savestate_header_t), savestate_data, savestate_data_len);
 
@@ -571,7 +571,7 @@ byte_t *gb_get_savestate(gb_t *gb, size_t *length, byte_t compressed) {
     return savestate;
 }
 
-int gb_load_savestate(gb_t *gb, const byte_t *data, size_t length) {
+int gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length) {
     if (length <= sizeof(savestate_header_t)) {
         eprintf("invalid savestate length (%zu)\n", length);
         return 0;
@@ -595,14 +595,14 @@ int gb_load_savestate(gb_t *gb, const byte_t *data, size_t length) {
         gb_reset(gb, savestate_header->mode & 0x03);
 
     size_t savestate_data_len = length - sizeof(savestate_header_t);
-    byte_t *savestate_data = xmalloc(savestate_data_len);
+    uint8_t *savestate_data = xmalloc(savestate_data_len);
     memcpy(savestate_data, data + sizeof(savestate_header_t), savestate_data_len);
 
     size_t cpu_len, timer_len, ppu_len, mmu_len;
     size_t expected_data_len = get_savestate_expected_len(gb, &cpu_len, &timer_len, &ppu_len, &mmu_len) - sizeof(savestate_header_t);
 
     if (CHECK_BIT(savestate_header->mode, 7)) {
-        byte_t *dest = xmalloc(expected_data_len);
+        uint8_t *dest = xmalloc(expected_data_len);
         uLongf dest_len = expected_data_len;
         if (uncompress(dest, &dest_len, savestate_data, savestate_data_len) == Z_OK) {
             free(savestate_data);
@@ -647,7 +647,7 @@ char *gb_get_rom_title(gb_t *gb) {
     return gb->rom_title;
 }
 
-byte_t *gb_get_rom(gb_t *gb, size_t *rom_size) {
+uint8_t *gb_get_rom(gb_t *gb, size_t *rom_size) {
     if (rom_size)
         *rom_size = gb->mmu->rom_size;
     return gb->mmu->rom;
@@ -691,8 +691,8 @@ gb_mode_t gb_is_cgb(gb_t *gb) {
     return gb->mode == GB_MODE_CGB;
 }
 
-word_t gb_get_cartridge_checksum(gb_t *gb) {
-    word_t checksum = 0;
+uint16_t gb_get_cartridge_checksum(gb_t *gb) {
+    uint16_t checksum = 0;
     for (unsigned int i = 0; i < gb->mmu->rom_size; i += 2)
         checksum = checksum - (gb->mmu->rom[i] + gb->mmu->rom[i + 1]) - 1;
     return checksum;
@@ -719,10 +719,10 @@ void gb_set_palette(gb_t *gb, gb_color_palette_t palette) {
     gb_set_options(gb, &opts);
 }
 
-byte_t gb_has_accelerometer(gb_t *gb) {
+uint8_t gb_has_accelerometer(gb_t *gb) {
     return gb->mmu->mbc.type == MBC7;
 }
 
-byte_t gb_has_camera(gb_t *gb) {
+uint8_t gb_has_camera(gb_t *gb) {
     return gb->mmu->mbc.type == CAMERA;
 }

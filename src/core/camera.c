@@ -32,7 +32,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-static inline int64_t get_processed_color(gb_mbc_t *mbc, byte_t x, byte_t y) {
+static inline int64_t get_processed_color(gb_mbc_t *mbc, uint8_t x, uint8_t y) {
     if (x == GB_CAMERA_WIDTH)
         x--;
     else if (x > GB_CAMERA_WIDTH)
@@ -63,17 +63,17 @@ static inline int64_t get_processed_color(gb_mbc_t *mbc, byte_t x, byte_t y) {
     return CLAMP(128 + (color * ((mbc->camera.work_regs[2] << 8) + mbc->camera.work_regs[3]) / 0x2000), 0, 255);
 }
 
-byte_t gb_camera_read_image(gb_t *gb, word_t address) {
+uint8_t gb_camera_read_image(gb_t *gb, uint16_t address) {
     gb_mbc_t *mbc = &gb->mmu->mbc;
 
-    byte_t tile_x = address / 0x10 % 0x10;
-    byte_t tile_y = address / 0x10 / 0x10;
+    uint8_t tile_x = address / 0x10 % 0x10;
+    uint8_t tile_y = address / 0x10 / 0x10;
 
-    byte_t y = ((address >> 1) & 0x7) + tile_y * 8;
-    byte_t bit = address & 1;
+    uint8_t y = ((address >> 1) & 0x7) + tile_y * 8;
+    uint8_t bit = address & 1;
 
-    byte_t ret = 0;
-    for (byte_t x = tile_x * 8; x < tile_x * 8 + 8; x++) {
+    uint8_t ret = 0;
+    for (uint8_t x = tile_x * 8; x < tile_x * 8 + 8; x++) {
         static const float edge_enhancement_ratios[] = {0.5f, 0.75f, 1.0f, 1.25f, 2.0f, 3.0f, 4.0f, 5.0f};
         float edge_enhancement_ratio = edge_enhancement_ratios[(mbc->camera.work_regs[4] >> 4) & 0x7];
 
@@ -87,7 +87,7 @@ byte_t gb_camera_read_image(gb_t *gb, word_t address) {
         }
 
         // The camera's registers are used as a threshold pattern, which defines the dithering
-        byte_t pattern_base = ((x & 3) + (y & 3) * 4) * 3 + 6;
+        uint8_t pattern_base = ((x & 3) + (y & 3) * 4) * 3 + 6;
         if (color < mbc->camera.work_regs[pattern_base])
             color = 3;
         else if (color < mbc->camera.work_regs[pattern_base + 1])
@@ -116,26 +116,26 @@ static inline unsigned int fastrand(void) {
     return (rand_seed >> 16) & 0xFF;
 }
 
-byte_t camera_read_reg(gb_t *gb, word_t address) {
+uint8_t camera_read_reg(gb_t *gb, uint16_t address) {
     if ((address & 0x003F) == 0)
         return gb->mmu->mbc.camera.regs[0] & 0x07;
     return 0x00;
 }
 
-void camera_write_reg(gb_t *gb, word_t address, byte_t data) {
+void camera_write_reg(gb_t *gb, uint16_t address, uint8_t data) {
     gb_mmu_t *mmu = gb->mmu;
 
-    byte_t reg = MIN(address & 0x003F, GB_CAMERA_N_REGS);
+    uint8_t reg = MIN(address & 0x003F, GB_CAMERA_N_REGS);
     if (reg == 0) {
-        byte_t request_capture = !CHECK_BIT(mmu->mbc.camera.regs[reg], 0) && CHECK_BIT(data, 0);
-        byte_t capture_in_progress = mmu->mbc.camera.capture_cycles_remaining > 0;
+        uint8_t request_capture = !CHECK_BIT(mmu->mbc.camera.regs[reg], 0) && CHECK_BIT(data, 0);
+        uint8_t capture_in_progress = mmu->mbc.camera.capture_cycles_remaining > 0;
 
         if (request_capture && !capture_in_progress) {
-            word_t exposure = (mmu->mbc.camera.regs[2] << 8) | mmu->mbc.camera.regs[3];
+            uint16_t exposure = (mmu->mbc.camera.regs[2] << 8) | mmu->mbc.camera.regs[3];
             mmu->mbc.camera.capture_cycles_remaining = 4 * (32448 + (CHECK_BIT(mmu->mbc.camera.regs[1], 7) ? 0 : 512) + (exposure * 16));
             memcpy(mmu->mbc.camera.work_regs, mmu->mbc.camera.regs, GB_CAMERA_N_REGS);
 
-            byte_t generate_noise_image = gb->on_camera_capture_image == NULL;
+            uint8_t generate_noise_image = gb->on_camera_capture_image == NULL;
             if (!generate_noise_image)
                 generate_noise_image |= !gb->on_camera_capture_image(mmu->mbc.camera.sensor_image);
             if (generate_noise_image) {

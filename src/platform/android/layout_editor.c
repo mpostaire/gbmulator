@@ -18,7 +18,7 @@ static int moving;
 static int moving_offset_x;
 static int moving_offset_y;
 
-static inline s_byte_t is_finger_over_ui_element(float x, float y) {
+static inline int8_t is_finger_over_ui_element(float x, float y) {
     if (is_landscape) {
         x *= screen_height;
         y *= screen_width;
@@ -27,7 +27,7 @@ static inline s_byte_t is_finger_over_ui_element(float x, float y) {
         y *= screen_height;
     }
 
-    for (s_byte_t i = 5; i >= 0; i--) {
+    for (int8_t i = 5; i >= 0; i--) {
         SDL_Rect *hitbox = &buttons[i].shape;
         if (x > hitbox->x && x < hitbox->x + hitbox->w && y > hitbox->y && y < hitbox->y + hitbox->h)
             return i;

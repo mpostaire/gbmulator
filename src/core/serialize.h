@@ -1,8 +1,8 @@
 #pragma once
 
 #define SERIALIZED_SIZE_FUNCTION_DECL(name) size_t name##_serialized_length(gb_t *gb)
-#define SERIALIZER_FUNCTION_DECL(name) byte_t *name##_serialize(gb_t *gb, size_t *size)
-#define UNSERIALIZER_FUNCTION_DECL(name) void name##_unserialize(gb_t *gb, byte_t *buf)
+#define SERIALIZER_FUNCTION_DECL(name) uint8_t *name##_serialize(gb_t *gb, size_t *size)
+#define UNSERIALIZER_FUNCTION_DECL(name) void name##_unserialize(gb_t *gb, uint8_t *buf)
 
 #define SERIALIZE_FUNCTION_DECLS(name)   \
     SERIALIZED_SIZE_FUNCTION_DECL(name); \
@@ -20,7 +20,7 @@
 #define SERIALIZER_FUNCTION(type, name, ...)   \
     SERIALIZER_FUNCTION_DECL(name) {           \
         *size = name##_serialized_length(gb); \
-        byte_t *buf = xmalloc(*size);          \
+        uint8_t *buf = xmalloc(*size);          \
         size_t offset = 0;                     \
         type *tmp = gb->name;                 \
         __VA_ARGS__;                           \

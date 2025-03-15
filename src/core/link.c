@@ -21,9 +21,9 @@ void link_quit(gb_t *gb) {
     free(gb->link);
 }
 
-byte_t gb_linked_shift_bit(void *device, byte_t in_bit) {
+uint8_t gb_linked_shift_bit(void *device, uint8_t in_bit) {
     gb_t *gb = device;
-    byte_t out_bit = GET_BIT(gb->mmu->io_registers[IO_SB], 7);
+    uint8_t out_bit = GET_BIT(gb->mmu->io_registers[IO_SB], 7);
     gb->mmu->io_registers[IO_SB] <<= 1;
     CHANGE_BIT(gb->mmu->io_registers[IO_SB], 0, in_bit);
     return out_bit;
@@ -46,16 +46,16 @@ void link_step(gb_t *gb) {
     // transfer requested / in progress with internal clock (this gb is the master of the connection)
     // --> the master emulator also does the work for the slave so we don't have to handle the case
     //     where this gb is the slave
-    byte_t master_transfer_request = CHECK_BIT(mmu->io_registers[IO_SC], 7) && CHECK_BIT(mmu->io_registers[IO_SC], 0);
+    uint8_t master_transfer_request = CHECK_BIT(mmu->io_registers[IO_SC], 7) && CHECK_BIT(mmu->io_registers[IO_SC], 0);
     if (!master_transfer_request)
         return;
 
     if (link->bit_shift_counter < 8) {
         link->bit_shift_counter++;
 
-        byte_t other_bit = 1; // this is 1 if no device is connected
+        uint8_t other_bit = 1; // this is 1 if no device is connected
         if (link->linked_device.type != LINK_TYPE_NONE) {
-            byte_t this_bit = GET_BIT(mmu->io_registers[IO_SB], 7);
+            uint8_t this_bit = GET_BIT(mmu->io_registers[IO_SB], 7);
             // transfer this gb bit to linked device
             other_bit = link->linked_device.shift_bit(link->linked_device.device, this_bit);
         }

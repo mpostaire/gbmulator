@@ -11,14 +11,14 @@ typedef enum {
 } tima_state_t;
 
 typedef struct {
-    word_t div_timer;
-    byte_t tima_increase_div_bit; // bit of DIV that causes an increase of TIMA when set to 1 and TAC timer is enabled
-    byte_t tima_state;
-    byte_t tima_cancelled_value;
-    byte_t old_tima_signal; // used by the tima signal falling edge detector
+    uint16_t div_timer;
+    uint8_t tima_increase_div_bit; // bit of DIV that causes an increase of TIMA when set to 1 and TAC timer is enabled
+    uint8_t tima_state;
+    uint8_t tima_cancelled_value;
+    uint8_t old_tima_signal; // used by the tima signal falling edge detector
 } gb_timer_t;
 
-void timer_set_div_timer(gb_t *gb, word_t value);
+void timer_set_div_timer(gb_t *gb, uint16_t value);
 
 void timer_step(gb_t *gb);
 

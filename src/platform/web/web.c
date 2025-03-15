@@ -64,7 +64,7 @@ static int samples_count;
 static SDL_GameController *pad;
 static SDL_bool is_controller_present = SDL_FALSE;
 
-static byte_t scale;
+static uint8_t scale;
 
 static int editing_keybind = -1;
 
@@ -87,7 +87,7 @@ static int keycode_filter(SDL_Keycode key) {
     }
 }
 
-static void ppu_vblank_cb(const byte_t *pixels) {
+static void ppu_vblank_cb(const uint8_t *pixels) {
     SDL_UpdateTexture(ppu_texture, NULL, pixels, ppu_texture_pitch);
 }
 
@@ -124,7 +124,7 @@ EMSCRIPTEN_KEEPALIVE void set_pause(uint8_t value) {
     }, !is_paused);
 }
 
-static byte_t *local_storage_get_item(const char *key, size_t *data_length, byte_t decode) {
+static uint8_t *local_storage_get_item(const char *key, size_t *data_length, uint8_t decode) {
     unsigned char *data = (unsigned char *) EM_ASM_INT({
         var item = localStorage.getItem(UTF8ToString($0).replaceAll(' ', '_'));
         if (item === null)
@@ -153,9 +153,9 @@ static byte_t *local_storage_get_item(const char *key, size_t *data_length, byte
     return decoded_data;
 }
 
-static void local_storage_set_item(const char *key, const byte_t *data, byte_t encode, size_t len) {
+static void local_storage_set_item(const char *key, const uint8_t *data, uint8_t encode, size_t len) {
     if (encode) {
-        byte_t *encoded_data = base64_encode(data, len, NULL);
+        uint8_t *encoded_data = base64_encode(data, len, NULL);
         EM_ASM({
             localStorage.setItem(UTF8ToString($0).replaceAll(' ', '_'), UTF8ToString($1));
         }, key, encoded_data);
@@ -168,7 +168,7 @@ static void local_storage_set_item(const char *key, const byte_t *data, byte_t e
 }
 
 void load_config(char *path) {
-    byte_t *data = local_storage_get_item(path, NULL, 0);
+    uint8_t *data = local_storage_get_item(path, NULL, 0);
     if (!data)
         return;
     config_load_from_string(&config, (const char *) data);
@@ -177,19 +177,19 @@ void load_config(char *path) {
 
 static void save_config(const char *path) {
     char *config_buf = config_save_to_string(&config);
-    local_storage_set_item(path, (byte_t *) config_buf, 0, strlen(config_buf));
+    local_storage_set_item(path, (uint8_t *) config_buf, 0, strlen(config_buf));
     free(config_buf);
 }
 
 static void save(void) {
     size_t save_length;
-    byte_t *save_data = gb_get_save(gb, &save_length);
+    uint8_t *save_data = gb_get_save(gb, &save_length);
     if (!save_data) return;
     local_storage_set_item(gb_get_rom_title(gb), save_data, 1, save_length);
     free(save_data);
 }
 
-void load_cartridge(const byte_t *rom, size_t rom_size) {
+void load_cartridge(const uint8_t *rom, size_t rom_size) {
     gb_options_t opts = {
         .mode = config.mode,
         .on_new_sample = apu_new_sample_cb,
@@ -376,12 +376,12 @@ static void handle_input(void) {
                 snprintf(savestate_path, len + 9, "%s-state-%d", rom_title, event.key.keysym.sym - SDLK_F1);
                 if (event.key.keysym.mod & KMOD_SHIFT) {
                     size_t savestate_length;
-                    byte_t *savestate = gb_get_savestate(gb, &savestate_length, 1);
+                    uint8_t *savestate = gb_get_savestate(gb, &savestate_length, 1);
                     local_storage_set_item(savestate_path, savestate, 1, savestate_length);
                     free(savestate);
                 } else {
                     size_t savestate_length;
-                    byte_t *savestate = local_storage_get_item(savestate_path, &savestate_length, 1);
+                    uint8_t *savestate = local_storage_get_item(savestate_path, &savestate_length, 1);
                     int ret = gb_load_savestate(gb, savestate, savestate_length);
                     if (ret > 0) {
                         config.mode = ret;
@@ -502,7 +502,7 @@ int main(int argc, char **argv) {
     SDL_ShowWindow(window); // show window after creating the renderer to avoid weird window show -> hide -> show at startup
 
     ppu_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(byte_t) * 4;
+    ppu_texture_pitch = GB_SCREEN_WIDTH * sizeof(uint8_t) * 4;
 
     SDL_AudioSpec audio_settings = {
         .freq = SAMPLING_RATE,

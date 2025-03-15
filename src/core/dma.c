@@ -1,12 +1,12 @@
 #include "gb_priv.h"
 
-static inline byte_t gdma_hdma_copy_step(gb_t *gb) {
+static inline uint8_t gdma_hdma_copy_step(gb_t *gb) {
     gb_mmu_t *mmu = gb->mmu;
 
     // normal speed: one step is 4 cycles -> 2 cycles to copy 1 byte -> copy 2 bytes from src to dest
     // double speed: one step is 8 cycles -> 4 cycles to copy 1 byte -> copy 1 byte from src to dest
-    for (byte_t i = 0; i < !IS_DOUBLE_SPEED(gb) + 1; i++) {
-        byte_t data = mmu_read_io_src(gb, mmu->hdma.src_address++, IO_SRC_GDMA_HDMA);
+    for (uint8_t i = 0; i < !IS_DOUBLE_SPEED(gb) + 1; i++) {
+        uint8_t data = mmu_read_io_src(gb, mmu->hdma.src_address++, IO_SRC_GDMA_HDMA);
         mmu_write_io_src(gb, mmu->hdma.dest_address++, data, IO_SRC_GDMA_HDMA);
 
         // printf("copy %x from %x to %x\n", data, mmu->hdma.src_address - 1, mmu->hdma.dest_address - 1);

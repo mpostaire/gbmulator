@@ -151,9 +151,9 @@ static inline int receive(int fd, void *buf, size_t n, int flags) {
 static int exchange_info(int sfd, gb_t *gb, gb_mode_t *mode, int *can_compress, int *is_cable_link, int *is_ir_link) {
     // --- SEND PKT_INFO ---
 
-    word_t checksum = gb_get_cartridge_checksum(gb);
+    uint16_t checksum = gb_get_cartridge_checksum(gb);
 
-    byte_t pkt[4] = { 0 };
+    uint8_t pkt[4] = { 0 };
     pkt[0] = PKT_INFO;
     pkt[1] = gb_is_cgb(gb);
     SET_BIT(pkt[1], 1); // cable-link
@@ -177,7 +177,7 @@ static int exchange_info(int sfd, gb_t *gb, gb_mode_t *mode, int *can_compress, 
     *is_ir_link = CHECK_BIT(pkt[1], 2); // ir-link
     *can_compress = GET_BIT(pkt[1], 7); // compress
 
-    word_t received_checksum = 0;
+    uint16_t received_checksum = 0;
     memcpy(&received_checksum, &pkt[2], 2);
     if (received_checksum == checksum) {
         return 1;
@@ -187,13 +187,13 @@ static int exchange_info(int sfd, gb_t *gb, gb_mode_t *mode, int *can_compress, 
     }
 }
 
-static int exchange_rom(int sfd, gb_t *gb, byte_t **other_rom, size_t *rom_len) {
+static int exchange_rom(int sfd, gb_t *gb, uint8_t **other_rom, size_t *rom_len) {
     // --- SEND PKT_ROM ---
 
     // TODO compression
-    byte_t *this_rom = gb_get_rom(gb, rom_len);
+    uint8_t *this_rom = gb_get_rom(gb, rom_len);
 
-    byte_t *pkt = xcalloc(1, *rom_len + 9);
+    uint8_t *pkt = xcalloc(1, *rom_len + 9);
     pkt[0] = PKT_ROM;
     memcpy(&pkt[1], rom_len, sizeof(size_t));
     memcpy(&pkt[9], this_rom, *rom_len); // causes segfault
@@ -204,7 +204,7 @@ static int exchange_rom(int sfd, gb_t *gb, byte_t **other_rom, size_t *rom_len) 
     // --- RECEIVE PKT_ROM ---
 
     // TODO compression
-    byte_t pkt_header[9] = { 0 };
+    uint8_t pkt_header[9] = { 0 };
     receive(sfd, pkt_header, 9, 0);
 
     if (pkt_header[0] != PKT_ROM) {
@@ -220,12 +220,12 @@ static int exchange_rom(int sfd, gb_t *gb, byte_t **other_rom, size_t *rom_len) 
     return 1;
 }
 
-static int exchange_savestate(int sfd, gb_t *gb, int can_compress, byte_t **savestate_data, size_t *savestate_len) {
+static int exchange_savestate(int sfd, gb_t *gb, int can_compress, uint8_t **savestate_data, size_t *savestate_len) {
     // --- SEND PKT_STATE ---
 
-    byte_t *local_savestate_data = gb_get_savestate(gb, savestate_len, can_compress);
+    uint8_t *local_savestate_data = gb_get_savestate(gb, savestate_len, can_compress);
 
-    byte_t *pkt = xcalloc(1, *savestate_len + 9);
+    uint8_t *pkt = xcalloc(1, *savestate_len + 9);
     pkt[0] = PKT_STATE;
     memcpy(&pkt[1], savestate_len, sizeof(size_t));
     memcpy(&pkt[9], local_savestate_data, *savestate_len);
@@ -236,7 +236,7 @@ static int exchange_savestate(int sfd, gb_t *gb, int can_compress, byte_t **save
 
     // --- RECEIVE PKT_STATE ---
 
-    byte_t pkt_header[9] = { 0 };
+    uint8_t pkt_header[9] = { 0 };
     receive(sfd, pkt_header, 9, 0);
 
     if (pkt_header[0] != PKT_STATE) {
@@ -261,9 +261,9 @@ int link_init_transfer(int sfd, gb_t *gb, gb_t **linked_gb) {
     int is_cable_link = 0;
     int is_ir_link = 0;
     size_t rom_len;
-    byte_t *rom = NULL;
+    uint8_t *rom = NULL;
     size_t savestate_len;
-    byte_t *savestate_data = NULL;
+    uint8_t *savestate_data = NULL;
 
     // TODO handle wrong packet type received
     int ret = exchange_info(sfd, gb, &mode, &can_compress, &is_cable_link, &is_ir_link);

@@ -12,10 +12,10 @@ typedef unsigned int (*keyname_parser_t)(const char *keyname);
 typedef struct {
     gb_mode_t mode;
     gb_color_palette_t color_palette;
-    byte_t scale;
+    uint8_t scale;
     float speed;
     float sound;
-    byte_t sound_drc;
+    uint8_t sound_drc;
     char link_host[INET6_ADDRSTRLEN];
     char link_port[6];
 

@@ -22,40 +22,40 @@ typedef enum {
 } gb_mbc_type_t;
 
 typedef struct {
-    byte_t type;
-    byte_t eram_enabled; // current eram bank number (shared by all MBCs)
+    uint8_t type;
+    uint8_t eram_enabled; // current eram bank number (shared by all MBCs)
 
     struct {
-        byte_t mode;
-        byte_t bank_lo;
-        byte_t bank_hi;
+        uint8_t mode;
+        uint8_t bank_lo;
+        uint8_t bank_hi;
     } mbc1;
 
     struct {
-        byte_t rom_bank;
+        uint8_t rom_bank;
     } mbc2;
 
     struct {
-        byte_t rtc_mapped;
-        byte_t rom_bank;
-        byte_t eram_bank;
+        uint8_t rtc_mapped;
+        uint8_t rom_bank;
+        uint8_t eram_bank;
 
         struct {
-            byte_t latched_s;
-            byte_t latched_m;
-            byte_t latched_h;
-            byte_t latched_dl;
-            byte_t latched_dh;
+            uint8_t latched_s;
+            uint8_t latched_m;
+            uint8_t latched_h;
+            uint8_t latched_dl;
+            uint8_t latched_dh;
 
-            byte_t s;
-            byte_t m;
-            byte_t h;
-            byte_t dl;
-            byte_t dh;
+            uint8_t s;
+            uint8_t m;
+            uint8_t h;
+            uint8_t dl;
+            uint8_t dh;
 
-            byte_t enabled;
-            byte_t reg; // rtc register
-            byte_t latch;
+            uint8_t enabled;
+            uint8_t reg; // rtc register
+            uint8_t latch;
             uint32_t rtc_cycles;
         } rtc;
     } mbc3;
@@ -67,48 +67,48 @@ typedef struct {
     } mbc5;
 
     struct {
-        byte_t eram_enabled2; // both mbc.eram_enabled and mbc.mbc7.eram_enabled2 must be 1 to enable eeprom
-        byte_t rom_bank;
+        uint8_t eram_enabled2; // both mbc.eram_enabled and mbc.mbc7.eram_enabled2 must be 1 to enable eeprom
+        uint8_t rom_bank;
 
         struct {
-            word_t latched_x;
-            word_t latched_y;
-            byte_t latch_ready; // 1 if latch was just erased and not yet relatched, else 0
+            uint16_t latched_x;
+            uint16_t latched_y;
+            uint8_t latch_ready; // 1 if latch was just erased and not yet relatched, else 0
         } accelerometer;
 
         struct {
-            byte_t data[256]; // 2048 bits addressed 16 bits at a time (addresses are 7 bits wide)
-            byte_t pins;
-            word_t command;
-            word_t command_arg_remaining_bits; // how many bits of the WRITE or WRAL command argument remains to be shifted in
-            word_t output_bits;
-            byte_t write_enabled;
+            uint8_t data[256]; // 2048 bits addressed 16 bits at a time (addresses are 7 bits wide)
+            uint8_t pins;
+            uint16_t command;
+            uint16_t command_arg_remaining_bits; // how many bits of the WRITE or WRAL command argument remains to be shifted in
+            uint16_t output_bits;
+            uint8_t write_enabled;
         } eeprom;
     } mbc7;
 
     struct {
-        byte_t ir_mode; // 1 if huc1 eram is in IR mode
-        byte_t ir_led;
-        byte_t rom_bank;
-        byte_t eram_bank;
+        uint8_t ir_mode; // 1 if huc1 eram is in IR mode
+        uint8_t ir_led;
+        uint8_t rom_bank;
+        uint8_t eram_bank;
     } huc1;
 
     struct {
-        byte_t rom_bank;
-        byte_t eram_bank;
-        byte_t cam_regs_enabled;
+        uint8_t rom_bank;
+        uint8_t eram_bank;
+        uint8_t cam_regs_enabled;
         uint32_t capture_cycles_remaining;
-        byte_t *sensor_image;
-        byte_t regs[GB_CAMERA_N_REGS];
-        byte_t work_regs[GB_CAMERA_N_REGS]; // registers saved for the image capture process
+        uint8_t *sensor_image;
+        uint8_t regs[GB_CAMERA_N_REGS];
+        uint8_t work_regs[GB_CAMERA_N_REGS]; // registers saved for the image capture process
     } camera;
 } gb_mbc_t;
 
-void mbc_write_registers(gb_t *gb, word_t address, byte_t data);
+void mbc_write_registers(gb_t *gb, uint16_t address, uint8_t data);
 
-byte_t mbc_read_eram(gb_t *gb, word_t address);
+uint8_t mbc_read_eram(gb_t *gb, uint16_t address);
 
-void mbc_write_eram(gb_t *gb, word_t address, byte_t data);
+void mbc_write_eram(gb_t *gb, uint16_t address, uint8_t data);
 
 void rtc_step(gb_t *gb);
 

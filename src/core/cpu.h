@@ -14,50 +14,50 @@ typedef enum {
 typedef struct {
     union {
         struct {
-            byte_t f;
-            byte_t a;
+            uint8_t f;
+            uint8_t a;
         };
-        word_t af;
+        uint16_t af;
     };
 
     union {
         struct {
-            byte_t c;
-            byte_t b;
+            uint8_t c;
+            uint8_t b;
         };
-        word_t bc;
+        uint16_t bc;
     };
 
     union {
         struct {
-            byte_t e;
-            byte_t d;
+            uint8_t e;
+            uint8_t d;
         };
-        word_t de;
+        uint16_t de;
     };
 
     union {
         struct {
-            byte_t l;
-            byte_t h;
+            uint8_t l;
+            uint8_t h;
         };
-        word_t hl;
+        uint16_t hl;
     };
 
-    word_t sp;
-    word_t pc;
+    uint16_t sp;
+    uint16_t pc;
 } gb_registers_t;
 
 typedef struct {
     gb_registers_t registers;
-    byte_t ime; // interrupt master enable
-    byte_t halt;
-    byte_t halt_bug;
-    byte_t exec_state; // determines if the cpu is pushing an interrupt execution, executiong a normal opcode or a cb opcode
-    byte_t opcode; // current opcode
-    s_word_t opcode_state; // current opcode or current microcode inside the opcode (< 0 --> request new instruction fetch)
-    word_t operand; // operand for the current opcode
-    word_t accumulator; // storage used for an easier implementation of some opcodes
+    uint8_t ime; // interrupt master enable
+    uint8_t halt;
+    uint8_t halt_bug;
+    uint8_t exec_state; // determines if the cpu is pushing an interrupt execution, executiong a normal opcode or a cb opcode
+    uint8_t opcode; // current opcode
+    int16_t opcode_state; // current opcode or current microcode inside the opcode (< 0 --> request new instruction fetch)
+    uint16_t operand; // operand for the current opcode
+    uint16_t accumulator; // storage used for an easier implementation of some opcodes
 } gb_cpu_t;
 
 #define CPU_REQUEST_INTERRUPT(gb, irq) SET_BIT((gb)->mmu->io_registers[IO_IF], (irq))

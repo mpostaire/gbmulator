@@ -43,7 +43,7 @@
         (gb)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 3] = 0xFF; \
     } while (0)
 
-static const byte_t dmg_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
+static const uint8_t dmg_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
     { // grayscale colors
         { 0xFF, 0xFF, 0xFF },
         { 0xAA, 0xAA, 0xAA },
@@ -61,7 +61,7 @@ static const byte_t dmg_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
 /**
  * This sets the ppu mode and STAT mode and handles stat irq line interrupts
  */
-static inline void set_mode(gb_t *gb, byte_t mode) {
+static inline void set_mode(gb_t *gb, uint8_t mode) {
     switch (mode) {
     case PPU_MODE_VBLANK:
         // if OAM stat irq is enabled while entering vblank, a stat irq can be requested depending on the stat irq line
@@ -90,19 +90,19 @@ static inline void set_mode(gb_t *gb, byte_t mode) {
 /**
  * @returns dmg color after applying palette.
  */
-static inline gb_dmg_color_t dmg_get_color(gb_mmu_t *mmu, gb_pixel_t *pixel, byte_t is_obj) {
+static inline gb_dmg_color_t dmg_get_color(gb_mmu_t *mmu, gb_pixel_t *pixel, uint8_t is_obj) {
     // return the color using the palette
-    word_t palette_address = is_obj ? IO_OBP0 + pixel->palette : IO_BGP;
+    uint16_t palette_address = is_obj ? IO_OBP0 + pixel->palette : IO_BGP;
     return (mmu->io_registers[palette_address] >> (pixel->color << 1)) & 0x03;
 }
 
 /**
  * @returns cgb colors in r, g, b arguments after applying palette.
  */
-static inline void cgb_get_color(gb_mmu_t *mmu, gb_pixel_t *pixel, byte_t is_obj, byte_t enable_color_correction, byte_t *r, byte_t *g, byte_t *b) {
-    word_t color_data;
+static inline void cgb_get_color(gb_mmu_t *mmu, gb_pixel_t *pixel, uint8_t is_obj, uint8_t enable_color_correction, uint8_t *r, uint8_t *g, uint8_t *b) {
+    uint16_t color_data;
     if (pixel) {
-        byte_t color_address = pixel->palette * 8 + pixel->color * 2;
+        uint8_t color_address = pixel->palette * 8 + pixel->color * 2;
         if (is_obj)
             color_data = (mmu->cram_obj[color_address + 1] << 8) | mmu->cram_obj[color_address];
         else
@@ -131,15 +131,15 @@ static inline void cgb_get_color(gb_mmu_t *mmu, gb_pixel_t *pixel, byte_t is_obj
     }
 }
 
-static inline byte_t cgb_get_bg_win_tile_attributes(gb_t *gb) {
+static inline uint8_t cgb_get_bg_win_tile_attributes(gb_t *gb) {
     gb_mmu_t *mmu = gb->mmu;
     gb_ppu_t *ppu = gb->ppu;
 
-    word_t tile_id_address;
+    uint16_t tile_id_address;
     switch (ppu->pixel_fetcher.mode) {
     case FETCH_BG: {
-        byte_t ly_scy = mmu->io_registers[IO_LY] + mmu->io_registers[IO_SCY]; // addition carried out in 8 bits (== result % 256)
-        byte_t fetcher_x_scx = ppu->pixel_fetcher.x + mmu->io_registers[IO_SCX]; // addition carried out in 8 bits (== result % 256)
+        uint8_t ly_scy = mmu->io_registers[IO_LY] + mmu->io_registers[IO_SCY]; // addition carried out in 8 bits (== result % 256)
+        uint8_t fetcher_x_scx = ppu->pixel_fetcher.x + mmu->io_registers[IO_SCX]; // addition carried out in 8 bits (== result % 256)
         tile_id_address = 0x9800 | (GET_BIT(mmu->io_registers[IO_LCDC], 3) << 10) | ((ly_scy / 8) << 5) | ((fetcher_x_scx / 8) & 0x1F);
         break;
     }
@@ -155,45 +155,45 @@ static inline byte_t cgb_get_bg_win_tile_attributes(gb_t *gb) {
 }
 
 // TODO if the ppu vram access is blocked, the tile id, tile map, etc. reads are 0xFF
-static inline word_t get_bg_tiledata_address(gb_t *gb, byte_t is_high, byte_t flip_y) {
+static inline uint16_t get_bg_tiledata_address(gb_t *gb, uint8_t is_high, uint8_t flip_y) {
     gb_mmu_t *mmu = gb->mmu;
     gb_ppu_t *ppu = gb->ppu;
 
-    byte_t bit_12 = !((mmu->io_registers[IO_LCDC] & 0x10) || (ppu->pixel_fetcher.current_tile_id & 0x80));
-    byte_t ly_scy = mmu->io_registers[IO_LY] + mmu->io_registers[IO_SCY]; // addition carried out in 8 bits (== result % 256)
+    uint8_t bit_12 = !((mmu->io_registers[IO_LCDC] & 0x10) || (ppu->pixel_fetcher.current_tile_id & 0x80));
+    uint8_t ly_scy = mmu->io_registers[IO_LY] + mmu->io_registers[IO_SCY]; // addition carried out in 8 bits (== result % 256)
     if (flip_y)
         ly_scy = ~ly_scy;
     ly_scy &= 0x07; // modulo 8
     return 0x8000 | (bit_12 << 12) | (ppu->pixel_fetcher.current_tile_id << 4) | (ly_scy << 1) | (!!is_high);
 }
 
-static inline word_t get_win_tiledata_address(gb_t *gb, byte_t is_high, byte_t flip_y) {
+static inline uint16_t get_win_tiledata_address(gb_t *gb, uint8_t is_high, uint8_t flip_y) {
     gb_mmu_t *mmu = gb->mmu;
     gb_ppu_t *ppu = gb->ppu;
 
-    byte_t bit_12 = !((mmu->io_registers[IO_LCDC] & 0x10) || (ppu->pixel_fetcher.current_tile_id & 0x80));
-    s_word_t wly = ppu->wly;
+    uint8_t bit_12 = !((mmu->io_registers[IO_LCDC] & 0x10) || (ppu->pixel_fetcher.current_tile_id & 0x80));
+    int16_t wly = ppu->wly;
     if (flip_y)
         wly = ~wly;
     wly &= 0x07; // modulo 8
     return 0x8000 | (bit_12 << 12) | (ppu->pixel_fetcher.current_tile_id << 4) | (wly << 1) | (!!is_high);
 }
 
-static inline word_t get_obj_tiledata_address(gb_t *gb, byte_t is_high) {
+static inline uint16_t get_obj_tiledata_address(gb_t *gb, uint8_t is_high) {
     gb_mmu_t *mmu = gb->mmu;
     gb_ppu_t *ppu = gb->ppu;
 
     gb_obj_t obj = ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index];
 
-    byte_t flip_y = CHECK_BIT(obj.attributes, 6);
-    byte_t actual_tile_id = obj.tile_id;
+    uint8_t flip_y = CHECK_BIT(obj.attributes, 6);
+    uint8_t actual_tile_id = obj.tile_id;
 
     if (IS_OBJ_TALL(gb)) {
-        byte_t is_top_tile = abs(mmu->io_registers[IO_LY] - obj.y) > 8;
+        uint8_t is_top_tile = abs(mmu->io_registers[IO_LY] - obj.y) > 8;
         CHANGE_BIT(actual_tile_id, 0, flip_y ? is_top_tile : !is_top_tile);
     }
 
-    byte_t bits_3_1 = (mmu->io_registers[IO_LY] - obj.y) % 8;
+    uint8_t bits_3_1 = (mmu->io_registers[IO_LY] - obj.y) % 8;
     if (flip_y)
         bits_3_1 = ~bits_3_1;
     bits_3_1 &= 0x07; // modulo 8
@@ -205,7 +205,7 @@ static inline gb_pixel_t *pixel_fifo_pop(gb_pixel_fifo_t *fifo) {
     if (fifo->size == 0)
         return NULL;
     fifo->size--;
-    byte_t old_head = fifo->head;
+    uint8_t old_head = fifo->head;
     fifo->head = (fifo->head + 1) % PIXEL_FIFO_SIZE;
     return &fifo->pixels[old_head];
 }
@@ -236,7 +236,7 @@ static inline void reset_pixel_fetcher(gb_ppu_t *ppu) {
 /**
  * taken from https://stackoverflow.com/a/2602885
  */
-static inline byte_t reverse_bits_order(byte_t b) {
+static inline uint8_t reverse_bits_order(uint8_t b) {
     b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
     b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
     b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
@@ -249,14 +249,14 @@ static inline void fetch_tile_id(gb_t *gb) {
 
     switch (ppu->pixel_fetcher.mode) {
         case FETCH_BG: {
-            byte_t ly_scy = mmu->io_registers[IO_LY] + mmu->io_registers[IO_SCY]; // addition carried out in 8 bits (== result % 256)
-            byte_t fetcher_x_scx = ppu->pixel_fetcher.x + mmu->io_registers[IO_SCX]; // addition carried out in 8 bits (== result % 256)
-            word_t tile_id_address = 0x9800 | (GET_BIT(mmu->io_registers[IO_LCDC], 3) << 10) | ((ly_scy / 8) << 5) | ((fetcher_x_scx / 8) & 0x1F);
+            uint8_t ly_scy = mmu->io_registers[IO_LY] + mmu->io_registers[IO_SCY]; // addition carried out in 8 bits (== result % 256)
+            uint8_t fetcher_x_scx = ppu->pixel_fetcher.x + mmu->io_registers[IO_SCX]; // addition carried out in 8 bits (== result % 256)
+            uint16_t tile_id_address = 0x9800 | (GET_BIT(mmu->io_registers[IO_LCDC], 3) << 10) | ((ly_scy / 8) << 5) | ((fetcher_x_scx / 8) & 0x1F);
             ppu->pixel_fetcher.current_tile_id = mmu->vram[tile_id_address - MMU_VRAM];
             break;
         }
         case FETCH_WIN: {
-            word_t tile_id_address = 0x9800 | (GET_BIT(mmu->io_registers[IO_LCDC], 6) << 10) | (((gb->ppu->wly / 8) & 0x1F) << 5) | ((ppu->pixel_fetcher.x / 8) & 0x1F);
+            uint16_t tile_id_address = 0x9800 | (GET_BIT(mmu->io_registers[IO_LCDC], 6) << 10) | (((gb->ppu->wly / 8) & 0x1F) << 5) | ((ppu->pixel_fetcher.x / 8) & 0x1F);
             ppu->pixel_fetcher.current_tile_id = mmu->vram[tile_id_address - MMU_VRAM];
             break;
         }
@@ -268,10 +268,10 @@ static inline void fetch_tile_id(gb_t *gb) {
     }
 }
 
-static inline byte_t get_tileslice(gb_t *gb, word_t tiledata_address, byte_t attributes) {
+static inline uint8_t get_tileslice(gb_t *gb, uint16_t tiledata_address, uint8_t attributes) {
     gb_mmu_t *mmu = gb->mmu;
 
-    byte_t flip_x = CHECK_BIT(attributes, 5);
+    uint8_t flip_x = CHECK_BIT(attributes, 5);
     if (gb->mode == GB_MODE_CGB) {
         if (CHECK_BIT(attributes, 3)) // tile is in VRAM bank 1
             return flip_x ? reverse_bits_order(mmu->vram[tiledata_address - MMU_VRAM + VRAM_BANK_SIZE]) : mmu->vram[tiledata_address - MMU_VRAM + VRAM_BANK_SIZE];
@@ -285,39 +285,39 @@ static inline byte_t get_tileslice(gb_t *gb, word_t tiledata_address, byte_t att
 static inline void fetch_tileslice_low(gb_t *gb) {
     gb_ppu_t *ppu = gb->ppu;
 
-    byte_t tileslice = 0;
+    uint8_t tileslice = 0;
     switch (ppu->pixel_fetcher.mode) {
         case FETCH_BG: {
-            byte_t attributes = gb->mode == GB_MODE_CGB ? cgb_get_bg_win_tile_attributes(gb) : 0;
-            word_t tiledata_address = get_bg_tiledata_address(gb, 0, CHECK_BIT(attributes, 6));
+            uint8_t attributes = gb->mode == GB_MODE_CGB ? cgb_get_bg_win_tile_attributes(gb) : 0;
+            uint16_t tiledata_address = get_bg_tiledata_address(gb, 0, CHECK_BIT(attributes, 6));
             tileslice = get_tileslice(gb, tiledata_address, attributes);
             break;
         }
         case FETCH_WIN: {
-            byte_t attributes = gb->mode == GB_MODE_CGB ? cgb_get_bg_win_tile_attributes(gb) : 0;
-            word_t tiledata_address = get_win_tiledata_address(gb, 0, CHECK_BIT(attributes, 6));
+            uint8_t attributes = gb->mode == GB_MODE_CGB ? cgb_get_bg_win_tile_attributes(gb) : 0;
+            uint16_t tiledata_address = get_win_tiledata_address(gb, 0, CHECK_BIT(attributes, 6));
             tileslice = get_tileslice(gb, tiledata_address, attributes);
             break;
         }
         case FETCH_OBJ: {
-            byte_t attributes = ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].attributes;
-            word_t tiledata_address = get_obj_tiledata_address(gb, 0);
+            uint8_t attributes = ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].attributes;
+            uint16_t tiledata_address = get_obj_tiledata_address(gb, 0);
             tileslice = get_tileslice(gb, tiledata_address, attributes);
             break;
         }
     }
 
-    for (byte_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < 8; i++)
         ppu->pixel_fetcher.pixels[i].color = GET_BIT(tileslice, 7 - i);
 }
 
 static inline void fetch_tileslice_high(gb_t *gb) {
     gb_ppu_t *ppu = gb->ppu;
 
-    byte_t tileslice = 0;
-    word_t palette = 0;
-    byte_t attributes = 0;
-    byte_t oam_pos = 0;
+    uint8_t tileslice = 0;
+    uint16_t palette = 0;
+    uint8_t attributes = 0;
+    uint8_t oam_pos = 0;
     // this recalculate the tiledata address because the ppu doesn't cache this info between steps,
     // leading to potential bitplane desync
     switch (ppu->pixel_fetcher.mode) {
@@ -328,7 +328,7 @@ static inline void fetch_tileslice_high(gb_t *gb) {
             } else {
                 palette = 0;
             }
-            word_t tiledata_address = get_bg_tiledata_address(gb, 1, CHECK_BIT(attributes, 6));
+            uint16_t tiledata_address = get_bg_tiledata_address(gb, 1, CHECK_BIT(attributes, 6));
             tileslice = get_tileslice(gb, tiledata_address, attributes);
             break;
         }
@@ -339,23 +339,23 @@ static inline void fetch_tileslice_high(gb_t *gb) {
             } else {
                 palette = 0;
             }
-            word_t tiledata_address = get_win_tiledata_address(gb, 1, CHECK_BIT(attributes, 6));
+            uint16_t tiledata_address = get_win_tiledata_address(gb, 1, CHECK_BIT(attributes, 6));
             tileslice = get_tileslice(gb, tiledata_address, attributes);
             break;
         }
         case FETCH_OBJ: {
             attributes = ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].attributes;
-            word_t tiledata_address = get_obj_tiledata_address(gb, 1);
+            uint16_t tiledata_address = get_obj_tiledata_address(gb, 1);
             tileslice = get_tileslice(gb, tiledata_address, attributes);
             oam_pos = ppu->oam_scan.objs_oam_pos[ppu->pixel_fetcher.curr_oam_index];
 
-            byte_t is_cgb_mode = gb->mode == GB_MODE_CGB && !IS_CGB_COMPAT_MODE(gb);
+            uint8_t is_cgb_mode = gb->mode == GB_MODE_CGB && !IS_CGB_COMPAT_MODE(gb);
             palette = is_cgb_mode ? attributes & 0x07 : GET_BIT(attributes, 4);
             break;
         }
     }
 
-    for (byte_t i = 0; i < 8; i++) {
+    for (uint8_t i = 0; i < 8; i++) {
         ppu->pixel_fetcher.pixels[i].color |= GET_BIT(tileslice, 7 - i) << 1;        
         ppu->pixel_fetcher.pixels[i].palette = palette;
         ppu->pixel_fetcher.pixels[i].attributes = attributes;
@@ -363,7 +363,7 @@ static inline void fetch_tileslice_high(gb_t *gb) {
     }
 }
 
-static inline byte_t push(gb_t *gb) {
+static inline uint8_t push(gb_t *gb) {
     gb_ppu_t *ppu = gb->ppu;
 
     switch (ppu->pixel_fetcher.mode) {
@@ -372,20 +372,20 @@ static inline byte_t push(gb_t *gb) {
             if (ppu->bg_win_fifo.size > 0)
                 return 0;
 
-            for (byte_t i = 0; i < 8; i++)
+            for (uint8_t i = 0; i < 8; i++)
                 pixel_fifo_push(&ppu->bg_win_fifo, &ppu->pixel_fetcher.pixels[i]);
             ppu->pixel_fetcher.x += 8;
             break;
         case FETCH_OBJ: {
             // if the obj starts before the beginning of the scanline, only push the visible pixels by using an offset
-            byte_t old_size = ppu->obj_fifo.size;
-            byte_t offset = 0;
+            uint8_t old_size = ppu->obj_fifo.size;
+            uint8_t offset = 0;
             if (ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].x < 8)
                 offset = 8 - ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].x;
 
-            byte_t is_cgb_mode = gb->mode == GB_MODE_CGB && !CHECK_BIT(gb->mmu->io_registers[IO_OPRI], 0);
-            for (byte_t fetcher_index = offset; fetcher_index < PIXEL_FIFO_SIZE; fetcher_index++) {
-                byte_t fifo_index = ((fetcher_index - offset) + ppu->obj_fifo.head) % PIXEL_FIFO_SIZE;
+            uint8_t is_cgb_mode = gb->mode == GB_MODE_CGB && !CHECK_BIT(gb->mmu->io_registers[IO_OPRI], 0);
+            for (uint8_t fetcher_index = offset; fetcher_index < PIXEL_FIFO_SIZE; fetcher_index++) {
+                uint8_t fifo_index = ((fetcher_index - offset) + ppu->obj_fifo.head) % PIXEL_FIFO_SIZE;
 
                 if (fetcher_index < old_size) {
                     if (ppu->pixel_fetcher.pixels[fetcher_index].color == DMG_WHITE)
@@ -408,7 +408,7 @@ static inline byte_t push(gb_t *gb) {
 }
 
 static inline gb_pixel_t *select_pixel(gb_t *gb, gb_pixel_t *bg_win_pixel, gb_pixel_t *obj_pixel) {
-    byte_t is_cgb_mode = gb->mode == GB_MODE_CGB && !IS_CGB_COMPAT_MODE(gb);
+    uint8_t is_cgb_mode = gb->mode == GB_MODE_CGB && !IS_CGB_COMPAT_MODE(gb);
     if (is_cgb_mode) {
         if (!obj_pixel || !IS_OBJ_ENABLED(gb) || obj_pixel->color == DMG_WHITE)
             return bg_win_pixel;
@@ -428,7 +428,7 @@ static inline gb_pixel_t *select_pixel(gb_t *gb, gb_pixel_t *bg_win_pixel, gb_pi
         if (!IS_OBJ_ENABLED(gb))
             return bg_win_pixel;
 
-        byte_t bg_over_obj = CHECK_BIT(obj_pixel->attributes, 7) && bg_win_pixel->color != DMG_WHITE;
+        uint8_t bg_over_obj = CHECK_BIT(obj_pixel->attributes, 7) && bg_win_pixel->color != DMG_WHITE;
         if (obj_pixel->color != DMG_WHITE && !bg_over_obj) // ignore transparent obj pixel and don't draw over another sprite (thus, respecting x priority)
             return obj_pixel;
         return bg_win_pixel;
@@ -459,7 +459,7 @@ static inline gb_pixel_t *handle_window(gb_t *gb) {
     // https://github.com/shonumi/gbe-plus/commit/15df53c83677062f98915293fc03620af65bd7c4
     // https://www.reddit.com/r/EmuDev/comments/6q2tom/gb_changing_window_registers_midframe/
     // https://github.com/LIJI32/SameBoy/commit/cbbaf2ee843870d96e72380e2dedbdbda471ca76
-    byte_t wx_scx_compare = ((mmu->io_registers[IO_WX] & 7) == 7 - (mmu->io_registers[IO_SCX] & 7));
+    uint8_t wx_scx_compare = ((mmu->io_registers[IO_WX] & 7) == 7 - (mmu->io_registers[IO_SCX] & 7));
     if (ppu->saved_wly != -1 && gb->mode == GB_MODE_DMG && !IS_WIN_ENABLED(gb) && ppu->is_wx_triggered && wx_scx_compare)
         return &glitched_pixel;
 
@@ -498,7 +498,7 @@ static inline gb_pixel_t *handle_window(gb_t *gb) {
 /**
  * @returns 1 if a an OBJ fetch is in progress, 0 otherwise 
  */
-static inline byte_t handle_obj(gb_t *gb) {
+static inline uint8_t handle_obj(gb_t *gb) {
     gb_ppu_t *ppu = gb->ppu;
 
     if (ppu->bg_win_fifo.size > 0 && ppu->pixel_fetcher.mode != FETCH_OBJ && ppu->oam_scan.index < ppu->oam_scan.size && ppu->oam_scan.objs[ppu->oam_scan.index].x <= ppu->lcd_x + 8) {
@@ -588,13 +588,13 @@ static inline void drawing_step(gb_t *gb) {
 
     gb_pixel_t *obj_pixel = pixel_fifo_pop(&ppu->obj_fifo);
     gb_pixel_t *selected_pixel = select_pixel(gb, bg_win_pixel, obj_pixel);
-    byte_t selected_is_obj = selected_pixel == obj_pixel;
+    uint8_t selected_is_obj = selected_pixel == obj_pixel;
 
     if (gb->mode == GB_MODE_CGB) {
         if (IS_CGB_COMPAT_MODE(gb))
             selected_pixel->color = dmg_get_color(mmu, selected_pixel, selected_is_obj);
 
-        byte_t r, g, b;
+        uint8_t r, g, b;
         cgb_get_color(mmu, selected_pixel, selected_is_obj, !gb->disable_cgb_color_correction, &r, &g, &b);
 
         SET_PIXEL_CGB(gb, ppu->lcd_x, mmu->io_registers[IO_LY], r, g, b);
@@ -634,10 +634,10 @@ static inline void oam_scan_step(gb_t *gb) {
     }
 
     gb_obj_t *obj = (gb_obj_t *) &mmu->oam[ppu->oam_scan.index * 4];
-    byte_t obj_height = IS_OBJ_TALL(gb) ? 16 : 8;
+    uint8_t obj_height = IS_OBJ_TALL(gb) ? 16 : 8;
     // NOTE: obj->x != 0 condition should not be checked even if ultimate gameboy talk says it should
     if (ppu->oam_scan.size < 10 && (obj->y <= mmu->io_registers[IO_LY] + 16) && (obj->y + obj_height > mmu->io_registers[IO_LY] + 16)) {
-        s_byte_t i;
+        int8_t i;
         // if equal x: insert after so that the drawing doesn't overwrite the existing sprite (equal x -> first scanned obj priority)
         for (i = ppu->oam_scan.size - 1; i >= 0 && ppu->oam_scan.objs[i].x > obj->x; i--) {
             ppu->oam_scan.objs[i + 1] = ppu->oam_scan.objs[i];
@@ -756,7 +756,7 @@ void ppu_disable_lcd(gb_t *gb) {
     for (int x = 0; x < GB_SCREEN_WIDTH; x++) {
         for (int y = 0; y < GB_SCREEN_HEIGHT; y++) {
             if (gb->mode == GB_MODE_CGB) {
-                byte_t r, g, b;
+                uint8_t r, g, b;
                 cgb_get_color(mmu, NULL, 0, !gb->disable_cgb_color_correction, &r, &g, &b);
                 SET_PIXEL_CGB(gb, x, y, r, g, b);
             } else {
@@ -775,7 +775,7 @@ void ppu_update_stat_irq_line(gb_t *gb) {
 
     gb_ppu_t *ppu = gb->ppu;
 
-    byte_t old_stat_irq_line = ppu->stat_irq_line;
+    uint8_t old_stat_irq_line = ppu->stat_irq_line;
 
     ppu->stat_irq_line = IS_HBLANK_IRQ_STAT_ENABLED(gb) && ppu->mode == PPU_MODE_HBLANK;
     ppu->stat_irq_line |= IS_VBLANK_IRQ_STAT_ENABLED(gb) && ppu->mode == PPU_MODE_VBLANK;
@@ -801,7 +801,7 @@ void ppu_step(gb_t *gb) {
         ppu->pending_stat_mode = -1;
     }
 
-    for (byte_t cycles = 0; cycles < 4; cycles++) { // 4 cycles per step
+    for (uint8_t cycles = 0; cycles < 4; cycles++) { // 4 cycles per step
         // check for LYC=LY at the 4th cycle
         if (ppu->cycles == 4) {
             UPDATE_STAT_LY_LYC_BIT(gb);

@@ -12,7 +12,7 @@ void joypad_quit(gb_t *gb) {
     free(gb->joypad);
 }
 
-byte_t joypad_get_input(gb_t *gb) {
+uint8_t joypad_get_input(gb_t *gb) {
     gb_joypad_t *joypad = gb->joypad;
     gb_mmu_t *mmu = gb->mmu;
 

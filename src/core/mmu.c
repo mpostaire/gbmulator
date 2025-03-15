@@ -11,8 +11,8 @@
 #define GBC_CURRENT_VRAM_BANK(mmu) ((mmu)->io_registers[IO_VBK] & 0x01)
 #define GBC_CURRENT_WRAM_BANK(mmu) (((mmu)->io_registers[IO_SVBK] & 0x07) == 0 ? 1 : ((mmu)->io_registers[IO_SVBK] & 0x07))
 
-int parse_header_mbc_byte(byte_t mbc_byte, byte_t *mbc_type, byte_t *has_eram, byte_t *has_battery, byte_t *has_rtc, byte_t *has_rumble) {
-    byte_t tmp_mbc_type = 0, tmp_has_eram = 0, tmp_has_battery = 0, tmp_has_rtc = 0, tmp_has_rumble = 0;
+int parse_header_mbc_byte(uint8_t mbc_byte, uint8_t *mbc_type, uint8_t *has_eram, uint8_t *has_battery, uint8_t *has_rtc, uint8_t *has_rumble) {
+    uint8_t tmp_mbc_type = 0, tmp_has_eram = 0, tmp_has_battery = 0, tmp_has_rtc = 0, tmp_has_rumble = 0;
 
     switch (mbc_byte) {
     case 0x00:
@@ -123,8 +123,8 @@ int parse_header_mbc_byte(byte_t mbc_byte, byte_t *mbc_type, byte_t *has_eram, b
     return 1;
 }
 
-int validate_header_checksum(const byte_t *rom) {
-    byte_t checksum = 0;
+int validate_header_checksum(const uint8_t *rom) {
+    uint8_t checksum = 0;
     for (int i = 0x0134; i <= 0x014C; i++)
         checksum = checksum - rom[i] - 1;
     return checksum == rom[0x014D];
@@ -139,7 +139,7 @@ static int parse_cartridge(gb_t *gb) {
         return 0;
     }
 
-    byte_t has_eram = 0;
+    uint8_t has_eram = 0;
     if (!parse_header_mbc_byte(mmu->rom[0x0147], &mmu->mbc.type, &has_eram, &mmu->has_battery, &mmu->has_rtc, &mmu->has_rumble)) {
         eprintf("MBC byte %02X not supported\n", mmu->rom[0x0147]);
         return 0;
@@ -148,14 +148,14 @@ static int parse_cartridge(gb_t *gb) {
     // detect MBC1M
     if (mmu->mbc.type == MBC1 && mmu->rom_size == 0x100000) {
         const unsigned int addrs[] = { 0x00104, 0x40104, 0x80104, 0xC0104 };
-        byte_t logo[] = {
+        uint8_t logo[] = {
             0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0C, 0x00, 0x0D,
             0x00, 0x08, 0x11, 0x1F, 0x88, 0x89, 0x00, 0x0E, 0xDC, 0xCC, 0x6E, 0xE6, 0xDD, 0xDD, 0xD9, 0x99,
             0xBB, 0xBB, 0x67, 0x63, 0x6E, 0x0E, 0xEC, 0xCC, 0xDD, 0xDC, 0x99, 0x9F, 0xBB, 0xB9, 0x33, 0x3E
         };
 
-        byte_t matches = 0;
-        for (byte_t i = 0; i < 4; i++) {
+        uint8_t matches = 0;
+        for (uint8_t i = 0; i < 4; i++) {
             matches += memcmp(&mmu->rom[addrs[i]], logo, sizeof(logo)) ? 0 : 1;
             if (matches > 1) {
                 mmu->mbc.type = MBC1M;
@@ -184,7 +184,7 @@ static int parse_cartridge(gb_t *gb) {
     // get rom title
     memcpy(gb->rom_title, (char *) &mmu->rom[0x0134], 16);
     gb->rom_title[16] = '\0';
-    byte_t cgb_flag = mmu->rom[0x0143] & 0xC0;
+    uint8_t cgb_flag = mmu->rom[0x0143] & 0xC0;
     if (cgb_flag)
         gb->rom_title[15] = '\0';
 
@@ -195,7 +195,7 @@ static int parse_cartridge(gb_t *gb) {
     return 1;
 }
 
-int mmu_init(gb_t *gb, const byte_t *rom, size_t rom_size) {
+int mmu_init(gb_t *gb, const uint8_t *rom, size_t rom_size) {
     gb_mmu_t *mmu = xcalloc(1, sizeof(*mmu));
     mmu->rom = xcalloc(1, rom_size);
     mmu->rom_size = rom_size;
@@ -238,7 +238,7 @@ void mmu_quit(gb_t *gb) {
     free(gb->mmu);
 }
 
-static inline byte_t is_oam_locked_for_cpu_read(gb_t *gb) {
+static inline uint8_t is_oam_locked_for_cpu_read(gb_t *gb) {
     // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
     // but it has some quirks for the other memory regions (check links below):
     // https://www.reddit.com/r/EmuDev/comments/5hahss/comment/daz9cbi/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
@@ -250,7 +250,7 @@ static inline byte_t is_oam_locked_for_cpu_read(gb_t *gb) {
     return IS_LCD_ENABLED(gb) && (PPU_STAT_IS_MODE(gb, PPU_MODE_OAM) || PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING) || gb->ppu->pending_stat_mode == PPU_MODE_OAM);
 }
 
-static inline byte_t is_oam_locked_for_cpu_write(gb_t *gb) {
+static inline uint8_t is_oam_locked_for_cpu_write(gb_t *gb) {
     // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
     // but it has some quirks for the other memory regions (check links below):
     // https://www.reddit.com/r/EmuDev/comments/5hahss/comment/daz9cbi/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
@@ -261,25 +261,25 @@ static inline byte_t is_oam_locked_for_cpu_write(gb_t *gb) {
     if (!IS_LCD_ENABLED(gb))
         return 0;
 
-    byte_t lcd_booting_up_into_drawing = PPU_STAT_IS_MODE(gb, PPU_MODE_HBLANK) && gb->ppu->pending_stat_mode == PPU_MODE_DRAWING;
-    byte_t starting_drawing = gb->ppu->mode == PPU_MODE_DRAWING && PPU_STAT_IS_MODE(gb, PPU_MODE_OAM);
+    uint8_t lcd_booting_up_into_drawing = PPU_STAT_IS_MODE(gb, PPU_MODE_HBLANK) && gb->ppu->pending_stat_mode == PPU_MODE_DRAWING;
+    uint8_t starting_drawing = gb->ppu->mode == PPU_MODE_DRAWING && PPU_STAT_IS_MODE(gb, PPU_MODE_OAM);
     if (starting_drawing || lcd_booting_up_into_drawing)
         return 0;
 
     return PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING) || PPU_STAT_IS_MODE(gb, PPU_MODE_OAM);
 }
 
-static inline byte_t is_vram_locked_for_cpu_read(gb_t *gb) {
+static inline uint8_t is_vram_locked_for_cpu_read(gb_t *gb) {
     // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
     return IS_LCD_ENABLED(gb) && (PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING) || (PPU_STAT_IS_MODE(gb, PPU_MODE_OAM) && gb->ppu->pending_stat_mode == PPU_MODE_DRAWING));
 }
 
-static inline byte_t is_vram_locked_for_cpu_write(gb_t *gb) {
+static inline uint8_t is_vram_locked_for_cpu_write(gb_t *gb) {
     // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
     return IS_LCD_ENABLED(gb) && PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING);
 }
 
-static inline byte_t read_io_register(gb_t *gb, byte_t io_reg_addr) {
+static inline uint8_t read_io_register(gb_t *gb, uint8_t io_reg_addr) {
     gb_mmu_t *mmu = gb->mmu;
 
     switch (io_reg_addr) {
@@ -344,8 +344,8 @@ static inline byte_t read_io_register(gb_t *gb, byte_t io_reg_addr) {
             if (!gb->ir_gb)
                 return mmu->io_registers[io_reg_addr] | 0x3E;
 
-            byte_t other_gb_led = gb->ir_gb->mmu->io_registers[IO_RP] & 0x01;
-            byte_t read_bit = (mmu->io_registers[io_reg_addr] & 0xC0) == 0xC0 ? !other_gb_led : 0x01;
+            uint8_t other_gb_led = gb->ir_gb->mmu->io_registers[IO_RP] & 0x01;
+            uint8_t read_bit = (mmu->io_registers[io_reg_addr] & 0xC0) == 0xC0 ? !other_gb_led : 0x01;
             CHANGE_BIT(mmu->io_registers[io_reg_addr], 1, read_bit);
             return mmu->io_registers[io_reg_addr] | 0x3C;
         }
@@ -356,7 +356,7 @@ static inline byte_t read_io_register(gb_t *gb, byte_t io_reg_addr) {
         if (gb->mode == GB_MODE_DMG || gb->ppu->mode == PPU_MODE_DRAWING)
             return 0xFF;
 
-        byte_t cram_address = mmu->io_registers[IO_BGPI] & 0x3F;
+        uint8_t cram_address = mmu->io_registers[IO_BGPI] & 0x3F;
         return mmu->cram_bg[cram_address];
     }
     case IO_OBPI: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] | 0x40 : 0xFF;
@@ -364,7 +364,7 @@ static inline byte_t read_io_register(gb_t *gb, byte_t io_reg_addr) {
         if (!gb->cgb_mode_enabled || gb->ppu->mode == PPU_MODE_DRAWING)
             return 0xFF;
 
-        byte_t cram_address = mmu->io_registers[IO_OBPI] & 0x3F;
+        uint8_t cram_address = mmu->io_registers[IO_OBPI] & 0x3F;
         return mmu->cram_obj[cram_address];
     }
     case 0x6C ... 0x6F: return 0xFF;
@@ -384,7 +384,7 @@ static inline byte_t read_io_register(gb_t *gb, byte_t io_reg_addr) {
     }
 }
 
-static inline void write_io_register(gb_t *gb, byte_t io_reg_addr, byte_t data) {
+static inline void write_io_register(gb_t *gb, uint8_t io_reg_addr, uint8_t data) {
     gb_mmu_t *mmu = gb->mmu;
 
     switch (io_reg_addr) {
@@ -559,14 +559,14 @@ static inline void write_io_register(gb_t *gb, byte_t io_reg_addr, byte_t data) 
     case IO_NR52:
         CHANGE_BIT(mmu->io_registers[IO_NR52], 7, data >> 7);
         if (!IS_APU_ENABLED(gb))
-            memset(&mmu->io_registers[IO_NR10], 0x00, 32 * sizeof(byte_t)); // clear all registers
+            memset(&mmu->io_registers[IO_NR10], 0x00, 32 * sizeof(uint8_t)); // clear all registers
         break;
     case IO_WAVE_RAM ... IO_LCDC - 1:
         if (!CHECK_BIT(mmu->io_registers[IO_NR30], 7))
             mmu->io_registers[io_reg_addr] = data;
         break;
     case IO_LCDC: {
-        byte_t old_lcd_enabled = IS_LCD_ENABLED(gb);
+        uint8_t old_lcd_enabled = IS_LCD_ENABLED(gb);
         mmu->io_registers[io_reg_addr] = data;
 
         if (!old_lcd_enabled && IS_LCD_ENABLED(gb)) // lcd turned on
@@ -579,7 +579,7 @@ static inline void write_io_register(gb_t *gb, byte_t io_reg_addr, byte_t data) 
         // check for STAT interrupt only if in VBLANK, HBLANK or LY=LYC STAT bit is set
         // (not sure if the LY=LYC condition is accurate: this passes wilbertpol's stat_write_if-GS test
         // but maybe only due to other inaccuracies in the emulation)
-        byte_t update_irq_line =
+        uint8_t update_irq_line =
                 PPU_STAT_IS_MODE(gb, PPU_MODE_VBLANK) || PPU_STAT_IS_MODE(gb, PPU_MODE_HBLANK) ||
                 CHECK_BIT(gb->mmu->io_registers[IO_STAT], 2);
 
@@ -691,14 +691,14 @@ static inline void write_io_register(gb_t *gb, byte_t io_reg_addr, byte_t data) 
             break;
 
         if (gb->ppu->mode != PPU_MODE_DRAWING) {
-            byte_t cram_address = mmu->io_registers[IO_BGPI] & 0x3F;
+            uint8_t cram_address = mmu->io_registers[IO_BGPI] & 0x3F;
             mmu->cram_bg[cram_address] = data;
             // printf("write %d in cram_bg %d\n", data, cram_address);
         }
 
         // increment BGPI address if auto increment (bit.7) of BGPI is set
         if (CHECK_BIT(mmu->io_registers[IO_BGPI], 7)) {
-            byte_t new_bgpi_address = (mmu->io_registers[IO_BGPI] & 0x3F) + 1;
+            uint8_t new_bgpi_address = (mmu->io_registers[IO_BGPI] & 0x3F) + 1;
             if (new_bgpi_address > 0x3F)
                 new_bgpi_address = 0;
             mmu->io_registers[IO_BGPI] = new_bgpi_address;
@@ -714,14 +714,14 @@ static inline void write_io_register(gb_t *gb, byte_t io_reg_addr, byte_t data) 
             break;
 
         if (gb->ppu->mode != PPU_MODE_DRAWING) {
-            byte_t cram_address = mmu->io_registers[IO_OBPI] & 0x3F;
+            uint8_t cram_address = mmu->io_registers[IO_OBPI] & 0x3F;
             mmu->cram_obj[cram_address] = data;
             // printf("write %d in cram_obj %d\n", data, cram_address);
         }
 
         // increment OBPI address if auto increment (bit.7) of OBPI is set
         if (CHECK_BIT(mmu->io_registers[IO_OBPI], 7)) {
-            byte_t new_obpi_address = (mmu->io_registers[IO_OBPI] & 0x3F) + 1;
+            uint8_t new_obpi_address = (mmu->io_registers[IO_OBPI] & 0x3F) + 1;
             if (new_obpi_address > 0x3F)
                 new_obpi_address = 0;
             mmu->io_registers[IO_OBPI] = new_obpi_address;
@@ -755,7 +755,7 @@ static inline void write_io_register(gb_t *gb, byte_t io_reg_addr, byte_t data) 
     }
 }
 
-byte_t mmu_read_io_src(gb_t *gb, word_t address, gb_io_source_t io_src) {
+uint8_t mmu_read_io_src(gb_t *gb, uint16_t address, gb_io_source_t io_src) {
     gb_mmu_t *mmu = gb->mmu;
 
     switch (address & 0xF000) {
@@ -822,7 +822,7 @@ byte_t mmu_read_io_src(gb_t *gb, word_t address, gb_io_source_t io_src) {
     }
 }
 
-void mmu_write_io_src(gb_t *gb, word_t address, byte_t data, gb_io_source_t io_src) {
+void mmu_write_io_src(gb_t *gb, uint16_t address, uint8_t data, gb_io_source_t io_src) {
     gb_mmu_t *mmu = gb->mmu;
 
     switch (address & 0xF000) {

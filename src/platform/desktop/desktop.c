@@ -145,7 +145,7 @@ static gboolean printer_save_dialog_resume_loop = FALSE;
 static gboolean is_paused = TRUE, link_is_server = TRUE;
 static int steps_per_frame;
 static gb_t *gb = NULL;
-static byte_t joypad_state = 0xFF;
+static uint8_t joypad_state = 0xFF;
 static double accel_x, accel_y;
 static gb_printer_t *printer = NULL;
 
@@ -370,11 +370,11 @@ static gboolean on_printer_resize(GtkGLArea *area, GdkGLContext *context) {
     return TRUE;
 }
 
-static void ppu_vblank_cb(const byte_t *pixels) {
+static void ppu_vblank_cb(const uint8_t *pixels) {
     glrenderer_update_texture(emu_renderer, 0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, pixels);
 }
 
-static void printer_new_line_cb(const byte_t *pixels, size_t height) {
+static void printer_new_line_cb(const uint8_t *pixels, size_t height) {
     if (!printer_renderer)
         return; // segfault if printer gl area was not realized (printer window not shown at least once before printing)
 
@@ -391,12 +391,12 @@ static void printer_new_line_cb(const byte_t *pixels, size_t height) {
     gtk_gl_area_queue_render(GTK_GL_AREA(printer_gl_area));
 }
 
-static void printer_start_cb(const byte_t *pixels, size_t height) {
+static void printer_start_cb(const uint8_t *pixels, size_t height) {
     gtk_widget_set_sensitive(GTK_WIDGET(printer_save_btn), FALSE);
     gtk_widget_set_sensitive(GTK_WIDGET(printer_clear_btn), FALSE);
 }
 
-static void printer_finish_cb(const byte_t *pixels, size_t height) {
+static void printer_finish_cb(const uint8_t *pixels, size_t height) {
     gtk_widget_set_sensitive(GTK_WIDGET(printer_save_btn), TRUE);
     gtk_widget_set_sensitive(GTK_WIDGET(printer_clear_btn), TRUE);
 }
@@ -530,7 +530,7 @@ static int load_cartridge(char *path) {
     }
 
     size_t rom_size;
-    byte_t *rom;
+    uint8_t *rom;
     if (path) {
         size_t len = strlen(path);
         rom_path = xrealloc(rom_path, len + 2);
@@ -543,7 +543,7 @@ static int load_cartridge(char *path) {
             return 0;
         }
     } else {
-        byte_t *data = gb_get_rom(gb, &rom_size);
+        uint8_t *data = gb_get_rom(gb, &rom_size);
         rom = xmalloc(rom_size);
         memcpy(rom, data, rom_size);
     }
@@ -804,7 +804,7 @@ static void open_btn_clicked(AdwActionRow *self, gpointer user_data) {
 
 static void printer_save_as_xpm(gb_printer_t *printer, char *file_path) {
     size_t height;
-    byte_t *image_data = gb_printer_get_image(printer, &height);
+    uint8_t *image_data = gb_printer_get_image(printer, &height);
 
     FILE *f = fopen(file_path, "w+");
     if (!f) {

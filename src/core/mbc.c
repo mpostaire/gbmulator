@@ -8,9 +8,9 @@
 #define EEPROM_CLK(pins) ((pins) & 0x40) // MBC7 EEPROM CLK pin
 #define EEPROM_CS(pins) ((pins) & 0x80) // MBC7 EEPROM CS pin
 
-static inline void write_mbc7_eeprom(gb_mbc_t *mbc, byte_t data) {
+static inline void write_mbc7_eeprom(gb_mbc_t *mbc, uint8_t data) {
     if (!EEPROM_CS(data)) { // if CS (Chip Select) not set, only update pins
-        byte_t bit_do = mbc->mbc7.eeprom.output_bits >> 15;
+        uint8_t bit_do = mbc->mbc7.eeprom.output_bits >> 15;
         mbc->mbc7.eeprom.pins = (data & 0xC2) | bit_do;
         return;
     }
@@ -29,7 +29,7 @@ static inline void write_mbc7_eeprom(gb_mbc_t *mbc, byte_t data) {
                     SET_BIT(mbc->mbc7.eeprom.data[mbc->mbc7.eeprom.command & 0x7F], mbc->mbc7.eeprom.command_arg_remaining_bits);
                 } else {
                     // WRAL
-                    for (byte_t i = 0; i < 0x7F; i++)
+                    for (uint8_t i = 0; i < 0x7F; i++)
                         SET_BIT(mbc->mbc7.eeprom.data[i], mbc->mbc7.eeprom.command_arg_remaining_bits);
                 }
             }
@@ -46,7 +46,7 @@ static inline void write_mbc7_eeprom(gb_mbc_t *mbc, byte_t data) {
             mbc->mbc7.eeprom.command |= (EEPROM_DI(data) >> 1);
 
             if (mbc->mbc7.eeprom.command & 0x0400) { // valid command if bit 11 is set (start bit)
-                word_t stripped_command = mbc->mbc7.eeprom.command & 0x03FF; // remove start bit from command
+                uint16_t stripped_command = mbc->mbc7.eeprom.command & 0x03FF; // remove start bit from command
 
                 switch ((stripped_command >> 6) & 0x000F) {
                 case 0x00: // EWDS
@@ -75,7 +75,7 @@ static inline void write_mbc7_eeprom(gb_mbc_t *mbc, byte_t data) {
                     // don't set command to 0 yet as we still need it after its arguments has been shifted in
                     break;
                 case 0x08 ... 0x0B: { // READ
-                    word_t eeprom_address = stripped_command & 0x7F;
+                    uint16_t eeprom_address = stripped_command & 0x7F;
                     mbc->mbc7.eeprom.output_bits = ((mbc->mbc7.eeprom.data[eeprom_address + 1]) << 8) | mbc->mbc7.eeprom.data[eeprom_address];
                     mbc->mbc7.eeprom.command = 0;
                 } break;
@@ -91,18 +91,18 @@ static inline void write_mbc7_eeprom(gb_mbc_t *mbc, byte_t data) {
         }
     }
 
-    byte_t bit_do = mbc->mbc7.eeprom.output_bits >> 15;
+    uint8_t bit_do = mbc->mbc7.eeprom.output_bits >> 15;
     mbc->mbc7.eeprom.pins = (data & 0xC2) | bit_do;
 }
 
-static inline void mbc1_set_bank_addrs(gb_mmu_t *mmu, byte_t bank1_size) {
+static inline void mbc1_set_bank_addrs(gb_mmu_t *mmu, uint8_t bank1_size) {
     gb_mbc_t *mbc = &mmu->mbc;
 
     if (mbc->mbc1.mode) { // ERAM mode
-        byte_t current_rom_bank0 = (mbc->mbc1.bank_hi << bank1_size) & (mmu->rom_banks - 1);
+        uint8_t current_rom_bank0 = (mbc->mbc1.bank_hi << bank1_size) & (mmu->rom_banks - 1);
         mmu->rom_bank0_addr = current_rom_bank0 * ROM_BANK_SIZE;
 
-        byte_t eram_bank = mbc->mbc1.bank_hi & (mmu->eram_banks - 1);
+        uint8_t eram_bank = mbc->mbc1.bank_hi & (mmu->eram_banks - 1);
         mmu->eram_bank_addr = eram_bank * ERAM_BANK_SIZE;
     } else { // ROM mode
         // NOTE: this is not really a BANK0 pointer: it's actually a BANKN pointer that happens to be mapped
@@ -111,13 +111,13 @@ static inline void mbc1_set_bank_addrs(gb_mmu_t *mmu, byte_t bank1_size) {
         mmu->eram_bank_addr = 0;
     }
 
-    byte_t current_rom_bankn = (mbc->mbc1.bank_hi << bank1_size) | mbc->mbc1.bank_lo;
+    uint8_t current_rom_bankn = (mbc->mbc1.bank_hi << bank1_size) | mbc->mbc1.bank_lo;
     current_rom_bankn &= mmu->rom_banks - 1;
 
     mmu->rom_bankn_addr = (current_rom_bankn - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
 }
 
-void mbc_write_registers(gb_t *gb, word_t address, byte_t data) {
+void mbc_write_registers(gb_t *gb, uint16_t address, uint8_t data) {
     gb_mmu_t *mmu = gb->mmu;
     gb_mbc_t *mbc = &mmu->mbc;
 
@@ -196,7 +196,7 @@ void mbc_write_registers(gb_t *gb, word_t address, byte_t data) {
             mmu->rom_bankn_addr = (mbc->mbc3.rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
             break;
         case 0x4000:;
-            byte_t max_ram_bank = mbc->type == MBC30 ? 0x07 : 0x03;
+            uint8_t max_ram_bank = mbc->type == MBC30 ? 0x07 : 0x03;
             if (data <= max_ram_bank) {
                 mbc->mbc3.eram_bank = data;
                 mbc->mbc3.eram_bank &= mmu->eram_banks - 1; // in this case, equivalent to mbc->mbc3.eram_bank %= eram_banks but avoid division by 0
@@ -227,14 +227,14 @@ void mbc_write_registers(gb_t *gb, word_t address, byte_t data) {
             break;
         case 0x2000: {
             mbc->mbc5.rom_bank_lo = data;
-            word_t current_rom_bank = (mbc->mbc5.rom_bank_hi << 8) | mbc->mbc5.rom_bank_lo;
+            uint16_t current_rom_bank = (mbc->mbc5.rom_bank_hi << 8) | mbc->mbc5.rom_bank_lo;
             current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
             mmu->rom_bankn_addr = (current_rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
             break;
         }
         case 0x3000: {
             mbc->mbc5.rom_bank_hi = data;
-            word_t current_rom_bank = (mbc->mbc5.rom_bank_hi << 8) | mbc->mbc5.rom_bank_lo;
+            uint16_t current_rom_bank = (mbc->mbc5.rom_bank_hi << 8) | mbc->mbc5.rom_bank_lo;
             current_rom_bank &= mmu->rom_banks - 1; // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
             mmu->rom_bankn_addr = (current_rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
             break;
@@ -299,7 +299,7 @@ void mbc_write_registers(gb_t *gb, word_t address, byte_t data) {
     }
 }
 
-byte_t mbc_read_eram(gb_t *gb, word_t address) {
+uint8_t mbc_read_eram(gb_t *gb, uint16_t address) {
     gb_mmu_t *mmu = gb->mmu;
     gb_mbc_t *mbc = &mmu->mbc;
 
@@ -343,7 +343,7 @@ byte_t mbc_read_eram(gb_t *gb, word_t address) {
         return mmu->eram[mmu->eram_bank_addr + (address - MMU_ERAM)];
     }
 
-    byte_t can_access_rtc = (mbc->type == MBC3 || mbc->type == MBC30) && mbc->mbc3.rtc_mapped; // mbc->mbc3.rtc_mapped implies that mmu->has_rtc is true
+    uint8_t can_access_rtc = (mbc->type == MBC3 || mbc->type == MBC30) && mbc->mbc3.rtc_mapped; // mbc->mbc3.rtc_mapped implies that mmu->has_rtc is true
     if (mbc->eram_enabled && !can_access_rtc) {
         if (mbc->type == MBC2) {
             // wrap around from 0xA200 to 0xBFFF (eg: address 0xA200 reads as address 0xA000)
@@ -366,7 +366,7 @@ byte_t mbc_read_eram(gb_t *gb, word_t address) {
     return 0xFF;
 }
 
-void mbc_write_eram(gb_t *gb, word_t address, byte_t data) {
+void mbc_write_eram(gb_t *gb, uint16_t address, uint8_t data) {
     gb_mmu_t *mmu = gb->mmu;
     gb_mbc_t *mbc = &mmu->mbc;
 
@@ -415,7 +415,7 @@ void mbc_write_eram(gb_t *gb, word_t address, byte_t data) {
         return;
     }
 
-    byte_t can_access_rtc = (mbc->type == MBC3 || mbc->type == MBC30) && mbc->mbc3.rtc_mapped; // mbc->mbc3.rtc_mapped implies that mmu->has_rtc is true
+    uint8_t can_access_rtc = (mbc->type == MBC3 || mbc->type == MBC30) && mbc->mbc3.rtc_mapped; // mbc->mbc3.rtc_mapped implies that mmu->has_rtc is true
     if (mbc->eram_enabled && !can_access_rtc) {
         mmu->eram[mmu->eram_bank_addr + (address - MMU_ERAM)] = data;
     } else if (mbc->mbc3.rtc.enabled) { // mbc->mbc3.rtc.enabled implies that mmu->has_rtc is true
@@ -474,7 +474,7 @@ void rtc_step(gb_t *gb) {
         return;
     mbc->mbc3.rtc.h = 0;
 
-    word_t d = ((mbc->mbc3.rtc.dh & 0x01) << 8) | mbc->mbc3.rtc.dl;
+    uint16_t d = ((mbc->mbc3.rtc.dh & 0x01) << 8) | mbc->mbc3.rtc.dl;
     d++;
     mbc->mbc3.rtc.dl = d & 0x00FF;
     if (CHECK_BIT(d, 8))

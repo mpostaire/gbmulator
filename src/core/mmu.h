@@ -117,41 +117,41 @@ typedef enum {
 } gb_io_source_t;
 
 typedef struct {
-    byte_t *dmg_boot_rom;
-    byte_t *cgb_boot_rom;
+    uint8_t *dmg_boot_rom;
+    uint8_t *cgb_boot_rom;
 
     size_t rom_size;
-    byte_t *rom; // max size: 8400000
+    uint8_t *rom; // max size: 8400000
 
-    byte_t vram[2 * VRAM_BANK_SIZE]; // DMG: 1 bank / CGB: 2 banks of size 0x2000
-    byte_t eram[16 * ERAM_BANK_SIZE]; // max 16 banks of size 0x2000
-    byte_t wram[8 * WRAM_BANK_SIZE]; // DMG: 2 banks / CGB: 8 banks of size 0x1000 (bank 0 non switchable)
-    byte_t oam[0xA0];
-    byte_t io_registers[0x80];
-    byte_t hram[0x7F];
-    byte_t ie;
-    byte_t cram_bg[CRAM_BG_SIZE]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
-    byte_t cram_obj[CRAM_OBJ_SIZE]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
+    uint8_t vram[2 * VRAM_BANK_SIZE]; // DMG: 1 bank / CGB: 2 banks of size 0x2000
+    uint8_t eram[16 * ERAM_BANK_SIZE]; // max 16 banks of size 0x2000
+    uint8_t wram[8 * WRAM_BANK_SIZE]; // DMG: 2 banks / CGB: 8 banks of size 0x1000 (bank 0 non switchable)
+    uint8_t oam[0xA0];
+    uint8_t io_registers[0x80];
+    uint8_t hram[0x7F];
+    uint8_t ie;
+    uint8_t cram_bg[CRAM_BG_SIZE]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
+    uint8_t cram_obj[CRAM_OBJ_SIZE]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
 
-    byte_t boot_finished;
+    uint8_t boot_finished;
 
     struct {
-        byte_t initializing; // 4 cycles of initialization delay
-        byte_t allow_hdma_block; // set to 1 while the current 0x10 bytes block of HDMA can be copied, else 0 (gb->mode == CGB is assumed)
-        byte_t lock_cpu;
-        byte_t type;
-        byte_t progress;
-        word_t src_address;
-        word_t dest_address;
+        uint8_t initializing; // 4 cycles of initialization delay
+        uint8_t allow_hdma_block; // set to 1 while the current 0x10 bytes block of HDMA can be copied, else 0 (gb->mode == CGB is assumed)
+        uint8_t lock_cpu;
+        uint8_t type;
+        uint8_t progress;
+        uint16_t src_address;
+        uint16_t dest_address;
     } hdma;
 
     struct {
         // array of statuses of the initialization of the oam dma (this is an array to allow multiple initializations
         // at the same time; the last will eventually overwrite the previous oam dma)
-        byte_t starting_statuses[2];
-        byte_t starting_count; // holds the number of oam dma initializations
-        s_word_t progress; // < 0 if oam dma not running, else [0, 159)
-        word_t src_address;
+        uint8_t starting_statuses[2];
+        uint8_t starting_count; // holds the number of oam dma initializations
+        int16_t progress; // < 0 if oam dma not running, else [0, 159)
+        uint16_t src_address;
     } oam_dma;
 
     // offset to add to address in vram when accessing the 0x8000-0x9FFF range (signed because it can be negative)
@@ -159,8 +159,8 @@ typedef struct {
     // offset to add to address in wram when accessing the 0xD000-0xDFFF range (signed because it can be negative)
     int32_t wram_bankn_addr_offset;
 
-    word_t rom_banks; // number of rom banks
-    byte_t eram_banks; // number of eram banks
+    uint16_t rom_banks; // number of rom banks
+    uint8_t eram_banks; // number of eram banks
     // address in rom that is the start of the current ROM bank when accessing the 0x0000-0x3FFF range
     uint32_t rom_bank0_addr;
     // address in rom that is the start of the current ROM bank when accessing the 0x4000-0x7FFF range
@@ -169,24 +169,24 @@ typedef struct {
     // address in eram that is the start of the current ERAM bank when accessing the 0x8000-0x9FFF range
     uint32_t eram_bank_addr;
 
-    byte_t has_battery;
-    byte_t has_rumble;
-    byte_t has_rtc;
+    uint8_t has_battery;
+    uint8_t has_rumble;
+    uint8_t has_rtc;
 
     gb_mbc_t mbc;
 } gb_mmu_t;
 
-int parse_header_mbc_byte(byte_t mbc_byte, byte_t *mbc_type, byte_t *has_eram, byte_t *has_battery, byte_t *has_rtc, byte_t *has_rumble);
+int parse_header_mbc_byte(uint8_t mbc_byte, uint8_t *mbc_type, uint8_t *has_eram, uint8_t *has_battery, uint8_t *has_rtc, uint8_t *has_rumble);
 
-int validate_header_checksum(const byte_t *rom);
+int validate_header_checksum(const uint8_t *rom);
 
-int mmu_init(gb_t *gb, const byte_t *rom, size_t rom_size);
+int mmu_init(gb_t *gb, const uint8_t *rom, size_t rom_size);
 
 void mmu_quit(gb_t *gb);
 
-byte_t mmu_read_io_src(gb_t *gb, word_t address, gb_io_source_t io_src);
+uint8_t mmu_read_io_src(gb_t *gb, uint16_t address, gb_io_source_t io_src);
 
-void mmu_write_io_src(gb_t *gb, word_t address, byte_t data, gb_io_source_t io_src);
+void mmu_write_io_src(gb_t *gb, uint16_t address, uint8_t data, gb_io_source_t io_src);
 
 /**
  * like mmu_read_io_src but using IO_SRC_CPU as io_src

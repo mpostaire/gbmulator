@@ -52,7 +52,7 @@ void gb_printer_quit(gb_printer_t *printer) {
     free(printer);
 }
 
-byte_t *gb_printer_get_image(gb_printer_t *printer, size_t *height) {
+uint8_t *gb_printer_get_image(gb_printer_t *printer, size_t *height) {
     *height = printer->image.height;
     return printer->image.data;
 }
@@ -65,20 +65,20 @@ void gb_printer_clear_image(gb_printer_t *printer) {
 }
 
 static inline void render_line(gb_printer_t *printer) {
-    for (byte_t tile_number = 0; tile_number < 20; tile_number++) { // GB_PRINTER_IMG_WIDTH / 8 == 20 tiles per line
-        word_t line_offset = ((printer->ram_printing_line_index % 8) * 2) + ((printer->ram_printing_line_index / 8) * PRINTER_LINE_SIZE);
-        word_t tileslice_index = line_offset + (tile_number * 16);
+    for (uint8_t tile_number = 0; tile_number < 20; tile_number++) { // GB_PRINTER_IMG_WIDTH / 8 == 20 tiles per line
+        uint16_t line_offset = ((printer->ram_printing_line_index % 8) * 2) + ((printer->ram_printing_line_index / 8) * PRINTER_LINE_SIZE);
+        uint16_t tileslice_index = line_offset + (tile_number * 16);
 
-        byte_t tileslice_lo = printer->ram[tileslice_index];
-        byte_t tileslice_hi = printer->ram[tileslice_index + 1];
+        uint8_t tileslice_lo = printer->ram[tileslice_index];
+        uint8_t tileslice_hi = printer->ram[tileslice_index + 1];
 
-        for (byte_t bit_number = 0; bit_number < 8; bit_number++) {
-            byte_t bit_lo = GET_BIT(tileslice_lo, 7 - bit_number);
-            byte_t bit_hi = GET_BIT(tileslice_hi, 7 - bit_number);
-            byte_t color = (bit_hi << 1) | bit_lo;
+        for (uint8_t bit_number = 0; bit_number < 8; bit_number++) {
+            uint8_t bit_lo = GET_BIT(tileslice_lo, 7 - bit_number);
+            uint8_t bit_hi = GET_BIT(tileslice_hi, 7 - bit_number);
+            uint8_t color = (bit_hi << 1) | bit_lo;
 
             // apply palette
-            byte_t palette = printer->cmd_data[2];
+            uint8_t palette = printer->cmd_data[2];
             color = (palette >> (color << 1)) & 0x03;
 
             int x = (tile_number * 8) + bit_number;
@@ -135,7 +135,7 @@ void gb_printer_step(gb_printer_t *printer) {
     }
 }
 
-static inline byte_t check_ram_len(gb_printer_t *printer) {
+static inline uint8_t check_ram_len(gb_printer_t *printer) {
     if (printer->ram_len >= sizeof(printer->ram)) {
         // not sure about this...
         SET_BIT(printer->status, 4); // bit 4: packet error
@@ -166,8 +166,8 @@ static void exec_command(gb_printer_t *printer) {
             break;
 
         // printer->cmd_data[0] is always 0x01 and has unknown purpose
-        // byte_t margins = printer->cmd_data[1];
-        // byte_t exposure = printer->cmd_data[3] & 0x7F; // 0x00 -> -25% darkness, 0x7F -> +25% darkness
+        // uint8_t margins = printer->cmd_data[1];
+        // uint8_t exposure = printer->cmd_data[3] & 0x7F; // 0x00 -> -25% darkness, 0x7F -> +25% darkness
 
         printer->image.allocated_height = printer->image.height + N_LINES_TO_PRINT(printer);
         printer->image.data = xrealloc(printer->image.data, printer->image.allocated_height * GB_PRINTER_IMG_WIDTH * 4);
@@ -181,18 +181,18 @@ static void exec_command(gb_printer_t *printer) {
     case FILL:
         printer->got_eof = printer->cmd_data_len == 0;
         if (!printer->got_eof) {
-            for (word_t i = 0; i < printer->cmd_data_len; i++) {
+            for (uint16_t i = 0; i < printer->cmd_data_len; i++) {
                 if (printer->compress_flag) {
-                    byte_t is_compressed_run = GET_BIT(printer->cmd_data[i], 7);
-                    word_t run_length = (printer->cmd_data[i] & 0x7F) + 1 + is_compressed_run;
+                    uint8_t is_compressed_run = GET_BIT(printer->cmd_data[i], 7);
+                    uint16_t run_length = (printer->cmd_data[i] & 0x7F) + 1 + is_compressed_run;
                     if (is_compressed_run) {
                         i++;
-                        for (word_t j = 0; j < run_length; j++) {
+                        for (uint16_t j = 0; j < run_length; j++) {
                             if (!check_ram_len(printer)) break;
                             printer->ram[printer->ram_len++] = printer->cmd_data[i];
                         }
                     } else {
-                        for (word_t j = 0; j < run_length; j++) {
+                        for (uint16_t j = 0; j < run_length; j++) {
                             if (!check_ram_len(printer)) break;
                             printer->ram[printer->ram_len++] = printer->cmd_data[++i];
                         }
@@ -221,9 +221,9 @@ static void exec_command(gb_printer_t *printer) {
         printer->status = STATUS_IDLE;
 }
 
-byte_t gb_printer_linked_shift_bit(void *device, byte_t in_bit) {
+uint8_t gb_printer_linked_shift_bit(void *device, uint8_t in_bit) {
     gb_printer_t *printer = device;
-    byte_t out_bit = GET_BIT(printer->sb, 7);
+    uint8_t out_bit = GET_BIT(printer->sb, 7);
     printer->sb <<= 1;
     CHANGE_BIT(printer->sb, 0, in_bit);
     return out_bit;

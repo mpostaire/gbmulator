@@ -30,10 +30,10 @@ pthread_mutex_t next_test_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static char root_path[BUF_SIZE];
 
-static byte_t dmg_boot_found;
-static byte_t cgb_boot_found;
-static byte_t dmg_boot[0x100];
-static byte_t cgb_boot[0x900];
+static uint8_t dmg_boot_found;
+static uint8_t cgb_boot_found;
+static uint8_t dmg_boot[0x100];
+static uint8_t cgb_boot[0x900];
 
 typedef struct {
     char *rom_path;                 // relative the the root_path given in the program's argument
@@ -41,7 +41,7 @@ typedef struct {
     char *result_diff_image_suffix;
     gb_mode_t mode;
     int running_ms;
-    byte_t exit_opcode;
+    uint8_t exit_opcode;
     char *input_sequence;
     int is_gbmicrotest;
 } test_t;
@@ -74,7 +74,7 @@ static void load_bootroms(void) {
     }
 }
 
-static byte_t *get_rom(const char *path, size_t *rom_size) {
+static uint8_t *get_rom(const char *path, size_t *rom_size) {
     const char *dot = strrchr(path, '.');
     if (!dot || (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) && strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))))) {
         eprintf("%s: wrong file extension (expected .gb or .gbc)\n", path);
@@ -91,7 +91,7 @@ static byte_t *get_rom(const char *path, size_t *rom_size) {
     size_t len = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    byte_t *buf = xmalloc(len);
+    uint8_t *buf = xmalloc(len);
     if (!fread(buf, len, 1, f)) {
         errnoprintf("reading %s", path);
         fclose(f);
@@ -305,7 +305,7 @@ static int run_test(test_t *test) {
         exit(EXIT_FAILURE);
 
     size_t rom_size = 0;
-    byte_t *rom = get_rom(rom_path, &rom_size);
+    uint8_t *rom = get_rom(rom_path, &rom_size);
     if (!rom)
         return 0;
 

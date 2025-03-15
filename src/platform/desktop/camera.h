@@ -4,7 +4,7 @@
 
 #include "../../core/gb.h"
 
-byte_t gb_camera_capture_image_cb(byte_t *pixels);
+uint8_t gb_camera_capture_image_cb(uint8_t *pixels);
 
 void camera_play(void);
 

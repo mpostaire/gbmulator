@@ -6,10 +6,10 @@
 #include "../../core/gb.h"
 
 static void parse_config_line(config_t *config, const char *line) {
-    byte_t scale, color_palette, sound_drc;
+    uint8_t scale, color_palette, sound_drc;
     float speed, sound;
     char link_host[INET6_ADDRSTRLEN], link_port[6];
-    byte_t mode;
+    uint8_t mode;
 
     char key_name[16];
 

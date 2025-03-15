@@ -623,32 +623,32 @@ const opcode_t extended_instructions[256] = {
         CLOCK(END_OPCODE);                                                  \
     }
 
-static inline void and(gb_cpu_t *cpu, byte_t reg) {
+static inline void and(gb_cpu_t *cpu, uint8_t reg) {
     cpu->registers.a &= reg;
     cpu->registers.a ? RESET_FLAG(cpu, FLAG_Z) : SET_FLAG(cpu, FLAG_Z);
     RESET_FLAG(cpu, FLAG_N | FLAG_C);
     SET_FLAG(cpu, FLAG_H);
 }
 
-static inline void or(gb_cpu_t *cpu, byte_t reg) {
+static inline void or(gb_cpu_t *cpu, uint8_t reg) {
     cpu->registers.a |= reg;
     cpu->registers.a ? RESET_FLAG(cpu, FLAG_Z) : SET_FLAG(cpu, FLAG_Z);
     RESET_FLAG(cpu, FLAG_C | FLAG_H | FLAG_N);
 }
 
-static inline void xor(gb_cpu_t *cpu, byte_t reg) {
+static inline void xor(gb_cpu_t *cpu, uint8_t reg) {
     cpu->registers.a ^= reg;
     cpu->registers.a ? RESET_FLAG(cpu, FLAG_Z) : SET_FLAG(cpu, FLAG_Z);
     RESET_FLAG(cpu, FLAG_C | FLAG_H | FLAG_N);
 }
 
-static inline void bit(gb_cpu_t *cpu, byte_t reg, byte_t pos) {
+static inline void bit(gb_cpu_t *cpu, uint8_t reg, uint8_t pos) {
     CHECK_BIT(reg, pos) ? RESET_FLAG(cpu, FLAG_Z) : SET_FLAG(cpu, FLAG_Z);
     RESET_FLAG(cpu, FLAG_N);
     SET_FLAG(cpu, FLAG_H);
 }
 
-static inline void inc(gb_cpu_t *cpu, byte_t *reg) {
+static inline void inc(gb_cpu_t *cpu, uint8_t *reg) {
     // if lower nibble of reg is at max value, there will be a half carry after we increment.
     ((*reg) & 0x0F) == 0x0F ? SET_FLAG(cpu, FLAG_H) : RESET_FLAG(cpu, FLAG_H);
     (*reg)++;
@@ -656,7 +656,7 @@ static inline void inc(gb_cpu_t *cpu, byte_t *reg) {
     RESET_FLAG(cpu, FLAG_N);
 }
 
-static inline void dec(gb_cpu_t *cpu, byte_t *reg) {
+static inline void dec(gb_cpu_t *cpu, uint8_t *reg) {
     // if lower nibble of reg is 0, there will be a half carry after we decrement (not sure if this is a sufficient condition)
     ((*reg) & 0x0F) == 0x00 ? SET_FLAG(cpu, FLAG_H) : RESET_FLAG(cpu, FLAG_H);
     (*reg)--;
@@ -664,7 +664,7 @@ static inline void dec(gb_cpu_t *cpu, byte_t *reg) {
     SET_FLAG(cpu, FLAG_N);
 }
 
-static inline void rl(gb_cpu_t *cpu, byte_t *reg) {
+static inline void rl(gb_cpu_t *cpu, uint8_t *reg) {
     int carry = CHECK_FLAG(cpu, FLAG_C) ? 1 : 0;
     // set new carry to the value of leftmost bit
     ((*reg) & 0x80) ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
@@ -677,7 +677,7 @@ static inline void rl(gb_cpu_t *cpu, byte_t *reg) {
     RESET_FLAG(cpu, FLAG_N | FLAG_H);
 }
 
-static inline void rlc(gb_cpu_t *cpu, byte_t *reg) {
+static inline void rlc(gb_cpu_t *cpu, uint8_t *reg) {
     // set new carry to the value of leftmost bit
     ((*reg) & 0x80) ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
     // shift left
@@ -689,7 +689,7 @@ static inline void rlc(gb_cpu_t *cpu, byte_t *reg) {
     RESET_FLAG(cpu, FLAG_N | FLAG_H);
 }
 
-static inline void srl(gb_cpu_t *cpu, byte_t *reg) {
+static inline void srl(gb_cpu_t *cpu, uint8_t *reg) {
     // set carry to the value of rightmost bit
     ((*reg) & 0x01) ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
     // shift right
@@ -699,7 +699,7 @@ static inline void srl(gb_cpu_t *cpu, byte_t *reg) {
     RESET_FLAG(cpu, FLAG_N | FLAG_H);
 }
 
-static inline void sla(gb_cpu_t *cpu, byte_t *reg) {
+static inline void sla(gb_cpu_t *cpu, uint8_t *reg) {
     // set carry to the value of leftmost bit
     ((*reg) & 0x80) ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
     // shift left
@@ -709,7 +709,7 @@ static inline void sla(gb_cpu_t *cpu, byte_t *reg) {
     RESET_FLAG(cpu, FLAG_N | FLAG_H);
 }
 
-static inline void sra(gb_cpu_t *cpu, byte_t *reg) {
+static inline void sra(gb_cpu_t *cpu, uint8_t *reg) {
     // set carry to the value of rightmost bit
     int msb = (*reg) & 0x80;
     ((*reg) & 0x01) ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
@@ -721,7 +721,7 @@ static inline void sra(gb_cpu_t *cpu, byte_t *reg) {
     RESET_FLAG(cpu, FLAG_N | FLAG_H);
 }
 
-static inline void rr(gb_cpu_t *cpu, byte_t *reg) {
+static inline void rr(gb_cpu_t *cpu, uint8_t *reg) {
     int carry = CHECK_FLAG(cpu, FLAG_C) ? 1 : 0;
     // set new carry to the value of rightmost bit
     ((*reg) & 0x01) ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
@@ -734,7 +734,7 @@ static inline void rr(gb_cpu_t *cpu, byte_t *reg) {
     RESET_FLAG(cpu, FLAG_N | FLAG_H);
 }
 
-static inline void rrc(gb_cpu_t *cpu, byte_t *reg) {
+static inline void rrc(gb_cpu_t *cpu, uint8_t *reg) {
     // set new carry to the value of rightmost bit
     ((*reg) & 0x01) ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
     // shift right
@@ -746,20 +746,20 @@ static inline void rrc(gb_cpu_t *cpu, byte_t *reg) {
     RESET_FLAG(cpu, FLAG_N | FLAG_H);
 }
 
-static inline void swap(gb_cpu_t *cpu, byte_t *reg) {
+static inline void swap(gb_cpu_t *cpu, uint8_t *reg) {
     (*reg) = ((*reg) << 4) | ((*reg) >> 4);
     (*reg) ? RESET_FLAG(cpu, FLAG_Z) : SET_FLAG(cpu, FLAG_Z);
     RESET_FLAG(cpu, FLAG_C | FLAG_H | FLAG_N);
 }
 
-static inline void cp(gb_cpu_t *cpu, byte_t reg) {
+static inline void cp(gb_cpu_t *cpu, uint8_t reg) {
     cpu->registers.a == reg ? SET_FLAG(cpu, FLAG_Z) : RESET_FLAG(cpu, FLAG_Z);
     reg > cpu->registers.a ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
     (reg & 0x0F) > (cpu->registers.a & 0x0F) ? SET_FLAG(cpu, FLAG_H) : RESET_FLAG(cpu, FLAG_H);
     SET_FLAG(cpu, FLAG_N);
 }
 
-static inline void add8(gb_cpu_t *cpu, byte_t val) {
+static inline void add8(gb_cpu_t *cpu, uint8_t val) {
     unsigned int result = cpu->registers.a + val;
     (result & 0xFF00) ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
     (((cpu->registers.a & 0x0F) + (val & 0x0F)) & 0x10) == 0x10 ? SET_FLAG(cpu, FLAG_H) : RESET_FLAG(cpu, FLAG_H);
@@ -768,7 +768,7 @@ static inline void add8(gb_cpu_t *cpu, byte_t val) {
     RESET_FLAG(cpu, FLAG_N);
 }
 
-static inline void add16(gb_cpu_t *cpu, word_t val) {
+static inline void add16(gb_cpu_t *cpu, uint16_t val) {
     unsigned int result = cpu->registers.hl + val;
     (result & 0xFFFF0000) ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
     (((cpu->registers.hl & 0x0FFF) + (val & 0x0FFF)) & 0x1000) == 0x1000 ? SET_FLAG(cpu, FLAG_H) : RESET_FLAG(cpu, FLAG_H);
@@ -776,8 +776,8 @@ static inline void add16(gb_cpu_t *cpu, word_t val) {
     RESET_FLAG(cpu, FLAG_N);
 }
 
-static inline void adc(gb_cpu_t *cpu, byte_t val) {
-    byte_t c = CHECK_FLAG(cpu, FLAG_C) ? 1 : 0;
+static inline void adc(gb_cpu_t *cpu, uint8_t val) {
+    uint8_t c = CHECK_FLAG(cpu, FLAG_C) ? 1 : 0;
     unsigned int result = cpu->registers.a + val + c;
     (result & 0xFF00) ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
     (((cpu->registers.a & 0x0F) + (val & 0x0F) + c) & 0x10) == 0x10 ? SET_FLAG(cpu, FLAG_H) : RESET_FLAG(cpu, FLAG_H);
@@ -786,7 +786,7 @@ static inline void adc(gb_cpu_t *cpu, byte_t val) {
     RESET_FLAG(cpu, FLAG_N);
 }
 
-static inline void sub8(gb_cpu_t *cpu, byte_t reg) {
+static inline void sub8(gb_cpu_t *cpu, uint8_t reg) {
     reg > cpu->registers.a ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
     (reg & 0x0F) > (cpu->registers.a & 0x0F) ? SET_FLAG(cpu, FLAG_H) : RESET_FLAG(cpu, FLAG_H);
     cpu->registers.a -= reg;
@@ -794,8 +794,8 @@ static inline void sub8(gb_cpu_t *cpu, byte_t reg) {
     SET_FLAG(cpu, FLAG_N);
 }
 
-static inline void sbc(gb_cpu_t *cpu, byte_t reg) {
-    byte_t c = CHECK_FLAG(cpu, FLAG_C) ? 1 : 0;
+static inline void sbc(gb_cpu_t *cpu, uint8_t reg) {
+    uint8_t c = CHECK_FLAG(cpu, FLAG_C) ? 1 : 0;
     reg + c > cpu->registers.a ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
     ((reg & 0x0F) + c) > (cpu->registers.a & 0x0F) ? SET_FLAG(cpu, FLAG_H) : RESET_FLAG(cpu, FLAG_H);
     cpu->registers.a -= reg + c;
@@ -822,7 +822,7 @@ static void exec_extended_opcode(gb_t *gb) {
     case 0x06: // RLC (HL) (12 cycles)
         CLOCK(
             cpu->accumulator = mmu_read(gb, cpu->registers.hl);
-            rlc(cpu, (byte_t *) &cpu->accumulator);
+            rlc(cpu, (uint8_t *) &cpu->accumulator);
         );
         CLOCK(mmu_write(gb, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
@@ -843,7 +843,7 @@ static void exec_extended_opcode(gb_t *gb) {
     case 0x0E: // RRC (HL) (12 cycles)
         CLOCK(
             cpu->accumulator = mmu_read(gb, cpu->registers.hl);
-            rrc(cpu, (byte_t *) &cpu->accumulator);
+            rrc(cpu, (uint8_t *) &cpu->accumulator);
         );
         CLOCK(mmu_write(gb, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
@@ -864,7 +864,7 @@ static void exec_extended_opcode(gb_t *gb) {
     case 0x16: // RL (HL) (12 cycles)
         CLOCK(
             cpu->accumulator = mmu_read(gb, cpu->registers.hl);
-            rl(cpu, (byte_t *) &cpu->accumulator);
+            rl(cpu, (uint8_t *) &cpu->accumulator);
         );
         CLOCK(mmu_write(gb, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
@@ -885,7 +885,7 @@ static void exec_extended_opcode(gb_t *gb) {
     case 0x1E: // RR (HL) (12 cycles)
         CLOCK(
             cpu->accumulator = mmu_read(gb, cpu->registers.hl);
-            rr(cpu, (byte_t *) &cpu->accumulator);
+            rr(cpu, (uint8_t *) &cpu->accumulator);
         );
         CLOCK(mmu_write(gb, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
@@ -906,7 +906,7 @@ static void exec_extended_opcode(gb_t *gb) {
     case 0x26: // SLA (HL) (12 cycles)
         CLOCK(
             cpu->accumulator = mmu_read(gb, cpu->registers.hl);
-            sla(cpu, (byte_t *) &cpu->accumulator);
+            sla(cpu, (uint8_t *) &cpu->accumulator);
         );
         CLOCK(mmu_write(gb, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
@@ -927,7 +927,7 @@ static void exec_extended_opcode(gb_t *gb) {
     case 0x2E: // SRA (HL) (12 cycles)
         CLOCK(
             cpu->accumulator = mmu_read(gb, cpu->registers.hl);
-            sra(cpu, (byte_t *) &cpu->accumulator);
+            sra(cpu, (uint8_t *) &cpu->accumulator);
         );
         CLOCK(mmu_write(gb, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
@@ -948,7 +948,7 @@ static void exec_extended_opcode(gb_t *gb) {
     case 0x36: // SWAP (HL) (12 cycles)
         CLOCK(
             cpu->accumulator = mmu_read(gb, cpu->registers.hl);
-            swap(cpu, (byte_t *) &cpu->accumulator);
+            swap(cpu, (uint8_t *) &cpu->accumulator);
         );
         CLOCK(mmu_write(gb, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
@@ -969,7 +969,7 @@ static void exec_extended_opcode(gb_t *gb) {
     case 0x3E: // SRL (HL) (12 cycles)
         CLOCK(
             cpu->accumulator = mmu_read(gb, cpu->registers.hl);
-            srl(cpu, (byte_t *) &cpu->accumulator);
+            srl(cpu, (uint8_t *) &cpu->accumulator);
         );
         CLOCK(mmu_write(gb, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
@@ -1545,7 +1545,7 @@ static void exec_opcode(gb_t *gb) {
         );
     case 0x18: // JR n (12 cycles)
         GET_OPERAND_8();
-        CLOCK(cpu->registers.pc += (s_byte_t) cpu->operand);
+        CLOCK(cpu->registers.pc += (int8_t) cpu->operand);
         CLOCK(END_OPCODE);
     case 0x19: // ADD HL, DE (8 cycles)
         CLOCK(add16(cpu, cpu->registers.de));
@@ -1575,7 +1575,7 @@ static void exec_opcode(gb_t *gb) {
             if (CHECK_FLAG(cpu, FLAG_Z))
                 END_OPCODE;
         );
-        CLOCK(cpu->registers.pc += (s_byte_t) cpu->operand; END_OPCODE;);
+        CLOCK(cpu->registers.pc += (int8_t) cpu->operand; END_OPCODE;);
     case 0x21: // LD HL, nn (12 cycles)
         GET_OPERAND_16();
         CLOCK(cpu->registers.hl = cpu->operand; END_OPCODE;);
@@ -1619,7 +1619,7 @@ static void exec_opcode(gb_t *gb) {
             if (!CHECK_FLAG(cpu, FLAG_Z))
                 END_OPCODE;
         );
-        CLOCK(cpu->registers.pc += (s_byte_t) cpu->operand; END_OPCODE;);
+        CLOCK(cpu->registers.pc += (int8_t) cpu->operand; END_OPCODE;);
     case 0x29: // ADD HL, HL (8 cycles)
         CLOCK(add16(cpu, cpu->registers.hl));
         CLOCK(END_OPCODE);
@@ -1652,7 +1652,7 @@ static void exec_opcode(gb_t *gb) {
             if (CHECK_FLAG(cpu, FLAG_C))
                 END_OPCODE;
         );
-        CLOCK(cpu->registers.pc += (s_byte_t) cpu->operand; END_OPCODE;);
+        CLOCK(cpu->registers.pc += (int8_t) cpu->operand; END_OPCODE;);
     case 0x31: // LD SP,nn (12 cycles)
         GET_OPERAND_16();
         CLOCK(cpu->registers.sp = cpu->operand; END_OPCODE;);
@@ -1665,14 +1665,14 @@ static void exec_opcode(gb_t *gb) {
     case 0x34: // INC (HL) (12 cycles)
         CLOCK(
             cpu->accumulator = mmu_read(gb, cpu->registers.hl);
-            inc(cpu, (byte_t *) &cpu->accumulator);
+            inc(cpu, (uint8_t *) &cpu->accumulator);
         );
         CLOCK(mmu_write(gb, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
     case 0x35: // DEC (HL) (12 cycles)
         CLOCK(
             cpu->accumulator = mmu_read(gb, cpu->registers.hl);
-            dec(cpu, (byte_t *) &cpu->accumulator);
+            dec(cpu, (uint8_t *) &cpu->accumulator);
         );
         CLOCK(mmu_write(gb, cpu->registers.hl, cpu->accumulator));
         CLOCK(END_OPCODE);
@@ -1692,7 +1692,7 @@ static void exec_opcode(gb_t *gb) {
             if (!CHECK_FLAG(cpu, FLAG_C))
                 END_OPCODE;
         );
-        CLOCK(cpu->registers.pc += (s_byte_t) cpu->operand; END_OPCODE;);
+        CLOCK(cpu->registers.pc += (int8_t) cpu->operand; END_OPCODE;);
     case 0x39: // ADD HL, SP (8 cycles)
         CLOCK(add16(cpu, cpu->registers.sp));
         CLOCK(END_OPCODE);
@@ -2127,10 +2127,10 @@ static void exec_opcode(gb_t *gb) {
         CLOCK(cpu->registers.pc = 0x0020; END_OPCODE;);
     case 0xE8: // ADD SP, n (16 cycles)
         GET_OPERAND_8();
-        CLOCK(cpu->accumulator = cpu->registers.sp + (s_byte_t) cpu->operand);
+        CLOCK(cpu->accumulator = cpu->registers.sp + (int8_t) cpu->operand);
         CLOCK(
-            (((cpu->registers.sp & 0xFF) + ((s_byte_t) cpu->operand & 0xFF)) & 0x100) == 0x100 ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
-            (((cpu->registers.sp & 0x0F) + ((s_byte_t) cpu->operand & 0x0F)) & 0x10) == 0x10 ? SET_FLAG(cpu, FLAG_H) : RESET_FLAG(cpu, FLAG_H);
+            (((cpu->registers.sp & 0xFF) + ((int8_t) cpu->operand & 0xFF)) & 0x100) == 0x100 ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
+            (((cpu->registers.sp & 0x0F) + ((int8_t) cpu->operand & 0x0F)) & 0x10) == 0x10 ? SET_FLAG(cpu, FLAG_H) : RESET_FLAG(cpu, FLAG_H);
         );
         CLOCK(
             cpu->registers.sp = cpu->accumulator & 0xFFFF;
@@ -2177,9 +2177,9 @@ static void exec_opcode(gb_t *gb) {
     case 0xF8: // LD HL, SP+n (12 cycles)
         GET_OPERAND_8();
         CLOCK(
-            cpu->accumulator = cpu->registers.sp + (s_byte_t) cpu->operand;
-            (((cpu->registers.sp & 0xFF) + ((s_byte_t) cpu->operand & 0xFF)) & 0x100) == 0x100 ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
-            (((cpu->registers.sp & 0x0F) + ((s_byte_t) cpu->operand & 0x0F)) & 0x10) == 0x10 ? SET_FLAG(cpu, FLAG_H) : RESET_FLAG(cpu, FLAG_H);
+            cpu->accumulator = cpu->registers.sp + (int8_t) cpu->operand;
+            (((cpu->registers.sp & 0xFF) + ((int8_t) cpu->operand & 0xFF)) & 0x100) == 0x100 ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
+            (((cpu->registers.sp & 0x0F) + ((int8_t) cpu->operand & 0x0F)) & 0x10) == 0x10 ? SET_FLAG(cpu, FLAG_H) : RESET_FLAG(cpu, FLAG_H);
         );
         CLOCK(
             cpu->registers.hl = cpu->accumulator & 0xFFFF;
@@ -2224,22 +2224,22 @@ static void exec_opcode(gb_t *gb) {
 static void print_trace(gb_t *gb) {
     gb_cpu_t *cpu = gb->cpu;
 
-    byte_t opcode = mmu_read(gb, cpu->registers.pc);
-    byte_t operand_size = instructions[opcode].operand_size;
+    uint8_t opcode = mmu_read(gb, cpu->registers.pc);
+    uint8_t operand_size = instructions[opcode].operand_size;
 
     if (operand_size == 0) {
         printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x        %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, instructions[opcode].name);
     } else if (operand_size == 1) {
         char buf[32];
         char *instr_name = opcode == 0xCB ? extended_instructions[mmu_read(gb, cpu->registers.pc + 1)].name : instructions[mmu_read(gb, cpu->registers.pc)].name;
-        byte_t operand = mmu_read(gb, cpu->registers.pc + 1);
+        uint8_t operand = mmu_read(gb, cpu->registers.pc + 1);
         snprintf(buf, sizeof(buf), instr_name, operand);
         printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x     %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, operand, buf);
     } else {
         char buf[32];
-        byte_t first_operand = mmu_read(gb, cpu->registers.pc + 1);
-        byte_t second_operand = mmu_read(gb, cpu->registers.pc + 2);
-        word_t both_operands = first_operand | second_operand << 8;
+        uint8_t first_operand = mmu_read(gb, cpu->registers.pc + 1);
+        uint8_t second_operand = mmu_read(gb, cpu->registers.pc + 2);
+        uint16_t both_operands = first_operand | second_operand << 8;
         snprintf(buf, sizeof(buf), instructions[opcode].name, both_operands);
         printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x %02x  %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, first_operand, second_operand, buf);
     }
@@ -2257,7 +2257,7 @@ static void push_interrupt(gb_t *gb) {
         CLOCK();
         CLOCK(mmu_write(gb, --cpu->registers.sp, cpu->registers.pc >> 8));
         CLOCK(
-            byte_t old_ie = mmu->ie; // in case the mmu_write below overwrites the IE register
+            uint8_t old_ie = mmu->ie; // in case the mmu_write below overwrites the IE register
             mmu_write(gb, --cpu->registers.sp, cpu->registers.pc & 0xFF);
             if (CHECK_BIT(mmu->io_registers[IO_IF], IRQ_VBLANK) && CHECK_BIT(old_ie, IRQ_VBLANK)) {
                 RESET_BIT(mmu->io_registers[IO_IF], IRQ_VBLANK);
