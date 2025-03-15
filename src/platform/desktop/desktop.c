@@ -1450,24 +1450,16 @@ static uint8_t *read_file(const char *path, size_t *size) {
 }
 
 int main(int argc, char **argv) {
-    if (argc < 3) {
-        printf("Usage: %s path/to/gba_bios.bin path/to/rom.gba\n", argv[0]);
+    if (argc < 2) {
+        printf("Usage: %s path/to/rom.gba\n", argv[0]);
         return EXIT_FAILURE;
     }
 
-    if (!check_extension(argv[1], ".bin"))
+    if (!check_extension(argv[1], ".gba"))
         return EXIT_FAILURE;
-
-    if (!check_extension(argv[2], ".gba"))
-        return EXIT_FAILURE;
-
-    size_t bios_size;
-    uint8_t *bios = read_file(argv[1], &bios_size);
-    if (!bios)
-        return EXIT_SUCCESS;
 
     size_t rom_size;
-    uint8_t *rom = read_file(argv[2], &rom_size);
+    uint8_t *rom = read_file(argv[1], &rom_size);
     if (!rom)
         return EXIT_SUCCESS;
 
@@ -1500,9 +1492,9 @@ int main(int argc, char **argv) {
     for (json_array_element_t *test = ((json_array_t *) root->payload)->start; test; test = test->next) {
         assert(test->value->type == json_type_object);
 
-        gba_t *gba = gba_init(rom, rom_size, bios, bios_size);
+        gba_t *gba = gba_init(rom, rom_size, NULL);
         if (!gba)
-            return EXIT_FAILURE;    
+            return EXIT_FAILURE;
 
         gba_cpu_json_test_t test_data = {};
 
@@ -1534,7 +1526,6 @@ int main(int argc, char **argv) {
     // printf("EXECUTED FIRST %d STEPS\n", max_step_count);
     // gba_quit(gba);
     free(rom);
-    free(bios);
 
     return EXIT_SUCCESS;
 }
