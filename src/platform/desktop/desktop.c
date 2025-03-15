@@ -21,7 +21,7 @@
 // #define APP_NAME EMULATOR_NAME
 // #define APP_ICON "gbmulator"
 // #define APP_VERSION STRINGIFY(VERSION)
-// #define APP_COPYRIGHT_YEAR "2024"
+// #define APP_COPYRIGHT_YEAR "2025"
 
 // #define CASE_THEN_STRING(x) case x: return #x
 
@@ -38,41 +38,50 @@
 
 // // config struct initialized to defaults
 // static config_t config = {
-//     .mode = GB_MODE_CGB,
-//     .color_palette = PPU_COLOR_PALETTE_ORIG,
+//     .mode = GBMULATOR_MODE_GBA,
+
 //     .scale = 2,
 //     .sound = 1.0f,
-//     .sound_drc = 1,
+//     .enable_sound_drc = 1,
 //     .speed = 1.0f,
 //     .link_host = "127.0.0.1",
 //     .link_port = "7777",
 
-//     .gamepad_bindings = {
-//         BTN_DPAD_RIGHT,
-//         BTN_DPAD_LEFT,
-//         BTN_DPAD_UP,
-//         BTN_DPAD_DOWN,
-//         BTN_A,
-//         BTN_B,
-//         BTN_SELECT,
-//         BTN_START
-//     },
-//     .gamepad_button_parser = (keycode_parser_t) gamepad_gamepad_button_parser,
-//     .gamepad_button_name_parser = (keyname_parser_t) gamepad_button_name_parser,
+//     .gb = {
+//         .mode = GB_MODE_CGB,
+//         .color_palette = PPU_COLOR_PALETTE_ORIG,
 
-//     .keybindings = {
-//         GDK_KEY_Right,
-//         GDK_KEY_Left,
-//         GDK_KEY_Up,
-//         GDK_KEY_Down,
-//         GDK_KEY_KP_0,
-//         GDK_KEY_period,
-//         GDK_KEY_KP_2,
-//         GDK_KEY_KP_1
+//         .gamepad_bindings = {
+//             BTN_DPAD_RIGHT,
+//             BTN_DPAD_LEFT,
+//             BTN_DPAD_UP,
+//             BTN_DPAD_DOWN,
+//             BTN_A,
+//             BTN_B,
+//             BTN_SELECT,
+//             BTN_START
+//         },
+//         .gamepad_button_parser = (keycode_parser_t) gamepad_gamepad_button_parser,
+//         .gamepad_button_name_parser = (keyname_parser_t) gamepad_button_name_parser,
+
+//         .keybindings = {
+//             GDK_KEY_Right,
+//             GDK_KEY_Left,
+//             GDK_KEY_Up,
+//             GDK_KEY_Down,
+//             GDK_KEY_KP_0,
+//             GDK_KEY_period,
+//             GDK_KEY_KP_2,
+//             GDK_KEY_KP_1
+//         },
+//         .keycode_filter = keycode_filter,
+//         .keycode_parser = gdk_keyval_name,
+//         .keyname_parser = gdk_keyval_from_name
 //     },
-//     .keycode_filter = keycode_filter,
-//     .keycode_parser = gdk_keyval_name,
-//     .keyname_parser = gdk_keyval_from_name
+
+//     .gba = {
+
+//     }
 // };
 
 // enum {
@@ -415,8 +424,22 @@
 // static void restart_emulator(AdwMessageDialog *self, gchar *response, gpointer user_data) {
 //     if (!strncmp(response, "restart", 8)) {
 //         start_loop();
-//         gb_reset(gb, config.mode);
-//         gb_print_status(gb);
+
+//         switch (config.mode) {
+//         case GBMULATOR_MODE_GB:
+//             gb_reset(gb, config.mode);
+//             gb_print_status(gb);
+//             break;
+//         case GBMULATOR_MODE_GBC:
+//             gb_reset(gb, config.mode);
+//             gb_print_status(gb);
+//             break;
+//         case GBMULATOR_MODE_GBA:
+//             gba_reset(gb, config.mode);
+//             gba_print_status(gb);
+//             break;
+//         }
+
 //         alrenderer_clear_queue();
 //     }
 // }
@@ -547,7 +570,7 @@
 //         memcpy(rom, data, rom_size);
 //     }
 
-//     gb_options_t opts = {
+//     gb_config_t opts = {
 //         .mode = config.mode,
 //         .on_new_sample = alrenderer_queue_sample,
 //         .on_new_frame = ppu_vblank_cb,
@@ -555,7 +578,7 @@
 //         .apu_speed = config.speed,
 //         .apu_sampling_rate = alrenderer_get_sampling_rate(),
 //         .apu_sound_level = config.sound,
-//         .palette = config.color_palette,
+//         .palette = config.gb.color_palette,
 //         .on_camera_capture_image = gb_camera_capture_image_cb
 //     };
 //     gb_t *new_emu = gb_init(rom, rom_size, &opts);
@@ -619,14 +642,14 @@
 // }
 
 // static void set_sound_drc(AdwSwitchRow *self, gpointer user_data) {
-//     config.sound_drc = adw_switch_row_get_active(self);
-//     alrenderer_enable_dynamic_rate_control(config.sound_drc);
+//     config.enable_sound_drc = adw_switch_row_get_active(self);
+//     alrenderer_enable_dynamic_rate_control(config.enable_sound_drc);
 // }
 
 // static void set_palette(AdwComboRow *self, GParamSpec *pspec, gpointer user_data) {
-//     config.color_palette = adw_combo_row_get_selected(self);
+//     config.gb.color_palette = adw_combo_row_get_selected(self);
 //     if (gb)
-//         gb_set_palette(gb, config.color_palette);
+//         gb_set_palette(gb, config.gb.color_palette);
 // }
 
 // static void set_keybinding(GtkDialog *self, gint response_id, gpointer user_data) {
@@ -638,15 +661,15 @@
 
 //         // detect if the key is already attributed, if yes, swap them
 //         for (int i = JOYPAD_RIGHT; i < JOYPAD_START; i++) {
-//             if (config.keybindings[i] == keyval && current_bind_setter != i) {
-//                 config.keybindings[i] = config.keybindings[current_bind_setter];
-//                 gtk_label_set_label(GTK_LABEL(key_handlers[i].widget), gdk_keyval_name(config.keybindings[i]));
+//             if (config.gb.keybindings[i] == keyval && current_bind_setter != i) {
+//                 config.gb.keybindings[i] = config.gb.keybindings[current_bind_setter];
+//                 gtk_label_set_label(GTK_LABEL(key_handlers[i].widget), gdk_keyval_name(config.gb.keybindings[i]));
 //                 break;
 //             }
 //         }
 
-//         config.keybindings[current_bind_setter] = keyval;
-//         gtk_label_set_label(GTK_LABEL(key_handlers[current_bind_setter].widget), gdk_keyval_name(config.keybindings[current_bind_setter]));
+//         config.gb.keybindings[current_bind_setter] = keyval;
+//         gtk_label_set_label(GTK_LABEL(key_handlers[current_bind_setter].widget), gdk_keyval_name(config.gb.keybindings[current_bind_setter]));
 //     }
 // }
 
@@ -659,15 +682,15 @@
 
 //         // detect if the key is already attributed, if yes, swap them
 //         for (int i = JOYPAD_RIGHT; i < JOYPAD_START; i++) {
-//             if (config.gamepad_bindings[i] == button && current_bind_setter != i) {
-//                 config.gamepad_bindings[i] = config.gamepad_bindings[current_bind_setter];
-//                 gtk_label_set_label(GTK_LABEL(gamepad_handlers[i].widget), gamepad_gamepad_button_parser(config.gamepad_bindings[i]));
+//             if (config.gb.gamepad_bindings[i] == button && current_bind_setter != i) {
+//                 config.gb.gamepad_bindings[i] = config.gb.gamepad_bindings[current_bind_setter];
+//                 gtk_label_set_label(GTK_LABEL(gamepad_handlers[i].widget), gamepad_gamepad_button_parser(config.gb.gamepad_bindings[i]));
 //                 break;
 //             }
 //         }
 
-//         config.gamepad_bindings[current_bind_setter] = button;
-//         gtk_label_set_label(GTK_LABEL(gamepad_handlers[current_bind_setter].widget), gamepad_gamepad_button_parser(config.gamepad_bindings[current_bind_setter]));
+//         config.gb.gamepad_bindings[current_bind_setter] = button;
+//         gtk_label_set_label(GTK_LABEL(gamepad_handlers[current_bind_setter].widget), gamepad_gamepad_button_parser(config.gb.gamepad_bindings[current_bind_setter]));
 //     }
 // }
 
@@ -749,7 +772,7 @@
 //         NULL
 //     };
 
-//     adw_show_about_window(gtk_application_get_active_window(GTK_APPLICATION(app)),
+//     adw_show_about_dialog(GTK_WIDGET(gtk_application_get_active_window(GTK_APPLICATION(app))),
 //                           "application-name", APP_NAME,
 //                           "application-icon", APP_ICON,
 //                           "version", APP_VERSION,
@@ -974,7 +997,7 @@
 // static gboolean key_pressed_keybind(GtkEventControllerKey *self, guint keyval, guint keycode, GdkModifierType state, gpointer user_data) {
 //     if (keyval == GDK_KEY_Escape || gamepad_state == GAMEPAD_BINDING)
 //         return FALSE;
-//     if (config.keycode_filter(keyval))
+//     if (config.gb.keycode_filter(keyval))
 //         gtk_label_set_label(GTK_LABEL(bind_value), gdk_keyval_name(keyval));
 //     return TRUE;
 // }
@@ -1162,7 +1185,7 @@
 //     g_signal_connect(widget, "value-changed", G_CALLBACK(set_sound), NULL);
 
 //     widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_sound_drc"));
-//     adw_switch_row_set_active(ADW_SWITCH_ROW(widget), config.sound_drc);
+//     adw_switch_row_set_active(ADW_SWITCH_ROW(widget), config.enable_sound_drc);
 //     g_signal_connect(widget, "notify::active", G_CALLBACK(set_sound_drc), NULL);
 
 //     speed_slider_container = GTK_WIDGET(gtk_builder_get_object(builder, "pref_speed_container"));
@@ -1175,7 +1198,7 @@
 
 //     widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_palette"));
 //     g_signal_connect(widget, "notify::selected", G_CALLBACK(set_palette), NULL);
-//     adw_combo_row_set_selected(ADW_COMBO_ROW(widget), config.color_palette);
+//     adw_combo_row_set_selected(ADW_COMBO_ROW(widget), config.gb.color_palette);
 
 //     mode_setter = GTK_WIDGET(gtk_builder_get_object(builder, "pref_mode"));
 //     g_signal_connect(mode_setter, "notify::selected", G_CALLBACK(set_mode), NULL);
@@ -1185,14 +1208,14 @@
 //         widget = GTK_WIDGET(gtk_builder_get_object(builder, key_handlers[i].name));
 //         g_signal_connect(widget, "activated", G_CALLBACK(key_setter_activated), (gpointer) &key_handlers[i].id);
 //         key_handlers[i].widget = GTK_WIDGET(gtk_builder_get_object(builder, key_handlers[i].label_name));
-//         gtk_label_set_label(GTK_LABEL(key_handlers[i].widget), gdk_keyval_name(config.keybindings[i]));
+//         gtk_label_set_label(GTK_LABEL(key_handlers[i].widget), gdk_keyval_name(config.gb.keybindings[i]));
 //     }
 
 //     for (size_t i = 0; i < G_N_ELEMENTS(gamepad_handlers); i++) {
 //         widget = GTK_WIDGET(gtk_builder_get_object(builder, gamepad_handlers[i].name));
 //         g_signal_connect(widget, "activated", G_CALLBACK(gamepad_setter_activated), (gpointer) &gamepad_handlers[i].id);
 //         gamepad_handlers[i].widget = GTK_WIDGET(gtk_builder_get_object(builder, gamepad_handlers[i].label_name));
-//         gtk_label_set_label(GTK_LABEL(gamepad_handlers[i].widget), gamepad_gamepad_button_parser(config.gamepad_bindings[i]));
+//         gtk_label_set_label(GTK_LABEL(gamepad_handlers[i].widget), gamepad_gamepad_button_parser(config.gb.gamepad_bindings[i]));
 //     }
 
 //     if (camera_find_devices()) {
@@ -1388,6 +1411,10 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <assert.h>
+
+#include "json.h"
+#include "core/gba/gba_priv.h"
 
 static bool check_extension(const char *path, const char *extension) {
     const char *dot = strrchr(path, '.');
@@ -1444,19 +1471,70 @@ int main(int argc, char **argv) {
     if (!rom)
         return EXIT_SUCCESS;
 
-    gba_t *gba = gba_init(rom, rom_size, bios, bios_size);
+    // TODO json tests
+
+    FILE *f = fopen("gba_json_tests/arm_b_bl.json", "r");
+    if (!f) {
+        errnoprintf("fopen");
+        return EXIT_FAILURE;
+    }
+
+    fseek(f, 0, SEEK_END);
+    long sz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    char *json = xmalloc(sz);
+    fread(json, sz, 1, f);
+
+    json_value_t *root = json_parse(json, strlen(json));
+    assert(root->type == json_type_array);
+
+    typedef struct {
+        gba_cpu_t final;
+
+        struct {
+
+        } transactions[8];
+    } gba_cpu_json_test_t;
+
+    for (json_array_element_t *test = ((json_array_t *) root->payload)->start; test; test = test->next) {
+        assert(test->value->type == json_type_object);
+
+        gba_t *gba = gba_init(rom, rom_size, bios, bios_size);
+        if (!gba)
+            return EXIT_FAILURE;    
+
+        gba_cpu_json_test_t test_data = {};
+
+        for (json_object_element_t *test_elem = ((json_object_t *) test->value->payload)->start; test_elem; test_elem = test_elem->next) {
+            if (!strncmp("initial", test_elem->name->string, test_elem->name->string_size)) {
+                assert(test_elem->value->type == json_type_object);
+            } else if (!strncmp("final:", test_elem->name->string, test_elem->name->string_size)) {
+                assert(test_elem->value->type == json_type_object);
+            } else if (!strncmp("transactions:", test_elem->name->string, test_elem->name->string_size)) {
+                assert(test_elem->value->type == json_type_array);
+            } else if (!strncmp("opcode:", test_elem->name->string, test_elem->name->string_size)) {
+                assert(test_elem->value->type == json_type_number);
+                gba->cpu->pipeline[1] = strtoul(((json_number_t *) test_elem->value->payload)->number, NULL, 0);
+            } else if (!strncmp("base_addr:", test_elem->name->string, test_elem->name->string_size)) {
+                assert(test_elem->value->type == json_type_number);
+            } else {
+                eprintf("%s\n", test_elem->name->string);
+                return EXIT_FAILURE;
+            }
+        }
+
+        gba_step(gba);    
+    }
+
+    // int max_step_count = 2048;
+    // for (int i = 0; i < max_step_count; i++)
+        // gba_step(gba);
+// 
+    // printf("EXECUTED FIRST %d STEPS\n", max_step_count);
+    // gba_quit(gba);
     free(rom);
     free(bios);
-
-    if (!gba)
-        return EXIT_FAILURE;
-
-    int max_step_count = 64;
-    for (int i = 0; i < max_step_count; i++)
-        gba_step(gba);
-
-    printf("EXECUTED FIRST %d STEPS\n", max_step_count);
-    gba_quit(gba);
 
     return EXIT_SUCCESS;
 }

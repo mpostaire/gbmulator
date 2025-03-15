@@ -185,6 +185,6 @@ uint32_t gba_bus_read_word(gba_t *gba);
 // TODO data type may be wrong
 void gba_bus_write(gba_t *gba, uint32_t data);
 
-gba_bus_t *gba_bus_init(uint8_t *rom, size_t rom_size, uint8_t *bios, size_t bios_size);
+gba_bus_t *gba_bus_init(const uint8_t *rom, size_t rom_size);
 
 void gba_bus_quit(gba_bus_t *bus);
