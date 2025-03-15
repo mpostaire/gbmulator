@@ -11,6 +11,7 @@
 #include "link.h"
 #include "printer.h"
 #include "camera.h"
+#include "../utils.h"
 
 #define PRINTER_CHUNK_SIZE 0x280
 

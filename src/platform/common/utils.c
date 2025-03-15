@@ -3,7 +3,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 
-#include "../../core/gb.h"
+#include "../../core/core.h"
 #include "config.h"
 
 static long fsize(FILE *f) {

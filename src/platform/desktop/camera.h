@@ -1,8 +1,7 @@
 #pragma once
 
 #include <gst/gst.h>
-
-#include "../../core/gb.h"
+#include <stdint.h>
 
 uint8_t gb_camera_capture_image_cb(uint8_t *pixels);
 

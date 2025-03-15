@@ -1,4 +1,4 @@
-#include "../../core/gb.h"
+#include "../../core/core.h"
 
 #include <adwaita.h>
 #include <libmanette.h>

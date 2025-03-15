@@ -1,7 +1,7 @@
+#include <stdint.h>
 #include <gst/gst.h>
 #include <adwaita.h>
 
-#include "../../core/gb.h"
 #include "../common/utils.h"
 
 static uint8_t *camera_data = NULL;

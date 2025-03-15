@@ -2,7 +2,7 @@
 #include <AL/al.h>
 #include <AL/alc.h>
 
-#include "../../core/gb.h"
+#include "../../core/core.h"
 
 #define AL_ERROR() alGetError() != AL_NO_ERROR
 

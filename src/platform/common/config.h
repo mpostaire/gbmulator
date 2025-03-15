@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <arpa/inet.h>
 
-#include "../../core/gb.h"
+#include "../../core/core.h"
 
 typedef int (*keycode_filter_t)(unsigned int keycode);
 typedef const char *(*keycode_parser_t)(unsigned int keycode);

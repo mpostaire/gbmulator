@@ -2,7 +2,7 @@
 
 #include <AL/al.h>
 
-#include "../../core/gb.h"
+#include "../../core/core.h"
 
 /**
  * @param sampling_rate If > 0, this sets the sampling rate of the audio. It is detected automatically if set to 0.

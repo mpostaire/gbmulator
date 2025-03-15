@@ -1,4 +1,4 @@
-#include "../../core/gb.h"
+#include "../../core/core.h"
 
 #include <stdlib.h>
 #include <adwaita.h>

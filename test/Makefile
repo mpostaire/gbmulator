@@ -1,17 +1,21 @@
-ODIR=../out/test/core
+ODIR=../build/test/core
 EMU_SDIR=../src/core
 CC=gcc
-CFLAGS=-std=gnu11 -Wall -Wextra -O3 -I$(EMU_SDIR)
+CFLAGS=-std=gnu23 -Wall -Wextra -fanalyzer -O3 -I$(EMU_SDIR)
 EXTRA_CFLAGS=$(shell pkg-config --cflags zlib MagickWand)
 LDLIBS=$(shell pkg-config --libs zlib MagickWand) -lpthread
 BIN=tester
 
-EMU_SRC=$(wildcard $(EMU_SDIR)/*.c)
+rwildcard=$(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
+
+EMU_SRC=$(call rwildcard,$(EMU_SDIR),*.c)
 EMU_OBJ=$(EMU_SRC:$(EMU_SDIR)/%.c=$(ODIR)/%.o)
+
+ODIR_STRUCTURE:=$(sort $(foreach d,$(EMU_OBJ),$(subst /$(lastword $(subst /, ,$d)),,$d)))
 
 TEST_ROMS=test_roms
 
-all: $(ODIR)
+all: $(ODIR_STRUCTURE)
 	$(MAKE) tests.txt
 	$(MAKE) $(BIN)
 	cp results/summary.txt results/summary_old.txt || true
@@ -36,7 +40,7 @@ $(TEST_ROMS):
 		-fill "#AAAAAA" -opaque "#BFBFBF" \
 		-fill "#000000" -opaque "#3F3F3F" \
 		$(TEST_ROMS)/other/windesync-validate/windesync-reference-sgb.png
-	convert docboy-test-suite-master/images/success.png \
+	convert docboy-test-suite-master/results/success.png \
 		-fill "#FFFFFF" -opaque "#839500" \
 		-fill "#000000" -opaque "#104000" \
 		$(TEST_ROMS)/docboy-test-suite/success.png
@@ -46,16 +50,16 @@ $(BIN): $(EMU_OBJ) $(ODIR)/$(BIN).o
 	$(CC) -o $@ $^ $(CFLAGS) $(EXTRA_CFLAGS) $(LDLIBS)
 
 $(ODIR)/$(BIN).o: $(BIN).c
-	$(CC) -o $@ -c $< $(CFLAGS) $(EXTRA_CFLAGS) $(LDLIBS) -MMD
+	$(CC) -o $@ -c $< $(CFLAGS) $(EXTRA_CFLAGS) $(LDLIBS) -MMD -MP
 
 $(ODIR)/%.o: $(EMU_SDIR)/%.c
-	$(CC) -o $@ -c $< $(CFLAGS) -MMD
+	$(CC) -o $@ -c $< $(CFLAGS) -MMD -MP
 
-$(ODIR):
+$(ODIR_STRUCTURE):
 	mkdir -p $@
 
 clean:
-	rm -rf $(BIN) out tests.txt results/summary.txt.tmp
+	rm -rf $(BIN) ../build/test tests.txt results/summary.txt.tmp
 
 cleaner: clean
 	rm -rf $(TEST_ROMS) results/*/ results/summary_old.txt

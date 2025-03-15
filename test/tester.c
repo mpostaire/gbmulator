@@ -12,7 +12,7 @@
 #include <dirent.h>
 #include <MagickWand/MagickWand.h>
 
-#include "../core/gb_priv.h"
+#include "../core/gb/gb_priv.h"
 
 #define BOLD "\033[1m"
 #define COLOR_OFF "\033[0m"
@@ -64,7 +64,7 @@ static void load_bootroms(void) {
 
     FILE *cgb_f = fopen("cgb_boot.bin", "r");
     if (cgb_f) {
-        if (fread(cgb_boot, 1, sizeof(cgb_boot), dmg_f) == 0x900)
+        if (fread(cgb_boot, 1, sizeof(cgb_boot), cgb_f) == 0x900)
             cgb_boot_found = 1;
         else
             printf("Cannot read cgb_boot.bin, using default CGB boot ROM...\n");

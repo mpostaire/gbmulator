@@ -5,7 +5,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 
-#include "../../core/gb.h"
+#include "../../core/core.h"
 
 typedef enum {
     PKT_INFO,

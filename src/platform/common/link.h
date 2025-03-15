@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../core/gb.h"
+#include "../../core/core.h"
 
 void link_cancel(void);
 

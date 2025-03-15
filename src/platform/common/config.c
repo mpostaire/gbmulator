@@ -3,7 +3,7 @@
 
 #include "config.h"
 #include "utils.h"
-#include "../../core/gb.h"
+#include "../../core/core.h"
 
 static void parse_config_line(config_t *config, const char *line) {
     uint8_t scale, color_palette, sound_drc;

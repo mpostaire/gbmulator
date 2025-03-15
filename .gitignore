@@ -3,7 +3,7 @@
 !src
 !src/**
 !test
-test/game-boy-test-roms-v*
+test/*.zip
 *.txt
 *.tmp
 *.pdf
