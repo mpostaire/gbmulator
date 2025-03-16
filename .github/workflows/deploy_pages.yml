@@ -21,7 +21,8 @@ jobs:
 
       - name: Get and compile rgbds
         run: |
-          sudo apt-get -y install libpng-dev
+          sudo apt-get update
+          sudo apt-get -y install libpng-dev bison
           git clone https://github.com/gbdev/rgbds.git
           cd rgbds
           make
