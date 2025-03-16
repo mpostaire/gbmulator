@@ -64,7 +64,7 @@ profile: run
 	gprof ./$(BIN) gmon.out > prof_output
 
 # TODO this should also make a gbmulator.apk file in this project root dir (next do the gbmulator desktop binary) 
-android: $(SDIR)/core/boot.c
+android: $(SDIR)/core/gb/boot.c
 	cd $(SDIR)/platform/android/android-project && ./gradlew build
 
 debug_android: android
@@ -88,7 +88,7 @@ debug_web: web
 	emrun web_build/index.html
 
 web_build/index.html: $(SDIR)/platform/web/template.html $(OBJ)
-	$(CC) -o $@ $(OBJ) $(CFLAGS) -sABORTING_MALLOC=0 -sINITIAL_MEMORY=96MB -sWASM=1 -sEXPORTED_RUNTIME_METHODS=[ccall] -sASYNCIFY --shell-file $<
+	$(CC) -o $@ $(OBJ) $(CFLAGS) -sABORTING_MALLOC=0 -sINITIAL_MEMORY=96MB -sWASM=1 -sEXPORTED_FUNCTIONS=[_malloc] -sEXPORTED_RUNTIME_METHODS=[ccall] -sASYNCIFY --shell-file $<
 
 test:
 	$(MAKE) -C test
@@ -103,8 +103,8 @@ $(PLATFORM_ODIR_STRUCTURE):
 	mkdir -p $@
 
 # Build boot roms (taken and modified from SameBoy emulator)
-$(SDIR)/core/boot.c: $(ODIR)/bootroms/gb/dmg_boot $(ODIR)/bootroms/gb/cgb_boot
-	cd $(ODIR)/bootroms/gb && xxd -i dmg_boot > ../../../$(SDIR)/core/boot.c && xxd -i cgb_boot >> ../../../$(SDIR)/core/boot.c
+$(SDIR)/core/gb/boot.c: $(ODIR)/bootroms/gb/dmg_boot $(ODIR)/bootroms/gb/cgb_boot
+	cd $(ODIR)/bootroms/gb && xxd -i dmg_boot > ../../../$(SDIR)/core/gb/boot.c && xxd -i cgb_boot >> ../../../$(SDIR)/core/gb/boot.c
 
 $(ODIR)/bootroms/gb/gbmulator_logo.1bpp: $(SDIR)/bootroms/gb/gbmulator_logo.png
 	-@mkdir -p $(dir $@)
@@ -127,7 +127,7 @@ $(ODIR)/bootroms/gb/%: $(SDIR)/bootroms/gb/%.asm $(ODIR)/bootroms/gb/gbmulator_l
 
 $(ICONS): $(ICONDIR)/$(BIN).svg
 	mkdir -p $(ICONDIR)/$(patsubst $(ICONDIR)/%/$(BIN).png,%,$@)
-	convert -background none -density 1200 -resize $(patsubst $(ICONDIR)/%/$(BIN).png,%,$@) $^ $(ICONDIR)/$(patsubst $(ICONDIR)/%/$(BIN).png,%,$@)/$(BIN).png
+	magick $^ -background none -density 1200 -resize $(patsubst $(ICONDIR)/%/$(BIN).png,%,$@) $(ICONDIR)/$(patsubst $(ICONDIR)/%/$(BIN).png,%,$@)/$(BIN).png
 
 check: $(SDIR)
 	cppcheck --enable=all --suppress=missingIncludeSystem -i $(SDIR)/platform/android/android-project -i $(SDIR)/platform/desktop/resources.c $(SDIR)
@@ -167,6 +167,6 @@ uninstall:
 	gtk-update-icon-cache
 	update-desktop-database
 
--include $(foreach d,$(PLATFORM_ODIR_STRUCTURE),$d/*.d)
+-include $(OBJ:.o=.d)
 
 .PHONY: all clean run install uninstall debug web debug_web android debug_android test

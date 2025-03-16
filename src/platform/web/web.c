@@ -5,7 +5,7 @@
 
 #include "../common/config.h"
 #include "../common/utils.h"
-#include "../../core/gb.h"
+#include "../../core/core.h"
 #include "base64.h"
 
 static int keycode_filter(SDL_Keycode key);
