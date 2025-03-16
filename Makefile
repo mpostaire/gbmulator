@@ -81,7 +81,7 @@ web_build/style.css: $(SDIR)/platform/web/style.css
 
 web: CC:=emcc
 web: LDLIBS:=
-web: CFLAGS+=-sUSE_SDL=2 -sUSE_ZLIB=1
+web: CFLAGS+=-sUSE_SDL=2 -sUSE_ZLIB=1 -std=gnu17
 web: $(PLATFORM_ODIR_STRUCTURE) web_build web_build/favicon.png web_build/style.css web_build/index.html
 
 debug_web: web
