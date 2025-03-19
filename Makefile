@@ -44,16 +44,13 @@ ICONS= \
 UI:=$(wildcard $(SDIR)/platform/desktop/ui/*.ui)
 SHADERS:=$(wildcard $(SDIR)/platform/desktop/ui/*.glsl)
 
-# aaaaa:
-# 	echo $(OBJ)
-
 all: desktop
 
 debug: CFLAGS+=-g -O0
 debug: all
 
-desktop: CFLAGS+=$(shell pkg-config --cflags gtk4 libadwaita-1 zlib manette-0.2 opengl glew openal gstreamer-1.0) -fanalyzer
-desktop: LDLIBS+=$(shell pkg-config --libs gtk4 libadwaita-1 zlib manette-0.2 opengl glew openal gstreamer-1.0)
+desktop: CFLAGS+=$(shell pkg-config --cflags gtk4 libadwaita-1 zlib manette-0.2 opengl openal gstreamer-1.0) -fanalyzer
+desktop: LDLIBS+=$(shell pkg-config --libs gtk4 libadwaita-1 zlib manette-0.2 opengl openal gstreamer-1.0)
 desktop: $(PLATFORM_ODIR_STRUCTURE) $(BIN) $(ICONS)
 
 $(SDIR)/platform/desktop/resources.c: $(SDIR)/platform/desktop/ui/gbmulator.gresource.xml $(UI) $(SHADERS)
@@ -81,14 +78,14 @@ web_build/style.css: $(SDIR)/platform/web/style.css
 
 web: CC:=emcc
 web: LDLIBS:=
-web: CFLAGS+=-sUSE_SDL=2 -sUSE_ZLIB=1 -std=gnu17
+web: CFLAGS+=-sUSE_ZLIB=1
 web: $(PLATFORM_ODIR_STRUCTURE) web_build web_build/favicon.png web_build/style.css web_build/index.html
 
 debug_web: web
 	emrun web_build/index.html
 
 web_build/index.html: $(SDIR)/platform/web/template.html $(OBJ)
-	$(CC) -o $@ $(OBJ) $(CFLAGS) -sABORTING_MALLOC=0 -sINITIAL_MEMORY=96MB -sWASM=1 -sEXPORTED_FUNCTIONS=[_malloc] -sEXPORTED_RUNTIME_METHODS=[ccall] -sASYNCIFY --shell-file $<
+	$(CC) -o $@ $(OBJ) $(CFLAGS) -lopenal -sINITIAL_MEMORY=96MB -sUSE_WEBGL2=1 -sWASM=1 -sEXPORTED_FUNCTIONS="['_main', '_malloc']" -sEXPORTED_RUNTIME_METHODS="['ccall']" -sASYNCIFY --shell-file $<
 
 test:
 	$(MAKE) -C test

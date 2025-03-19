@@ -7,9 +7,9 @@
 #include <netdb.h>
 #include <string.h>
 
-#include "glrenderer.h"
-#include "alrenderer.h"
 #include "camera.h"
+#include "../common/glrenderer.h"
+#include "../common/alrenderer.h"
 #include "../common/link.h"
 #include "../common/utils.h"
 #include "../common/config.h"
