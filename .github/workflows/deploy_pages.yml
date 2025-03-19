@@ -6,7 +6,7 @@ on:
 permissions:
   contents: write
 env:
-  EM_VERSION: 3.1.15
+  EM_VERSION: 4.0.4
   EM_CACHE_FOLDER: 'emsdk-cache'
 jobs:
   build-and-deploy:
