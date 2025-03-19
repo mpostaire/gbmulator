@@ -82,9 +82,30 @@ static void ppu_vblank_cb(const uint8_t *pixels) {
     glrenderer_update_texture(renderer, 0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, pixels);
 }
 
+// TODO maybe use same loop as desktop platform
+static void loop(void) {
+    if (is_paused) {
+        emscripten_cancel_main_loop();
+        // emscripten_set_main_loop(paused_loop, 30, 1);
+    }
+
+    glrenderer_render(renderer);
+    // handle_input(); // keep this the closest possible before gb_run_steps() to reduce input inaccuracies
+
+    // run the emulator for the approximate number of steps it takes for the ppu to render a frame
+    gb_run_steps(gb, GB_CPU_STEPS_PER_FRAME * config.speed);
+}
+
 EMSCRIPTEN_KEEPALIVE void set_pause(uint8_t value) {
     if (!gb) return;
+
     is_paused = value;
+
+    if (is_paused)
+        emscripten_cancel_main_loop();
+    else
+        emscripten_set_main_loop(loop, GB_FRAMES_PER_SECOND, 0);
+
     EM_ASM({
         setMenuVisibility($0);
     }, !is_paused);
@@ -403,31 +424,6 @@ static void handle_input(void) {
     // }
 }
 
-static void loop(void);
-static void paused_loop(void) {
-    handle_input();
-    if (!is_paused) {
-        emscripten_cancel_main_loop();
-        emscripten_set_main_loop(loop, 60, 1);
-    }
-
-    glrenderer_render(renderer);
-}
-
-static void loop(void) {
-    if (is_paused) {
-        emscripten_cancel_main_loop();
-        emscripten_set_main_loop(paused_loop, 30, 1);
-    }
-
-    // TODO maybe use same loop as desktop platform
-    glrenderer_render(renderer);
-    handle_input(); // keep this the closest possible before gb_run_steps() to reduce input inaccuracies
-
-    // run the emulator for the approximate number of steps it takes for the ppu to render a frame
-    gb_run_steps(gb, GB_CPU_STEPS_PER_FRAME * config.speed);
-}
-
 int main(int argc, char **argv) {
     // load_config() must be called before gb_init()
     // config.keybindings[JOYPAD_B] = SDLK_PERIOD; // change default B key to SDLK_PERIOD as SDLK_KP_PERIOD doesn't work for web
@@ -478,8 +474,6 @@ int main(int argc, char **argv) {
     emscripten_set_window_title(EMULATOR_NAME);
 
     alrenderer_init(0);
-
-    emscripten_set_main_loop(paused_loop, 30, 1);
 
     return EXIT_SUCCESS;
 }
