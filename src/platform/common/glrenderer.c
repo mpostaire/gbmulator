@@ -30,37 +30,8 @@ static const char fragment_shader_source[] = {
     "// Gets the Texture Unit from the main function\n"
     "uniform sampler2D tex0;\n"
     "\n"
-    "const uint COLOR_CORRECTION_NONE = 0u;\n"
-    "const uint COLOR_CORRECTION_CGB = 1u;\n"
-    "\n"
-    "uniform uint color_correction;\n"
-    "\n"
     "void main() {\n"
-    "    vec4 temp_color = texture(tex0, tex_coord);\n"
-    "\n"
-    "    switch (color_correction) {\n"
-    "    case COLOR_CORRECTION_NONE:\n"
-    "        break;\n"
-    "    case COLOR_CORRECTION_CGB:\n"
-    "        temp_color.rgb *= 255.0;\n"
-    "\n"
-    "        int r = int(temp_color.r);\n"
-    "        int g = int(temp_color.g);\n"
-    "        int b = int(temp_color.b);\n"
-    "\n"
-    "        temp_color.rgb = vec3(\n"
-    "            float((r * 13 + g * 2 + b) >> 4),\n"
-    "            float((g *  3 + b) >> 2),\n"
-    "            float((r *  3 + g * 2 + b * 11) >> 4)\n"
-    "        );\n"
-    "\n"
-    "        temp_color.rgb /= 255.0;\n"
-    "        break;\n"
-    "    default:\n"
-    "        break;\n"
-    "    }\n"
-    "\n"
-    "    color = temp_color;\n"
+    "    color = texture(tex0, tex_coord);\n"
     "}"
 };
 
@@ -237,10 +208,4 @@ void glrenderer_resize_texture(glrenderer_t *renderer, GLsizei width, GLsizei he
     glBindTexture(GL_TEXTURE_2D, renderer->texture);
     // NULL as pixel data: opengl allocates texture but doesn't copy any pixel data 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-}
-
-void glrenderer_set_conf_uniform(glrenderer_t *renderer, const GLchar *uniform, GLuint value) {
-    GLint uniform_location = glGetUniformLocation(shader_program, uniform);
-    if (uniform_location != -1)
-        glUniform1ui(uniform_location, value);
 }
