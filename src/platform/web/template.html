@@ -323,13 +323,18 @@
         var setMenuVisibility = function(visible) {
             var menu = document.getElementById("menu");
             var openMenu = document.getElementById("open-menu");
-            menu.style.display = visible ? "none" : "flex";
+            if (visible) {
+                openMenu.classList.remove("paused");
+                menu.style.display = "none";
+            } else {
+                openMenu.classList.add("paused");
+                menu.style.display = "flex";
+            }
         };
 
         var togglePause = function(elem) {
             var x = document.getElementById("menu");
             Module.ccall('set_pause', 'void', ['boolean'], [x.style.display === "none"]);
-            elem.classList.toggle("paused");
         };
 
         var ROMPicker = document.getElementById('rom-picker');

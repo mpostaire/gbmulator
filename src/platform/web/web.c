@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
+#include <emscripten/key_codes.h>
 
 #include "../common/glrenderer.h"
 #include "../common/alrenderer.h"
@@ -10,7 +11,7 @@
 #include "../../core/core.h"
 #include "base64.h"
 
-// static int keycode_filter(SDL_Keycode key);
+static int keycode_filter(unsigned int key);
 
 // config struct initialized to defaults
 static config_t config = {
@@ -19,41 +20,27 @@ static config_t config = {
     .scale = 2,
     .sound = 0.25f,
     .speed = 1.0f,
-    .link_host = "127.0.0.1",
-    .link_port = "7777",
-
-    .gamepad_bindings = {
-        // SDL_CONTROLLER_BUTTON_DPAD_RIGHT,
-        // SDL_CONTROLLER_BUTTON_DPAD_LEFT,
-        // SDL_CONTROLLER_BUTTON_DPAD_UP,
-        // SDL_CONTROLLER_BUTTON_DPAD_DOWN,
-        // SDL_CONTROLLER_BUTTON_A,
-        // SDL_CONTROLLER_BUTTON_B,
-        // SDL_CONTROLLER_BUTTON_BACK,
-        // SDL_CONTROLLER_BUTTON_START
-    },
 
     .keybindings = {
-        // SDLK_RIGHT,
-        // SDLK_LEFT,
-        // SDLK_UP,
-        // SDLK_DOWN,
-        // SDLK_KP_0,
-        // SDLK_KP_PERIOD,
-        // SDLK_KP_2,
-        // SDLK_KP_1
+        DOM_VK_RIGHT,
+        DOM_VK_LEFT,
+        DOM_VK_UP,
+        DOM_VK_DOWN,
+        DOM_VK_NUMPAD0,
+        DOM_VK_PERIOD,
+        DOM_VK_NUMPAD2,
+        DOM_VK_NUMPAD1
     },
-    // .keycode_filter = (keycode_filter_t) keycode_filter,
-    // .keycode_parser = (keycode_parser_t) SDL_GetKeyName,
-    // .keyname_parser = (keyname_parser_t) SDL_GetKeyFromName
+    .keycode_filter = (keycode_filter_t) keycode_filter,
+    // TODO uncomment both lines below to save/load config for keybindings (emscripten_dom_pk_code_to_string and
+    //      emscripten_compute_dom_pk_code are unsuitable because they use PK codes but we use VK codes)
+    // .keycode_parser = (keycode_parser_t) emscripten_dom_pk_code_to_string,
+    // .keyname_parser = (keyname_parser_t) emscripten_compute_dom_pk_code
 };
 
 static bool is_paused = 1;
 
 static glrenderer_t *renderer;
-
-// static SDL_GameController *pad;
-// static bool is_controller_present = 0;
 
 static uint8_t scale;
 
@@ -61,22 +48,24 @@ static int editing_keybind = -1;
 
 static char window_title[sizeof(EMULATOR_NAME) + 19];
 
+static uint8_t joypad_state = 0xFF;
+
 static gb_t *gb;
 
-// static int keycode_filter(SDL_Keycode key) {
-//     switch (key) {
-//     case SDLK_RETURN: case SDLK_KP_ENTER:
-//     case SDLK_DELETE: case SDLK_BACKSPACE:
-//     case SDLK_PAUSE: case SDLK_ESCAPE:
-//     case SDLK_F1: case SDLK_F2:
-//     case SDLK_F3: case SDLK_F4:
-//     case SDLK_F5: case SDLK_F6:
-//     case SDLK_F7: case SDLK_F8:
-//         return 0;
-//     default:
-//         return 1;
-//     }
-// }
+static int keycode_filter(unsigned int key) {
+    switch (key) {
+    case DOM_VK_RETURN: case DOM_VK_ENTER:
+    case DOM_VK_DELETE: case DOM_VK_BACK_SPACE:
+    case DOM_VK_PAUSE: case DOM_VK_ESCAPE:
+    case DOM_VK_F1: case DOM_VK_F2:
+    case DOM_VK_F3: case DOM_VK_F4:
+    case DOM_VK_F5: case DOM_VK_F6:
+    case DOM_VK_F7: case DOM_VK_F8:
+        return 0;
+    default:
+        return 1;
+    }
+}
 
 static void ppu_vblank_cb(const uint8_t *pixels) {
     glrenderer_update_texture(renderer, 0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, pixels);
@@ -86,14 +75,14 @@ static void ppu_vblank_cb(const uint8_t *pixels) {
 static void loop(void) {
     if (is_paused) {
         emscripten_cancel_main_loop();
-        // emscripten_set_main_loop(paused_loop, 30, 1);
     }
 
-    glrenderer_render(renderer);
-    // handle_input(); // keep this the closest possible before gb_run_steps() to reduce input inaccuracies
+    gb_set_joypad_state(gb, joypad_state);
 
     // run the emulator for the approximate number of steps it takes for the ppu to render a frame
     gb_run_steps(gb, GB_CPU_STEPS_PER_FRAME * config.speed);
+
+    glrenderer_render(renderer);
 }
 
 EMSCRIPTEN_KEEPALIVE void set_pause(uint8_t value) {
@@ -215,7 +204,7 @@ void load_cartridge(const uint8_t *rom, size_t rom_size) {
         document.getElementById('mode-setter-label').innerHTML = "Mode: (applied on restart)";
         var x = document.getElementById('open-menu');
         x.disabled = 0;
-        x.classList.toggle("paused");
+        x.classList.remove("paused");
     }, config.mode);
 }
 
@@ -227,9 +216,6 @@ EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
 
     // save config
     save_config("config");
-
-    // if (is_controller_present)
-    //     SDL_GameControllerClose(pad);
 
     alrenderer_quit();
     glrenderer_quit(renderer);
@@ -299,134 +285,103 @@ EMSCRIPTEN_KEEPALIVE void edit_keybind(uint8_t value) {
     editing_keybind = value;
 }
 
-EMSCRIPTEN_KEEPALIVE void *_xmalloc(size_t size) {
-    return xmalloc(size);
-}
+bool handle_keyboard_input(int eventType, const EmscriptenKeyboardEvent *e, void *userData) {
+    size_t len;
+    char *savestate_path;
+    char *rom_title;
+    int joypad;
 
-static void handle_input(void) {
-    // SDL_Event event;
-    // size_t len;
-    // char *savestate_path;
-    // char *rom_title;
-    // while (SDL_PollEvent(&event)) {
-    //     switch (event.type) {
-    //     case SDL_KEYDOWN:
-    //         if (event.key.repeat)
-    //             break;
-    //         if (is_paused) {
-    //             if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_PAUSE) {
-    //                 set_pause(0);
-    //                 if (editing_keybind >= JOYPAD_RIGHT && editing_keybind <= JOYPAD_START) {
-    //                     EM_ASM({
-    //                         toggleEditingKeybind($0);
-    //                         editingKeybind = -1;
-    //                     }, editing_keybind);
-    //                     editing_keybind = -1;
-    //                 }
-    //             } else if (editing_keybind >= JOYPAD_RIGHT && editing_keybind <= JOYPAD_START && config.keycode_filter(event.key.keysym.sym)) {
-    //                 // check if another keybind is already bound to this key and swap them if this is the case
-    //                 for (int i = JOYPAD_RIGHT; i <= JOYPAD_START; i++) {
-    //                     if (i != editing_keybind && (int) config.keybindings[i] == event.key.keysym.sym) {
-    //                         config.keybindings[i] = config.keybindings[editing_keybind];
-    //                         EM_ASM({
-    //                             document.getElementById("keybind-setter-" + $0).innerHTML = UTF8ToString($1);
-    //                         }, i, SDL_GetKeyName(config.keybindings[i]));
-    //                         break;
-    //                     }
-    //                 }
+    switch (eventType) {
+    case EMSCRIPTEN_EVENT_KEYUP:
+        if (!gb || is_paused) return 0;
 
-    //                 config.keybindings[editing_keybind] = event.key.keysym.sym;
-    //                 EM_ASM({
-    //                     document.getElementById("keybind-setter-" + $0).innerHTML = UTF8ToString($1);
-    //                     toggleEditingKeybind($0);
-    //                     editingKeybind = -1;
-    //                 }, editing_keybind, SDL_GetKeyName(config.keybindings[editing_keybind]));
-    //                 editing_keybind = -1;
-    //             }
-    //             break;
-    //         }
-    //         switch (event.key.keysym.sym) {
-    //         case SDLK_PAUSE:
-    //         case SDLK_ESCAPE:
-    //             set_pause(1);
-    //             break;
-    //         case SDLK_F1: case SDLK_F2:
-    //         case SDLK_F3: case SDLK_F4:
-    //         case SDLK_F5: case SDLK_F6:
-    //         case SDLK_F7: case SDLK_F8:
-    //             if (!gb)
-    //                 break;
-    //             rom_title = gb_get_rom_title(gb);
-    //             len = strlen(rom_title);
-    //             savestate_path = xmalloc(len + 10);
-    //             snprintf(savestate_path, len + 9, "%s-state-%d", rom_title, event.key.keysym.sym - SDLK_F1);
-    //             if (event.key.keysym.mod & KMOD_SHIFT) {
-    //                 size_t savestate_length;
-    //                 uint8_t *savestate = gb_get_savestate(gb, &savestate_length, 1);
-    //                 local_storage_set_item(savestate_path, savestate, 1, savestate_length);
-    //                 free(savestate);
-    //             } else {
-    //                 size_t savestate_length;
-    //                 uint8_t *savestate = local_storage_get_item(savestate_path, &savestate_length, 1);
-    //                 int ret = gb_load_savestate(gb, savestate, savestate_length);
-    //                 if (ret > 0) {
-    //                     config.mode = ret;
-    //                     EM_ASM({
-    //                         document.getElementById("mode-setter").value = $4;
-    //                     }, config.mode);
-    //                 }
-    //                 free(savestate);
-    //             }
-    //             free(savestate_path);
-    //             break;
-    //         }
-    //         if (!is_paused)
-    //             gb_joypad_press(gb, keycode_to_joypad(&config, event.key.keysym.sym));
-    //         break;
-    //     case SDL_KEYUP:
-    //         if (!event.key.repeat && !is_paused)
-    //             gb_joypad_release(gb, keycode_to_joypad(&config, event.key.keysym.sym));
-    //         break;
-    //     case SDL_CONTROLLERBUTTONDOWN:
-    //         if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
-    //             set_pause(!is_paused);
-    //             if (editing_keybind >= 0) {
-    //                 EM_ASM({
-    //                     toggleEditingKeybind($0);
-    //                     editingKeybind = -1;
-    //                 }, editing_keybind);
-    //                 editing_keybind = -1;
-    //             }
-    //             break;
-    //         }
-    //         if (!is_paused)
-    //             gb_joypad_press(gb, button_to_joypad(&config, event.cbutton.button));
-    //         break;
-    //     case SDL_CONTROLLERBUTTONUP:
-    //         if (!is_paused)
-    //             gb_joypad_release(gb, button_to_joypad(&config, event.cbutton.button));
-    //         break;
-    //     case SDL_CONTROLLERDEVICEADDED:
-    //         if (!is_controller_present) {
-    //             pad = SDL_GameControllerOpen(event.cdevice.which);
-    //             is_controller_present = 1;
-    //             printf("%s connected\n", SDL_GameControllerName(pad));
-    //         }
-    //         break;
-    //     case SDL_CONTROLLERDEVICEREMOVED:
-    //         if (is_controller_present) {
-    //             SDL_GameControllerClose(pad);
-    //             is_controller_present = 0;
-    //             printf("%s disconnected\n", SDL_GameControllerName(pad));
-    //         }
-    //         break;
-    //     }
-    // }
+        joypad = keycode_to_joypad(&config, e->keyCode);
+        if (joypad < 0) return 1;
+        SET_BIT(joypad_state, joypad);
+        return 1;
+    case EMSCRIPTEN_EVENT_KEYDOWN:
+        if (is_paused) {
+            if (e->keyCode == DOM_VK_ESCAPE || e->keyCode == DOM_VK_PAUSE) {
+                set_pause(0);
+                if (editing_keybind >= JOYPAD_RIGHT && editing_keybind <= JOYPAD_START) {
+                    EM_ASM({
+                        toggleEditingKeybind($0);
+                        editingKeybind = -1;
+                    }, editing_keybind);
+                    editing_keybind = -1;
+                }
+            } else if (editing_keybind >= JOYPAD_RIGHT && editing_keybind <= JOYPAD_START && config.keycode_filter(e->keyCode)) {
+                // check if another keybind is already bound to this key and swap them if this is the case
+                for (int i = JOYPAD_RIGHT; i <= JOYPAD_START; i++) {
+                    if (i != editing_keybind && config.keybindings[i] == e->keyCode) {
+                        config.keybindings[i] = config.keybindings[editing_keybind];
+                        EM_ASM({
+                            document.getElementById("keybind-setter-" + $0).innerHTML = UTF8ToString($1);
+                        }, i, emscripten_dom_vk_to_string(config.keybindings[i]));
+                        break;
+                    }
+                }
+        
+                config.keybindings[editing_keybind] = e->keyCode;
+                EM_ASM({
+                    document.getElementById("keybind-setter-" + $0).innerHTML = UTF8ToString($1);
+                    toggleEditingKeybind($0);
+                    editingKeybind = -1;
+                }, editing_keybind, emscripten_dom_vk_to_string(config.keybindings[editing_keybind]));
+                editing_keybind = -1;
+            }
+            return 1;
+        }
+
+        switch (e->keyCode) {
+        case DOM_VK_PAUSE:
+        case DOM_VK_ESCAPE:
+            set_pause(1);
+            break;
+        case DOM_VK_F1: case DOM_VK_F2:
+        case DOM_VK_F3: case DOM_VK_F4:
+        case DOM_VK_F5: case DOM_VK_F6:
+        case DOM_VK_F7: case DOM_VK_F8:
+            if (!gb)
+                break;
+
+            rom_title = gb_get_rom_title(gb);
+            len = strlen(rom_title);
+            savestate_path = xmalloc(len + 10);
+            snprintf(savestate_path, len + 9, "%s-state-%d", rom_title, e->keyCode - DOM_VK_F1);
+            if (e->shiftKey) {
+                size_t savestate_length;
+                uint8_t *savestate = gb_get_savestate(gb, &savestate_length, 1);
+                local_storage_set_item(savestate_path, savestate, 1, savestate_length);
+                free(savestate);
+            } else {
+                size_t savestate_length;
+                uint8_t *savestate = local_storage_get_item(savestate_path, &savestate_length, 1);
+                int ret = gb_load_savestate(gb, savestate, savestate_length);
+                if (ret > 0) {
+                    config.mode = ret;
+                    EM_ASM({
+                        document.getElementById("mode-setter").value = $4;
+                    }, config.mode);
+                }
+                free(savestate);
+            }
+            free(savestate_path);
+            break;
+        }
+
+        joypad = keycode_to_joypad(&config, e->keyCode);
+        if (joypad < 0) return 1;
+        RESET_BIT(joypad_state, joypad);
+        return 1;
+    default:
+        return 0;
+    }
 }
 
 int main(int argc, char **argv) {
     // load_config() must be called before gb_init()
-    // config.keybindings[JOYPAD_B] = SDLK_PERIOD; // change default B key to SDLK_PERIOD as SDLK_KP_PERIOD doesn't work for web
+    // config.keybindings[JOYPAD_B] = DOM_VK_PERIOD; // change default B key to DOM_VK_PERIOD as DOM_VK_KP_PERIOD doesn't work for web
     load_config("config");
     gb = NULL;
 
@@ -440,16 +395,13 @@ int main(int argc, char **argv) {
         document.getElementById("mode-setter").value = $4;
     }, config.speed, config.sound * 100, config.scale, config.color_palette, config.mode);
 
-    // separate calls necessary for SDL_GetKeyName()
     for (int i = JOYPAD_RIGHT; i <= JOYPAD_START; i++) {
-        // EM_ASM({
-        //     document.getElementById("keybind-setter-" + $0).innerHTML = UTF8ToString($1);
-        // }, i, SDL_GetKeyName(config.keybindings[i]));
+        EM_ASM({
+            document.getElementById("keybind-setter-" + $0).innerHTML = UTF8ToString($1);
+        }, i, emscripten_dom_vk_to_string(config.keybindings[i]));
     }
 
     scale = config.scale;
-
-    // SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
 
     emscripten_set_canvas_element_size("#canvas", GB_SCREEN_WIDTH * scale, GB_SCREEN_HEIGHT * scale);
 
@@ -474,6 +426,9 @@ int main(int argc, char **argv) {
     emscripten_set_window_title(EMULATOR_NAME);
 
     alrenderer_init(0);
+
+    emscripten_set_keydown_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, 0, 1, handle_keyboard_input);
+    emscripten_set_keyup_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, 0, 1, handle_keyboard_input);
 
     return EXIT_SUCCESS;
 }
