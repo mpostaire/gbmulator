@@ -209,3 +209,7 @@ void glrenderer_resize_texture(glrenderer_t *renderer, GLsizei width, GLsizei he
     // NULL as pixel data: opengl allocates texture but doesn't copy any pixel data 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 }
+
+void glrenderer_resize_viewport(glrenderer_t *renderer, GLsizei width, GLsizei height) {
+    glViewport(0, 0, width, height);
+}

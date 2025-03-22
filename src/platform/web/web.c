@@ -223,12 +223,12 @@ EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
 
 EMSCRIPTEN_KEEPALIVE void on_gui_button_down(gb_joypad_button_t button) {
     if (!is_paused)
-        gb_joypad_press(gb, button);
+        RESET_BIT(joypad_state, button);
 }
 
 EMSCRIPTEN_KEEPALIVE void on_gui_button_up(gb_joypad_button_t button) {
     if (!is_paused)
-        gb_joypad_release(gb, button);
+        SET_BIT(joypad_state, button);
 }
 
 EMSCRIPTEN_KEEPALIVE void receive_rom(uint8_t *rom, size_t rom_size) {
@@ -251,6 +251,7 @@ EMSCRIPTEN_KEEPALIVE void set_scale(uint8_t value) {
     if (scale != config.scale) {
         scale = config.scale;
         emscripten_set_canvas_element_size("#canvas", GB_SCREEN_WIDTH * scale, GB_SCREEN_HEIGHT * scale);
+        glrenderer_resize_viewport(renderer, GB_SCREEN_WIDTH * scale, GB_SCREEN_HEIGHT * scale);
     }
 }
 
@@ -289,7 +290,7 @@ bool handle_keyboard_input(int eventType, const EmscriptenKeyboardEvent *e, void
     size_t len;
     char *savestate_path;
     char *rom_title;
-    int joypad;
+    gb_joypad_button_t joypad;
 
     switch (eventType) {
     case EMSCRIPTEN_EVENT_KEYUP:

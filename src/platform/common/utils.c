@@ -20,7 +20,7 @@ static long fsize(FILE *f) {
     return len;
 }
 
-int keycode_to_joypad(config_t *config, unsigned int keycode) {
+gb_joypad_button_t keycode_to_joypad(config_t *config, unsigned int keycode) {
     if (keycode == config->keybindings[JOYPAD_RIGHT]) return JOYPAD_RIGHT;
     if (keycode == config->keybindings[JOYPAD_LEFT]) return JOYPAD_LEFT;
     if (keycode == config->keybindings[JOYPAD_UP]) return JOYPAD_UP;
@@ -32,7 +32,7 @@ int keycode_to_joypad(config_t *config, unsigned int keycode) {
     return -1;
 }
 
-int button_to_joypad(config_t *config, unsigned int button) {
+gb_joypad_button_t button_to_joypad(config_t *config, unsigned int button) {
     if (button == config->gamepad_bindings[JOYPAD_RIGHT]) return JOYPAD_RIGHT;
     if (button == config->gamepad_bindings[JOYPAD_LEFT]) return JOYPAD_LEFT;
     if (button == config->gamepad_bindings[JOYPAD_UP]) return JOYPAD_UP;
