@@ -152,22 +152,27 @@
 
         const buttons = [ "gb-right", "gb-left", "gb-up", "gb-down", "gb-a", "gb-b", "gb-select", "gb-start" ];
         let currentButton = null;
-        buttons.forEach(function (item, index) {
-            let elem = document.getElementById(item);
-            elem.onmousedown = function() {
-                Module.ccall('on_gui_button_down', 'void', ['number'], [index]);
-                currentButton = elem;
-            };
-            elem.onmouseup = function() {
+
+        let on_gui_button_down = function(event, elem, index) {
+            Module.ccall('on_gui_button_down', 'void', ['number'], [index]);
+            currentButton = elem;
+        }
+
+        let on_gui_button_up = function(event, elem, index) {
+            if (elem === currentButton) {
                 Module.ccall('on_gui_button_up', 'void', ['number'], [index]);
                 currentButton = null;
-            };
-            elem.onmouseleave = function() {
-                if (elem === currentButton) {
-                    Module.ccall('on_gui_button_up', 'void', ['number'], [index]);
-                    currentButton = null;
-                }
-            };
+            }
+        }
+
+        buttons.forEach(function (item, index) {
+            let elem = document.getElementById(item);
+            elem.addEventListener("touchstart", (e) => on_gui_button_down(e, elem, index));
+            elem.addEventListener("touchend", (e) => on_gui_button_up(e, elem, index));
+            elem.addEventListener("touchcancel", (e) => on_gui_button_up(e, elem, index));
+            elem.addEventListener("mousedown", (e) => on_gui_button_down(e, elem, index));
+            elem.addEventListener("mouseup", (e) => on_gui_button_up(e, elem, index));
+            elem.addEventListener("mouseleave", (e) => on_gui_button_up(e, elem, index));
         });
 
         var editingKeybind = -1;
