@@ -179,9 +179,11 @@ glrenderer_t *glrenderer_init(GLsizei width, GLsizei height, const GLvoid *pixel
 }
 
 void glrenderer_quit(glrenderer_t *renderer) {
-    glDeleteTextures(1, &renderer->texture);
-    glDeleteVertexArrays(1, &renderer->VAO);
-    glDeleteBuffers(1, &renderer->VBO);
+    if (renderer) {
+        glDeleteTextures(1, &renderer->texture);
+        glDeleteVertexArrays(1, &renderer->VAO);
+        glDeleteBuffers(1, &renderer->VBO);
+    }
 }
 
 void glrenderer_render(glrenderer_t *renderer) {

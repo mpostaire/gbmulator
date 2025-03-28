@@ -200,11 +200,6 @@ void load_cartridge(const uint8_t *rom, size_t rom_size) {
 
     EM_ASM({
         setTheme($0);
-        document.getElementById('reset-rom').disabled = 0;
-        document.getElementById('mode-setter-label').innerHTML = "Mode: (applied on restart)";
-        var x = document.getElementById('open-menu');
-        x.disabled = 0;
-        x.classList.remove("paused");
     }, config.mode);
 }
 

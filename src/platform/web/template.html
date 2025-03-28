@@ -316,6 +316,12 @@
                 const data_on_heap = new Uint8Array(Module.HEAPU8.buffer, data_ptr, num_bytes);
                 data_on_heap.set(uint8Arr);
                 Module.ccall('receive_rom', 'void', ['number', 'number'], [data_on_heap.byteOffset, uint8Arr.length]);
+
+                document.getElementById('reset-rom').disabled = 0;
+                document.getElementById('mode-setter-label').innerHTML = "Mode: (applied on restart)";
+                let elem = document.getElementById('open-menu');
+                elem.disabled = 0;
+                elem.classList.remove("paused");
             };
             if (e.target.files.length === 0)
                 return;
