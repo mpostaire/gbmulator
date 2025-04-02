@@ -10,15 +10,14 @@
 typedef struct __attribute__((packed)) {
     char identifier[sizeof(SAVESTATE_STRING)];
     char rom_title[16];
-    uint8_t mode; // GB_MODE_DMG or GB_MODE_CGB
+    uint8_t is_cgb; // bit 7 set --> savestate data is compressed
 } savestate_header_t;
 
-gb_options_t defaults_opts = {
-    .mode = GB_MODE_DMG,
-    .disable_cgb_color_correction = 0,
+gbmulator_options_t defaults_opts = {
+    .mode = GBMULATOR_MODE_GBC,
+    .disable_color_correction = 0,
     .palette = PPU_COLOR_PALETTE_ORIG,
     .apu_speed = 1.0f,
-    .apu_sound_level = 1.0f,
     .apu_sampling_rate = 44100,
     .on_new_sample = NULL,
     .on_new_frame = NULL,
@@ -146,7 +145,7 @@ static size_t get_savestate_expected_len(gb_t *gb, size_t *cpu_len, size_t *time
     return cpu + timer + ppu + mmu + sizeof(savestate_header_t);
 }
 
-gb_t *gb_init(const uint8_t *rom, size_t rom_size, gb_options_t *opts) {
+gb_t *gb_init(const uint8_t *rom, size_t rom_size, gbmulator_options_t *opts) {
     gb_t *gb = xcalloc(1, sizeof(*gb));
     gb_set_options(gb, opts);
 
@@ -182,15 +181,14 @@ void gb_quit(gb_t *gb) {
     free(gb);
 }
 
-void gb_reset(gb_t *gb, gb_mode_t mode) {
+void gb_reset(gb_t *gb, bool is_cgb) {
     size_t rom_size = gb->mmu->rom_size;
     uint8_t *rom = xmalloc(rom_size);
     memcpy(rom, gb->mmu->rom, rom_size);
 
-    gb->mode = 0;
-    gb_options_t opts;
+    gbmulator_options_t opts;
     gb_get_options(gb, &opts);
-    opts.mode = mode;
+    opts.mode = is_cgb ? GBMULATOR_MODE_GBC : GBMULATOR_MODE_GB;
     gb_set_options(gb, &opts);
 
     size_t save_len;
@@ -277,7 +275,7 @@ void gb_print_status(gb_t *gb) {
         snprintf(str_buf, 30, " by %s", licensee);
 
     printf("[%s] Playing %s (v%d)%s\n",
-            gb->mode == GB_MODE_DMG ? "DMG" : "CGB",
+            gb->is_cgb ? "CGB" : "DMG",
             gb->rom_title,
             mmu->rom[0x014C],
             licensee ? str_buf : ""
@@ -335,9 +333,9 @@ void gb_link_disconnect(gb_t *gb) {
 }
 
 uint8_t gb_ir_connect(gb_t *gb, gb_t *other_gb) {
-    if (gb->mode == GB_MODE_DMG && gb->mmu->mbc.type != HuC1 && gb->mmu->mbc.type != HuC3)
+    if (!gb->is_cgb && gb->mmu->mbc.type != HuC1 && gb->mmu->mbc.type != HuC3)
         return 0;
-    if (other_gb->mode == GB_MODE_DMG && other_gb->mmu->mbc.type != HuC1 && other_gb->mmu->mbc.type != HuC3)
+    if (!other_gb->is_cgb && other_gb->mmu->mbc.type != HuC1 && other_gb->mmu->mbc.type != HuC3)
         return 0;
 
     gb_ir_disconnect(gb);
@@ -349,10 +347,10 @@ uint8_t gb_ir_connect(gb_t *gb, gb_t *other_gb) {
 }
 
 void gb_ir_disconnect(gb_t *gb) {
-    if (gb->mode != GB_MODE_CGB)
+    if (!gb->is_cgb)
         return;
 
-    if (gb->ir_gb && gb->ir_gb->mode == GB_MODE_CGB)
+    if (gb->ir_gb && gb->ir_gb->is_cgb)
         gb->ir_gb->ir_gb = NULL;
 
     gb->ir_gb = NULL;
@@ -509,10 +507,10 @@ int gb_load_save(gb_t *gb, uint8_t *save_data, size_t save_length) {
     return 1;
 }
 
-uint8_t *gb_get_savestate(gb_t *gb, size_t *length, uint8_t compressed) {
+uint8_t *gb_get_savestate(gb_t *gb, size_t *length, bool is_compressed) {
     // make savestate header
     savestate_header_t *savestate_header = xmalloc(sizeof(*savestate_header));
-    savestate_header->mode = gb->mode;
+    savestate_header->is_cgb = gb->is_cgb;
     memcpy(savestate_header->identifier, SAVESTATE_STRING, sizeof(savestate_header->identifier));
     memcpy(savestate_header->rom_title, gb->rom_title, sizeof(savestate_header->rom_title));
 
@@ -545,11 +543,11 @@ uint8_t *gb_get_savestate(gb_t *gb, size_t *length, uint8_t compressed) {
     free(mmu);
 
     // compress savestate data if specified
-    if (compressed) {
+    if (is_compressed) {
         uLongf dest_len = compressBound(savestate_data_len);
         uint8_t *dest = xmalloc(dest_len);
         if (compress(dest, &dest_len, savestate_data, savestate_data_len) == Z_OK) {
-            SET_BIT(savestate_header->mode, 7);
+            SET_BIT(savestate_header->is_cgb, 7);
             free(savestate_data);
             savestate_data_len = dest_len;
             savestate_data = dest;
@@ -571,7 +569,7 @@ uint8_t *gb_get_savestate(gb_t *gb, size_t *length, uint8_t compressed) {
     return savestate;
 }
 
-int gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length) {
+bool gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length) {
     if (length <= sizeof(savestate_header_t)) {
         eprintf("invalid savestate length (%zu)\n", length);
         return 0;
@@ -591,8 +589,8 @@ int gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length) {
         return 0;
     }
 
-    if ((savestate_header->mode & 0x03) != gb->mode)
-        gb_reset(gb, savestate_header->mode & 0x03);
+    if ((savestate_header->is_cgb & 0x03) != gb->is_cgb)
+        gb_reset(gb, savestate_header->is_cgb & 0x03);
 
     size_t savestate_data_len = length - sizeof(savestate_header_t);
     uint8_t *savestate_data = xmalloc(savestate_data_len);
@@ -601,7 +599,7 @@ int gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length) {
     size_t cpu_len, timer_len, ppu_len, mmu_len;
     size_t expected_data_len = get_savestate_expected_len(gb, &cpu_len, &timer_len, &ppu_len, &mmu_len) - sizeof(savestate_header_t);
 
-    if (CHECK_BIT(savestate_header->mode, 7)) {
+    if (CHECK_BIT(savestate_header->is_cgb, 7)) {
         uint8_t *dest = xmalloc(expected_data_len);
         uLongf dest_len = expected_data_len;
         if (uncompress(dest, &dest_len, savestate_data, savestate_data_len) == Z_OK) {
@@ -640,7 +638,7 @@ int gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length) {
     apu_quit(gb);
     apu_init(gb);
 
-    return gb->mode;
+    return gb->is_cgb;
 }
 
 char *gb_get_rom_title(gb_t *gb) {
@@ -653,12 +651,11 @@ uint8_t *gb_get_rom(gb_t *gb, size_t *rom_size) {
     return gb->mmu->rom;
 }
 
-void gb_get_options(gb_t *gb, gb_options_t *opts) {
-    opts->mode = gb->mode;
-    opts->disable_cgb_color_correction = gb->disable_cgb_color_correction;
+void gb_get_options(gb_t *gb, gbmulator_options_t *opts) {
+    opts->mode = gb->is_cgb ? GBMULATOR_MODE_GBC : GBMULATOR_MODE_GB;
+    opts->disable_color_correction = gb->disable_cgb_color_correction;
     opts->apu_speed = gb->apu_speed;
     opts->apu_sampling_rate = gb->apu_sampling_rate;
-    opts->apu_sound_level = gb->apu_sound_level;
     opts->palette = gb->dmg_palette;
     opts->on_new_sample = gb->on_new_sample;
     opts->on_new_frame = gb->on_new_frame;
@@ -666,20 +663,19 @@ void gb_get_options(gb_t *gb, gb_options_t *opts) {
     opts->on_camera_capture_image = gb->on_camera_capture_image;
 }
 
-void gb_set_options(gb_t *gb, gb_options_t *opts) {
+void gb_set_options(gb_t *gb, gbmulator_options_t *opts) {
     if (!opts)
         opts = &defaults_opts;
 
     // allow changes of mode and apu_sampling_rate only once (inside gb_init())
-    if (!gb->mode) {
-        gb->mode = opts->mode >= GB_MODE_DMG && opts->mode <= GB_MODE_CGB ? opts->mode : defaults_opts.mode;
-        gb->cgb_mode_enabled = gb->mode == GB_MODE_CGB;
+    if (!gb->cpu) {
+        gb->is_cgb = opts->mode == GBMULATOR_MODE_GBC;
+        gb->cgb_mode_enabled = gb->is_cgb;
         gb->apu_sampling_rate = opts->apu_sampling_rate == 0 ? defaults_opts.apu_sampling_rate : opts->apu_sampling_rate;
     }
 
-    gb->disable_cgb_color_correction = opts->disable_cgb_color_correction;
+    gb->disable_cgb_color_correction = opts->disable_color_correction;
     gb->apu_speed = opts->apu_speed < 1.0f ? defaults_opts.apu_speed : opts->apu_speed;
-    gb->apu_sound_level = opts->apu_sound_level > 1.0f ? defaults_opts.apu_sound_level : opts->apu_sound_level;
     gb->dmg_palette = opts->palette >= 0 && opts->palette < PPU_COLOR_PALETTE_MAX ? opts->palette : defaults_opts.palette;
     gb->on_new_frame = opts->on_new_frame;
     gb->on_new_sample = opts->on_new_sample;
@@ -687,8 +683,8 @@ void gb_set_options(gb_t *gb, gb_options_t *opts) {
     gb->on_camera_capture_image = opts->on_camera_capture_image;
 }
 
-gb_mode_t gb_is_cgb(gb_t *gb) {
-    return gb->mode == GB_MODE_CGB;
+bool gb_is_cgb(gb_t *gb) {
+    return gb->is_cgb;
 }
 
 uint16_t gb_get_cartridge_checksum(gb_t *gb) {
@@ -699,21 +695,14 @@ uint16_t gb_get_cartridge_checksum(gb_t *gb) {
 }
 
 void gb_set_apu_speed(gb_t *gb, float speed) {
-    gb_options_t opts;
+    gbmulator_options_t opts;
     gb_get_options(gb, &opts);
     opts.apu_speed = speed;
     gb_set_options(gb, &opts);
 }
 
-void gb_set_apu_sound_level(gb_t *gb, float level) {
-    gb_options_t opts;
-    gb_get_options(gb, &opts);
-    opts.apu_sound_level = level;
-    gb_set_options(gb, &opts);
-}
-
 void gb_set_palette(gb_t *gb, gb_color_palette_t palette) {
-    gb_options_t opts;
+    gbmulator_options_t opts;
     gb_get_options(gb, &opts);
     opts.palette = palette;
     gb_set_options(gb, &opts);

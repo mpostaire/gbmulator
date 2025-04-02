@@ -4,7 +4,7 @@
 
 void link_set_clock(gb_t *gb) {
     // double speed is handled by the gb_step() function
-    if (gb->mode == GB_MODE_CGB && CHECK_BIT(gb->mmu->io_registers[IO_SC], 1))
+    if (gb->is_cgb && CHECK_BIT(gb->mmu->io_registers[IO_SC], 1))
         gb->link->max_clock_cycles = GB_CPU_FREQ / 262144;
     else
         gb->link->max_clock_cycles = GB_CPU_FREQ / 8192;

@@ -39,6 +39,9 @@ struct glrenderer_t {
     GLuint texture;
     GLuint VAO; // Vertex Array Object
     GLuint VBO; // Vertex Buffer Object
+
+    GLsizei texture_width;
+    GLsizei texture_height;
 };
 
 static GLuint shader_program;
@@ -162,6 +165,8 @@ glrenderer_t *glrenderer_init(GLsizei width, GLsizei height, const GLvoid *pixel
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     renderer->texture = create_texture(width, height, pixels);
+    renderer->texture_width = width;
+    renderer->texture_height = height;
 
     // Tell OpenGL which Shader Program we want to use
     glUseProgram(shader_program);
@@ -179,14 +184,18 @@ glrenderer_t *glrenderer_init(GLsizei width, GLsizei height, const GLvoid *pixel
 }
 
 void glrenderer_quit(glrenderer_t *renderer) {
-    if (renderer) {
-        glDeleteTextures(1, &renderer->texture);
-        glDeleteVertexArrays(1, &renderer->VAO);
-        glDeleteBuffers(1, &renderer->VBO);
-    }
+    if (!renderer)
+        return;
+
+    glDeleteTextures(1, &renderer->texture);
+    glDeleteVertexArrays(1, &renderer->VAO);
+    glDeleteBuffers(1, &renderer->VBO);
 }
 
 void glrenderer_render(glrenderer_t *renderer) {
+    if (!renderer)
+        return;
+
     // Clean the back buffer and assign the new color to it
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -201,17 +210,28 @@ void glrenderer_render(glrenderer_t *renderer) {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-void glrenderer_update_texture(glrenderer_t *renderer, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, const GLvoid *pixels) {
+void glrenderer_update_texture(glrenderer_t *renderer, const GLvoid *pixels) {
+    if (!renderer)
+        return;
+
     glBindTexture(GL_TEXTURE_2D, renderer->texture);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, xoffset, yoffset, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, renderer->texture_width, renderer->texture_height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 }
 
 void glrenderer_resize_texture(glrenderer_t *renderer, GLsizei width, GLsizei height) {
+    if (!renderer)
+        return;
+
     glBindTexture(GL_TEXTURE_2D, renderer->texture);
-    // NULL as pixel data: opengl allocates texture but doesn't copy any pixel data 
+    // NULL as pixel data: opengl allocates texture but doesn't copy any pixel data
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    renderer->texture_width = width;
+    renderer->texture_height = height;
 }
 
 void glrenderer_resize_viewport(glrenderer_t *renderer, GLsizei width, GLsizei height) {
+    if (!renderer)
+        return;
+
     glViewport(0, 0, width, height);
 }

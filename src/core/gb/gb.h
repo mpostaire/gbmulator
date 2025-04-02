@@ -1,8 +1,7 @@
 #pragma once
 
-#include "types.h"
 #include "../utils.h"
-#include "printer.h"
+#include "../core.h"
 
 #define EMULATOR_NAME "GBmulator"
 
@@ -17,6 +16,18 @@
 
 #define GB_CAMERA_SENSOR_WIDTH 128
 #define GB_CAMERA_SENSOR_HEIGHT 128
+
+#define GB_PRINTER_IMG_WIDTH 160
+
+typedef struct gb_t gb_t;
+typedef struct gb_printer_t gb_printer_t;
+
+typedef enum {
+    DMG_WHITE,
+    DMG_LIGHT_GRAY,
+    DMG_DARK_GRAY,
+    DMG_BLACK
+} gb_dmg_color_t;
 
 void gb_rewind(gb_t *gb);
 
@@ -51,14 +62,14 @@ int gb_is_rom_valid(const uint8_t *rom);
  * @param rom_size the size of the `rom`.
  * @param opts the initialization options of the emulator or NULL for defaults.
  */
-gb_t *gb_init(const uint8_t *rom, size_t rom_size, gb_options_t *opts);
+gb_t *gb_init(const uint8_t *rom, size_t rom_size, gbmulator_options_t *opts);
 
 /**
  * Quits the emulator gracefully (save eram into a '.sav' file, ...).
  */
 void gb_quit(gb_t *gb);
 
-void gb_reset(gb_t *gb, gb_mode_t mode);
+void gb_reset(gb_t *gb, bool is_cgb);
 
 void gb_print_status(gb_t *gb);
 
@@ -117,9 +128,9 @@ uint8_t *gb_get_save(gb_t *gb, size_t *save_length);
 
 int gb_load_save(gb_t *gb, uint8_t *save_data, size_t save_length);
 
-uint8_t *gb_get_savestate(gb_t *gb, size_t *length, uint8_t compressed);
+uint8_t *gb_get_savestate(gb_t *gb, size_t *length, bool is_compressed);
 
-int gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length);
+bool gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length);
 
 /**
  * @returns the ROM title (you must not free the returned pointer).
@@ -131,17 +142,15 @@ char *gb_get_rom_title(gb_t *gb);
  */
 uint8_t *gb_get_rom(gb_t *gb, size_t *rom_size);
 
-void gb_get_options(gb_t *gb, gb_options_t *opts);
+void gb_get_options(gb_t *gb, gbmulator_options_t *opts);
 
-void gb_set_options(gb_t *gb, gb_options_t *opts);
+void gb_set_options(gb_t *gb, gbmulator_options_t *opts);
 
-gb_mode_t gb_is_cgb(gb_t *gb);
+bool gb_is_cgb(gb_t *gb);
 
 uint16_t gb_get_cartridge_checksum(gb_t *gb);
 
 void gb_set_apu_speed(gb_t *gb, float speed);
-
-void gb_set_apu_sound_level(gb_t *gb, float level);
 
 void gb_set_palette(gb_t *gb, gb_color_palette_t palette);
 

@@ -1,7 +1,6 @@
 #pragma once
 
-#include "types.h"
-#include "../utils.h"
+#include "gba.h"
 
 typedef enum {
     // General Internal Memory
@@ -185,6 +184,6 @@ uint32_t gba_bus_read_word(gba_t *gba);
 // TODO data type may be wrong
 void gba_bus_write(gba_t *gba, uint32_t data);
 
-gba_bus_t *gba_bus_init(const uint8_t *rom, size_t rom_size);
+bool gba_bus_init(gba_t *gba, const uint8_t *rom, size_t rom_size);
 
 void gba_bus_quit(gba_bus_t *bus);

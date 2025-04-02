@@ -16,18 +16,17 @@
 #define PRINTER_CHUNK_SIZE 0x280
 
 struct gb_t {
-    gb_mode_t mode;
-    uint8_t cgb_mode_enabled; // this is 1 if CGB is in CGB mode, 0 if it is in DMG compatibility mode // TODO understand this better
+    bool is_cgb;
+    bool cgb_mode_enabled; // this is 1 if CGB is in CGB mode, 0 if it is in DMG compatibility mode // TODO understand this better
 
-    uint8_t disable_cgb_color_correction;
+    bool disable_cgb_color_correction;
     uint8_t dmg_palette;
-    float apu_sound_level;
     float apu_speed;
     uint32_t apu_sampling_rate;
-    gb_new_frame_cb_t on_new_frame;
-    gb_new_sample_cb_t on_new_sample;
-    gb_accelerometer_request_cb_t on_accelerometer_request;
-    gb_camera_capture_image_cb_t on_camera_capture_image;
+    gbmulator_new_frame_cb_t on_new_frame;
+    gbmulator_new_sample_cb_t on_new_sample;
+    gbmulator_accelerometer_request_cb_t on_accelerometer_request;
+    gbmulator_camera_capture_image_cb_t on_camera_capture_image;
 
     char rom_title[17];
 

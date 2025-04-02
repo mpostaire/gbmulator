@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <time.h>
@@ -43,13 +44,11 @@
         exit(42);                       \
     } while (0)
 
-// #ifdef DEBUG
-// #   define LOG_DEBUG(format, ...) eprintf(format, ##__VA_ARGS__)
-// #else
-// #   define LOG_DEBUG(format, ...)
-// #endif
-
-// #define LOG(level, format, ...) LOG_##level(format, ##__VA_ARGS__)
+#ifdef DEBUG
+#   define LOG_DEBUG(...) fprintf(stderr, __VA_ARGS__)
+#else
+#   define LOG_DEBUG(...)
+#endif
 
 void *xmalloc(size_t size);
 

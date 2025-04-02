@@ -1,6 +1,6 @@
 #pragma once
 
-#include "types.h"
+#include "gb.h"
 
 typedef uint8_t (*linked_device_shift_bit_cb_t)(void *device, uint8_t in_bit);
 typedef void (*linked_device_data_received_cb_t)(void *device);

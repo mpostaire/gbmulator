@@ -1,6 +1,6 @@
 #pragma once
 
-#include "types.h"
+#include "gb.h"
 #include "serialize.h"
 #include "mbc.h"
 

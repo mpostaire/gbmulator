@@ -18,8 +18,9 @@ static ALCcontext *context;
 static ALuint source;
 static ALint sampling_rate;
 static ALuint buffers[N_BUFFERS];
-static gb_apu_sample_t samples[N_SAMPLES];
+static gbmulator_apu_sample_t samples[N_SAMPLES];
 static ALsizei samples_count;
+static float sound_level;
 static ALboolean drc_enabled;
 static int ewma_queue_size;
 
@@ -145,7 +146,7 @@ void alrenderer_enable_dynamic_rate_control(ALboolean enabled) {
 
 static inline uint32_t dynamic_rate_control(void) {
     // https://github.com/kevinbchen/nes-emu/blob/a993b0a5c080bc689de5f41e1e492e9e219e14e6/src/audio.cpp#L39
-    int queue_size = alrenderer_get_queue_size() / sizeof(gb_apu_sample_t);
+    int queue_size = alrenderer_get_queue_size() / sizeof(gbmulator_apu_sample_t);
     ewma_queue_size = queue_size * DRC_ALPHA + ewma_queue_size * (1.0 - DRC_ALPHA);
 
     // Adjust sample frequency to try and maintain a constant queue size
@@ -159,8 +160,9 @@ static inline uint32_t dynamic_rate_control(void) {
     return sample_rate;
 }
 
-void alrenderer_queue_sample(const gb_apu_sample_t sample, uint32_t *dynamic_sampling_rate) {
-    samples[samples_count++] = sample;
+void alrenderer_queue_sample(const gbmulator_apu_sample_t sample, uint32_t *dynamic_sampling_rate) {
+    samples[samples_count++] = (gbmulator_apu_sample_t) {.l = sample.l * sound_level, .r = sample.r * sound_level};
+
     if (samples_count < N_SAMPLES)
         return;
     samples_count = 0;
@@ -217,4 +219,8 @@ void alrenderer_queue_sample(const gb_apu_sample_t sample, uint32_t *dynamic_sam
             return;
         }
     }
+}
+
+void alrenderer_set_level(float level) {
+    sound_level = CLAMP(level, 0.0f, 1.0f);
 }

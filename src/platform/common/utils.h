@@ -22,13 +22,13 @@ void mkdirp(const char *directory_path);
  */
 void make_parent_dirs(const char *filepath);
 
-void save_battery_to_file(gb_t *gb, const char *path);
+void save_battery_to_file(gbmulator_t *emu, const char *path);
 
-void load_battery_from_file(gb_t *gb, const char *path);
+void load_battery_from_file(gbmulator_t *emu, const char *path);
 
-int save_state_to_file(gb_t *gb, const char *path, int compressed);
+int save_state_to_file(gbmulator_t *emu, const char *path, int compressed);
 
-int load_state_from_file(gb_t *gb, const char *path);
+int load_state_from_file(gbmulator_t *emu, const char *path);
 
 /**
  * @returns the contents of the file at `path` or `NULL` if the contents are invalid or an unsupported ROM.

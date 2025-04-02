@@ -10,7 +10,7 @@ typedef const char *(*keycode_parser_t)(unsigned int keycode);
 typedef unsigned int (*keyname_parser_t)(const char *keyname);
 
 typedef struct {
-    gb_mode_t mode;
+    gbmulator_mode_t mode;
     gb_color_palette_t color_palette;
     uint8_t scale;
     float speed;
