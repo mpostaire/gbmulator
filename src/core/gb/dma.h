@@ -1,6 +1,6 @@
 #pragma once
 
-#include "types.h"
+#include "gb.h"
 #include "mmu.h"
 
 typedef enum {

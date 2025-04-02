@@ -100,16 +100,16 @@
     } while (0)
 
 #define SERIALIZED_LENGTH_IF_CGB(member) \
-    length += gb->mode == GB_MODE_CGB ? sizeof(tmp->member) : 0
+    length += gb->is_cgb ? sizeof(tmp->member) : 0
 
 #define SERIALIZE_IF_CGB(member)     \
     do {                             \
-        if (gb->mode == GB_MODE_CGB) \
+        if (gb->is_cgb)              \
             SERIALIZE(member);       \
     } while (0)
 
 #define UNSERIALIZE_IF_CGB(member)   \
     do {                             \
-        if (gb->mode == GB_MODE_CGB) \
+        if (gb->is_cgb)              \
             UNSERIALIZE(member);     \
     } while (0)

@@ -172,7 +172,6 @@ void load_cartridge(const uint8_t *rom, size_t rom_size) {
         .on_new_frame = ppu_vblank_cb,
         .apu_speed = config.speed,
         .apu_sampling_rate = alrenderer_get_sampling_rate(),
-        .apu_sound_level = config.sound,
         .palette = config.color_palette
     };
     gb_t *new_emu = gb_init(rom, rom_size, &opts);
@@ -258,8 +257,7 @@ EMSCRIPTEN_KEEPALIVE void set_speed(float value) {
 
 EMSCRIPTEN_KEEPALIVE void set_sound(float value) {
     config.sound = value;
-    if (gb)
-        gb_set_apu_sound_level(gb, config.sound);
+    alrenderer_set_level(config.sound);
 }
 
 EMSCRIPTEN_KEEPALIVE void set_color(uint8_t value) {

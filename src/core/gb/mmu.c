@@ -335,7 +335,7 @@ static inline uint8_t read_io_register(gb_t *gb, uint8_t io_reg_addr) {
     case IO_KEY0: return 0xFF;
     case IO_KEY1: return gb->cgb_mode_enabled ? (mmu->io_registers[io_reg_addr] | 0x7E) : 0xFF;
     case 0x4E: return 0xFF;
-    case IO_VBK: return gb->mode == GB_MODE_CGB ? 0xFE | (mmu->io_registers[io_reg_addr] & 0x01) : 0xFF;
+    case IO_VBK: return gb->is_cgb ? 0xFE | (mmu->io_registers[io_reg_addr] & 0x01) : 0xFF;
     case IO_BANK: return 0xFF;
     case IO_HDMA1 ... IO_HDMA4: return 0xFF;
     case IO_HDMA5: return gb->cgb_mode_enabled ? mmu->io_registers[io_reg_addr] : 0xFF;
@@ -351,15 +351,15 @@ static inline uint8_t read_io_register(gb_t *gb, uint8_t io_reg_addr) {
         }
         return 0xFF;
     case 0x57 ... 0x67: return 0xFF;
-    case IO_BGPI: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] | 0x40 : 0xFF;
+    case IO_BGPI: return gb->is_cgb ? mmu->io_registers[io_reg_addr] | 0x40 : 0xFF;
     case IO_BGPD: {
-        if (gb->mode == GB_MODE_DMG || gb->ppu->mode == PPU_MODE_DRAWING)
+        if (!gb->is_cgb || gb->ppu->mode == PPU_MODE_DRAWING)
             return 0xFF;
 
         uint8_t cram_address = mmu->io_registers[IO_BGPI] & 0x3F;
         return mmu->cram_bg[cram_address];
     }
-    case IO_OBPI: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] | 0x40 : 0xFF;
+    case IO_OBPI: return gb->is_cgb ? mmu->io_registers[io_reg_addr] | 0x40 : 0xFF;
     case IO_OBPD: {
         if (!gb->cgb_mode_enabled || gb->ppu->mode == PPU_MODE_DRAWING)
             return 0xFF;
@@ -370,13 +370,13 @@ static inline uint8_t read_io_register(gb_t *gb, uint8_t io_reg_addr) {
     case 0x6C ... 0x6F: return 0xFF;
     case IO_SVBK: return gb->cgb_mode_enabled ? 0xF8 | (mmu->io_registers[io_reg_addr] & 0x07) : 0xFF;
     case 0x71: return 0xFF;
-    case 0x72 ... 0x73: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] : 0xFF;
+    case 0x72 ... 0x73: return gb->is_cgb ? mmu->io_registers[io_reg_addr] : 0xFF;
     case 0x74: return gb->cgb_mode_enabled ? mmu->io_registers[io_reg_addr] : 0xFF;
-    case 0x75: return gb->mode == GB_MODE_CGB ? mmu->io_registers[io_reg_addr] | 0x8F : 0xFF;
+    case 0x75: return gb->is_cgb ? mmu->io_registers[io_reg_addr] | 0x8F : 0xFF;
     case IO_PCM12:
     case IO_PCM34:
         // not emulated because it appears to be never used
-        return gb->mode == GB_MODE_CGB ? 0x00 : 0xFF;
+        return gb->is_cgb ? 0x00 : 0xFF;
     case 0x78 ... 0x7F: return 0xFF;
     default:
         eprintf("invalid read at 0xFF%02X\n", io_reg_addr);
@@ -583,7 +583,7 @@ static inline void write_io_register(gb_t *gb, uint8_t io_reg_addr, uint8_t data
                 PPU_STAT_IS_MODE(gb, PPU_MODE_VBLANK) || PPU_STAT_IS_MODE(gb, PPU_MODE_HBLANK) ||
                 CHECK_BIT(gb->mmu->io_registers[IO_STAT], 2);
 
-        if (gb->mode == GB_MODE_DMG) {
+        if (!gb->is_cgb) {
             // on DMG hardware, writing any data to STAT is like writing 0xFF, then 4 cycles later, the actual data is written into STAT
             // the 4 cycles delay is not emulated because it this only relevant for STAT interrupts
             // so we check for a STAT interrupt then immediately set STAT to its actual value
@@ -596,7 +596,7 @@ static inline void write_io_register(gb_t *gb, uint8_t io_reg_addr, uint8_t data
         mmu->io_registers[io_reg_addr] =
                 0x80 | (data & 0x78) | (mmu->io_registers[io_reg_addr] & 0x07);
 
-        if (gb->mode == GB_MODE_CGB && update_irq_line)
+        if (gb->is_cgb && update_irq_line)
             ppu_update_stat_irq_line(gb);
         break;
     }
@@ -620,7 +620,7 @@ static inline void write_io_register(gb_t *gb, uint8_t io_reg_addr, uint8_t data
         }
         break;
     case IO_KEY0:
-        if (gb->mode == GB_MODE_CGB && !mmu->boot_finished) {
+        if (gb->is_cgb && !mmu->boot_finished) {
             gb->cgb_mode_enabled = !(data & 0x0C);
             mmu->io_registers[io_reg_addr] = data;
         }
@@ -629,14 +629,14 @@ static inline void write_io_register(gb_t *gb, uint8_t io_reg_addr, uint8_t data
         mmu->io_registers[io_reg_addr] |= data & 0x01;
         break;
     case IO_VBK:
-        if (gb->mode == GB_MODE_CGB) {
+        if (gb->is_cgb) {
             mmu->io_registers[io_reg_addr] = data & 0x01;
             mmu->vram_bank_addr_offset = (GBC_CURRENT_VRAM_BANK(mmu) * VRAM_BANK_SIZE) - MMU_VRAM;
         }
         break;
     case IO_BANK:
         // disable boot rom
-        if ((gb->mode == GB_MODE_DMG && data == 0x01) || (gb->mode == GB_MODE_CGB && data == 0x11))
+        if ((!gb->is_cgb && data == 0x01) || (gb->is_cgb && data == 0x11))
             mmu->boot_finished = 1;
         mmu->io_registers[io_reg_addr] = data;
         break;
@@ -683,11 +683,11 @@ static inline void write_io_register(gb_t *gb, uint8_t io_reg_addr, uint8_t data
         mmu->io_registers[io_reg_addr] = gb->cgb_mode_enabled ? data & 0xC1 : 0xFF;
         break;
     case IO_BGPI:
-        if (gb->mode == GB_MODE_CGB)
+        if (gb->is_cgb)
             mmu->io_registers[io_reg_addr] = data;
         break;
     case IO_BGPD:
-        if (gb->mode == GB_MODE_DMG)
+        if (!gb->is_cgb)
             break;
 
         if (gb->ppu->mode != PPU_MODE_DRAWING) {
@@ -706,11 +706,11 @@ static inline void write_io_register(gb_t *gb, uint8_t io_reg_addr, uint8_t data
         }
         break;
     case IO_OBPI:
-        if (gb->mode == GB_MODE_CGB)
+        if (gb->is_cgb)
             mmu->io_registers[io_reg_addr] = data;
         break;
     case IO_OBPD:
-        if (gb->mode == GB_MODE_DMG)
+        if (!gb->is_cgb)
             break;
 
         if (gb->ppu->mode != PPU_MODE_DRAWING) {
@@ -735,18 +735,18 @@ static inline void write_io_register(gb_t *gb, uint8_t io_reg_addr, uint8_t data
         }
         break;
     case 0x74:
-        if (gb->mode == GB_MODE_CGB)
+        if (gb->is_cgb)
             mmu->io_registers[io_reg_addr] = data; // only writable in CGB mode
         break;
     case 0x75:
-        mmu->io_registers[io_reg_addr] = gb->mode == GB_MODE_CGB ? data & 0x70 : data;
+        mmu->io_registers[io_reg_addr] = gb->is_cgb ? data & 0x70 : data;
         break;
     case 0x76:
-        if (gb->mode == GB_MODE_DMG)
+        if (!gb->is_cgb)
             mmu->io_registers[io_reg_addr] = data; // only writable in DMG mode
         break;
     case 0x77:
-        if (gb->mode == GB_MODE_DMG)
+        if (!gb->is_cgb)
             mmu->io_registers[io_reg_addr] = data; // only writable in DMG mode
         break;
     default:
@@ -761,9 +761,9 @@ uint8_t mmu_read_io_src(gb_t *gb, uint16_t address, gb_io_source_t io_src) {
     switch (address & 0xF000) {
     case MMU_ROM_BANK0:
         if (!mmu->boot_finished) {
-            if (gb->mode == GB_MODE_DMG && address < 0x100)
+            if (!gb->is_cgb && address < 0x100)
                 return mmu->dmg_boot_rom[address];
-            if (gb->mode == GB_MODE_CGB && (address < 0x100 || (address >= 0x200 && address < sizeof(cgb_boot))))
+            if (gb->is_cgb && (address < 0x100 || (address >= 0x200 && address < sizeof(cgb_boot))))
                 return mmu->cgb_boot_rom[address];
         }
         // fallthrough
@@ -881,9 +881,9 @@ void mmu_write_io_src(gb_t *gb, uint16_t address, uint8_t data, gb_io_source_t i
 // serialize everything except rom
 #define SERIALIZED_MEMBERS                                                   \
     X(rom_size)                                                              \
-    Y(vram, gb->mode == GB_MODE_CGB, 2 * VRAM_BANK_SIZE, VRAM_BANK_SIZE)     \
+    Y(vram, gb->is_cgb, 2 * VRAM_BANK_SIZE, VRAM_BANK_SIZE)                  \
     Z(eram, eram_banks, ERAM_BANK_SIZE)                                      \
-    Y(wram, gb->mode == GB_MODE_CGB, 8 * WRAM_BANK_SIZE, 2 * WRAM_BANK_SIZE) \
+    Y(wram, gb->is_cgb, 8 * WRAM_BANK_SIZE, 2 * WRAM_BANK_SIZE)              \
     X(oam)                                                                   \
     X(io_registers)                                                          \
     X(hram)                                                                  \

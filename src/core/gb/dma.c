@@ -105,6 +105,6 @@ static inline void oam_dma_step(gb_t *gb) {
 
 void dma_step(gb_t *gb) {
     oam_dma_step(gb);
-    if (gb->mode == GB_MODE_CGB)
+    if (gb->is_cgb)
         gdma_hdma_step(gb);
 }

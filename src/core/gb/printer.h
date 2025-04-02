@@ -1,8 +1,6 @@
 #pragma once
 
-#include "types.h"
-
-#define GB_PRINTER_IMG_WIDTH 160
+#include "gb.h"
 
 typedef void (*gb_new_printer_line_cb_t)(const uint8_t *pixels, size_t height);
 typedef void (*gb_start_printing_cb_t)(const uint8_t *pixels, size_t height);

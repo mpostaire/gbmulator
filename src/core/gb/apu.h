@@ -1,6 +1,6 @@
 #pragma once
 
-#include "types.h"
+#include "gb.h"
 #include "mmu.h"
 
 #define IS_APU_ENABLED(gb) CHECK_BIT((gb)->mmu->io_registers[IO_NR52], 7)

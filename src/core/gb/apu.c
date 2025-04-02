@@ -249,11 +249,11 @@ void apu_step(gb_t *gb) {
                                 + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_3 + 4) ? channel_dac(gb, &apu->channel3) : 0.0f)
                                 + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_4 + 4) ? channel_dac(gb, &apu->channel4) : 0.0f)) / 4.0f;
 
-            // apply channel volume and global volume to its output
-            S01_output = S01_output * S01_volume * gb->apu_sound_level;
-            S02_output = S02_output * S02_volume * gb->apu_sound_level;
+            // apply channel volume to its output
+            S01_output *= S01_volume;
+            S02_output *= S02_volume;
 
-            gb->on_new_sample((gb_apu_sample_t) {.l = S02_output * 32767, .r = S01_output * 32767}, &apu->dynamic_sampling_rate);
+            gb->on_new_sample((gbmulator_apu_sample_t) {.l = S02_output * 32767, .r = S01_output * 32767}, &apu->dynamic_sampling_rate);
         }
     }
 }

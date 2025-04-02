@@ -52,8 +52,7 @@
                 </child>
 
                 <property name="content">
-                    <object class="GtkAspectFrame">
-                        <property name="ratio">1.111111</property>
+                    <object class="GtkAspectFrame" id="aspect_frame">
                         <property name="xalign">0.5</property>
                         <property name="yalign">0.5</property>
                         <child>
@@ -66,8 +65,6 @@
                                                 <property name="description">Open/Drag and drop ROM</property>
                                                 <property name="vexpand">true</property>
                                                 <property name="hexpand">true</property>
-                                                <property name="width-request">480</property>
-                                                <property name="height-request">432</property>
                                             </object>
                                         </child>
 
@@ -76,8 +73,6 @@
                                                 <property name="visible">false</property>
                                                 <property name="vexpand">true</property>
                                                 <property name="hexpand">true</property>
-                                                <property name="width-request">480</property>
-                                                <property name="height-request">432</property>
                                                 <property name="focusable">true</property>
                                                 <property name="allowed-apis">GDK_GL_API_GL</property>
                                             </object>

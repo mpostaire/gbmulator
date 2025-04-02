@@ -4,22 +4,13 @@
 
 #define ALIGN_ADDRESS(address, n) ((address) & (~((n) - 1))) // TODO maybe wrong
 
+static bool gba_parse_cartridge(gba_t *gba) {
+    // uint8_t entrypoint = gba->bus->game_rom[0x00];
 
-const char *makers[256] = {
-    [0x01] = "Nintendo"
-};
+    memcpy(gba->rom_title, &gba->bus->game_rom[0xA0], sizeof(gba->rom_title));
+    gba->rom_title[12] = '\0';
 
-static bool gba_is_rom_valid(const uint8_t *rom, size_t rom_size) {
-    if (rom_size < 0xBF)
-        return false;
-
-    // uint8_t entrypoint = rom[0x00];
-
-    char title[13]; // title is max 12 chars
-    memcpy(title, &rom[0xA0], sizeof(title));
-    title[12] = '\0';
-
-    // uint8_t game_type = rom[0xAC];
+    // uint8_t game_type = gba->bus->game_rom[0xAC];
     // switch (game_type) {
     //     case 'A':
     //     case 'B':
@@ -38,77 +29,37 @@ static bool gba_is_rom_valid(const uint8_t *rom, size_t rom_size) {
     //         return false;
     // }
 
-    char short_title[3]; // short_title is 2 chars
-    memcpy(short_title, &rom[0xAD], sizeof(short_title));
-    short_title[2] = '\0';
+    // char short_title[3]; // short_title is 2 chars
+    // memcpy(short_title, &gba->bus->game_rom[0xAD], sizeof(short_title));
+    // short_title[2] = '\0';
 
-    uint8_t language = rom[0xAF];
-
-    uint16_t maker_code = ((rom[0xB0] - 0x30) * 10) + (rom[0xB1] - 0x30); // maker_code is 2 chars
-
-    if (rom[0xB2] != 0x96 || rom[0xB3] != 0x00)
+    if (gba->bus->game_rom[0xB2] != 0x96 || gba->bus->game_rom[0xB3] != 0x00)
         return false;
 
     for (int i = 0xB5; i < 0xBC; i++)
-        if (rom[i] != 0x00)
+        if (gba->bus->game_rom[i] != 0x00)
             return false;
-
-    uint8_t version = rom[0xBC];
 
     uint8_t checksum = 0;
     for (int i = 0xA0; i < 0xBC; i++)
-        checksum -= rom[i];
+        checksum -= gba->bus->game_rom[i];
     checksum -= 0x19;
 
-    if (rom[0xBD] != checksum) {
+    if (gba->bus->game_rom[0xBD] != checksum) {
         eprintf("Invalid cartridge header checksum");
         return false;
     }
 
-    if (rom[0xBE] != 0x00 && rom[0xBF] != 0x00)
+    if (gba->bus->game_rom[0xBE] != 0x00 && gba->bus->game_rom[0xBF] != 0x00)
         return false;
 
     // TODO multiboot entries
-
-    const char *maker_name = makers[maker_code];
-    if (!maker_name)
-        maker_name = "Unknown";
-
-    char *language_str;
-    switch (language) {
-    case 'J':
-        language_str = "Japan";
-        break;
-    case 'P':
-        language_str = "Europe/Elsewhere";
-        break;
-    case 'F':
-        language_str = "French";
-        break;
-    case 'S':
-        language_str = "Spanish";
-        break;
-    case 'E':
-        language_str = "USA/English";
-        break;
-    case 'D':
-        language_str = "German";
-        break;
-    case 'I':
-        language_str = "Italian";
-        break;
-    default:
-        language_str = "Unknown";
-    }
-
-    // TODO this should not be in this function
-    printf("Playing %s (%s v%d) by %s (language: %s)\n", title, short_title, version, maker_name, language_str);
 
     return true;
 }
 
 void gba_bus_select(gba_t *gba, uint32_t address) {
-    printf("bus addr select: 0x%08X\n", address);
+    LOG_DEBUG("bus addr select: 0x%08X\n", address);
 
     gba_bus_t *bus = gba->bus;
 
@@ -215,40 +166,47 @@ uint32_t gba_bus_read_word(gba_t *gba) {
 // TODO data type may be wrong
 void gba_bus_write(gba_t *gba, uint32_t data) {
     if (gba->bus->is_writeable) {
-        eprintf("bus address 0x%08X is read only", gba->bus->address);
+        LOG_DEBUG("bus address 0x%08X is read only", gba->bus->address);
         return;
     } else if (!gba->bus->selected_mem_ptr) {
-        eprintf("bus address 0x%08X is unmapped memory", gba->bus->address);
+        LOG_DEBUG("bus address 0x%08X is unmapped memory", gba->bus->address);
         return;
     }
 
-    eprintf("bus write of 0x%08X at 0x%08X", data, gba->bus->address);
+    LOG_DEBUG("bus write of 0x%08X at 0x%08X", data, gba->bus->address);
 
     // TODO special cases like io registers
     gba->bus->selected_mem_ptr[gba->bus->selected_mem_offset] = data;
 }
 
-gba_bus_t *gba_bus_init(const uint8_t *rom, size_t rom_size) {
-    if (!gba_is_rom_valid(rom, rom_size))
-        return NULL;
+// TODO this shouldn't be responsible for cartridge loading and parsing (same for gb_mmu_t)
+bool gba_bus_init(gba_t *gba, const uint8_t *rom, size_t rom_size) {
+    if (!rom || rom_size < 0xBF)
+        return false;
+
+    gba->bus = xcalloc(1, sizeof(*gba->bus));
+    memcpy(gba->bus->game_rom, rom, rom_size);
+
+    if (!gba_parse_cartridge(gba)) {
+        gba_bus_quit(gba->bus);
+        return false;
+    }
 
     // TODO do not load bios from hardcoded file path
     FILE *f = fopen("src/bootroms/gba/gba_bios.bin", "r");
     if (!f) {
-        return NULL;
+        gba_bus_quit(gba->bus);
+        return false;
     }
-
-    gba_bus_t *bus = xcalloc(1, sizeof(*bus));
-    memcpy(bus->game_rom, rom, rom_size);
 
     fseek(f, 0, SEEK_END);
     long sz = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    fread(bus->bios_rom, sz, 1, f);
+    fread(gba->bus->bios_rom, sz, 1, f);
     fclose(f);
 
-    return bus;
+    return true;
 }
 
 void gba_bus_quit(gba_bus_t *bus) {

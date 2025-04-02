@@ -1,6 +1,6 @@
 #pragma once
 
-#include "types.h"
+#include "gb.h"
 
 typedef struct {
     uint8_t action;

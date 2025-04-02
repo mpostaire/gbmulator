@@ -1,9 +1,6 @@
 #pragma once
 
-#include "types.h"
-#include "../utils.h"
-
-#define GBA_CPU_FREQ 0x1000000 // 16.8 Mhz
+#include "gba.h"
 
 typedef struct {
     uint32_t regs[16];
@@ -19,6 +16,6 @@ typedef struct {
 
 void gba_cpu_step(gba_t *gba);
 
-gba_cpu_t *gba_cpu_init(void);
+void gba_cpu_init(gba_t *gba);
 
 void gba_cpu_quit(gba_cpu_t *cpu);

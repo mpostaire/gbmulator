@@ -1,6 +1,6 @@
 #pragma once
 
-#include "types.h"
+#include "gb.h"
 
 #define GB_CAMERA_N_REGS 0x36
 

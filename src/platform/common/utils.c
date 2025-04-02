@@ -94,9 +94,9 @@ void make_parent_dirs(const char *filepath) {
     }
 }
 
-void save_battery_to_file(gb_t *gb, const char *path) {
+void save_battery_to_file(gbmulator_t *emu, const char *path) {
     size_t save_length;
-    uint8_t *save_data = gb_get_save(gb, &save_length);
+    uint8_t *save_data = gbmulator_get_save(emu, &save_length);
     if (!save_data) return;
 
     make_parent_dirs(path);
@@ -111,7 +111,7 @@ void save_battery_to_file(gb_t *gb, const char *path) {
     free(save_data);
 }
 
-void load_battery_from_file(gb_t *gb, const char *path) {
+void load_battery_from_file(gbmulator_t *emu, const char *path) {
     FILE *f = fopen(path, "r");
     if (!f) return;
 
@@ -123,16 +123,16 @@ void load_battery_from_file(gb_t *gb, const char *path) {
 
     uint8_t *save_data = xmalloc(save_length);
     fread(save_data, save_length, 1, f);
-    gb_load_save(gb, save_data, save_length);
+    gbmulator_load_save(emu, save_data, save_length);
     fclose(f);
     free(save_data);
 }
 
-int save_state_to_file(gb_t *gb, const char *path, int compressed) {
+int save_state_to_file(gbmulator_t *emu, const char *path, int compressed) {
     make_parent_dirs(path);
 
     size_t len;
-    uint8_t *buf = gb_get_savestate(gb, &len, compressed);
+    uint8_t *buf = gbmulator_get_savestate(emu, &len, compressed);
 
     FILE *f = fopen(path, "wb");
     if (!f) {
@@ -152,7 +152,7 @@ int save_state_to_file(gb_t *gb, const char *path, int compressed) {
     return 1;
 }
 
-int load_state_from_file(gb_t *gb, const char *path) {
+int load_state_from_file(gbmulator_t *emu, const char *path) {
     FILE *f = fopen(path, "rb");
     if (!f) {
         errnoprintf("opening %s", path);
@@ -174,7 +174,7 @@ int load_state_from_file(gb_t *gb, const char *path) {
         return 0;
     }
 
-    int ret = gb_load_savestate(gb, buf, len);
+    int ret = gbmulator_load_savestate(emu, buf, len);
     fclose(f);
     free(buf);
     return ret;
@@ -182,8 +182,12 @@ int load_state_from_file(gb_t *gb, const char *path) {
 
 uint8_t *get_rom(const char *path, size_t *rom_size) {
     const char *dot = strrchr(path, '.');
-    if (!dot || (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) && strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))))) {
-        eprintf("%s: wrong file extension (expected .gb or .gbc)\n", path);
+    if (!dot ||
+        (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) &&
+        strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc")) &&
+        strncmp(dot, ".gba", MAX(strlen(dot), sizeof(".gba")))))
+    ) {
+        eprintf("%s: wrong file extension (expected .gb, .gbc or .gba)\n", path);
         return NULL;
     }
 
@@ -205,11 +209,12 @@ uint8_t *get_rom(const char *path, size_t *rom_size) {
     }
     fclose(f);
 
-    if (!gb_is_rom_valid(rom)) {
-        eprintf("%s: invalid or unsupported rom\n", path);
-        free(rom);
-        return NULL;
-    }
+    // TODO
+    // if (!gb_is_rom_valid(rom)) {
+    //     eprintf("%s: invalid or unsupported rom\n", path);
+    //     free(rom);
+    //     return NULL;
+    // }
 
     if (rom_size)
         *rom_size = len;

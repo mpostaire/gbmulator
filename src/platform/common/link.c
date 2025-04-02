@@ -149,179 +149,189 @@ static inline int receive(int fd, void *buf, size_t n, int flags) {
     return 1;
 }
 
-static int exchange_info(int sfd, gb_t *gb, gb_mode_t *mode, int *can_compress, int *is_cable_link, int *is_ir_link) {
-    // --- SEND PKT_INFO ---
+// static int exchange_info(int sfd, gbmulator_t *emu, bool *is_cgb, int *can_compress, int *is_cable_link, int *is_ir_link) {
+//     // // --- SEND PKT_INFO ---
 
-    uint16_t checksum = gb_get_cartridge_checksum(gb);
+//     // uint16_t checksum = gb_get_cartridge_checksum(gb);
 
-    uint8_t pkt[4] = { 0 };
-    pkt[0] = PKT_INFO;
-    pkt[1] = gb_is_cgb(gb);
-    SET_BIT(pkt[1], 1); // cable-link
-    SET_BIT(pkt[1], 2); // ir-link
-    SET_BIT(pkt[1], 7); // compress
-    memcpy(&pkt[2], &checksum, 2);
+//     // uint8_t pkt[4] = { 0 };
+//     // pkt[0] = PKT_INFO;
+//     // pkt[1] = gb_is_cgb(gb);
+//     // SET_BIT(pkt[1], 1); // cable-link
+//     // SET_BIT(pkt[1], 2); // ir-link
+//     // SET_BIT(pkt[1], 7); // compress
+//     // memcpy(&pkt[2], &checksum, 2);
 
-    send(sfd, pkt, 4, 0);
+//     // send(sfd, pkt, 4, 0);
 
-    // --- RECEIVE PKT_INFO ---
+//     // // --- RECEIVE PKT_INFO ---
 
-    receive(sfd, pkt, 4, 0);
+//     // receive(sfd, pkt, 4, 0);
 
-    if (pkt[0] != PKT_INFO) {
-        eprintf("received packet type %d but expected %d (ignored)\n", pkt[0], PKT_INFO);
-        return -1;
-    }
+//     // if (pkt[0] != PKT_INFO) {
+//     //     eprintf("received packet type %d but expected %d (ignored)\n", pkt[0], PKT_INFO);
+//     //     return -1;
+//     // }
 
-    *mode = CHECK_BIT(pkt[1], 0) ? GB_MODE_CGB : GB_MODE_DMG;
-    *is_cable_link = CHECK_BIT(pkt[1], 1); // cable-link
-    *is_ir_link = CHECK_BIT(pkt[1], 2); // ir-link
-    *can_compress = GET_BIT(pkt[1], 7); // compress
+//     // *is_cgb = GET_BIT(pkt[1], 0);
+//     // *is_cable_link = CHECK_BIT(pkt[1], 1); // cable-link
+//     // *is_ir_link = CHECK_BIT(pkt[1], 2); // ir-link
+//     // *can_compress = GET_BIT(pkt[1], 7); // compress
 
-    uint16_t received_checksum = 0;
-    memcpy(&received_checksum, &pkt[2], 2);
-    if (received_checksum == checksum) {
-        return 1;
-    } else {
-        printf("checksum mismatch ('%x' != '%x'): exchanging ROMs\n", checksum, received_checksum);
-        return 0;
-    }
+//     // uint16_t received_checksum = 0;
+//     // memcpy(&received_checksum, &pkt[2], 2);
+//     // if (received_checksum == checksum) {
+//     //     return 1;
+//     // } else {
+//     //     printf("checksum mismatch ('%x' != '%x'): exchanging ROMs\n", checksum, received_checksum);
+//     //     return 0;
+//     // }
+
+//     return 0;
+// }
+
+// static int exchange_rom(int sfd, gbmulator_t *emu, uint8_t **other_rom, size_t *rom_len) {
+//     // // --- SEND PKT_ROM ---
+
+//     // // TODO compression
+//     // uint8_t *this_rom = gb_get_rom(gb, rom_len);
+
+//     // uint8_t *pkt = xcalloc(1, *rom_len + 9);
+//     // pkt[0] = PKT_ROM;
+//     // memcpy(&pkt[1], rom_len, sizeof(size_t));
+//     // memcpy(&pkt[9], this_rom, *rom_len); // causes segfault
+
+//     // send(sfd, pkt, *rom_len + 9, 0);
+//     // free(pkt);
+
+//     // // --- RECEIVE PKT_ROM ---
+
+//     // // TODO compression
+//     // uint8_t pkt_header[9] = { 0 };
+//     // receive(sfd, pkt_header, 9, 0);
+
+//     // if (pkt_header[0] != PKT_ROM) {
+//     //     eprintf("received packet type %d but expected %d (ignored)\n", pkt_header[0], PKT_ROM);
+//     //     return 0;
+//     // }
+
+//     // memcpy(rom_len, &pkt_header[1], sizeof(size_t));
+//     // *other_rom = xcalloc(1, *rom_len);
+
+//     // receive(sfd, *other_rom, *rom_len, 0);
+
+//     // return 1;
+
+//     return 0;
+// }
+
+// static int exchange_savestate(int sfd, gbmulator_t *emu, int can_compress, uint8_t **savestate_data, size_t *savestate_len) {
+//     // // --- SEND PKT_STATE ---
+
+//     // uint8_t *local_savestate_data = gb_get_savestate(gb, savestate_len, can_compress);
+
+//     // uint8_t *pkt = xcalloc(1, *savestate_len + 9);
+//     // pkt[0] = PKT_STATE;
+//     // memcpy(&pkt[1], savestate_len, sizeof(size_t));
+//     // memcpy(&pkt[9], local_savestate_data, *savestate_len);
+
+//     // send(sfd, pkt, *savestate_len + 9, 0);
+//     // free(pkt);
+//     // free(local_savestate_data);
+
+//     // // --- RECEIVE PKT_STATE ---
+
+//     // uint8_t pkt_header[9] = { 0 };
+//     // receive(sfd, pkt_header, 9, 0);
+
+//     // if (pkt_header[0] != PKT_STATE) {
+//     //     eprintf("received packet type %d but expected %d (ignored)\n", pkt_header[0], PKT_STATE);
+//     //     return 0;
+//     // }
+
+//     // memcpy(savestate_len, &pkt_header[1], sizeof(size_t));
+
+//     // *savestate_data = xcalloc(1, *savestate_len);
+
+//     // receive(sfd, *savestate_data, *savestate_len, 0);
+
+//     // return 1;
+
+//     return 0;
+// }
+
+int link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
+    // // TODO connection lost detection (return -1)
+    // *linked_gb = NULL;
+    // bool is_cgb = false;
+    // int can_compress = 0;
+    // int is_cable_link = 0;
+    // int is_ir_link = 0;
+    // size_t rom_len;
+    // uint8_t *rom = NULL;
+    // size_t savestate_len;
+    // uint8_t *savestate_data = NULL;
+
+    // // TODO handle wrong packet type received
+    // int ret = exchange_info(sfd, gb, &is_cgb, &can_compress, &is_cable_link, &is_ir_link);
+    // if (ret == 0)
+    //     exchange_rom(sfd, gb, &rom, &rom_len);
+    // exchange_savestate(sfd, gb, can_compress, &savestate_data, &savestate_len);
+
+    // // --- LINK BACKGROUND EMULATOR ---
+
+    // gb_options_t opts = { .is_cgb = is_cgb };
+    // if (rom) {
+    //     *linked_gb = gb_init(rom, rom_len, &opts);
+    //     if (!*linked_gb) {
+    //         eprintf("received invalid or corrupted PKT_ROM\n");
+    //         free(rom);
+    //         close(sfd);
+    //         return 0;
+    //     }
+    //     free(rom);
+    // } else {
+    //     rom = gb_get_rom(gb, &rom_len);
+    //     *linked_gb = gb_init(rom, rom_len, &opts);
+    // }
+
+    // if (!gb_load_savestate(*linked_gb, savestate_data, savestate_len)) {
+    //     eprintf("received invalid or corrupted savestate\n");
+    //     close(sfd);
+    //     return 0;
+    // }
+
+    // if (is_cable_link)
+    //     gb_link_connect_gb(gb, *linked_gb);
+    // if (is_ir_link)
+    //     gb_ir_connect(gb, *linked_gb);
+
+    // free(savestate_data);
+    // return 1;
+
+    return 0;
 }
 
-static int exchange_rom(int sfd, gb_t *gb, uint8_t **other_rom, size_t *rom_len) {
-    // --- SEND PKT_ROM ---
+int link_exchange_joypad(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
+    // char buf[2];
+    // buf[0] = PKT_JOYPAD;
+    // buf[1] = gb_get_joypad_state(gb);
+    // send(sfd, buf, 2, 0);
 
-    // TODO compression
-    uint8_t *this_rom = gb_get_rom(gb, rom_len);
+    // do {
+    //     if (!receive(sfd, buf, 2, 0)) {
+    //         printf("Link cable disconnected\n");
+    //         gb_link_disconnect(gb);
+    //         gb_quit(linked_gb);
+    //         close(sfd);
+    //         return 0;
+    //     }
+    //     if (buf[0] != PKT_JOYPAD)
+    //         eprintf("received packet type %d but expected %d (ignored)\n", buf[0], PKT_JOYPAD);
+    // } while (buf[0] != PKT_JOYPAD);
 
-    uint8_t *pkt = xcalloc(1, *rom_len + 9);
-    pkt[0] = PKT_ROM;
-    memcpy(&pkt[1], rom_len, sizeof(size_t));
-    memcpy(&pkt[9], this_rom, *rom_len); // causes segfault
+    // gb_set_joypad_state(linked_gb, buf[1]);
+    // return 1;
 
-    send(sfd, pkt, *rom_len + 9, 0);
-    free(pkt);
-
-    // --- RECEIVE PKT_ROM ---
-
-    // TODO compression
-    uint8_t pkt_header[9] = { 0 };
-    receive(sfd, pkt_header, 9, 0);
-
-    if (pkt_header[0] != PKT_ROM) {
-        eprintf("received packet type %d but expected %d (ignored)\n", pkt_header[0], PKT_ROM);
-        return 0;
-    }
-
-    memcpy(rom_len, &pkt_header[1], sizeof(size_t));
-    *other_rom = xcalloc(1, *rom_len);
-
-    receive(sfd, *other_rom, *rom_len, 0);
-
-    return 1;
-}
-
-static int exchange_savestate(int sfd, gb_t *gb, int can_compress, uint8_t **savestate_data, size_t *savestate_len) {
-    // --- SEND PKT_STATE ---
-
-    uint8_t *local_savestate_data = gb_get_savestate(gb, savestate_len, can_compress);
-
-    uint8_t *pkt = xcalloc(1, *savestate_len + 9);
-    pkt[0] = PKT_STATE;
-    memcpy(&pkt[1], savestate_len, sizeof(size_t));
-    memcpy(&pkt[9], local_savestate_data, *savestate_len);
-
-    send(sfd, pkt, *savestate_len + 9, 0);
-    free(pkt);
-    free(local_savestate_data);
-
-    // --- RECEIVE PKT_STATE ---
-
-    uint8_t pkt_header[9] = { 0 };
-    receive(sfd, pkt_header, 9, 0);
-
-    if (pkt_header[0] != PKT_STATE) {
-        eprintf("received packet type %d but expected %d (ignored)\n", pkt_header[0], PKT_STATE);
-        return 0;
-    }
-
-    memcpy(savestate_len, &pkt_header[1], sizeof(size_t));
-
-    *savestate_data = xcalloc(1, *savestate_len);
-
-    receive(sfd, *savestate_data, *savestate_len, 0);
-
-    return 1;
-}
-
-int link_init_transfer(int sfd, gb_t *gb, gb_t **linked_gb) {
-    // TODO connection lost detection (return -1)
-    *linked_gb = NULL;
-    gb_mode_t mode = 0;
-    int can_compress = 0;
-    int is_cable_link = 0;
-    int is_ir_link = 0;
-    size_t rom_len;
-    uint8_t *rom = NULL;
-    size_t savestate_len;
-    uint8_t *savestate_data = NULL;
-
-    // TODO handle wrong packet type received
-    int ret = exchange_info(sfd, gb, &mode, &can_compress, &is_cable_link, &is_ir_link);
-    if (ret == 0)
-        exchange_rom(sfd, gb, &rom, &rom_len);
-    exchange_savestate(sfd, gb, can_compress, &savestate_data, &savestate_len);
-
-    // --- LINK BACKGROUND EMULATOR ---
-
-    gb_options_t opts = { .mode = mode };
-    if (rom) {
-        *linked_gb = gb_init(rom, rom_len, &opts);
-        if (!*linked_gb) {
-            eprintf("received invalid or corrupted PKT_ROM\n");
-            free(rom);
-            close(sfd);
-            return 0;
-        }
-        free(rom);
-    } else {
-        rom = gb_get_rom(gb, &rom_len);
-        *linked_gb = gb_init(rom, rom_len, &opts);
-    }
-
-    if (!gb_load_savestate(*linked_gb, savestate_data, savestate_len)) {
-        eprintf("received invalid or corrupted savestate\n");
-        close(sfd);
-        return 0;
-    }
-
-    if (is_cable_link)
-        gb_link_connect_gb(gb, *linked_gb);
-    if (is_ir_link)
-        gb_ir_connect(gb, *linked_gb);
-
-    free(savestate_data);
-    return 1;
-}
-
-int link_exchange_joypad(int sfd, gb_t *gb, gb_t *linked_gb) {
-    char buf[2];
-    buf[0] = PKT_JOYPAD;
-    buf[1] = gb_get_joypad_state(gb);
-    send(sfd, buf, 2, 0);
-
-    do {
-        if (!receive(sfd, buf, 2, 0)) {
-            printf("Link cable disconnected\n");
-            gb_link_disconnect(gb);
-            gb_quit(linked_gb);
-            close(sfd);
-            return 0;
-        }
-        if (buf[0] != PKT_JOYPAD)
-            eprintf("received packet type %d but expected %d (ignored)\n", buf[0], PKT_JOYPAD);
-    } while (buf[0] != PKT_JOYPAD);
-
-    gb_set_joypad_state(linked_gb, buf[1]);
-    return 1;
+    return 0;
 }

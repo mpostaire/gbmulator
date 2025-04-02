@@ -17,8 +17,10 @@ void alrenderer_quit(void);
 
 void alrenderer_enable_dynamic_rate_control(ALboolean enabled);
 
-void alrenderer_queue_sample(const gb_apu_sample_t sample, uint32_t *dynamic_sampling_rate);
+void alrenderer_queue_sample(const gbmulator_apu_sample_t sample, uint32_t *dynamic_sampling_rate);
 
 void alrenderer_pause(void);
 
 void alrenderer_play(void);
+
+void alrenderer_set_level(float level);

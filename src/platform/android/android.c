@@ -575,7 +575,6 @@ static void load_cartridge(const uint8_t *rom, size_t rom_size, int resume, int 
         .on_new_frame = ppu_vblank_cb,
         .apu_speed = emu_speed,
         .apu_sampling_rate = SAMPLING_RATE,
-        .apu_sound_level = sound,
         .on_camera_capture_image = camera_capture_image_cb,
         .palette = palette
     };
