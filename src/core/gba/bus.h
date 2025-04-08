@@ -167,22 +167,20 @@ typedef struct {
     uint8_t game_rom[BUS_GAME_ROM1 - BUS_GAME_ROM0];
     uint8_t game_sram[BUS_GAME_UNUSED - BUS_GAME_SRAM];
 
-    uint32_t address; // current selected address on the bus
-    uint32_t selected_mem_offset; // offset to substract to address to index selected_mem_ptr array
-    uint8_t *selected_mem_ptr; // pointer to start of one of memory regions currently selected on bus
     bool is_writeable;
 } gba_bus_t;
 
-void gba_bus_select(gba_t *gba, uint32_t address);
+uint8_t gba_bus_read_byte(gba_t *gba, uint32_t address);
 
-uint8_t gba_bus_read_byte(gba_t *gba);
+uint16_t gba_bus_read_half(gba_t *gba, uint32_t address);
 
-uint16_t gba_bus_read_half(gba_t *gba);
+uint32_t gba_bus_read_word(gba_t *gba, uint32_t address);
 
-uint32_t gba_bus_read_word(gba_t *gba);
+void gba_bus_write_byte(gba_t *gba, uint32_t address, uint8_t data);
 
-// TODO data type may be wrong
-void gba_bus_write(gba_t *gba, uint32_t data);
+void gba_bus_write_half(gba_t *gba, uint32_t address, uint16_t data);
+
+void gba_bus_write_word(gba_t *gba, uint32_t address, uint32_t data);
 
 bool gba_bus_init(gba_t *gba, const uint8_t *rom, size_t rom_size);
 
