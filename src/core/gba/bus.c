@@ -58,125 +58,86 @@ static bool gba_parse_cartridge(gba_t *gba) {
     return true;
 }
 
-void gba_bus_select(gba_t *gba, uint32_t address) {
+static uint32_t read_open_bus(gba_t *gba, uint32_t address) {
+    return 0xFFFFFFFF;
+}
+
+static void *bus_access(gba_t *gba, uint32_t address) {
     LOG_DEBUG("bus addr select: 0x%08X\n", address);
 
     gba_bus_t *bus = gba->bus;
 
-    bus->address = address;
-
     switch (address) {
     case BUS_BIOS_ROM ... BUS_BIOS_ROM_UNUSED - 1:
-        bus->selected_mem_ptr = (uint8_t *) &bus->bios_rom;
-        bus->selected_mem_offset = BUS_BIOS_ROM;
         bus->is_writeable = false;
-        break;
+        return &bus->bios_rom[address - BUS_BIOS_ROM];
     case BUS_WRAM_BOARD ... BUS_WRAM_BOARD_UNUSED - 1:
-        bus->selected_mem_ptr = (uint8_t *) &bus->wram_board;
-        bus->selected_mem_offset = BUS_WRAM_BOARD;
         bus->is_writeable = true;
-        break;
+        return &bus->wram_board[address - BUS_WRAM_BOARD];
     case BUS_WRAM_CHIP ... BUS_WRAM_CHIP_UNUSED - 1:
-        bus->selected_mem_ptr = (uint8_t *) &bus->wram_chip;
-        bus->selected_mem_offset = BUS_WRAM_CHIP;
         bus->is_writeable = true;
-        break;
+        return &bus->wram_chip[address - BUS_WRAM_CHIP];
     case BUS_IO_REGS ... BUS_IO_REGS_UNUSED - 1:
-        bus->selected_mem_ptr = (uint8_t *) &bus->io_regs;
-        bus->selected_mem_offset = BUS_IO_REGS;
         bus->is_writeable = true;
-        break;
+        return &bus->io_regs[address - BUS_IO_REGS];
     case BUS_PALETTE_RAM ... BUS_PALETTE_RAM_UNUSED - 1:
-        bus->selected_mem_ptr = (uint8_t *) &bus->palette_ram;
-        bus->selected_mem_offset = BUS_PALETTE_RAM;
         bus->is_writeable = true;
-        break;
+        return &bus->palette_ram[address - BUS_PALETTE_RAM];
     case BUS_VRAM ... BUS_VRAM_UNUSED - 1:
-        bus->selected_mem_ptr = (uint8_t *) &bus->vram;
-        bus->selected_mem_offset = BUS_VRAM;
         bus->is_writeable = true;
-        break;
+        return &bus->vram[address - BUS_VRAM];
     case BUS_OAM ... BUS_OAM_UNUSED - 1:
-        bus->selected_mem_ptr = (uint8_t *) &bus->oam;
-        bus->selected_mem_offset = BUS_OAM;
         bus->is_writeable = true;
-        break;
+        return &bus->oam[address - BUS_OAM];
     case BUS_GAME_ROM0 ... BUS_GAME_ROM1 - 1:
-        bus->selected_mem_ptr = (uint8_t *) &bus->game_rom;
-        bus->selected_mem_offset = BUS_GAME_ROM0;
         bus->is_writeable = false;
-        break;
+        return &bus->game_rom[address - BUS_GAME_ROM0];
     case BUS_GAME_ROM1 ... BUS_GAME_ROM2 - 1:
-        bus->selected_mem_ptr = (uint8_t *) &bus->game_rom;
-        bus->selected_mem_offset = BUS_GAME_ROM1;
         bus->is_writeable = false;
-        break;
+        return &bus->game_rom[address - BUS_GAME_ROM0];
     case BUS_GAME_ROM2 ... BUS_GAME_SRAM - 1:
-        bus->selected_mem_ptr = (uint8_t *) &bus->game_rom;
-        bus->selected_mem_offset = BUS_GAME_ROM2;
         bus->is_writeable = false;
-        break;
+        return &bus->game_rom[address - BUS_GAME_ROM0];
     case BUS_GAME_SRAM ... BUS_GAME_UNUSED - 1:
-        bus->selected_mem_ptr = (uint8_t *) &bus->game_sram;
-        bus->selected_mem_offset = BUS_GAME_SRAM;
         bus->is_writeable = true;
-        break;
+        return &bus->game_sram[address - BUS_GAME_SRAM];
     default:
-        bus->selected_mem_ptr = NULL;
-        bus->selected_mem_offset = 0;
         bus->is_writeable = false;
-        break;
+        return NULL;
     }
 }
 
-uint8_t gba_bus_read_byte(gba_t *gba) {
-    gba_bus_t *bus = gba->bus;
-
-    uint8_t ret = 0xFF;
-    if (!bus->selected_mem_ptr)
-        return ret;
-
-    uint32_t address = ALIGN_ADDRESS(bus->address - bus->selected_mem_offset, sizeof(ret));
-    memcpy(&ret, bus->selected_mem_ptr + address, sizeof(ret));
-    return ret;
-}
-uint16_t gba_bus_read_half(gba_t *gba) {
-    gba_bus_t *bus = gba->bus;
-
-    uint16_t ret = 0xFFFF;
-    if (!bus->selected_mem_ptr)
-        return ret;
-
-    uint32_t address = ALIGN_ADDRESS(bus->address - bus->selected_mem_offset, sizeof(ret));
-    memcpy(&ret, bus->selected_mem_ptr + address, sizeof(ret));
-    return ret;
-}
-uint32_t gba_bus_read_word(gba_t *gba) {
-    gba_bus_t *bus = gba->bus;
-
-    uint32_t ret = 0xFFFFFFFF;
-    if (!bus->selected_mem_ptr)
-        return ret;
-
-    uint32_t address = ALIGN_ADDRESS(bus->address - bus->selected_mem_offset, sizeof(ret));
-    memcpy(&ret, bus->selected_mem_ptr + address, sizeof(ret));
-    return ret;
+uint8_t gba_bus_read_byte(gba_t *gba, uint32_t address) {
+    uint8_t *ret = bus_access(gba, ALIGN_ADDRESS(address, sizeof(*ret)));
+    return ret ? *ret : read_open_bus(gba, address);
 }
 
-// TODO data type may be wrong
-void gba_bus_write(gba_t *gba, uint32_t data) {
-    if (gba->bus->is_writeable) {
-        LOG_DEBUG("bus address 0x%08X is read only", gba->bus->address);
-        return;
-    } else if (!gba->bus->selected_mem_ptr) {
-        LOG_DEBUG("bus address 0x%08X is unmapped memory", gba->bus->address);
-        return;
-    }
+uint16_t gba_bus_read_half(gba_t *gba, uint32_t address) {
+    uint16_t *ret = bus_access(gba, ALIGN_ADDRESS(address, sizeof(*ret)));
+    return ret ? *ret : read_open_bus(gba, address);
+}
 
-    LOG_DEBUG("bus write of 0x%08X at 0x%08X", data, gba->bus->address);
+uint32_t gba_bus_read_word(gba_t *gba, uint32_t address) {
+    uint32_t *ret = bus_access(gba, ALIGN_ADDRESS(address, sizeof(*ret)));
+    return ret ? *ret : read_open_bus(gba, address);
+}
 
-    // TODO special cases like io registers
-    gba->bus->selected_mem_ptr[gba->bus->selected_mem_offset] = data;
+void gba_bus_write_byte(gba_t *gba, uint32_t address, uint8_t data) {
+    uint8_t *ret = bus_access(gba, ALIGN_ADDRESS(address, sizeof(*ret)));
+    if (ret)
+        *ret = data;
+}
+
+void gba_bus_write_half(gba_t *gba, uint32_t address, uint16_t data) {
+    uint16_t *ret = bus_access(gba, ALIGN_ADDRESS(address, sizeof(*ret)));
+    if (ret)
+        *ret = data;
+}
+
+void gba_bus_write_word(gba_t *gba, uint32_t address, uint32_t data) {
+    uint32_t *ret = bus_access(gba, ALIGN_ADDRESS(address, sizeof(*ret)));
+    if (ret)
+        *ret = data;
 }
 
 // TODO this shouldn't be responsible for cartridge loading and parsing (same for gb_mmu_t)

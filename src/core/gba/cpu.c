@@ -212,10 +212,11 @@ static void bx_handler(gba_t *gba, uint32_t instr) {
     //                       ------> NO BUT IT COINCIDES BECAUSE IT THE SAME TIME
 
     if (CPSR_CHECK_FLAG(gba->cpu, CPSR_T))
-        pc_dest -= 1;
+        pc_dest -= 1; // TODO really -1 here? not align 2?
 
     LOG_DEBUG("(0x%08X) BX%s %s (0x%08X)\n", instr, cond_names[INSTR_GET_COND(instr)], reg_names[rn], pc_dest);
 
+    // TODO is this sure?
     gba->cpu->regs[REG_PC] = pc_dest - 4; // -4 here to counterbalance the REG_PC += 4 at the end of cpu_step()
 
     // TODO flush pipeline? --> should be filled with 0: this is an andeq r0, r0, r0 and is equivalent to a nop
@@ -485,16 +486,14 @@ static void str_handler(gba_t *gba, uint32_t instr) {
     else
         todo();
 
-    gba_bus_select(gba, addr);
-
     uint8_t rd = (instr >> 12) & 0x0F;
 
     LOG_DEBUG("(0x%08X) STR%s%s%s %s, [%s, #0x%X]\n", instr, cond_names[INSTR_GET_COND(instr)], b ? "B" : "", w ? "T" : "", reg_names[rd], reg_names[rn], offset);
 
     if (b)
-        gba_bus_write(gba, gba->cpu->regs[rd] & 0xFF); // TODO maybe this is wrong because data bus should be 8 MSB repeated in all 32 bits
+        gba_bus_write_byte(gba, gba->cpu->regs[rd], addr);
     else
-        gba_bus_write(gba, gba->cpu->regs[rd]);
+        gba_bus_write_word(gba, gba->cpu->regs[rd], addr);
 }
 
 static void ldr_handler(gba_t *gba, uint32_t instr) {
@@ -528,13 +527,11 @@ static void ldr_handler(gba_t *gba, uint32_t instr) {
     else
         todo();
 
-    gba_bus_select(gba, addr);
-
     uint32_t res;
     if (b)
-        res = gba_bus_read_byte(gba);
+        res = gba_bus_read_byte(gba, addr);
     else
-        res = gba_bus_read_word(gba);
+        res = gba_bus_read_word(gba, addr);
 
     uint8_t rd = (instr >> 12) & 0x0F;
 
@@ -635,16 +632,14 @@ void gba_cpu_step(gba_t *gba) {
 
     LOG_DEBUG("--------\n[PC=0x%08X] [COND=%c%c%c%c %c%c%c]\n", cpu->regs[REG_PC], N, Z, C, V, I, F, T);
 
-    gba_bus_select(gba, cpu->regs[REG_PC]);
-
     int pc_increment;
     uint32_t fetched_instr;
     if (CPSR_CHECK_FLAG(gba->cpu, CPSR_T)) {
         pc_increment = 2;
-        fetched_instr = gba_bus_read_half(gba);
+        fetched_instr = gba_bus_read_half(gba, cpu->regs[REG_PC]);
     } else {
         pc_increment = 4;
-        fetched_instr = gba_bus_read_word(gba);
+        fetched_instr = gba_bus_read_word(gba, cpu->regs[REG_PC]);
     }
 
     uint32_t instr = cpu->pipeline[PIPELINE_DECODING];
@@ -775,14 +770,13 @@ static void thumb_bx_handler(gba_t *gba, uint32_t instr) {
     //                       ------> NO BUT IT COINCIDES BECAUSE IT THE SAME TIME
 
     if (!CPSR_CHECK_FLAG(gba->cpu, CPSR_T))
-        pc_dest &= 0xFFFFFFFC;
+        pc_dest &= 0xFFFFFFFC; // TODO is this sure? no offset?
 
     LOG_DEBUG("(0x%04X) BX %s (0x%08X)\n", instr, reg_names[rn], pc_dest);
 
 // todo("lr register should contain 0x000000A0 but got --> 0x%08X", pc_dest);
 
-//     todo("really -4 here ? it should already be offset by 4 when stored in LR register? check implem of BL");
-    gba->cpu->regs[REG_PC] = pc_dest - 4; // -4 here to counterbalance the REG_PC += 4 at the end of cpu_step()
+    gba->cpu->regs[REG_PC] = pc_dest;
 
     // TODO flush pipeline? --> should be filled with 0: this is an andeq r0, r0, r0 and is equivalent to a nop
     gba->cpu->pipeline[PIPELINE_FETCHING] = 0x00000000;
@@ -793,9 +787,7 @@ static void thumb_pc_relative_ldr_handler(gba_t *gba, uint32_t instr) {
     uint32_t word8 = (instr & 0xFF) << 2;
     uint8_t rd = (instr & 0x700) >> 8;
 
-    gba_bus_select(gba, gba->cpu->regs[REG_PC] - 2 + word8);
-
-    gba->cpu->regs[rd] = gba_bus_read_word(gba);
+    gba->cpu->regs[rd] = gba_bus_read_word(gba, gba->cpu->regs[REG_PC] - 2 + word8);
 
     LOG_DEBUG("(0x%04X) LDR %s, [PC, #0x%08X]\n", instr, reg_names[rd], word8);
 
@@ -811,15 +803,68 @@ static void thumb_reg_str_handler(gba_t *gba, uint32_t instr) {
 
     LOG_DEBUG("(0x%04X) STR%s %s, [%s, %s]\n", instr, b ? "B" : "", reg_names[rd], reg_names[rb], reg_names[ro]);
 
-    gba_bus_select(gba, gba->cpu->regs[rb] + gba->cpu->regs[ro]);
-
     LOG_DEBUG("%d %d %X\n", gba->cpu->regs[rb], gba->cpu->regs[rb], (int) gba->cpu->regs[rb]);
     // todo("%u %d %X", (unsigned int) gba->cpu->regs[ro], gba->cpu->regs[ro], (int) gba->cpu->regs[ro]);
 
     if (b)
-        gba_bus_write(gba, gba->cpu->regs[rd] & 0xFF);
+        gba_bus_write_byte(gba, gba->cpu->regs[rd], gba->cpu->regs[rb] + gba->cpu->regs[ro]);
     else
-        gba_bus_write(gba, gba->cpu->regs[rd]);
+        gba_bus_write_word(gba, gba->cpu->regs[rd], gba->cpu->regs[rb] + gba->cpu->regs[ro]);
+}
+
+static void thumb_push_handler(gba_t *gba, uint32_t instr) {
+    uint16_t r = CHECK_BIT(instr, 8);
+
+    // TODO reuse this code for STM/LDM instrs
+
+    if (r) {
+        gba->cpu->regs[REG_SP] = gba->cpu->regs[REG_LR];
+        gba->cpu->regs[REG_SP]--;
+    }
+
+    for (int i = 7; i >= 0; i--) {
+        if (CHECK_BIT(instr, i)) {
+            gba->cpu->regs[REG_SP] = gba->cpu->regs[i];
+            gba->cpu->regs[REG_SP]--;
+        }
+    }
+
+#ifdef DEBUG
+    char buf[128] = {};
+    size_t buf_offset = 0;
+    buf_offset += snprintf(buf + buf_offset, sizeof(buf) - buf_offset, "(0x%04X) PUSH {", instr);
+
+    int first = -1;
+    int last = -1;
+    for (int i = 0; i < 8; i++) {
+        if (CHECK_BIT(instr, i)) {
+            if (first < 0) {
+                first = i;
+                buf_offset += snprintf(buf + buf_offset, sizeof(buf) - buf_offset, "%sR%d", last >= 0 ? "," : "", i);
+            } else if (buf[buf_offset - 1] != '-') {
+                buf_offset += snprintf(buf + buf_offset, sizeof(buf) - buf_offset, "-");
+            }
+            last = i;
+        } else {
+            if (first >= 0) {
+                if (last != first)
+                    buf_offset += snprintf(buf + buf_offset, sizeof(buf) - buf_offset, "R%d", last);
+                first = -1;
+            }
+        }
+    }
+
+    if (buf[buf_offset - 1] == '-')
+        buf_offset += snprintf(buf + buf_offset, sizeof(buf) - buf_offset, "R%d", last);
+
+    buf_offset += snprintf(buf + buf_offset, sizeof(buf) - buf_offset, "%s%s}\n", ((instr & 0x00FF) && r) ? "," : "", r ? "R14" : "");
+
+    LOG_DEBUG(buf);
+#endif
+}
+
+static void thumb_pop_handler(gba_t *gba, uint32_t instr) {
+    todo("thumb_pop_handler");
 }
 
 static void thumb_b_handler(gba_t *gba, uint32_t instr) {
@@ -858,6 +903,8 @@ static void thumb_b_handler(gba_t *gba, uint32_t instr) {
     X(thumb_bx_handler)              \
     X(thumb_pc_relative_ldr_handler) \
     X(thumb_reg_str_handler)         \
+    X(thumb_push_handler)            \
+    X(thumb_pop_handler)             \
     X(thumb_b_handler)
 #define HANDLER_ID(name) name##_id
 #define HANDLER_ID_GENERATOR(name) HANDLER_ID(name),
@@ -956,7 +1003,10 @@ decoder_rule_t thumb_decoder_rules[] = {
     {"01000111________", HANDLER_ID(thumb_bx_handler)}, // Hi register operations/branch exchange
     {"01001***________", HANDLER_ID(thumb_pc_relative_ldr_handler)}, // PC-relative load
     {"01010*0*________", HANDLER_ID(thumb_reg_str_handler)}, // Load/store with register offset
+    {"1011010*________", HANDLER_ID(thumb_push_handler)}, // Push/pop registers
+    {"1011110*________", HANDLER_ID(thumb_pop_handler)}, // Push/pop registers
     {"1101****________", HANDLER_ID(thumb_b_handler)}, // Conditonal branch
+
     // {"11011111________", HANDLER_ID(thumb_sw_int_handler)}, // Software interrupt
 };
 uint8_t get_thumb_handler(uint32_t instr) {
