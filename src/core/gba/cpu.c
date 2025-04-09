@@ -812,6 +812,15 @@ static void thumb_reg_str_handler(gba_t *gba, uint32_t instr) {
         gba_bus_write_word(gba, gba->cpu->regs[rd], gba->cpu->regs[rb] + gba->cpu->regs[ro]);
 }
 
+static void thumb_str_sp_handler(gba_t *gba, uint32_t instr) {
+    uint8_t rd = (instr >> 8) & 0x07;
+    uint16_t offset = (instr & 0x00FF) << 2;
+
+    LOG_DEBUG("(0x%04X) STR R%d, [SP, #%d]\n", instr, rd, offset);
+
+    gba_bus_write_word(gba, gba->cpu->regs[REG_SP] + offset, gba->cpu->regs[rd]);
+}
+
 static void thumb_add_sp_handler(gba_t *gba, uint32_t instr) {
     bool s = GET_BIT(instr, 7);
     uint16_t offset = ((instr & 0x007F) << 2) * s;
@@ -912,6 +921,7 @@ static void thumb_b_handler(gba_t *gba, uint32_t instr) {
     X(thumb_bx_handler)              \
     X(thumb_pc_relative_ldr_handler) \
     X(thumb_reg_str_handler)         \
+    X(thumb_str_sp_handler)          \
     X(thumb_add_sp_handler)          \
     X(thumb_push_handler)            \
     X(thumb_pop_handler)             \
@@ -1013,6 +1023,8 @@ decoder_rule_t thumb_decoder_rules[] = {
     {"01000111________", HANDLER_ID(thumb_bx_handler)},              // Hi register operations/branch exchange
     {"01001***________", HANDLER_ID(thumb_pc_relative_ldr_handler)}, // PC-relative load
     {"01010*0*________", HANDLER_ID(thumb_reg_str_handler)},         // Load/store with register offset
+    {"10010***________", HANDLER_ID(thumb_str_sp_handler)},          // SP-relative load/store
+    // {"10011***________", HANDLER_ID(thumb_ldr_sp_handler)},       // SP-relative load/store
     {"10110000________", HANDLER_ID(thumb_add_sp_handler)},          // Add offset to stack pointer
     {"1011010*________", HANDLER_ID(thumb_push_handler)},            // Push/pop registers
     {"1011110*________", HANDLER_ID(thumb_pop_handler)},             // Push/pop registers
