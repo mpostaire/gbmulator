@@ -812,6 +812,15 @@ static void thumb_reg_str_handler(gba_t *gba, uint32_t instr) {
         gba_bus_write_word(gba, gba->cpu->regs[rd], gba->cpu->regs[rb] + gba->cpu->regs[ro]);
 }
 
+static void thumb_add_sp_handler(gba_t *gba, uint32_t instr) {
+    bool s = GET_BIT(instr, 7);
+    uint16_t offset = ((instr & 0x007F) << 2) * s;
+
+    LOG_DEBUG("(0x%04X) ADD R13 #%s%d\n", instr, s ? "-" : "", offset);
+
+    gba->cpu->regs[REG_SP] += offset;
+}
+
 static void thumb_push_handler(gba_t *gba, uint32_t instr) {
     uint16_t r = CHECK_BIT(instr, 8);
 
@@ -903,6 +912,7 @@ static void thumb_b_handler(gba_t *gba, uint32_t instr) {
     X(thumb_bx_handler)              \
     X(thumb_pc_relative_ldr_handler) \
     X(thumb_reg_str_handler)         \
+    X(thumb_add_sp_handler)          \
     X(thumb_push_handler)            \
     X(thumb_pop_handler)             \
     X(thumb_b_handler)
@@ -927,8 +937,8 @@ typedef struct {
 decoder_rule_t arm_decoder_rules[] = {
     // TODO bx handler and msr handler are confondus
     // --> needs another way to distinguish them
-    {"____00*0000*________________****", HANDLER_ID(and_handler)}, // Data processing
-    {"____00010*00________________0000", HANDLER_ID(mrs_handler)}, // PSR Transfer
+    {"____00*0000*________________****", HANDLER_ID(and_handler)},       // Data processing
+    {"____00010*00________________0000", HANDLER_ID(mrs_handler)},       // PSR Transfer
     {"____00*10*10________________0000", HANDLER_ID(msr_bx_dispatcher)}, // Branch and exchange / PSR Transfer
     // {"____00*0001*________________****", HANDLER_ID(eor_handler)}, // Data processing
     // {"____00*0010*________________****", HANDLER_ID(sub_handler)}, // Data processing
@@ -945,10 +955,10 @@ decoder_rule_t arm_decoder_rules[] = {
     {"____00*1101*________________****", HANDLER_ID(mov_handler)}, // Data processing
     // {"____00*1110*________________****", HANDLER_ID(bic_handler)}, // Data processing
     // {"____00*1111*________________****", HANDLER_ID(mvn_handler)}, // Data processing
-    {"____01*****0________________****", HANDLER_ID(str_handler)},         // Single Data Transfer
-    {"____01*****1________________****", HANDLER_ID(ldr_handler)},         // Single Data Transfer
-    {"____1010****________________****", HANDLER_ID(b_handler)},      // Branch
-    {"____1011****________________****", HANDLER_ID(bl_handler)}, // Branch
+    {"____01*****0________________****", HANDLER_ID(str_handler)}, // Single Data Transfer
+    {"____01*****1________________****", HANDLER_ID(ldr_handler)}, // Single Data Transfer
+    {"____1010****________________****", HANDLER_ID(b_handler)},   // Branch
+    {"____1011****________________****", HANDLER_ID(bl_handler)},  // Branch
 };
 uint8_t get_arm_handler(uint32_t instr) {
     // TODO
@@ -997,15 +1007,16 @@ static void arm_handlers_init(void) {
 decoder_rule_t thumb_decoder_rules[] = {
     // TODO bx handler and msr handler are confondus
     // --> needs another way to distinguish them
-    {"0000000*________", HANDLER_ID(thumb_lsl_handler)}, // Move shifted register
-    {"00011*0*________", HANDLER_ID(thumb_add_handler)}, // Add/substract
-    {"00100***________", HANDLER_ID(thumb_mov_handler)}, // Move/compare/add/substract immediate
-    {"01000111________", HANDLER_ID(thumb_bx_handler)}, // Hi register operations/branch exchange
+    {"0000000*________", HANDLER_ID(thumb_lsl_handler)},             // Move shifted register
+    {"00011*0*________", HANDLER_ID(thumb_add_handler)},             // Add/substract
+    {"00100***________", HANDLER_ID(thumb_mov_handler)},             // Move/compare/add/substract immediate
+    {"01000111________", HANDLER_ID(thumb_bx_handler)},              // Hi register operations/branch exchange
     {"01001***________", HANDLER_ID(thumb_pc_relative_ldr_handler)}, // PC-relative load
-    {"01010*0*________", HANDLER_ID(thumb_reg_str_handler)}, // Load/store with register offset
-    {"1011010*________", HANDLER_ID(thumb_push_handler)}, // Push/pop registers
-    {"1011110*________", HANDLER_ID(thumb_pop_handler)}, // Push/pop registers
-    {"1101****________", HANDLER_ID(thumb_b_handler)}, // Conditonal branch
+    {"01010*0*________", HANDLER_ID(thumb_reg_str_handler)},         // Load/store with register offset
+    {"10110000________", HANDLER_ID(thumb_add_sp_handler)},          // Add offset to stack pointer
+    {"1011010*________", HANDLER_ID(thumb_push_handler)},            // Push/pop registers
+    {"1011110*________", HANDLER_ID(thumb_pop_handler)},             // Push/pop registers
+    {"1101****________", HANDLER_ID(thumb_b_handler)},               // Conditonal branch
 
     // {"11011111________", HANDLER_ID(thumb_sw_int_handler)}, // Software interrupt
 };
