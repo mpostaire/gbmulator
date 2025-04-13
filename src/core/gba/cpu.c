@@ -458,13 +458,6 @@ static bool msr_handler(gba_t *gba, uint32_t instr) {
     return true;
 }
 
-static bool msr_bx_dispatcher(gba_t *gba, uint32_t instr) {
-    if ((instr & 0x0FFFFFF0) == 0b00000001001011111111111100010000)
-        return bx_handler(gba, instr);
-    else
-        return msr_handler(gba, instr);
-}
-
 static bool add_handler(gba_t *gba, uint32_t instr) {
     uint8_t rn = (instr & 0x000F0000) >> 16;
     bool s = CHECK_BIT(instr, 20);
@@ -1313,12 +1306,12 @@ static bool thumb_bl_handler(gba_t *gba, uint32_t instr) {
     X(not_implemented_handler)       \
     X(and_handler)                   \
     X(mrs_handler)                   \
-    X(msr_bx_dispatcher)             \
     X(add_handler)                   \
     X(teq_handler)                   \
     X(cmp_handler)                   \
     X(orr_handler)                   \
     X(mov_handler)                   \
+    X(bx_handler)                    \
     X(strh_handler)                  \
     X(str_handler)                   \
     X(ldr_handler)                   \
@@ -1368,32 +1361,36 @@ typedef struct {
 decoder_rule_t arm_decoder_rules[] = {
     // TODO bx handler and msr handler are confondus
     // --> needs another way to distinguish them
-    {"____00*0000*________________****", HANDLER_ID(and_handler)},       // Data processing
-    {"____00010*00________________0000", HANDLER_ID(mrs_handler)},       // PSR Transfer
-    {"____00*10*10________________0000", HANDLER_ID(msr_bx_dispatcher)}, // Branch and exchange / PSR Transfer
-    // {"____00*0001*________________****", HANDLER_ID(eor_handler)}, // Data processing
-    // {"____00*0010*________________****", HANDLER_ID(sub_handler)}, // Data processing
-    // {"____00*0011*________________****", HANDLER_ID(rsb_handler)}, // Data processing
-    {"____00*0100*________________****", HANDLER_ID(add_handler)}, // Data processing
-    // {"____00*0101*________________****", HANDLER_ID(adc_handler)}, // Data processing
-    // {"____00*0110*________________****", HANDLER_ID(sbc_handler)}, // Data processing
-    // {"____00*0111*________________****", HANDLER_ID(rsc_handler)}, // Data processing
-    // {"____00*10001________________****", HANDLER_ID(tst_handler)}, // Data processing
-    {"____00*10011________________****", HANDLER_ID(teq_handler)}, // Data processing
-    {"____00*10101________________****", HANDLER_ID(cmp_handler)}, // Data processing
-    // {"____00*10111________________****", HANDLER_ID(cmn_handler)}, // Data processing
-    {"____00*1100*________________****", HANDLER_ID(orr_handler)}, // Data processing
-    {"____00*1101*________________****", HANDLER_ID(mov_handler)}, // Data processing
-    // {"____00*1110*________________****", HANDLER_ID(bic_handler)}, // Data processing
-    // {"____00*1111*________________****", HANDLER_ID(mvn_handler)}, // Data processing
-    {"____000****0________________****", HANDLER_ID(strh_handler)}, // Halfword Data Transfer: register offset
-    // {"____000****1________________****", HANDLER_ID(ldmh_handler)}, // Halfword Data Transfer: register offset
-    {"____01*****0________________****", HANDLER_ID(str_handler)}, // Single Data Transfer
-    {"____01*****1________________****", HANDLER_ID(ldr_handler)}, // Single Data Transfer
-    {"____100****0________________****", HANDLER_ID(stm_handler)}, // Block Data Transfer
-    {"____100****1________________****", HANDLER_ID(ldm_handler)}, // Block Data Transfer
-    {"____1010****________________****", HANDLER_ID(b_handler)},   // Branch
-    {"____1011****________________****", HANDLER_ID(bl_handler)},  // Branch
+    {"____00*0000*____________****____", HANDLER_ID(and_handler)},       // Data processing
+    {"____00010*00____________****____", HANDLER_ID(/*mrs_handler*/ not_implemented_handler)}, // PSR Transfer // TODO pattern may be wrong
+    {"____00*0001*____________****____", HANDLER_ID(/*eor_handler*/ not_implemented_handler)}, // Data processing
+    {"____00*0010*____________****____", HANDLER_ID(/*sub_handler*/ not_implemented_handler)}, // Data processing
+    {"____00*0011*____________****____", HANDLER_ID(/*rsb_handler*/ not_implemented_handler)}, // Data processing
+    {"____00*0100*____________****____", HANDLER_ID(add_handler)}, // Data processing
+    {"____00*0101*____________****____", HANDLER_ID(/*adc_handler*/ not_implemented_handler)}, // Data processing
+    {"____00*0110*____________****____", HANDLER_ID(/*sbc_handler*/ not_implemented_handler)}, // Data processing
+    {"____00*0111*____________****____", HANDLER_ID(/*rsc_handler*/ not_implemented_handler)}, // Data processing
+    {"____00*10001____________****____", HANDLER_ID(/*tst_handler*/ not_implemented_handler)}, // Data processing
+    {"____00*10011____________****____", HANDLER_ID(teq_handler)}, // Data processing
+    {"____00*10101____________****____", HANDLER_ID(cmp_handler)}, // Data processing
+    {"____00*10111____________****____", HANDLER_ID(/*cmn_handler*/ not_implemented_handler)}, // Data processing
+    {"____00*1100*____________****____", HANDLER_ID(orr_handler)}, // Data processing
+    {"____00*1101*____________****____", HANDLER_ID(mov_handler)}, // Data processing
+    {"____00*1110*____________****____", HANDLER_ID(/*bic_handler*/ not_implemented_handler)}, // Data processing
+    {"____00*1111*____________****____", HANDLER_ID(/*mvn_handler*/ not_implemented_handler)}, // Data processing
+    {"____000000**____________1001____", HANDLER_ID(not_implemented_handler)}, // Multiply
+    {"____00001***____________1001____", HANDLER_ID(not_implemented_handler)}, // Multiply Long
+    {"____00010*00____________1001____", HANDLER_ID(not_implemented_handler)}, // Single Data Swap
+    {"____00010010____________0001____", HANDLER_ID(bx_handler)}, // Branch and exchange
+    {"____000****0____________1**1____", HANDLER_ID(strh_handler)}, // Halfword Data Transfer: register offset
+    {"____000****1____________1**1____", HANDLER_ID(/*ldmh_handler*/ not_implemented_handler)}, // Halfword Data Transfer: register offset
+    {"____01*****0____________****____", HANDLER_ID(str_handler)}, // Single Data Transfer
+    {"____01*****1____________****____", HANDLER_ID(ldr_handler)}, // Single Data Transfer
+    {"____100****0____________****____", HANDLER_ID(stm_handler)}, // Block Data Transfer
+    {"____100****1____________****____", HANDLER_ID(ldm_handler)}, // Block Data Transfer
+    {"____1010****____________****____", HANDLER_ID(b_handler)},   // Branch
+    {"____1011****____________****____", HANDLER_ID(bl_handler)},  // Branch
+    {"____1111****____________****____", HANDLER_ID(/*swi_handler*/ not_implemented_handler)}, // Software Interrupt
 };
 uint8_t get_arm_handler(uint32_t instr) {
     // TODO
@@ -1407,10 +1404,12 @@ uint8_t get_arm_handler(uint32_t instr) {
                 break;
             case '_':
                 // jump to next relevant char
-                if (j == 4)
+                if (j == 0)
+                    j = 3;
+                else if (j == 8)
                     j = 19;
-                else if (j == 28)
-                    j = 31;
+                else
+                    j = sizeof(rule->match_string);
                 break;
             case '0':
                 match = GET_BIT(instr, j) == 0;
