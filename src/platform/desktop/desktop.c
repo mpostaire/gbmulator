@@ -399,7 +399,7 @@ static gboolean on_printer_resize(GtkGLArea *area, GdkGLContext *context) {
     return TRUE;
 }
 
-static void ppu_vblank_cb(const uint8_t *pixels) {
+static void on_new_frame_cb(const uint8_t *pixels) {
     glrenderer_update_texture(emu_renderer, pixels);
 }
 
@@ -581,7 +581,7 @@ static int load_cartridge(char *path) {
     gbmulator_options_t opts = {
         .mode = config.mode,
         .on_new_sample = alrenderer_queue_sample,
-        .on_new_frame = ppu_vblank_cb,
+        .on_new_frame = on_new_frame_cb,
         .on_accelerometer_request = set_accelerometer_data,
         .apu_speed = config.speed,
         .apu_sampling_rate = alrenderer_get_sampling_rate(),

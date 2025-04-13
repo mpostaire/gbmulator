@@ -20,6 +20,8 @@
 #define CHANGE_BIT(var, pos, value) ((var) ^= (-(value) ^ (var)) & (1UL << (pos)))
 #define CHANGE_BITS(var, mask, value) ((var) = ((var) & (~(mask)) | ((value) & (mask))))
 
+#define ALIGN(x, n) ((x) & (~((n) - 1)))
+
 #ifndef MIN
 #   define MIN(x, y) ((x) < (y) ? (x) : (y))
 #endif

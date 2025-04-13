@@ -40,7 +40,7 @@ void gba_ppu_step(gba_t *gba) {
 
     switch (ppu->period) {
     case GBA_PPU_PERIOD_HDRAW:
-        uint16_t color = gba_bus_read_half(gba, BUS_VRAM + (ppu->y * GBA_SCREEN_WIDTH + ppu->x));
+        uint16_t color = gba_bus_read_half(gba, BUS_VRAM + (ppu->y * (GBA_SCREEN_WIDTH * 2) + (ppu->x * 2)));
 
         uint8_t r = color & 0x001F;
         uint8_t g = (color >> 5) & 0x001F;
@@ -74,9 +74,11 @@ void gba_ppu_step(gba_t *gba) {
             ppu->y++;
 
             if (ppu->y >= GBA_SCREEN_HEIGHT + VBLANK_HEIGHT) {
+                // todo("VBLANK --> if no picture visible, check how to implement io registers");
+
                 ppu->y = 0;
                 ppu->period = GBA_PPU_PERIOD_HDRAW;
-    
+
                 if (gba->on_new_frame)
                     gba->on_new_frame(ppu->pixels);
             }
