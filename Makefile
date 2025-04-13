@@ -46,7 +46,8 @@ SHADERS:=$(wildcard $(SDIR)/platform/desktop/ui/*.glsl)
 
 all: desktop
 
-debug: CFLAGS+=-g -O0
+debug: CFLAGS+=-ggdb -O0
+# debug: CFLAGS+=-DDEBUG
 debug: all
 
 desktop: CFLAGS+=$(shell pkg-config --cflags gtk4 libadwaita-1 zlib manette-0.2 opengl openal gstreamer-1.0) -fanalyzer
