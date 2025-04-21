@@ -278,12 +278,12 @@ static char *_strh_addr_str(uint8_t rn, int32_t offset, bool offset_is_reg, bool
     return buf;
 }
 
-static char *_msr_op_to_str(uint8_t op, bool i, char *buf, size_t buf_size) {
+static char *_msr_op_to_str(uint32_t instr, uint8_t op, bool i, char *buf, size_t buf_size) {
     size_t buf_offset = 0;
     if (i)
         buf_offset += snprintf(buf + buf_offset, buf_size - buf_offset, "#0x%08X", op);
     else
-        buf_offset += snprintf(buf + buf_offset, buf_size - buf_offset, "%s", reg_names[op]);
+        buf_offset += snprintf(buf + buf_offset, buf_size - buf_offset, "%s", reg_names[instr & 0x0F]);
     return buf;
 }
 
@@ -291,7 +291,7 @@ static char *_msr_op_to_str(uint8_t op, bool i, char *buf, size_t buf_size) {
 
 #define rlist_to_str(rlist) _rlist_to_str((rlist), (char[32]) {}, 32)
 
-#define msr_op_to_str(op, i) _msr_op_to_str((op), (i), (char[32]) {}, 32)
+#define msr_op_to_str(instr, op, i) _msr_op_to_str((instr), (op), (i), (char[32]) {}, 32)
 #endif
 
 static bool not_implemented_handler(UNUSED gba_t *gba, uint32_t instr) {
@@ -457,11 +457,6 @@ static bool and_handler(gba_t *gba, uint32_t instr) {
     return true;
 }
 
-static bool mrs_handler(gba_t *gba, uint32_t instr) {
-    todo();
-    return true;
-}
-
 static inline void bank_registers(gba_cpu_t *cpu, uint8_t new_mode) {
     uint8_t old_mode = CPSR_GET_MODE(cpu);
 
@@ -521,7 +516,7 @@ static bool msr_handler(gba_t *gba, uint32_t instr) {
 
     uint32_t mask = c ? 0xFFFFFFFF : 0xF0000000;
 
-    LOG_DEBUG("(0x%08X) MSR%s %cPSR_%s,%s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], pd ? 'S' : 'C', c ? "fc" : "flg", msr_op_to_str(op, i));
+    LOG_DEBUG("(0x%08X) MSR%s %cPSR_%s,%s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], pd ? 'S' : 'C', c ? "fc" : "flg", msr_op_to_str(instr, op, i));
 
     if (pd) {
         if (CPSR_GET_MODE(gba->cpu) == CPSR_MODE_USR)
@@ -532,6 +527,17 @@ static bool msr_handler(gba_t *gba, uint32_t instr) {
         bank_registers(gba->cpu, op & CPSR_MODE_MASK);
         CHANGE_BITS(gba->cpu->cpsr, mask, op);
     }
+
+    return true;
+}
+
+static bool mrs_handler(gba_t *gba, uint32_t instr) {
+    bool ps = CHECK_BIT(instr, 22);
+    uint8_t rd = (instr >> 12) & 0x0F;
+
+    gba->cpu->regs[rd] = ps ? gba->cpu->spsr[regs_mode_hashes[CPSR_GET_MODE(gba->cpu) & 0x0F]] : gba->cpu->cpsr;
+
+    LOG_DEBUG("(0x%08X) MRS%s %s,%cPSR_fc\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[rd], ps ? 'S' : 'C');
 
     return true;
 }
@@ -1742,7 +1748,7 @@ decoder_rule_t arm_decoder_rules[] = {
     // {"____0000000*____________1001____", HANDLER_ID(mul_handler)}, // Multiply
     {"____0000001*____________1001____", HANDLER_ID(mla_handler)}, // Multiply
     {"____00*0000*____________****____", HANDLER_ID(and_handler)},       // Data processing
-    {"____00010*00____________0000____", HANDLER_ID(/*mrs_handler*/ not_implemented_handler)}, // PSR Transfer
+    {"____00010*00____________0000____", HANDLER_ID(mrs_handler)}, // PSR Transfer
     {"____00*10*10____________****____", HANDLER_ID(msr_handler)}, // PSR Transfer
     {"____000**0**____________1**1____", HANDLER_ID(strh_reg_handler)}, // Halfword Data Transfer: register offset
     {"____000**1**____________1**1____", HANDLER_ID(strh_imm_handler)}, // Halfword Data Transfer: register offset
