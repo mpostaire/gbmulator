@@ -3,7 +3,7 @@
 
 #include "gba_priv.h"
 
-static const char *makers[256] = {
+static const char *makers[] = {
     [0x01] = "Nintendo"
 };
 
@@ -43,9 +43,11 @@ void gba_print_status(gba_t *gba) {
     uint16_t maker_code = ((gba->bus->game_rom[0xB0] - 0x30) * 10) + (gba->bus->game_rom[0xB1] - 0x30); // maker_code is 2 chars
     uint8_t version = gba->bus->game_rom[0xBC];
 
-    const char *maker_name = makers[maker_code];
-    if (!maker_name)
-        maker_name = "Unknown";
+    char maker_buf[32];
+    if (maker_code < sizeof(makers))
+        snprintf(maker_buf, sizeof(maker_buf), "%s", makers[maker_code]);
+    else
+        snprintf(maker_buf, sizeof(maker_buf), "%c%c", gba->bus->game_rom[0xB0], gba->bus->game_rom[0xB1]);
 
     char *language_str;
     switch (language) {
@@ -74,7 +76,7 @@ void gba_print_status(gba_t *gba) {
         language_str = "Unknown";
     }
 
-    printf("Playing %s (v%d) by %s (language: %s)\n", *gba->rom_title ? gba->rom_title : "Unknown", version, maker_name, language_str);
+    printf("Playing %s (v%d) by %s (language: %s)\n", *gba->rom_title ? gba->rom_title : "Unknown", version, maker_buf, language_str);
 }
 
 char *gba_get_rom_title(gba_t *gba) {
