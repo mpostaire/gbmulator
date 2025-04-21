@@ -1034,8 +1034,6 @@ static bool str_handler(gba_t *gba, uint32_t instr) {
     uint32_t addr = gba->cpu->regs[rn];
     uint32_t offset;
 
-    LOG_DEBUG("(0x%08X) STR%s%s%s %s,[%s%s,#%s0x%X%s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], b ? "B" : "", w ? "T" : "", reg_names[rd], reg_names[rn], p ? "" : "]", u ? "" : "-", u ? offset : -offset, p ? "]" : "");
-
     if (i) {
         uint8_t rm = instr & 0x0F;
         offset = gba->cpu->regs[rm];
@@ -1055,6 +1053,8 @@ static bool str_handler(gba_t *gba, uint32_t instr) {
 
     if (p)
         addr += offset;
+
+    LOG_DEBUG("(0x%08X) STR%s%s%s %s,[%s%s,#%s0x%X%s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], b ? "B" : "", w ? "T" : "", reg_names[rd], reg_names[rn], p ? "" : "]", u ? "" : "-", u ? offset : -offset, p ? "]" : "");
 
     uint32_t data = gba->cpu->regs[rd];
     if (rd == REG_PC)
@@ -1086,8 +1086,6 @@ static bool ldr_handler(gba_t *gba, uint32_t instr) {
     uint32_t addr = gba->cpu->regs[rn];
     uint32_t offset;
 
-    LOG_DEBUG("(0x%08X) LDR%s%s%s %s,[%s%s,#%s0x%X%s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], b ? "B" : "", w ? "T" : "", reg_names[rd], reg_names[rn], p ? "" : "]", u ? "" : "-", u ? offset : -offset, p ? "]" : "");
-
     if (i) {
         uint8_t rm = instr & 0x0F;
         offset = gba->cpu->regs[rm];
@@ -1107,6 +1105,8 @@ static bool ldr_handler(gba_t *gba, uint32_t instr) {
 
     if (p)
         addr += offset;
+
+    LOG_DEBUG("(0x%08X) LDR%s%s%s %s,[%s%s,#%s0x%X%s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], b ? "B" : "", w ? "T" : "", reg_names[rd], reg_names[rn], p ? "" : "]", u ? "" : "-", u ? offset : -offset, p ? "]" : "");
 
     uint32_t data;
     if (b) {
