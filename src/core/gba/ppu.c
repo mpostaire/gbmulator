@@ -40,7 +40,7 @@ void gba_ppu_step(gba_t *gba) {
 
     switch (ppu->period) {
     case GBA_PPU_PERIOD_HDRAW:
-        uint16_t color = gba_bus_read_half(gba, BUS_VRAM + (ppu->y * (GBA_SCREEN_WIDTH * 2) + (ppu->x * 2)));
+        uint16_t color = gba_bus_read_half(gba, BUS_VRAM + (gba->bus->io_regs[IO_VCOUNT] * (GBA_SCREEN_WIDTH * 2) + (ppu->x * 2)));
 
         uint8_t r = color & 0x001F;
         uint8_t g = (color >> 5) & 0x001F;
@@ -50,34 +50,40 @@ void gba_ppu_step(gba_t *gba) {
         g = (g << 3) | (g >> 2);
         b = (b << 3) | (b >> 2);
 
-        SET_PIXEL(gba, ppu->x, ppu->y, r, g, b);
+        SET_PIXEL(gba, ppu->x, gba->bus->io_regs[IO_VCOUNT], r, g, b);
 
         ppu->x++;
-        if (ppu->x >= GBA_SCREEN_WIDTH)
+        if (ppu->x >= GBA_SCREEN_WIDTH) {
             ppu->period = GBA_PPU_PERIOD_HBLANK;
+            SET_BIT(gba->bus->io_regs[IO_DISPSTAT], 1);
+        }
         break;
     case GBA_PPU_PERIOD_HBLANK:
         ppu->x++;
         if (ppu->x >= GBA_SCREEN_WIDTH + HBLANK_WIDTH) {
             ppu->x = 0;
-            ppu->y++;
+            gba->bus->io_regs[IO_VCOUNT]++;
 
             ppu->period = GBA_PPU_PERIOD_HDRAW;
-            if (ppu->y >= GBA_SCREEN_HEIGHT)
+            if (gba->bus->io_regs[IO_VCOUNT] >= GBA_SCREEN_HEIGHT) {
                 ppu->period = GBA_PPU_PERIOD_VBLANK;
+                RESET_BIT(gba->bus->io_regs[IO_DISPSTAT], 1);
+                SET_BIT(gba->bus->io_regs[IO_DISPSTAT], 0);
+            }
         }
         break;
     case GBA_PPU_PERIOD_VBLANK:
         ppu->x++;
         if (ppu->x >= GBA_SCREEN_WIDTH + HBLANK_WIDTH) {
             ppu->x = 0;
-            ppu->y++;
+            gba->bus->io_regs[IO_VCOUNT]++;
 
-            if (ppu->y >= GBA_SCREEN_HEIGHT + VBLANK_HEIGHT) {
-                // todo("VBLANK --> if no picture visible, check how to implement io registers");
+            if (gba->bus->io_regs[IO_VCOUNT] >= GBA_SCREEN_HEIGHT + VBLANK_HEIGHT) {
+                todo("VBLANK --> if no picture visible, check how to implement io registers");
 
-                ppu->y = 0;
+                gba->bus->io_regs[IO_VCOUNT] = 0;
                 ppu->period = GBA_PPU_PERIOD_HDRAW;
+                RESET_BIT(gba->bus->io_regs[IO_DISPSTAT], 0);
 
                 if (gba->on_new_frame)
                     gba->on_new_frame(ppu->pixels);
