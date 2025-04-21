@@ -300,6 +300,60 @@ static bool not_implemented_handler(UNUSED gba_t *gba, uint32_t instr) {
     return true;
 }
 
+static uint32_t shift_offset(gba_cpu_t *cpu, uint8_t type, uint32_t offset, uint8_t amount, bool i, bool *c) {
+    *c = CPSR_CHECK_FLAG(cpu, CPSR_C);
+    bool old_c = *c;
+
+    uint64_t offset_64 = offset;
+
+    switch (type) {
+    case 0b00: // shift left
+        if (amount > 0) {
+            amount = MIN(amount, 33);
+            offset_64 = LSL(offset_64, amount);
+            *c = GET_BIT(offset_64, 32);
+        }
+        break;
+    case 0b01: // shift right
+        amount = amount == 0 && i ? 32 : amount;
+        if (amount > 0) {
+            amount = MIN(amount, 33);
+            offset_64 = LSR(offset_64, amount - 1);
+            *c = GET_BIT(offset_64, 0);
+            offset_64 = LSR(offset_64, 1);
+        }
+        break;
+    case 0b10: // arithmetic shift right
+        amount = amount == 0 && i ? 32 : amount;
+        if (amount > 0) {
+            amount = MIN(amount, 33);
+            offset_64 = ASR(offset_64, amount - 1);
+            *c = GET_BIT(offset_64, 0);
+            offset_64 = ASR(offset_64, 1);
+        }
+        break;
+    case 0b11: // rotate right
+        if (amount == 0 && i) {
+            // RRX
+            *c = GET_BIT(offset_64, 0);
+            offset_64 = (offset_64 >> 1) | (old_c << 31);
+            amount = 1;
+        } else {
+            amount &= 31;
+            if (amount > 0) {
+                offset_64 = ROR(offset_64, amount);
+                *c = GET_BIT(offset_64, 31);
+            }
+        }
+        break;
+    }
+
+    if (amount == 0)
+        *c = old_c;
+
+    return offset_64;
+}
+
 static bool data_processing_begin(gba_t *gba, uint32_t instr, uint8_t *rd, uint32_t *op1, uint32_t *op2, bool *c) {
     bool i = CHECK_BIT(instr, 25);
     bool s = CHECK_BIT(instr, 20);
@@ -309,20 +363,21 @@ static bool data_processing_begin(gba_t *gba, uint32_t instr, uint8_t *rd, uint3
     *op1 = gba->cpu->regs[rn];
     *op2 = instr & 0x00000FFF;
 
-    bool old_c = CPSR_CHECK_FLAG(gba->cpu, CPSR_C);
-
     // TODO replace this function
 
     if (i) {
+        *c = CPSR_CHECK_FLAG(gba->cpu, CPSR_C);
+
         uint32_t amount = (*op2 & 0xF00) >> 7;
         uint32_t imm = (*op2 & 0x0FF);
         *op2 = ROR(imm, amount);
-        *c = amount == 0 ? old_c : GET_BIT(*op2, 31);
+        *c = amount == 0 ? *c : GET_BIT(*op2, 31);
     } else {
         uint8_t rm = *op2 & 0x00F;
         uint16_t shift = (*op2 & 0xFF0) >> 4;
+        uint8_t shift_type = (shift & 0b00000110) >> 1;
 
-        uint64_t op2_64 = gba->cpu->regs[rm];
+        uint64_t offset = gba->cpu->regs[rm];
 
         uint8_t amount;
         bool i = !CHECK_BIT(shift, 0);
@@ -331,59 +386,36 @@ static bool data_processing_begin(gba_t *gba, uint32_t instr, uint8_t *rd, uint3
         } else {
             amount = gba->cpu->regs[(shift & 0xF0) >> 4];
             if (rm == REG_PC)
-                op2_64 += 4;
+                offset += 4;
             else if (rn == REG_PC)
                 *op1 += 4;
         }
 
-        switch ((shift & 0b00000110) >> 1) {
-        case 0b00: // shift left
-            if (amount > 0) {
-                amount = MIN(amount, 33);
-                op2_64 = LSL(op2_64, amount);
-                *c = GET_BIT(op2_64, 32);
-            }
-            break;
-        case 0b01: // shift right
-            amount = amount == 0 && i ? 32 : amount;
-            if (amount > 0) {
-                amount = MIN(amount, 33);
-                op2_64 = LSR(op2_64, amount - 1);
-                *c = GET_BIT(op2_64, 0);
-                op2_64 = LSR(op2_64, 1);
-            }
-            break;
-        case 0b10: // arithmetic shift right
-            amount = amount == 0 && i ? 32 : amount;
-            if (amount > 0) {
-                amount = MIN(amount, 33);
-                op2_64 = ASR(op2_64, amount - 1);
-                *c = GET_BIT(op2_64, 0);
-                op2_64 = ASR(op2_64, 1);
-            }
-            break;
-        case 0b11: // rotate right
-            if (amount == 0 && i) {
-                // RRX
-                *c = GET_BIT(op2_64, 0);
-                op2_64 = (op2_64 >> 1) | (old_c << 31);
-                amount = 1;
-            } else {
-                amount &= 31;
-                if (amount > 0) {
-                    op2_64 = ROR(op2_64, amount);
-                    *c = GET_BIT(op2_64, 31);
-                }
-            }
-            break;
-        }
-
-        *op2 = op2_64;
-        if (amount == 0)
-            *c = old_c;
+        *op2 = shift_offset(gba->cpu, shift_type, offset, amount, i, c);
     }
 
     return s && rd != REG_PC;
+}
+
+static bool mul_handler(gba_t *gba, uint32_t instr) {
+    uint8_t rd = (instr >> 16) & 0x0F;
+    uint8_t rs = (instr >> 8) & 0x0F;
+    uint8_t rm = instr & 0x0F;
+    bool s = CHECK_BIT(instr, 20);
+
+    if (s)
+        todo("s");
+
+    gba->cpu->regs[rd] = gba->cpu->regs[rm] * gba->cpu->regs[rs];
+
+    LOG_DEBUG("(0x%08X) MUL%s%s %s,%s,%s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rd], reg_names[rm], reg_names[rs]);
+
+    if (rd == REG_PC) {
+        todo("flush pipeline");
+        return false;
+    }
+
+    return true;
 }
 
 static bool mla_handler(gba_t *gba, uint32_t instr) {
@@ -404,6 +436,31 @@ static bool mla_handler(gba_t *gba, uint32_t instr) {
         todo("flush pipeline");
         return false;
     }
+
+    return true;
+}
+
+static bool mull_handler(gba_t *gba, uint32_t instr) {
+    uint8_t rdhi = (instr >> 16) & 0x0F;
+    uint8_t rdlo = (instr >> 12) & 0x0F;
+    uint8_t rs = (instr >> 8) & 0x0F;
+    uint8_t rm = instr & 0x0F;
+    bool u = CHECK_BIT(instr, 22);
+    bool s = CHECK_BIT(instr, 20);
+
+    if (s)
+        todo("s");
+
+    uint64_t res;
+    if (u)
+        res = (uint64_t) gba->cpu->regs[rm] * (uint64_t) gba->cpu->regs[rs];
+    else
+        res = ((int64_t) (int32_t) gba->cpu->regs[rm]) * ((int64_t) (int32_t) gba->cpu->regs[rs]);
+
+    gba->cpu->regs[rdhi] = res >> 32;
+    gba->cpu->regs[rdlo] = res;
+
+    LOG_DEBUG("(0x%08X) %cMULL%s%s %s,%s,%s,%s\n", instr, u ? 'S' : 'U', cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rdlo], reg_names[rdhi], reg_names[rm], reg_names[rs]);
 
     return true;
 }
@@ -966,91 +1023,114 @@ static bool strh_imm_handler(gba_t *gba, uint32_t instr) {
 
 // TODO ldm and str handlers are VERY similar --> break into subfunctions
 static bool str_handler(gba_t *gba, uint32_t instr) {
+    bool i = CHECK_BIT(instr, 25);
+    bool p = CHECK_BIT(instr, 24);
+    bool u = CHECK_BIT(instr, 23);
     bool b = CHECK_BIT(instr, 22);
     bool w = CHECK_BIT(instr, 21);
     uint8_t rn = (instr >> 16) & 0x0F;
+    uint8_t rd = (instr >> 12) & 0x0F;
 
     uint32_t addr = gba->cpu->regs[rn];
     uint32_t offset;
 
-    // TODO split this into 2 different handler functions to avoid branching (also do this to all other branches in any instruction)
+    LOG_DEBUG("(0x%08X) STR%s%s%s %s,[%s%s,#%s0x%X%s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], b ? "B" : "", w ? "T" : "", reg_names[rd], reg_names[rn], p ? "" : "]", u ? "" : "-", u ? offset : -offset, p ? "]" : "");
 
-    if (w)
-        todo();
-
-    // TODO generic offset compute inline function (because lots of instructions uses this BUT check if this can be done because they may differ a bit)
-    bool i = CHECK_BIT(instr, 25);
     if (i) {
         uint8_t rm = instr & 0x0F;
+        offset = gba->cpu->regs[rm];
+
         uint8_t shift = (instr >> 4) & 0xFF;
-        todo();
+        uint8_t shift_type = (shift & 0b00000110) >> 1;
+        uint8_t amount = (shift & 0xF8) >> 3;
+
+        bool c;
+        offset = shift_offset(gba->cpu, shift_type, offset, amount, true, &c);
     } else {
         offset = instr & 0x0FFF;
     }
 
-    bool u = GET_BIT(instr, 23);
-    offset *= -1 * -u;
+    if (!u)
+        offset = -offset;
 
-    bool p = CHECK_BIT(instr, 24);
     if (p)
         addr += offset;
-    else
-        todo();
 
-    uint8_t rd = (instr >> 12) & 0x0F;
-
-    LOG_DEBUG("(0x%08X) STR%s%s%s %s, [%s, #0x%X]\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], b ? "B" : "", w ? "T" : "", reg_names[rd], reg_names[rn], offset);
+    uint32_t data = gba->cpu->regs[rd];
+    if (rd == REG_PC)
+        data += 4;
 
     if (b)
-        gba_bus_write_byte(gba, addr, rd);
+        gba_bus_write_byte(gba, addr, data);
     else
-        gba_bus_write_word(gba, addr, rd);
+        gba_bus_write_word(gba, addr, data);
+
+    if (!p)
+        addr += offset;
+
+    if (w || !p)
+        gba->cpu->regs[rn] = addr;
 
     return true;
 }
 
 static bool ldr_handler(gba_t *gba, uint32_t instr) {
+    bool i = CHECK_BIT(instr, 25);
+    bool p = CHECK_BIT(instr, 24);
+    bool u = CHECK_BIT(instr, 23);
     bool b = CHECK_BIT(instr, 22);
     bool w = CHECK_BIT(instr, 21);
     uint8_t rn = (instr >> 16) & 0x0F;
+    uint8_t rd = (instr >> 12) & 0x0F;
 
     uint32_t addr = gba->cpu->regs[rn];
     uint32_t offset;
 
-    // TODO split this into 2 different handler functions to avoid branching (also do this to all other branches in any instruction)
+    LOG_DEBUG("(0x%08X) LDR%s%s%s %s,[%s%s,#%s0x%X%s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], b ? "B" : "", w ? "T" : "", reg_names[rd], reg_names[rn], p ? "" : "]", u ? "" : "-", u ? offset : -offset, p ? "]" : "");
 
-    if (w)
-        todo();
-
-    bool i = CHECK_BIT(instr, 25);
     if (i) {
         uint8_t rm = instr & 0x0F;
+        offset = gba->cpu->regs[rm];
+
         uint8_t shift = (instr >> 4) & 0xFF;
-        todo();
+        uint8_t shift_type = (shift & 0b00000110) >> 1;
+        uint8_t amount = (shift & 0xF8) >> 3;
+
+        bool c;
+        offset = shift_offset(gba->cpu, shift_type, offset, amount, true, &c);
     } else {
         offset = instr & 0x0FFF;
     }
 
-    bool u = GET_BIT(instr, 23);
-    offset *= -1 * -u;
+    if (!u)
+        offset = -offset;
 
-    bool p = CHECK_BIT(instr, 24);
     if (p)
         addr += offset;
-    else
-        todo();
 
-    uint32_t res;
-    if (b)
-        res = gba_bus_read_byte(gba, addr);
-    else
-        res = gba_bus_read_word(gba, addr);
+    uint32_t data;
+    if (b) {
+        data = gba_bus_read_byte(gba, addr);
+    } else {
+        data = gba_bus_read_word(gba, addr);
+        uint8_t amount = (addr & 0x03) << 3;
+        data = ROR(data, amount);
+    }
 
-    uint8_t rd = (instr >> 12) & 0x0F;
+    if (!p)
+        addr += offset;
 
-    LOG_DEBUG("(0x%08X) LDR%s%s%s %s, [%s, #0x%X]\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], b ? "B" : "", w ? "T" : "", reg_names[rd], reg_names[rn], offset);
+    if (w || !p)
+        gba->cpu->regs[rn] = addr;
 
-    gba->cpu->regs[rd] = res;
+    gba->cpu->regs[rd] = data;
+
+    if (rd == REG_PC) {
+        gba->cpu->pipeline[PIPELINE_FETCHING] = 0x00000000;
+        gba->cpu->pipeline[PIPELINE_DECODING] = 0x00000000;
+
+        return false;
+    }
 
     return true;
 }
@@ -1692,7 +1772,9 @@ static bool thumb_bl_handler(gba_t *gba, uint32_t instr) {
     X(mvn_handler)                   \
     X(mov_handler)                   \
     X(bx_handler)                    \
+    X(mul_handler)                   \
     X(mla_handler)                   \
+    X(mull_handler)                  \
     X(strh_reg_handler)              \
     X(strh_imm_handler)              \
     X(str_handler)                   \
@@ -1745,9 +1827,11 @@ decoder_rule_t arm_decoder_rules[] = {
     // TODO bx handler and msr handler are confondus
     // --> needs another way to distinguish them
     {"____00010010____________0001____", HANDLER_ID(bx_handler)}, // Branch and exchange
-    // {"____0000000*____________1001____", HANDLER_ID(mul_handler)}, // Multiply
+    {"____0000000*____________1001____", HANDLER_ID(mul_handler)}, // Multiply
     {"____0000001*____________1001____", HANDLER_ID(mla_handler)}, // Multiply
-    {"____00*0000*____________****____", HANDLER_ID(and_handler)},       // Data processing
+    {"____00001*0*____________1001____", HANDLER_ID(mull_handler)}, // Multiply Long
+    {"____00001*1*____________1001____", HANDLER_ID(/*mlal_handler*/ not_implemented_handler)}, // Multiply Long
+    {"____00*0000*____________****____", HANDLER_ID(and_handler)}, // Data processing
     {"____00010*00____________0000____", HANDLER_ID(mrs_handler)}, // PSR Transfer
     {"____00*10*10____________****____", HANDLER_ID(msr_handler)}, // PSR Transfer
     {"____000**0**____________1**1____", HANDLER_ID(strh_reg_handler)}, // Halfword Data Transfer: register offset
@@ -1767,7 +1851,6 @@ decoder_rule_t arm_decoder_rules[] = {
     {"____00*1101*____________****____", HANDLER_ID(mov_handler)}, // Data processing
     {"____00*1110*____________****____", HANDLER_ID(bic_handler)}, // Data processing
     {"____00*1111*____________****____", HANDLER_ID(mvn_handler)}, // Data processing
-    {"____00001***____________1001____", HANDLER_ID(not_implemented_handler)}, // Multiply Long
     {"____00010*00____________1001____", HANDLER_ID(not_implemented_handler)}, // Single Data Swap
     {"____000****1____________1**1____", HANDLER_ID(/*ldmh_handler*/ not_implemented_handler)}, // Halfword Data Transfer: register offset
     {"____01*****0____________****____", HANDLER_ID(str_handler)}, // Single Data Transfer
