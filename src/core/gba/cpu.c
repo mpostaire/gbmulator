@@ -936,25 +936,28 @@ static bool strh_reg_handler(gba_t *gba, uint32_t instr) {
     bool s = CHECK_BIT(instr, 6);
     bool h = CHECK_BIT(instr, 5);
 
-    uint8_t rn = (instr >> 16) & 0x07;
-    uint8_t rd = (instr >> 12) & 0x07;
+    uint8_t rn = (instr >> 16) & 0x0F;
+    uint8_t rd = (instr >> 12) & 0x0F;
     uint8_t rm = instr & 0x0F;
 
     int32_t offset = gba->cpu->regs[rm];
-    uint32_t base_addr = gba->cpu->regs[rn];
+    uint32_t addr = gba->cpu->regs[rn];
 
     if (!u)
         offset = -offset;
 
     if (p)
-        base_addr += offset;
+        addr += offset;
 
-    if (w)
-        todo("w");
+    LOG_DEBUG("(0x%08X) STR%s%s%s %s, %s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", h ? "H" : "", reg_names[rd], strh_addr_str(rn, rm, true, p, u, w));
+
+    uint32_t data = gba->cpu->regs[rd];
+    if (rd == REG_PC)
+        data += 4;
 
     switch ((s << 1) | h) {
     case 0b01:
-        gba_bus_write_half(gba, base_addr, gba->cpu->regs[rd]);
+        gba_bus_write_half(gba, addr, data);
         break;
     case 0b10:
         todo("0b10");
@@ -968,9 +971,10 @@ static bool strh_reg_handler(gba_t *gba, uint32_t instr) {
     }
 
     if (!p)
-        base_addr += offset;
+        addr += offset;
 
-    LOG_DEBUG("(0x%08X) STR%s%s%s %s, %s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", h ? "H" : "", reg_names[rd], strh_addr_str(rn, rm, true, p, u, w));
+    if (w || !p)
+        gba->cpu->regs[rn] = addr;
 
     return true;
 }
@@ -983,24 +987,27 @@ static bool strh_imm_handler(gba_t *gba, uint32_t instr) {
     bool s = CHECK_BIT(instr, 6);
     bool h = CHECK_BIT(instr, 5);
 
-    uint8_t rn = (instr >> 16) & 0x07;
-    uint8_t rd = (instr >> 12) & 0x07;
+    uint8_t rn = (instr >> 16) & 0x0F;
+    uint8_t rd = (instr >> 12) & 0x0F;
     int32_t offset = ((instr & 0x0F00) >> 4) | (instr & 0x0F);
 
-    uint32_t base_addr = gba->cpu->regs[rn];
+    uint32_t addr = gba->cpu->regs[rn];
 
     if (!u)
         offset = -offset;
 
     if (p)
-        base_addr += offset;
+        addr += offset;
 
-    if (w)
-        todo("w");
+    LOG_DEBUG("(0x%08X) STR%s%s%s %s, %s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", h ? "H" : "", reg_names[rd], strh_addr_str(rn, offset, false, p, u, w));
+
+    uint32_t data = gba->cpu->regs[rd];
+    if (rd == REG_PC)
+        data += 4;
 
     switch ((s << 1) | h) {
         case 0b01:
-            gba_bus_write_half(gba, base_addr, gba->cpu->regs[rd]);
+            gba_bus_write_half(gba, addr, data);
             break;
         case 0b10:
             todo("0b10");
@@ -1014,9 +1021,133 @@ static bool strh_imm_handler(gba_t *gba, uint32_t instr) {
         }
 
     if (!p)
-        base_addr += offset;
+        addr += offset;
 
-    LOG_DEBUG("(0x%08X) STR%s%s%s %s, %s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", h ? "H" : "", reg_names[rd], strh_addr_str(rn, offset, false, p, u, w));
+    if (w || !p)
+        gba->cpu->regs[rn] = addr;
+
+    return true;
+}
+
+static bool ldrh_reg_handler(gba_t *gba, uint32_t instr) {
+    bool p = CHECK_BIT(instr, 24);
+    bool u = CHECK_BIT(instr, 23);
+    bool w = CHECK_BIT(instr, 21);
+    bool l = CHECK_BIT(instr, 20);
+    bool s = CHECK_BIT(instr, 6);
+    bool h = CHECK_BIT(instr, 5);
+
+    uint8_t rn = (instr >> 16) & 0x0F;
+    uint8_t rd = (instr >> 12) & 0x0F;
+    uint8_t rm = instr & 0x0F;
+
+    int32_t offset = gba->cpu->regs[rm];
+    uint32_t addr = gba->cpu->regs[rn];
+
+    if (!u)
+        offset = -offset;
+
+    if (p)
+        addr += offset;
+
+    LOG_DEBUG("(0x%08X) LDR%s%s%s %s, %s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", h ? "H" : "", reg_names[rd], strh_addr_str(rn, rm, true, p, u, w));
+
+    uint8_t amount;
+    uint32_t data;
+    switch ((s << 1) | h) {
+    case 0b01:
+        data = gba_bus_read_half(gba, addr);
+        amount = (addr & 0x01) << 3;
+        data = ROR(data, amount);
+        break;
+    case 0b10:
+        data = (int8_t) gba_bus_read_byte(gba, addr);
+        break;
+    case 0b11:
+        data = (int16_t) gba_bus_read_half(gba, addr);
+        amount = (addr & 0x01) << 3;
+        data = (int16_t) ROR(data, amount);
+        break;
+    case 0b00:
+    default:
+        todo();
+    }
+
+    if (!p)
+        addr += offset;
+
+    if (w || !p)
+        gba->cpu->regs[rn] = addr;
+
+    gba->cpu->regs[rd] = data;
+
+    if (rd == REG_PC) {
+        gba->cpu->pipeline[PIPELINE_FETCHING] = 0x00000000;
+        gba->cpu->pipeline[PIPELINE_DECODING] = 0x00000000;
+
+        return false;
+    }
+
+    return true;
+}
+
+static bool ldrh_imm_handler(gba_t *gba, uint32_t instr) {
+    bool p = CHECK_BIT(instr, 24);
+    bool u = CHECK_BIT(instr, 23);
+    bool w = CHECK_BIT(instr, 21);
+    bool l = CHECK_BIT(instr, 20);
+    bool s = CHECK_BIT(instr, 6);
+    bool h = CHECK_BIT(instr, 5);
+
+    uint8_t rn = (instr >> 16) & 0x0F;
+    uint8_t rd = (instr >> 12) & 0x0F;
+    int32_t offset = ((instr & 0x0F00) >> 4) | (instr & 0x0F);
+
+    uint32_t addr = gba->cpu->regs[rn];
+
+    if (!u)
+        offset = -offset;
+
+    if (p)
+        addr += offset;
+
+    LOG_DEBUG("(0x%08X) LDR%s%s%s %s, %s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", h ? "H" : "", reg_names[rd], strh_addr_str(rn, offset, false, p, u, w));
+
+    uint8_t amount;
+    uint32_t data;
+    switch ((s << 1) | h) {
+    case 0b01:
+        data = gba_bus_read_half(gba, addr);
+        amount = (addr & 0x01) << 3;
+        data = ROR(data, amount);
+        break;
+    case 0b10:
+        data = (int8_t) gba_bus_read_byte(gba, addr);
+        break;
+    case 0b11:
+        data = (int16_t) gba_bus_read_half(gba, addr);
+        amount = (addr & 0x01) << 3;
+        data = (int16_t) ROR(data, amount);
+        break;
+    case 0b00:
+    default:
+        todo();
+    }
+
+    if (!p)
+        addr += offset;
+
+    if (w || !p)
+        gba->cpu->regs[rn] = addr;
+
+    gba->cpu->regs[rd] = data;
+
+    if (rd == REG_PC) {
+        gba->cpu->pipeline[PIPELINE_FETCHING] = 0x00000000;
+        gba->cpu->pipeline[PIPELINE_DECODING] = 0x00000000;
+
+        return false;
+    }
 
     return true;
 }
@@ -1777,6 +1908,8 @@ static bool thumb_bl_handler(gba_t *gba, uint32_t instr) {
     X(mull_handler)                  \
     X(strh_reg_handler)              \
     X(strh_imm_handler)              \
+    X(ldrh_reg_handler)              \
+    X(ldrh_imm_handler)              \
     X(str_handler)                   \
     X(ldr_handler)                   \
     X(stm_handler)                   \
@@ -1834,8 +1967,10 @@ decoder_rule_t arm_decoder_rules[] = {
     {"____00*0000*____________****____", HANDLER_ID(and_handler)}, // Data processing
     {"____00010*00____________0000____", HANDLER_ID(mrs_handler)}, // PSR Transfer
     {"____00*10*10____________****____", HANDLER_ID(msr_handler)}, // PSR Transfer
-    {"____000**0**____________1**1____", HANDLER_ID(strh_reg_handler)}, // Halfword Data Transfer: register offset
-    {"____000**1**____________1**1____", HANDLER_ID(strh_imm_handler)}, // Halfword Data Transfer: register offset
+    {"____000**0*0____________1**1____", HANDLER_ID(strh_reg_handler)}, // Halfword Data Transfer
+    {"____000**1*0____________1**1____", HANDLER_ID(strh_imm_handler)}, // Halfword Data Transfer
+    {"____000**0*1____________1**1____", HANDLER_ID(ldrh_reg_handler)}, // Halfword Data Transfer
+    {"____000**1*1____________1**1____", HANDLER_ID(ldrh_imm_handler)}, // Halfword Data Transfer
     {"____00*0001*____________****____", HANDLER_ID(eor_handler)}, // Data processing
     {"____00*0010*____________****____", HANDLER_ID(sub_handler)}, // Data processing
     {"____00*0011*____________****____", HANDLER_ID(rsb_handler)}, // Data processing
@@ -1852,7 +1987,6 @@ decoder_rule_t arm_decoder_rules[] = {
     {"____00*1110*____________****____", HANDLER_ID(bic_handler)}, // Data processing
     {"____00*1111*____________****____", HANDLER_ID(mvn_handler)}, // Data processing
     {"____00010*00____________1001____", HANDLER_ID(not_implemented_handler)}, // Single Data Swap
-    {"____000****1____________1**1____", HANDLER_ID(/*ldmh_handler*/ not_implemented_handler)}, // Halfword Data Transfer: register offset
     {"____01*****0____________****____", HANDLER_ID(str_handler)}, // Single Data Transfer
     {"____01*****1____________****____", HANDLER_ID(ldr_handler)}, // Single Data Transfer
     {"____100****0____________****____", HANDLER_ID(stm_handler)}, // Block Data Transfer
