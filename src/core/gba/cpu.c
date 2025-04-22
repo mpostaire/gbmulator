@@ -928,6 +928,36 @@ static bool mvn_handler(gba_t *gba, uint32_t instr) {
     return true;
 }
 
+static bool swp_handler(gba_t *gba, uint32_t instr) {
+    bool b = CHECK_BIT(instr, 22);
+    uint8_t rn = (instr >> 16) & 0x0F;
+    uint8_t rd = (instr >> 12) & 0x0F;
+    uint8_t rm = instr & 0x0F;
+
+    LOG_DEBUG("(0x%08X) SWP%s%s %s,%s,[%s]\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], b ? "B" : "", reg_names[rd], reg_names[rm], reg_names[rn]);
+
+    if (b) {
+        gba->cpu->regs[rd] = gba_bus_read_byte(gba, gba->cpu->regs[rn]);
+        gba_bus_write_byte(gba, gba->cpu->regs[rn], gba->cpu->regs[rm]);
+    } else {
+        uint32_t data = gba_bus_read_word(gba, gba->cpu->regs[rn]);
+
+        uint8_t amount = (gba->cpu->regs[rn] & 0x03) << 3;
+        data = ROR(data, amount);
+        gba_bus_write_word(gba, gba->cpu->regs[rn], gba->cpu->regs[rm]);
+
+        gba->cpu->regs[rd] = data;
+    }
+
+    if (rd == REG_PC) {
+        gba->cpu->pipeline[PIPELINE_FETCHING] = 0x00000000;
+        gba->cpu->pipeline[PIPELINE_DECODING] = 0x00000000;
+        return false;
+    }
+
+    return true;
+}
+
 static bool strh_reg_handler(gba_t *gba, uint32_t instr) {
     bool p = CHECK_BIT(instr, 24);
     bool u = CHECK_BIT(instr, 23);
@@ -1906,6 +1936,7 @@ static bool thumb_bl_handler(gba_t *gba, uint32_t instr) {
     X(mul_handler)                   \
     X(mla_handler)                   \
     X(mull_handler)                  \
+    X(swp_handler)                   \
     X(strh_reg_handler)              \
     X(strh_imm_handler)              \
     X(ldrh_reg_handler)              \
@@ -1967,6 +1998,7 @@ decoder_rule_t arm_decoder_rules[] = {
     {"____00*0000*____________****____", HANDLER_ID(and_handler)}, // Data processing
     {"____00010*00____________0000____", HANDLER_ID(mrs_handler)}, // PSR Transfer
     {"____00*10*10____________****____", HANDLER_ID(msr_handler)}, // PSR Transfer
+    {"____00010*00____________1001____", HANDLER_ID(swp_handler)}, // Single Data Swap
     {"____000**0*0____________1**1____", HANDLER_ID(strh_reg_handler)}, // Halfword Data Transfer
     {"____000**1*0____________1**1____", HANDLER_ID(strh_imm_handler)}, // Halfword Data Transfer
     {"____000**0*1____________1**1____", HANDLER_ID(ldrh_reg_handler)}, // Halfword Data Transfer
