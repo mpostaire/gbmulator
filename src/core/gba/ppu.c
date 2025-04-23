@@ -12,7 +12,18 @@
 #define VBLANK_CYCLES (SCANLINE_CYCLES * VBLANK_HEIGHT)
 #define REFRESH_CYCLES (VDRAW_CYCLES + VBLANK_CYCLES)
 
-#define SET_PIXEL(gba, x, y, r, g, b)                                            \
+#define PPU_GET_MODE(gba) (gba)->bus->io_regs[IO_DISPCNT] & 0x07
+
+#define PPU_MODE0 0
+#define PPU_MODE1 1
+#define PPU_MODE2 2
+#define PPU_MODE3 3
+#define PPU_MODE4 4
+#define PPU_MODE5 5
+
+#define PPU_GET_FRAME(gba) GET_BIT((gba)->bus->io_regs[IO_DISPCNT], 4)
+
+#define SET_PIXEL_RGB(gba, x, y, r, g, b)                                        \
     do {                                                                         \
         (gba)->ppu->pixels[((y) * GBA_SCREEN_WIDTH * 4) + ((x) * 4)] = (r);      \
         (gba)->ppu->pixels[((y) * GBA_SCREEN_WIDTH * 4) + ((x) * 4) + 1] = (g);  \
@@ -20,12 +31,49 @@
         (gba)->ppu->pixels[((y) * GBA_SCREEN_WIDTH * 4) + ((x) * 4) + 3] = 0xFF; \
     } while (0)
 
+#define SET_PIXEL_COLOR(gba, x, y, c)            \
+    do {                                         \
+        uint8_t r = color & 0x001F;              \
+        uint8_t g = (color >> 5) & 0x001F;       \
+        uint8_t b = (color >> 10) & 0x001F;      \
+        r = (r << 3) | (r >> 2);                 \
+        g = (g << 3) | (g >> 2);                 \
+        b = (b << 3) | (b >> 2);                 \
+        SET_PIXEL_RGB((gba), (x), (y), r, g, b); \
+    } while (0)
+
 void gba_ppu_init(gba_t *gba) {
     gba->ppu = xcalloc(1, sizeof(*gba->ppu));
+
+    memset(gba->bus->palette_ram, 0xAA, sizeof(gba->bus->palette_ram));
 }
 
 void gba_ppu_quit(gba_ppu_t *ppu) {
     free(ppu);
+}
+
+static inline void draw_mode3(gba_t *gba) {
+    gba_ppu_t *ppu = gba->ppu;
+
+    uint32_t pixel_addr_offset = gba->bus->io_regs[IO_VCOUNT] * GBA_SCREEN_WIDTH + ppu->x;
+
+    uint16_t color = gba_bus_read_half(gba, BUS_VRAM + pixel_addr_offset);
+
+    SET_PIXEL_COLOR(gba, ppu->x, gba->bus->io_regs[IO_VCOUNT], color);
+}
+
+static inline void draw_mode4(gba_t *gba) {
+    gba_ppu_t *ppu = gba->ppu;
+
+    uint32_t pixel_base_addr = BUS_VRAM + (PPU_GET_FRAME(gba) * 0xA000);
+    uint32_t pixel_addr_offset = gba->bus->io_regs[IO_VCOUNT] * GBA_SCREEN_WIDTH + ppu->x;
+
+    uint8_t palette_index = gba_bus_read_byte(gba, pixel_base_addr + pixel_addr_offset);
+    uint32_t palette_addr_offset = palette_index << 1;
+
+    uint16_t color = gba_bus_read_half(gba, BUS_PALETTE_RAM + palette_addr_offset);
+
+    SET_PIXEL_COLOR(gba, ppu->x, gba->bus->io_regs[IO_VCOUNT], color);
 }
 
 void gba_ppu_step(gba_t *gba) {
@@ -40,17 +88,25 @@ void gba_ppu_step(gba_t *gba) {
 
     switch (ppu->period) {
     case GBA_PPU_PERIOD_HDRAW:
-        uint16_t color = gba_bus_read_half(gba, BUS_VRAM + (gba->bus->io_regs[IO_VCOUNT] * (GBA_SCREEN_WIDTH * 2) + (ppu->x * 2)));
-
-        uint8_t r = color & 0x001F;
-        uint8_t g = (color >> 5) & 0x001F;
-        uint8_t b = (color >> 10) & 0x001F;
-
-        r = (r << 3) | (r >> 2);
-        g = (g << 3) | (g >> 2);
-        b = (b << 3) | (b >> 2);
-
-        SET_PIXEL(gba, ppu->x, gba->bus->io_regs[IO_VCOUNT], r, g, b);
+        switch (PPU_GET_MODE(gba)) {
+        case PPU_MODE0:
+            break;
+        case PPU_MODE1:
+            break;
+        case PPU_MODE2:
+            break;
+        case PPU_MODE3:
+            draw_mode3(gba);
+            break;
+        case PPU_MODE4:
+            draw_mode4(gba);
+            break;
+        case PPU_MODE5:
+            break;
+        default:
+            todo();
+            break;
+        }
 
         ppu->x++;
         if (ppu->x >= GBA_SCREEN_WIDTH) {
@@ -79,8 +135,6 @@ void gba_ppu_step(gba_t *gba) {
             gba->bus->io_regs[IO_VCOUNT]++;
 
             if (gba->bus->io_regs[IO_VCOUNT] >= GBA_SCREEN_HEIGHT + VBLANK_HEIGHT) {
-                todo("VBLANK --> if no picture visible, check how to implement io registers");
-
                 gba->bus->io_regs[IO_VCOUNT] = 0;
                 ppu->period = GBA_PPU_PERIOD_HDRAW;
                 RESET_BIT(gba->bus->io_regs[IO_DISPSTAT], 0);

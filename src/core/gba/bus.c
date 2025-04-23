@@ -73,13 +73,6 @@ static uint8_t io_regs_read_byte(gba_t *gba, uint16_t address) {
         LOG_DEBUG("IO_DISPSTAT\n");
         break;
     case IO_VCOUNT ... IO_VCOUNT + 1:
-
-        if (gba->cpu->regs[12] == 0) {
-            todo("SUCCESS");
-        } else {
-            todo("FAILURE on test %d", gba->cpu->regs[12]);
-        }
-
         LOG_DEBUG("IO_VCOUNT\n");
         break;
     case IO_BG0CNT ... IO_BG0CNT + 1:
@@ -757,8 +750,6 @@ static void *bus_access(gba_t *gba, uint32_t address, bool is_write) {
 }
 
 uint8_t gba_bus_read_byte(gba_t *gba, uint32_t address) {
-    address = ALIGN(address, 1);
-
     uint8_t *ret = bus_access(gba, address, false);
 
     if (ret == gba->bus->io_regs)
@@ -798,8 +789,6 @@ uint32_t gba_bus_read_word(gba_t *gba, uint32_t address) {
 }
 
 void gba_bus_write_byte(gba_t *gba, uint32_t address, uint8_t data) {
-    address = ALIGN(address, 1);
-
     uint8_t *ret = bus_access(gba, address, true);
 
     if ((uint8_t *) ret == gba->bus->io_regs) {
