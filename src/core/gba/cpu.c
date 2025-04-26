@@ -2039,7 +2039,9 @@ static bool thumb_b_cond_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool thumb_b_handler(gba_t *gba, uint32_t instr) {
-    int16_t offset11 = ((int16_t) (instr & 0x07FF)) << 1;
+    int16_t offset11 = ((instr & 0x03FF) << 1);
+    if (CHECK_BIT(offset11, 10))
+        offset11 |= 0xF800;
 
     gba->cpu->regs[REG_PC] += offset11;
 
@@ -2052,17 +2054,11 @@ static bool thumb_b_handler(gba_t *gba, uint32_t instr) {
 
 static bool thumb_bl_handler(gba_t *gba, uint32_t instr) {
     bool h = CHECK_BIT(instr, 11);
-    uint16_t offset = instr & 0x07FF;
+    int16_t offset = instr & 0x07FF;
 
     if (h) { // instruction 2
-        // gba->cpu->regs[REG_LR] += offset << 1;
-
-        // uint32_t tmp = gba->cpu->regs[REG_LR];
-        // gba->cpu->regs[REG_LR] = (gba->cpu->regs[REG_PC] - 2) | 1;
-        // gba->cpu->regs[REG_PC] = tmp;
-
         uint32_t tmp = gba->cpu->regs[REG_PC] - 2;
-        gba->cpu->regs[REG_PC] = (gba->cpu->regs[REG_LR] + (offset << 1)) & ~1;
+        gba->cpu->regs[REG_PC] = ALIGN(gba->cpu->regs[REG_LR] + (offset << 1), 2);
         gba->cpu->regs[REG_LR] = tmp | 1;
 
         flush_pipeline(gba);
@@ -2071,9 +2067,8 @@ static bool thumb_bl_handler(gba_t *gba, uint32_t instr) {
 
         return false;
     } else { // instruction 1
-        // gba->cpu->regs[REG_LR] = gba->cpu->regs[REG_PC] + (offset << 12);
         offset <<= 12;
-        if (offset & 0x00400000) // sign extend?
+        if (offset & 0x00400000)
             offset |= 0xFF800000;
         gba->cpu->regs[REG_LR] = gba->cpu->regs[REG_PC] + offset;
 
