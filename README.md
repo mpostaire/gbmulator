@@ -87,7 +87,6 @@ There is also support for gamepad controllers.
 - implement other MBCs
 - find out what are the accurate timings for the ppu pixel fifo/fetcher (especially for corner cases)
 - android link cable via bluetooth + cross platform link cable
-- Maybe: web link cable using Emscripten WebSockets API (https://emscripten.org/docs/porting/networking.html and https://github.com/emscripten-core/emscripten/blob/main/system/include/emscripten/websocket.h. Example gist: https://gist.github.com/nus/564e9e57e4c107faa1a45b8332c265b9)
 - rewrite Makefile (it's a mess) maybe use CMake instead
 
 ## Resources used
