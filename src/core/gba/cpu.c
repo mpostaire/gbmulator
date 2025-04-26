@@ -26,9 +26,9 @@
 #define CPSR_Z (1 << 30) // Zero
 #define CPSR_C (1 << 29) // Carry or borrow or extend
 #define CPSR_V (1 << 28) // Overflow
-#define CPSR_I (1 << 7) // IRQ disable
-#define CPSR_F (1 << 6) // FIQ disable
-#define CPSR_T (1 << 5) // State bit
+#define CPSR_I (1 << 7)  // IRQ disable
+#define CPSR_F (1 << 6)  // FIQ disable
+#define CPSR_T (1 << 5)  // State bit
 
 #define CPSR_MODE_USR 0b10000 // User (usr): The normal ARM program execution state
 #define CPSR_MODE_FIQ 0b10001 // FIQ (fiq): Designed to support a data transfer or channel process
@@ -45,14 +45,14 @@
 #define CPSR_GET_MODE(cpu) ((cpu)->cpsr & CPSR_MODE_MASK)
 #define CPSR_SET_MODE(cpu, mode) CHANGE_BITS((cpu)->cpsr, CPSR_MODE_MASK, mode)
 
-#define VECTOR_RESET 0x00000000 // Reset --> mode on entry: CPSR_MODE_SVC
-#define VECTOR_UNDEFINED_INSTR 0x00000004 // Undefined instruction --> mode on entry: CPSR_MODE_UND
+#define VECTOR_RESET 0x00000000              // Reset --> mode on entry: CPSR_MODE_SVC
+#define VECTOR_UNDEFINED_INSTR 0x00000004    // Undefined instruction --> mode on entry: CPSR_MODE_UND
 #define VECTOR_SOFTWARE_INTERRUPT 0x00000008 // Software interrupt --> mode on entry: CPSR_MODE_SVC
-#define VECTOR_ABORT_PREFETCH 0x0000000C // Abort (prefetch) --> mode on entry: CPSR_MODE_ABT
-#define VECTOR_ABORT_DATA 0x00000010 // Abort (data) --> mode on entry: CPSR_MODE_ABT
-#define VECTOR_RESERVED 0x00000014 // Reserved Reserved
-#define VECTOR_IRQ 0x00000018 // IRQ --> mode on entry: CPSR_MODE_IRQ
-#define VECTOR_FIQ 0x0000001C // FIQ --> mode on entry: CPSR_MODE_FIQ
+#define VECTOR_ABORT_PREFETCH 0x0000000C     // Abort (prefetch) --> mode on entry: CPSR_MODE_ABT
+#define VECTOR_ABORT_DATA 0x00000010         // Abort (data) --> mode on entry: CPSR_MODE_ABT
+#define VECTOR_RESERVED 0x00000014           // Reserved Reserved
+#define VECTOR_IRQ 0x00000018                // IRQ --> mode on entry: CPSR_MODE_IRQ
+#define VECTOR_FIQ 0x0000001C                // FIQ --> mode on entry: CPSR_MODE_FIQ
 
 #define ARM_INSTR_GET_COND(instr) ((instr) >> 28)
 
@@ -64,33 +64,6 @@
 #define ASR(op, amount) ((int64_t) (int32_t) (op) >> (amount))
 // rotate right
 #define ROR(op, amount) (((op) >> (amount)) | ((op) << (32 - (amount))))
-
-#define _STM_LDM_STM_BUS_ACCESS gba_bus_write_word((gba), dest_addr, (gba)->cpu->regs[i])
-#define _STM_LDM_LDM_BUS_ACCESS (gba)->cpu->regs[i] = gba_bus_read_word((gba), dest_addr)
-#define _STM_LDM_NEXT_REG(rlist) (stdc_first_trailing_one((rlist)) - 1)
-#define _STM_LDM(op, gba, rb, rlist, p, u, w)                                                  \
-    do {                                                                                       \
-        typeof((rlist)) rlist_tmp = (rlist);                                                   \
-        int8_t transfer_size = stdc_count_ones((rlist)) * 4;                                   \
-        uint32_t dest_addr = (gba)->cpu->regs[(rb)];                                           \
-        bool p_tmp = p;                                                                        \
-        if (!(u)) {                                                                            \
-            dest_addr -= transfer_size;                                                        \
-            p_tmp = !p_tmp;                                                                    \
-        }                                                                                      \
-        if ((w))                                                                               \
-            (gba)->cpu->regs[(rb)] = dest_addr;                                                \
-        for (int i = _STM_LDM_NEXT_REG(rlist_tmp); i >= 0; i = _STM_LDM_NEXT_REG(rlist_tmp)) { \
-            if ((p_tmp))                                                                       \
-                dest_addr += 4;                                                                \
-            (op);                                                                              \
-            if (!(p_tmp))                                                                      \
-                dest_addr += 4;                                                                \
-            RESET_BIT(rlist_tmp, i);                                                           \
-        }                                                                                      \
-    } while (0)
-#define STM(gba, rb, rlist, p, u, w) _STM_LDM(_STM_LDM_STM_BUS_ACCESS, gba, rb, rlist, p, u, w)
-#define LDM(gba, rb, rlist, p, u, w) _STM_LDM(_STM_LDM_LDM_BUS_ACCESS, gba, rb, rlist, p, u, w)
 
 #define FOREACH_COND(X) \
     X(EQ)               \
@@ -119,8 +92,7 @@ typedef enum {
 #ifdef DEBUG
 #define Y(name) ""
 static const char *cond_names[] = {
-    FOREACH_COND(COND_NAME_GENERATOR)
-};
+    FOREACH_COND(COND_NAME_GENERATOR)};
 #undef Y
 #endif
 
@@ -293,6 +265,73 @@ static char *_msr_op_to_str(uint32_t instr, uint8_t op, bool i, char *buf, size_
 
 #define msr_op_to_str(instr, op, i) _msr_op_to_str((instr), (op), (i), (char[32]) {}, 32)
 #endif
+
+static inline void stm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, bool w) {
+    int8_t transfer_size = stdc_count_ones(rlist) * 4;
+    if (rlist == 0) {
+        SET_BIT(rlist, 15);
+        transfer_size = 64;
+    }
+
+    uint32_t dest_addr = gba->cpu->regs[rb];
+    if (!u) {
+        dest_addr -= transfer_size;
+        p = !p;
+    }
+
+    unsigned int first_reg = stdc_first_trailing_one(rlist) - 1;
+    uint32_t writeback_value = u ? dest_addr + transfer_size : dest_addr;
+    if (w && first_reg != rb)
+        gba->cpu->regs[rb] = writeback_value;
+
+    for (int i = stdc_first_trailing_one(rlist) - 1; i >= 0; i = stdc_first_trailing_one(rlist) - 1) {
+        if ((p))
+            dest_addr += 4;
+
+        gba_bus_write_word(gba, dest_addr, i == REG_PC ? gba->cpu->regs[i] + 4 : gba->cpu->regs[i]);
+
+        if (!(p))
+            dest_addr += 4;
+
+        RESET_BIT(rlist, i);
+    }
+
+    if (w && first_reg == rb)
+        gba->cpu->regs[rb] = writeback_value;
+}
+
+static inline bool ldm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, bool w) {
+    int8_t transfer_size = stdc_count_ones(rlist) * 4;
+    if (rlist == 0) {
+        SET_BIT(rlist, 15);
+        transfer_size = 64;
+    }
+
+    uint32_t dest_addr = gba->cpu->regs[rb];
+    if (!u) {
+        dest_addr -= transfer_size;
+        p = !p;
+    }
+
+    uint32_t writeback_value = u ? dest_addr + transfer_size : dest_addr;
+    if (w)
+        gba->cpu->regs[rb] = writeback_value;
+
+    uint16_t rlist_tmp = rlist;
+    for (int i = stdc_first_trailing_one(rlist_tmp) - 1; i >= 0; i = stdc_first_trailing_one(rlist_tmp) - 1) {
+        if (p)
+            dest_addr += 4;
+
+        gba->cpu->regs[i] = gba_bus_read_word(gba, dest_addr);
+
+        if (!p)
+            dest_addr += 4;
+
+        RESET_BIT(rlist_tmp, i);
+    }
+
+    return GET_BIT(rlist, REG_PC);
+}
 
 static bool not_implemented_handler(UNUSED gba_t *gba, uint32_t instr) {
     int instr_size = CPSR_CHECK_FLAG(gba->cpu, CPSR_T) ? 2 : 4;
@@ -514,9 +553,7 @@ static bool and_handler(gba_t *gba, uint32_t instr) {
     return true;
 }
 
-static inline void bank_registers(gba_cpu_t *cpu, uint8_t new_mode) {
-    uint8_t old_mode = CPSR_GET_MODE(cpu);
-
+static inline void bank_registers(gba_cpu_t *cpu, uint8_t old_mode, uint8_t new_mode) {
     if (old_mode == new_mode)
         return;
 
@@ -581,7 +618,7 @@ static bool msr_handler(gba_t *gba, uint32_t instr) {
 
         CHANGE_BITS(gba->cpu->spsr[regs_mode_hashes[CPSR_GET_MODE(gba->cpu) & 0x0F]], mask, op);
     } else {
-        bank_registers(gba->cpu, op & CPSR_MODE_MASK);
+        bank_registers(gba->cpu, CPSR_GET_MODE(gba->cpu), op & CPSR_MODE_MASK);
         CHANGE_BITS(gba->cpu->cpsr, mask, op);
     }
 
@@ -1036,19 +1073,19 @@ static bool strh_imm_handler(gba_t *gba, uint32_t instr) {
         data += 4;
 
     switch ((s << 1) | h) {
-        case 0b01:
-            gba_bus_write_half(gba, addr, data);
-            break;
-        case 0b10:
-            todo("0b10");
-            break;
-        case 0b11:
-            todo("0b11");
-            break;
-        case 0b00:
-        default:
-            todo();
-        }
+    case 0b01:
+        gba_bus_write_half(gba, addr, data);
+        break;
+    case 0b10:
+        todo("0b10");
+        break;
+    case 0b11:
+        todo("0b11");
+        break;
+    case 0b00:
+    default:
+        todo();
+    }
 
     if (!p)
         addr += offset;
@@ -1304,12 +1341,16 @@ static bool stm_handler(gba_t *gba, uint32_t instr) {
     uint8_t rn = (instr >> 16) & 0x0F;
     uint16_t rlist = instr & 0xFFFF;
 
-    if (s)
-        todo("PSR & force user");
-
-    STM(gba, rn, rlist, p, u, w);
-
     LOG_DEBUG("(0x%08X) STM%s%s %s%s, {%s}%s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], stm_ldm_addr_mode_names[rn == REG_SP ? 0 : 1][(p << 1) | u], reg_names[rn], w ? "!" : "", rlist_to_str(rlist), s ? "^" : "");
+
+    uint8_t mode = CPSR_GET_MODE(gba->cpu);
+    if (s) {
+        bank_registers(gba->cpu, CPSR_GET_MODE(gba->cpu), CPSR_MODE_USR);
+        if (w)
+            todo("w && s");
+    }
+
+    stm(gba, rn, rlist, p, u, w);
 
     return true;
 }
@@ -1322,14 +1363,21 @@ static bool ldm_handler(gba_t *gba, uint32_t instr) {
     uint8_t rn = (instr >> 16) & 0x0F;
     uint16_t rlist = instr & 0xFFFF;
 
-    if (s)
-        todo("PSR & force user");
-
-    LDM(gba, rn, rlist, p, u, w);
-
     LOG_DEBUG("(0x%08X) LDM%s%s %s%s, {%s}%s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], stm_ldm_addr_mode_names[rn == REG_SP ? 0 : 1][(u << 1) | p], reg_names[rn], w ? "!" : "", rlist_to_str(rlist), s ? "^" : "");
 
-    if (CHECK_BIT(rlist, REG_PC)) {
+    uint8_t mode = CPSR_GET_MODE(gba->cpu);
+    if (s) {
+        bank_registers(gba->cpu, CPSR_GET_MODE(gba->cpu), CPSR_MODE_USR);
+        if (CHECK_BIT(rlist, 15))
+            gba->cpu->cpsr = gba->cpu->spsr[regs_mode_hashes[CPSR_GET_MODE(gba->cpu) & 0x0F]];
+    }
+
+    bool branch = ldm(gba, rn, rlist, p, u, w);
+
+    if (s)
+        bank_registers(gba->cpu, CPSR_MODE_USR, mode);
+
+    if (branch) {
         gba->cpu->pipeline[PIPELINE_FETCHING] = 0x00000000;
         gba->cpu->pipeline[PIPELINE_DECODING] = 0x00000000;
         return false;
@@ -1453,9 +1501,9 @@ void gba_cpu_step(gba_t *gba) {
     // execute
     // TODO
     // if (cpu->stall) {
-        // cpu->stall--;
-        // LOG_DEBUG("CPU stalled, remaining: %d\n", cpu->stall);
-        // return;
+    // cpu->stall--;
+    // LOG_DEBUG("CPU stalled, remaining: %d\n", cpu->stall);
+    // return;
     // }
 #ifdef DEBUG
     LOG_DEBUG("execute: 0x%0.*X\n", 1 << pc_increment_shift, instr);
@@ -1818,7 +1866,7 @@ static bool thumb_stm_handler(gba_t *gba, uint32_t instr) {
     uint8_t rlist = instr & 0xFF;
 
     todo();
-    STM(gba, rb, rlist, 4, false, true);
+    stm(gba, rb, rlist, 4, false, true);
 
     LOG_DEBUG("(0x%04X) STMIA %s! {%s}\n", instr, reg_names[rb], rlist_to_str(rlist));
 
@@ -1835,7 +1883,7 @@ static bool thumb_push_handler(gba_t *gba, uint32_t instr) {
     }
 
     todo();
-    STM(gba, REG_SP, rlist, -4, false, true);
+    stm(gba, REG_SP, rlist, -4, false, true);
 
     LOG_DEBUG("(0x%04X) PUSH {%s%s%s}\n", instr, rlist_to_str(rlist), rlist ? "," : "", r ? reg_names[REG_LR] : "");
 
@@ -1978,8 +2026,7 @@ typedef enum {
 } handler_id_t;
 
 handler_t handlers[] = {
-    FOREACH_HANDLER(HANDLER_FUNC_PTR_GENERATOR)
-};
+    FOREACH_HANDLER(HANDLER_FUNC_PTR_GENERATOR)};
 
 typedef struct {
     const char match_string[32]; // '1': bit MUST be set, '0': bit MUST be reset, '*': bit can be set OR reset
@@ -1990,42 +2037,41 @@ typedef struct {
 decoder_rule_t arm_decoder_rules[] = {
     // TODO bx handler and msr handler are confondus
     // --> needs another way to distinguish them
-    {"____00010010____________0001____", HANDLER_ID(bx_handler)}, // Branch and exchange
-    {"____0000000*____________1001____", HANDLER_ID(mul_handler)}, // Multiply
-    {"____0000001*____________1001____", HANDLER_ID(mla_handler)}, // Multiply
-    {"____00001*0*____________1001____", HANDLER_ID(mull_handler)}, // Multiply Long
+    {"____00010010____________0001____", HANDLER_ID(bx_handler)},                               // Branch and exchange
+    {"____0000000*____________1001____", HANDLER_ID(mul_handler)},                              // Multiply
+    {"____0000001*____________1001____", HANDLER_ID(mla_handler)},                              // Multiply
+    {"____00001*0*____________1001____", HANDLER_ID(mull_handler)},                             // Multiply Long
     {"____00001*1*____________1001____", HANDLER_ID(/*mlal_handler*/ not_implemented_handler)}, // Multiply Long
-    {"____00*0000*____________****____", HANDLER_ID(and_handler)}, // Data processing
-    {"____00010*00____________0000____", HANDLER_ID(mrs_handler)}, // PSR Transfer
-    {"____00*10*10____________****____", HANDLER_ID(msr_handler)}, // PSR Transfer
-    {"____00010*00____________1001____", HANDLER_ID(swp_handler)}, // Single Data Swap
-    {"____000**0*0____________1**1____", HANDLER_ID(strh_reg_handler)}, // Halfword Data Transfer
-    {"____000**1*0____________1**1____", HANDLER_ID(strh_imm_handler)}, // Halfword Data Transfer
-    {"____000**0*1____________1**1____", HANDLER_ID(ldrh_reg_handler)}, // Halfword Data Transfer
-    {"____000**1*1____________1**1____", HANDLER_ID(ldrh_imm_handler)}, // Halfword Data Transfer
-    {"____00*0001*____________****____", HANDLER_ID(eor_handler)}, // Data processing
-    {"____00*0010*____________****____", HANDLER_ID(sub_handler)}, // Data processing
-    {"____00*0011*____________****____", HANDLER_ID(rsb_handler)}, // Data processing
-    {"____00*0100*____________****____", HANDLER_ID(add_handler)}, // Data processing
-    {"____00*0101*____________****____", HANDLER_ID(adc_handler)}, // Data processing
-    {"____00*0110*____________****____", HANDLER_ID(sbc_handler)}, // Data processing
-    {"____00*0111*____________****____", HANDLER_ID(rsc_handler)}, // Data processing
-    {"____00*10001____________****____", HANDLER_ID(tst_handler)}, // Data processing
-    {"____00*10011____________****____", HANDLER_ID(teq_handler)}, // Data processing
-    {"____00*10101____________****____", HANDLER_ID(cmp_handler)}, // Data processing
-    {"____00*10111____________****____", HANDLER_ID(cmn_handler)}, // Data processing
-    {"____00*1100*____________****____", HANDLER_ID(orr_handler)}, // Data processing
-    {"____00*1101*____________****____", HANDLER_ID(mov_handler)}, // Data processing
-    {"____00*1110*____________****____", HANDLER_ID(bic_handler)}, // Data processing
-    {"____00*1111*____________****____", HANDLER_ID(mvn_handler)}, // Data processing
-    {"____00010*00____________1001____", HANDLER_ID(not_implemented_handler)}, // Single Data Swap
-    {"____01*****0____________****____", HANDLER_ID(str_handler)}, // Single Data Transfer
-    {"____01*****1____________****____", HANDLER_ID(ldr_handler)}, // Single Data Transfer
-    {"____100****0____________****____", HANDLER_ID(stm_handler)}, // Block Data Transfer
-    {"____100****1____________****____", HANDLER_ID(ldm_handler)}, // Block Data Transfer
-    {"____1010****____________****____", HANDLER_ID(b_handler)},   // Branch
-    {"____1011****____________****____", HANDLER_ID(bl_handler)},  // Branch
-    {"____1111****____________****____", HANDLER_ID(/*swi_handler*/ not_implemented_handler)}, // Software Interrupt
+    {"____00*0000*____________****____", HANDLER_ID(and_handler)},                              // Data processing
+    {"____00010*00____________0000____", HANDLER_ID(mrs_handler)},                              // PSR Transfer
+    {"____00*10*10____________****____", HANDLER_ID(msr_handler)},                              // PSR Transfer
+    {"____00010*00____________1001____", HANDLER_ID(swp_handler)},                              // Single Data Swap
+    {"____000**0*0____________1**1____", HANDLER_ID(strh_reg_handler)},                         // Halfword Data Transfer
+    {"____000**1*0____________1**1____", HANDLER_ID(strh_imm_handler)},                         // Halfword Data Transfer
+    {"____000**0*1____________1**1____", HANDLER_ID(ldrh_reg_handler)},                         // Halfword Data Transfer
+    {"____000**1*1____________1**1____", HANDLER_ID(ldrh_imm_handler)},                         // Halfword Data Transfer
+    {"____00*0001*____________****____", HANDLER_ID(eor_handler)},                              // Data processing
+    {"____00*0010*____________****____", HANDLER_ID(sub_handler)},                              // Data processing
+    {"____00*0011*____________****____", HANDLER_ID(rsb_handler)},                              // Data processing
+    {"____00*0100*____________****____", HANDLER_ID(add_handler)},                              // Data processing
+    {"____00*0101*____________****____", HANDLER_ID(adc_handler)},                              // Data processing
+    {"____00*0110*____________****____", HANDLER_ID(sbc_handler)},                              // Data processing
+    {"____00*0111*____________****____", HANDLER_ID(rsc_handler)},                              // Data processing
+    {"____00*10001____________****____", HANDLER_ID(tst_handler)},                              // Data processing
+    {"____00*10011____________****____", HANDLER_ID(teq_handler)},                              // Data processing
+    {"____00*10101____________****____", HANDLER_ID(cmp_handler)},                              // Data processing
+    {"____00*10111____________****____", HANDLER_ID(cmn_handler)},                              // Data processing
+    {"____00*1100*____________****____", HANDLER_ID(orr_handler)},                              // Data processing
+    {"____00*1101*____________****____", HANDLER_ID(mov_handler)},                              // Data processing
+    {"____00*1110*____________****____", HANDLER_ID(bic_handler)},                              // Data processing
+    {"____00*1111*____________****____", HANDLER_ID(mvn_handler)},                              // Data processing
+    {"____01*****0____________****____", HANDLER_ID(str_handler)},                              // Single Data Transfer
+    {"____01*****1____________****____", HANDLER_ID(ldr_handler)},                              // Single Data Transfer
+    {"____100****0____________****____", HANDLER_ID(stm_handler)},                              // Block Data Transfer
+    {"____100****1____________****____", HANDLER_ID(ldm_handler)},                              // Block Data Transfer
+    {"____1010****____________****____", HANDLER_ID(b_handler)},                                // Branch
+    {"____1011****____________****____", HANDLER_ID(bl_handler)},                               // Branch
+    {"____1111****____________****____", HANDLER_ID(/*swi_handler*/ not_implemented_handler)},  // Software Interrupt
 };
 uint8_t get_arm_handler(uint32_t instr) {
     // TODO
@@ -2089,17 +2135,17 @@ decoder_rule_t thumb_decoder_rules[] = {
     {"01010*0*________", HANDLER_ID(thumb_reg_str_handler)},         // Load/store with register offset
     {"10000***________", HANDLER_ID(thumb_strh_handler)},            // Load/store halfword
     // {"10001***________", HANDLER_ID(thumb_ldrh_handler)},            // Load/store halfword
-    {"10010***________", HANDLER_ID(thumb_str_sp_handler)},          // SP-relative load/store
+    {"10010***________", HANDLER_ID(thumb_str_sp_handler)}, // SP-relative load/store
     // {"10011***________", HANDLER_ID(thumb_ldr_sp_handler)},          // SP-relative load/store
-    {"1010****________", HANDLER_ID(thumb_add_addr_handler)},          // Load address
-    {"10110000________", HANDLER_ID(thumb_add_sp_handler)},          // Add offset to stack pointer
-    {"1011010*________", HANDLER_ID(thumb_push_handler)},            // Push/pop registers
-    {"1011110*________", HANDLER_ID(thumb_pop_handler)},             // Push/pop registers
-    {"11000***________", HANDLER_ID(thumb_stm_handler)},          // Multiple load/store
+    {"1010****________", HANDLER_ID(thumb_add_addr_handler)}, // Load address
+    {"10110000________", HANDLER_ID(thumb_add_sp_handler)},   // Add offset to stack pointer
+    {"1011010*________", HANDLER_ID(thumb_push_handler)},     // Push/pop registers
+    {"1011110*________", HANDLER_ID(thumb_pop_handler)},      // Push/pop registers
+    {"11000***________", HANDLER_ID(thumb_stm_handler)},      // Multiple load/store
     // {"11001***________", HANDLER_ID(thumb_ldm_handler)},          // Multiple load/store
-    {"1101****________", HANDLER_ID(thumb_b_cond_handler)},          // Conditonal branch
-    {"11100***________", HANDLER_ID(thumb_b_handler)},               // Unconditional branch
-    {"1111****________", HANDLER_ID(thumb_bl_handler)},              // Long branch with link
+    {"1101****________", HANDLER_ID(thumb_b_cond_handler)}, // Conditonal branch
+    {"11100***________", HANDLER_ID(thumb_b_handler)},      // Unconditional branch
+    {"1111****________", HANDLER_ID(thumb_bl_handler)},     // Long branch with link
     // {"11011111________", HANDLER_ID(thumb_sw_int_handler)}, // Software interrupt
 };
 uint8_t get_thumb_handler(uint32_t instr) {
@@ -2152,7 +2198,6 @@ void gba_cpu_init(gba_t *gba) {
 
     // TODO reg values after bios boot, remove to boot from bios directly
     CPSR_SET_MODE(gba->cpu, CPSR_MODE_SYS);
-    bank_registers(gba->cpu, CPSR_MODE_SYS);
     gba->cpu->banked_regs_13_14[regs_mode_hashes[CPSR_MODE_SVC & 0x0F]][0] = 0x03007FE0;
     gba->cpu->banked_regs_13_14[regs_mode_hashes[CPSR_MODE_IRQ & 0x0F]][0] = 0x03007FA0;
     gba->cpu->regs[13] = 0x03007F00;
