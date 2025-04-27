@@ -166,7 +166,7 @@ handler_t handlers[];
 
 // using double lookup tables to reduce impact on host CPU cache
 uint8_t arm_handlers[1 << 12];
-uint8_t thumb_handlers[1 << 8]; // TODO not sure of this size
+uint8_t thumb_handlers[1 << 8];
 
 static inline void compute_flags_nz(gba_cpu_t *cpu, uint32_t res) {
     CPSR_CHANGE_FLAG(cpu, CPSR_N, res >> 31);
@@ -242,9 +242,9 @@ static char *_strh_addr_str(uint8_t rn, int32_t offset, bool offset_is_reg, bool
             buf_offset += snprintf(buf + buf_offset, buf_size - buf_offset, ",%s0x%04X]%s", u ? "" : "-", offset < 0 ? -offset : offset, w ? "!" : "");
     } else {
         if (offset_is_reg)
-            buf_offset += snprintf(buf + buf_offset, buf_size - buf_offset, "],%s%s", u ? "" : "-", reg_names[offset], w ? "!" : "");
+            buf_offset += snprintf(buf + buf_offset, buf_size - buf_offset, "],%s%s%s", u ? "" : "-", reg_names[offset], w ? "!" : "");
         else
-            buf_offset += snprintf(buf + buf_offset, buf_size - buf_offset, "],%s0x%04X", u ? "" : "-", offset < 0 ? -offset : offset, w ? "!" : "");
+            buf_offset += snprintf(buf + buf_offset, buf_size - buf_offset, "],%s0x%04X%s", u ? "" : "-", offset < 0 ? -offset : offset, w ? "!" : "");
     }
 
     return buf;
@@ -349,7 +349,7 @@ static inline bool ldm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, b
 
 static bool not_implemented_handler(UNUSED gba_t *gba, uint32_t instr) {
     int instr_size = CPSR_CHECK_FLAG(gba->cpu, CPSR_T) ? 2 : 4;
-    todo("not implemented instruction: 0x%0*X (0b%0.*b)", instr_size * 2, instr, instr_size * 8, instr);
+    todo("not implemented instruction: 0x%0*X (0b%0*b)", instr_size * 2, instr, instr_size * 8, instr);
     return true;
 }
 
@@ -447,7 +447,7 @@ static bool data_processing_begin(gba_t *gba, uint32_t instr, uint8_t *rd, uint3
         *op2 = shift_offset(gba->cpu, shift_type, offset, amount, i, c);
     }
 
-    return s && rd != REG_PC;
+    return s && *rd != REG_PC;
 }
 
 static bool mul_handler(gba_t *gba, uint32_t instr) {
@@ -528,15 +528,11 @@ static bool bx_handler(gba_t *gba, uint32_t instr) {
     // change cpu state to THUMB/ARM
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_T, GET_BIT(pc_dest, 0));
 
-    // TODO 2S + 1N cycles --> does this take into account the pipeline flush (1 cycle to execute, 2 cycles to fill pipeline until next instruction execution)?
-    //                       ------> NO BUT IT COINCIDES BECAUSE IT THE SAME TIME
-
     if (CPSR_CHECK_FLAG(gba->cpu, CPSR_T))
-        pc_dest -= 1; // TODO really -1 here? not align 2?
+        pc_dest -= 1;
 
     LOG_DEBUG("(0x%08X) BX%s %s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[rn]);
 
-    // TODO is this sure?
     gba->cpu->regs[REG_PC] = pc_dest;
 
     flush_pipeline(gba);
@@ -545,16 +541,13 @@ static bool bx_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool and_handler(gba_t *gba, uint32_t instr) {
-    uint8_t rn = (instr & 0x000F0000) >> 16;
-    bool s = CHECK_BIT(instr, 20);
-
     uint32_t op1;
     uint32_t op2;
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
 
-    LOG_DEBUG("(0x%08X) AND%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rd], reg_names[rn], op2);
+    LOG_DEBUG("(0x%08X) AND%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], reg_names[(instr & 0x000F0000) >> 16], op2);
 
     gba->cpu->regs[rd] = op1 & op2;
 
@@ -650,9 +643,6 @@ static bool mrs_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool eor_handler(gba_t *gba, uint32_t instr) {
-    uint8_t rn = (instr & 0x000F0000) >> 16;
-    bool s = CHECK_BIT(instr, 20);
-
     uint32_t op1;
     uint32_t op2;
     uint8_t rd;
@@ -661,7 +651,7 @@ static bool eor_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu->regs[rd] = op1 ^ op2;
 
-    LOG_DEBUG("(0x%08X) EOR%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[rn], op2);
+    LOG_DEBUG("(0x%08X) EOR%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[(instr & 0x000F0000) >> 16], op2);
 
     if (set_flags) {
         compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
@@ -672,16 +662,13 @@ static bool eor_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool sub_handler(gba_t *gba, uint32_t instr) {
-    uint8_t rn = (instr & 0x000F0000) >> 16;
-    bool s = CHECK_BIT(instr, 20);
-
     uint32_t op1;
     uint32_t op2;
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
 
-    LOG_DEBUG("(0x%08X) SUB%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rd], reg_names[rn], op2);
+    LOG_DEBUG("(0x%08X) SUB%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], reg_names[(instr & 0x000F0000) >> 16], op2);
 
     gba->cpu->regs[rd] = op1 - op2;
 
@@ -692,16 +679,13 @@ static bool sub_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool rsb_handler(gba_t *gba, uint32_t instr) {
-    uint8_t rn = (instr & 0x000F0000) >> 16;
-    bool s = CHECK_BIT(instr, 20);
-
     uint32_t op1;
     uint32_t op2;
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
 
-    LOG_DEBUG("(0x%08X) RSB%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rd], reg_names[rn], op2);
+    LOG_DEBUG("(0x%08X) RSB%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], reg_names[(instr & 0x000F0000) >> 16], op2);
 
     gba->cpu->regs[rd] = op2 - op1;
 
@@ -712,16 +696,13 @@ static bool rsb_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool add_handler(gba_t *gba, uint32_t instr) {
-    uint8_t rn = (instr & 0x000F0000) >> 16;
-    bool s = CHECK_BIT(instr, 20);
-
     uint32_t op1;
     uint32_t op2;
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
 
-    LOG_DEBUG("(0x%08X) ADD%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rd], reg_names[rn], op2);
+    LOG_DEBUG("(0x%08X) ADD%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], reg_names[(instr & 0x000F0000) >> 16], op2);
 
     gba->cpu->regs[rd] = op1 + op2;
 
@@ -732,16 +713,13 @@ static bool add_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool adc_handler(gba_t *gba, uint32_t instr) {
-    uint8_t rn = (instr & 0x000F0000) >> 16;
-    bool s = CHECK_BIT(instr, 20);
-
     uint32_t op1;
     uint32_t op2;
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
 
-    LOG_DEBUG("(0x%08X) ADC%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rd], reg_names[rn], op2);
+    LOG_DEBUG("(0x%08X) ADC%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], reg_names[(instr & 0x000F0000) >> 16], op2);
 
     gba->cpu->regs[rd] = op1 + op2 + ((bool) CPSR_CHECK_FLAG(gba->cpu, CPSR_C));
 
@@ -752,16 +730,13 @@ static bool adc_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool sbc_handler(gba_t *gba, uint32_t instr) {
-    uint8_t rn = (instr & 0x000F0000) >> 16;
-    bool s = CHECK_BIT(instr, 20);
-
     uint32_t op1;
     uint32_t op2;
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
 
-    LOG_DEBUG("(0x%08X) SBC%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rd], reg_names[rn], op2);
+    LOG_DEBUG("(0x%08X) SBC%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], reg_names[(instr & 0x000F0000) >> 16], op2);
 
     bool tmp = !((bool) CPSR_CHECK_FLAG(gba->cpu, CPSR_C));
     uint64_t res = op1 - op2 - tmp;
@@ -774,16 +749,13 @@ static bool sbc_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool rsc_handler(gba_t *gba, uint32_t instr) {
-    uint8_t rn = (instr & 0x000F0000) >> 16;
-    bool s = CHECK_BIT(instr, 20);
-
     uint32_t op1;
     uint32_t op2;
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
 
-    LOG_DEBUG("(0x%08X) RSC%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rd], reg_names[rn], op2);
+    LOG_DEBUG("(0x%08X) RSC%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], reg_names[(instr & 0x000F0000) >> 16], op2);
 
     bool tmp = !((bool) CPSR_CHECK_FLAG(gba->cpu, CPSR_C));
     uint64_t res = op2 - op1 - tmp;
@@ -796,15 +768,13 @@ static bool rsc_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool tst_handler(gba_t *gba, uint32_t instr) {
-    uint8_t rn = (instr & 0x000F0000) >> 16;
-
     uint32_t op1;
     uint32_t op2;
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
 
-    LOG_DEBUG("(0x%08X) TST%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[rn], op2);
+    LOG_DEBUG("(0x%08X) TST%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[(instr & 0x000F0000) >> 16], op2);
 
     uint32_t res = op1 & op2;
 
@@ -817,15 +787,13 @@ static bool tst_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool teq_handler(gba_t *gba, uint32_t instr) {
-    uint8_t rn = (instr & 0x000F0000) >> 16;
-
     uint32_t op1;
     uint32_t op2;
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
 
-    LOG_DEBUG("(0x%08X) TEQ%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[rn], op2);
+    LOG_DEBUG("(0x%08X) TEQ%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[(instr & 0x000F0000) >> 16], op2);
 
     uint32_t res = op1 ^ op2;
 
@@ -838,15 +806,13 @@ static bool teq_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool cmp_handler(gba_t *gba, uint32_t instr) {
-    uint8_t rn = (instr & 0x000F0000) >> 16;
-
     uint32_t op1;
     uint32_t op2;
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
 
-    LOG_DEBUG("(0x%08X) CMP%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[rn], op2);
+    LOG_DEBUG("(0x%08X) CMP%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[(instr & 0x000F0000) >> 16], op2);
 
     uint32_t res = op1 - op2;
 
@@ -857,15 +823,13 @@ static bool cmp_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool cmn_handler(gba_t *gba, uint32_t instr) {
-    uint8_t rn = (instr & 0x000F0000) >> 16;
-
     uint32_t op1;
     uint32_t op2;
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
 
-    LOG_DEBUG("(0x%08X) CMN%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[rn], op2);
+    LOG_DEBUG("(0x%08X) CMN%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[(instr & 0x000F0000) >> 16], op2);
 
     uint32_t res = op1 + op2;
 
@@ -876,9 +840,6 @@ static bool cmn_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool orr_handler(gba_t *gba, uint32_t instr) {
-    uint8_t rn = (instr & 0x000F0000) >> 16;
-    bool s = CHECK_BIT(instr, 20);
-
     uint32_t op1;
     uint32_t op2;
     uint8_t rd;
@@ -887,7 +848,7 @@ static bool orr_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu->regs[rd] = op1 | op2;
 
-    LOG_DEBUG("(0x%08X) ORR%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[rn], op2);
+    LOG_DEBUG("(0x%08X) ORR%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[(instr & 0x000F0000) >> 16], op2);
 
     if (set_flags) {
         compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
@@ -898,15 +859,13 @@ static bool orr_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool mov_handler(gba_t *gba, uint32_t instr) {
-    bool s = CHECK_BIT(instr, 20);
-
     uint32_t op1;
     uint32_t op2;
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
 
-    LOG_DEBUG("(0x%08X) MOV%s%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rd], op2);
+    LOG_DEBUG("(0x%08X) MOV%s%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], op2);
 
     gba->cpu->regs[rd] = op2;
 
@@ -924,15 +883,13 @@ static bool mov_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool bic_handler(gba_t *gba, uint32_t instr) {
-    bool s = CHECK_BIT(instr, 20);
-
     uint32_t op1;
     uint32_t op2;
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
 
-    LOG_DEBUG("(0x%08X) BIC%s%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rd], op2);
+    LOG_DEBUG("(0x%08X) BIC%s%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], op2);
 
     gba->cpu->regs[rd] = op1 & ~op2;
 
@@ -950,15 +907,13 @@ static bool bic_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool mvn_handler(gba_t *gba, uint32_t instr) {
-    bool s = CHECK_BIT(instr, 20);
-
     uint32_t op1;
     uint32_t op2;
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
 
-    LOG_DEBUG("(0x%08X) MVN%s%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rd], op2);
+    LOG_DEBUG("(0x%08X) MVN%s%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], op2);
 
     gba->cpu->regs[rd] = ~op2;
 
@@ -1008,7 +963,6 @@ static bool strh_reg_handler(gba_t *gba, uint32_t instr) {
     bool p = CHECK_BIT(instr, 24);
     bool u = CHECK_BIT(instr, 23);
     bool w = CHECK_BIT(instr, 21);
-    bool l = CHECK_BIT(instr, 20);
     bool s = CHECK_BIT(instr, 6);
     bool h = CHECK_BIT(instr, 5);
 
@@ -1059,7 +1013,6 @@ static bool strh_imm_handler(gba_t *gba, uint32_t instr) {
     bool p = CHECK_BIT(instr, 24);
     bool u = CHECK_BIT(instr, 23);
     bool w = CHECK_BIT(instr, 21);
-    bool l = CHECK_BIT(instr, 20);
     bool s = CHECK_BIT(instr, 6);
     bool h = CHECK_BIT(instr, 5);
 
@@ -1109,7 +1062,6 @@ static bool ldrh_reg_handler(gba_t *gba, uint32_t instr) {
     bool p = CHECK_BIT(instr, 24);
     bool u = CHECK_BIT(instr, 23);
     bool w = CHECK_BIT(instr, 21);
-    bool l = CHECK_BIT(instr, 20);
     bool s = CHECK_BIT(instr, 6);
     bool h = CHECK_BIT(instr, 5);
 
@@ -1169,7 +1121,6 @@ static bool ldrh_imm_handler(gba_t *gba, uint32_t instr) {
     bool p = CHECK_BIT(instr, 24);
     bool u = CHECK_BIT(instr, 23);
     bool w = CHECK_BIT(instr, 21);
-    bool l = CHECK_BIT(instr, 20);
     bool s = CHECK_BIT(instr, 6);
     bool h = CHECK_BIT(instr, 5);
 
@@ -1224,7 +1175,6 @@ static bool ldrh_imm_handler(gba_t *gba, uint32_t instr) {
     return true;
 }
 
-// TODO ldm and str handlers are VERY similar --> break into subfunctions
 static bool str_handler(gba_t *gba, uint32_t instr) {
     bool i = CHECK_BIT(instr, 25);
     bool p = CHECK_BIT(instr, 24);
@@ -1346,7 +1296,6 @@ static bool stm_handler(gba_t *gba, uint32_t instr) {
 
     LOG_DEBUG("(0x%08X) STM%s%s %s%s, {%s}%s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], stm_ldm_addr_mode_names[rn == REG_SP ? 0 : 1][(p << 1) | u], reg_names[rn], w ? "!" : "", rlist_to_str(rlist), s ? "^" : "");
 
-    uint8_t mode = CPSR_GET_MODE(gba->cpu);
     if (s) {
         bank_registers(gba->cpu, CPSR_GET_MODE(gba->cpu), CPSR_MODE_USR);
         if (w)
@@ -1493,10 +1442,10 @@ void gba_cpu_step(gba_t *gba) {
     cpu->pipeline[PIPELINE_FETCHING] = fetched_instr;
     // TODO bus_read can stall CPU (nop instruction inserted) while reading memory (depends on waitstates)
     //      while this stalls, the decode and execute stages continue their operation
-    LOG_DEBUG("fetch:   0x%0.*X\n", 1 << pc_increment_shift, cpu->pipeline[PIPELINE_FETCHING]);
+    LOG_DEBUG("fetch:   0x%0*X\n", 1 << pc_increment_shift, cpu->pipeline[PIPELINE_FETCHING]);
 
     // decode
-    LOG_DEBUG("decode:  0x%0.*X\n", 1 << pc_increment_shift, cpu->pipeline[PIPELINE_DECODING]);
+    LOG_DEBUG("decode:  0x%0*X\n", 1 << pc_increment_shift, cpu->pipeline[PIPELINE_DECODING]);
 
     bool increment_pc = true;
 
@@ -1511,7 +1460,7 @@ void gba_cpu_step(gba_t *gba) {
         // return;
         // }
 #ifdef DEBUG
-        LOG_DEBUG("execute: 0x%0.*X\n", 1 << pc_increment_shift, instr);
+        LOG_DEBUG("execute: 0x%0*X\n", 1 << pc_increment_shift, instr);
         for (size_t i = 0; i < sizeof(cpu->regs) / sizeof(*cpu->regs); i++)
             LOG_DEBUG("\t%s=0x%08X\n", reg_names[i], gba->cpu->regs[i]);
 #endif
@@ -1895,9 +1844,6 @@ static bool thumb_bx_handler(gba_t *gba, uint32_t instr) {
     // change cpu state to THUMB/ARM
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_T, GET_BIT(pc_dest, 0));
 
-    // TODO 2S + 1N cycles --> does this take into account the pipeline flush (1 cycle to execute, 2 cycles to fill pipeline until next instruction execution)?
-    //                       ------> NO BUT IT COINCIDES BECAUSE IT THE SAME TIME
-
     if (CPSR_CHECK_FLAG(gba->cpu, CPSR_T))
         pc_dest &= 0xFFFFFFFC;
     else
@@ -2200,7 +2146,6 @@ static bool thumb_b_cond_handler(gba_t *gba, uint32_t instr) {
     int8_t soffset8 = ((int8_t) (instr & 0xFF)) << 1;
     uint8_t cond = (instr >> 8) & 0x0F;
 
-    // TODO this should be done in cpu_step() ?
     if (!verif_cond(gba->cpu, cond))
         return true;
 
@@ -2337,11 +2282,9 @@ typedef struct {
     const char match_string[32]; // '1': bit MUST be set, '0': bit MUST be reset, '*': bit can be set OR reset
     uint8_t handler_id;
 } decoder_rule_t;
+
 // arm_decoder_rules definition order is important: they are matched in the order they are defined in the arm_decoder_rules array
-// TODO '_' == '*' for now, its to visually help me find relevant bits: '_' are alway ignored because they are not relevant in the instruction hash
 decoder_rule_t arm_decoder_rules[] = {
-    // TODO bx handler and msr handler are confondus
-    // --> needs another way to distinguish them
     {"____00010010____________0001____", HANDLER_ID(bx_handler)},                               // Branch and exchange
     {"____0000000*____________1001____", HANDLER_ID(mul_handler)},                              // Multiply
     {"____0000001*____________1001____", HANDLER_ID(mla_handler)},                              // Multiply
@@ -2378,8 +2321,8 @@ decoder_rule_t arm_decoder_rules[] = {
     {"____1011****____________****____", HANDLER_ID(bl_handler)},                               // Branch
     {"____1111****____________****____", HANDLER_ID(/*swi_handler*/ not_implemented_handler)},  // Software Interrupt
 };
+
 uint8_t get_arm_handler(uint32_t instr) {
-    // TODO
     for (size_t i = 0; i < sizeof(arm_decoder_rules) / sizeof(*arm_decoder_rules); i++) {
         decoder_rule_t *rule = &arm_decoder_rules[i];
 
@@ -2423,7 +2366,6 @@ static void arm_handlers_init(void) {
 }
 
 // thumb_decoder_rules definition order is important: they are matched in the order they are defined in the thumb_decoder_rules array
-// TODO '_' == '*' for now, its to visually help me find relevant bits: '_' are alway ignored because they are not relevant in the instruction hash
 decoder_rule_t thumb_decoder_rules[] = {
     {"00000***________", HANDLER_ID(thumb_lsl_handler)},             // Move shifted register
     {"00001***________", HANDLER_ID(thumb_lsr_handler)},             // Move shifted register
@@ -2461,9 +2403,8 @@ decoder_rule_t thumb_decoder_rules[] = {
     {"1111****________", HANDLER_ID(thumb_bl_handler)},              // Long branch with link
     // {"11011111________", HANDLER_ID(thumb_sw_int_handler)}, // Software interrupt
 };
-uint8_t get_thumb_handler(uint32_t instr) {
-    // TODO
 
+uint8_t get_thumb_handler(uint32_t instr) {
     for (size_t i = 0; i < sizeof(thumb_decoder_rules) / sizeof(*thumb_decoder_rules); i++) {
         decoder_rule_t *rule = &thumb_decoder_rules[i];
 
