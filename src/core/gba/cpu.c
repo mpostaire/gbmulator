@@ -1835,21 +1835,22 @@ static bool thumb_bx_handler(gba_t *gba, uint32_t instr) {
     uint8_t rd = (instr >> 3) & 0x07;
     uint8_t rn = CHECK_BIT(instr, 6) ? rd + 8 : rd;
 
+    LOG_DEBUG("(0x%04X) BX %s\n", instr, reg_names[rn]);
+
     uint32_t pc_dest = gba->cpu->regs[rn];
 
     // TODO this should be undefined behaviour only if jumping from a non word aligned address (with -4 or -2 offset? or none?) AND rn == REG_PC
     if (rn == REG_PC)
         todo("undefined behaviour");
 
+    bool change_instr_set = GET_BIT(pc_dest, 0);
     // change cpu state to THUMB/ARM
-    CPSR_CHANGE_FLAG(gba->cpu, CPSR_T, GET_BIT(pc_dest, 0));
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_T, change_instr_set);
 
     if (CPSR_CHECK_FLAG(gba->cpu, CPSR_T))
-        pc_dest &= 0xFFFFFFFC;
+        pc_dest = ALIGN(pc_dest, 2);
     else
-        pc_dest &= 0xFFFFFFFE;
-
-    LOG_DEBUG("(0x%04X) BX %s\n", instr, reg_names[rn]);
+        pc_dest = ALIGN(pc_dest, 4);
 
     gba->cpu->regs[REG_PC] = pc_dest;
 
