@@ -14,15 +14,17 @@ typedef enum {
 } gb_color_palette_t; // TODO rename?
 
 typedef enum {
+    JOYPAD_A,
+    JOYPAD_B,
+    JOYPAD_SELECT,
+    JOYPAD_START,
     JOYPAD_RIGHT,
     JOYPAD_LEFT,
     JOYPAD_UP,
     JOYPAD_DOWN,
-    JOYPAD_A,
-    JOYPAD_B,
-    JOYPAD_SELECT,
-    JOYPAD_START
-} gb_joypad_button_t; // TODO rename?
+    JOYPAD_R,
+    JOYPAD_L
+} joypad_button_t;
 
 typedef void (*gbmulator_new_frame_cb_t)(const uint8_t *pixels);
 typedef void (*gbmulator_new_sample_cb_t)(const gbmulator_apu_sample_t sample, uint32_t *dynamic_sampling_rate);

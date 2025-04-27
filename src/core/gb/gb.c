@@ -356,11 +356,11 @@ void gb_ir_disconnect(gb_t *gb) {
     gb->ir_gb = NULL;
 }
 
-void gb_joypad_press(gb_t *gb, gb_joypad_button_t key) {
+void gb_joypad_press(gb_t *gb, joypad_button_t key) {
     joypad_press(gb, key);
 }
 
-void gb_joypad_release(gb_t *gb, gb_joypad_button_t key) {
+void gb_joypad_release(gb_t *gb, joypad_button_t key) {
     joypad_release(gb, key);
 }
 
