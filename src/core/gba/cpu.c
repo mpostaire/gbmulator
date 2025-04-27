@@ -938,18 +938,19 @@ static bool swp_handler(gba_t *gba, uint32_t instr) {
 
     LOG_DEBUG("(0x%08X) SWP%s%s %s,%s,[%s]\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], b ? "B" : "", reg_names[rd], reg_names[rm], reg_names[rn]);
 
+    uint32_t data;
     if (b) {
-        gba->cpu->regs[rd] = gba_bus_read_byte(gba, gba->cpu->regs[rn]);
+        data = gba_bus_read_byte(gba, gba->cpu->regs[rn]);
         gba_bus_write_byte(gba, gba->cpu->regs[rn], gba->cpu->regs[rm]);
     } else {
-        uint32_t data = gba_bus_read_word(gba, gba->cpu->regs[rn]);
+        data = gba_bus_read_word(gba, gba->cpu->regs[rn]);
 
         uint8_t amount = (gba->cpu->regs[rn] & 0x03) << 3;
         data = ROR(data, amount);
         gba_bus_write_word(gba, gba->cpu->regs[rn], gba->cpu->regs[rm]);
+    }
 
         gba->cpu->regs[rd] = data;
-    }
 
     if (rd == REG_PC) {
         flush_pipeline(gba);
