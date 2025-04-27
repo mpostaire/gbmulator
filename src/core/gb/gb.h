@@ -116,9 +116,9 @@ uint8_t gb_ir_connect(gb_t *gb, gb_t *other_gb);
 */
 void gb_ir_disconnect(gb_t *gb);
 
-void gb_joypad_press(gb_t *gb, gb_joypad_button_t key);
+void gb_joypad_press(gb_t *gb, joypad_button_t key);
 
-void gb_joypad_release(gb_t *gb, gb_joypad_button_t key);
+void gb_joypad_release(gb_t *gb, joypad_button_t key);
 
 uint8_t gb_get_joypad_state(gb_t *gb);
 

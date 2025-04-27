@@ -20,27 +20,27 @@ static long fsize(FILE *f) {
     return len;
 }
 
-gb_joypad_button_t keycode_to_joypad(config_t *config, unsigned int keycode) {
-    if (keycode == config->keybindings[JOYPAD_RIGHT]) return JOYPAD_RIGHT;
-    if (keycode == config->keybindings[JOYPAD_LEFT]) return JOYPAD_LEFT;
-    if (keycode == config->keybindings[JOYPAD_UP]) return JOYPAD_UP;
-    if (keycode == config->keybindings[JOYPAD_DOWN]) return JOYPAD_DOWN;
+joypad_button_t keycode_to_joypad(config_t *config, unsigned int keycode) {
     if (keycode == config->keybindings[JOYPAD_A]) return JOYPAD_A;
     if (keycode == config->keybindings[JOYPAD_B]) return JOYPAD_B;
     if (keycode == config->keybindings[JOYPAD_SELECT]) return JOYPAD_SELECT;
     if (keycode == config->keybindings[JOYPAD_START]) return JOYPAD_START;
+    if (keycode == config->keybindings[JOYPAD_RIGHT]) return JOYPAD_RIGHT;
+    if (keycode == config->keybindings[JOYPAD_LEFT]) return JOYPAD_LEFT;
+    if (keycode == config->keybindings[JOYPAD_UP]) return JOYPAD_UP;
+    if (keycode == config->keybindings[JOYPAD_DOWN]) return JOYPAD_DOWN;
     return -1;
 }
 
-gb_joypad_button_t button_to_joypad(config_t *config, unsigned int button) {
-    if (button == config->gamepad_bindings[JOYPAD_RIGHT]) return JOYPAD_RIGHT;
-    if (button == config->gamepad_bindings[JOYPAD_LEFT]) return JOYPAD_LEFT;
-    if (button == config->gamepad_bindings[JOYPAD_UP]) return JOYPAD_UP;
-    if (button == config->gamepad_bindings[JOYPAD_DOWN]) return JOYPAD_DOWN;
+joypad_button_t button_to_joypad(config_t *config, unsigned int button) {
     if (button == config->gamepad_bindings[JOYPAD_A]) return JOYPAD_A;
     if (button == config->gamepad_bindings[JOYPAD_B]) return JOYPAD_B;
     if (button == config->gamepad_bindings[JOYPAD_SELECT]) return JOYPAD_SELECT;
     if (button == config->gamepad_bindings[JOYPAD_START]) return JOYPAD_START;
+    if (button == config->gamepad_bindings[JOYPAD_RIGHT]) return JOYPAD_RIGHT;
+    if (button == config->gamepad_bindings[JOYPAD_LEFT]) return JOYPAD_LEFT;
+    if (button == config->gamepad_bindings[JOYPAD_UP]) return JOYPAD_UP;
+    if (button == config->gamepad_bindings[JOYPAD_DOWN]) return JOYPAD_DOWN;
     return -1;
 }
 

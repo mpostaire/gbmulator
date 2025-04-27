@@ -64,7 +64,7 @@ static uint8_t io_regs_read_byte(gba_t *gba, uint16_t address) {
     switch (address) {
     // LCD I/O Registers
     case IO_DISPCNT ... IO_DISPCNT + 1:
-        // todo("IO_DISPCNT\n");
+        LOG_DEBUG("IO_DISPCNT\n");
         break;
     case IO_GREENSWAP ... IO_GREENSWAP + 1:
         todo("IO_GREENSWAP\n");
@@ -335,7 +335,7 @@ static uint8_t io_regs_read_byte(gba_t *gba, uint16_t address) {
 
     // Keypad Input
     case IO_KEYINPUT ... IO_KEYINPUT + 1:
-        todo("IO_KEYINPUT\n");
+        LOG_DEBUG("IO_KEYINPUT\n");
         break;
     case IO_KEYCNT ... IO_KEYCNT + 1:
         todo("IO_KEYCNT\n");
@@ -382,7 +382,6 @@ static uint8_t io_regs_read_byte(gba_t *gba, uint16_t address) {
         break;
 
     default:
-        todo();
         return 0x00;
     }
 
@@ -393,10 +392,10 @@ static void io_regs_write_byte(gba_t *gba, uint16_t address, uint8_t data) {
     switch (address) {
     // LCD I/O Registers
     case IO_DISPCNT ... IO_DISPCNT + 1:
-        // todo("IO_DISPCNT\n");
+        LOG_DEBUG("IO_DISPCNT\n");
         break;
     case IO_GREENSWAP ... IO_GREENSWAP + 1:
-        todo("IO_GREENSWAP\n");
+        LOG_DEBUG("IO_GREENSWAP\n");
         break;
     case IO_DISPSTAT ... IO_DISPSTAT + 1:
         LOG_DEBUG("IO_DISPSTAT\n");
@@ -711,7 +710,6 @@ static void io_regs_write_byte(gba_t *gba, uint16_t address, uint8_t data) {
         break;
 
     default:
-        todo();
         break;
     }
 
@@ -846,6 +844,9 @@ bool gba_bus_init(gba_t *gba, const uint8_t *rom, size_t rom_size) {
         gba_bus_quit(gba->bus);
         return false;
     }
+
+    gba->bus->io_regs[IO_KEYINPUT] = 0xFF;
+    gba->bus->io_regs[IO_KEYINPUT + 1] = 0x03;
 
     // TODO do not load bios from hardcoded file path
     FILE *f = fopen("src/bootroms/gba/gba_bios.bin", "r");

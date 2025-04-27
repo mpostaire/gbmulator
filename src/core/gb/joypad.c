@@ -26,7 +26,7 @@ uint8_t joypad_get_input(gb_t *gb) {
         return 0xFF;
 }
 
-void joypad_press(gb_t *gb, gb_joypad_button_t key) {
+void joypad_press(gb_t *gb, joypad_button_t key) {
     gb_joypad_t *joypad = gb->joypad;
     gb_mmu_t *mmu = gb->mmu;
 
@@ -35,7 +35,7 @@ void joypad_press(gb_t *gb, gb_joypad_button_t key) {
     case JOYPAD_LEFT:
     case JOYPAD_UP:
     case JOYPAD_DOWN:
-        RESET_BIT(joypad->direction, key);
+        RESET_BIT(joypad->direction, key - 4);
         if (!CHECK_BIT(mmu->io_registers[IO_P1], 4))
             CPU_REQUEST_INTERRUPT(gb, IRQ_JOYPAD);
         break;
@@ -43,14 +43,16 @@ void joypad_press(gb_t *gb, gb_joypad_button_t key) {
     case JOYPAD_B:
     case JOYPAD_SELECT:
     case JOYPAD_START:
-        RESET_BIT(joypad->action, key - 4);
+        RESET_BIT(joypad->action, key);
         if (!CHECK_BIT(mmu->io_registers[IO_P1], 5))
             CPU_REQUEST_INTERRUPT(gb, IRQ_JOYPAD);
+        break;
+    default:
         break;
     }
 }
 
-void joypad_release(gb_t *gb, gb_joypad_button_t key) {
+void joypad_release(gb_t *gb, joypad_button_t key) {
     gb_joypad_t *joypad = gb->joypad;
 
     switch (key) {
@@ -58,13 +60,15 @@ void joypad_release(gb_t *gb, gb_joypad_button_t key) {
     case JOYPAD_LEFT:
     case JOYPAD_UP:
     case JOYPAD_DOWN:
-        SET_BIT(joypad->direction, key);
+        SET_BIT(joypad->direction, key - 4);
         break;
     case JOYPAD_A:
     case JOYPAD_B:
     case JOYPAD_SELECT:
     case JOYPAD_START:
-        SET_BIT(joypad->action, key - 4);
+        SET_BIT(joypad->action, key);
+        break;
+    default:
         break;
     }
 }
