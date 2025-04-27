@@ -273,7 +273,7 @@ static inline void flush_pipeline(gba_t *gba) {
 static inline void stm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, bool w) {
     int8_t transfer_size = stdc_count_ones(rlist) * 4;
     if (rlist == 0) {
-        SET_BIT(rlist, 15);
+        SET_BIT(rlist, REG_PC);
         transfer_size = 64;
     }
 
@@ -292,7 +292,12 @@ static inline void stm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, b
         if ((p))
             dest_addr += 4;
 
-        gba_bus_write_word(gba, dest_addr, i == REG_PC ? gba->cpu->regs[i] + 4 : gba->cpu->regs[i]);
+        if (i == REG_PC) {
+            uint8_t pc_increment = CPSR_CHECK_FLAG(gba->cpu, CPSR_T) ? 2 : 4;
+            gba_bus_write_word(gba, dest_addr, gba->cpu->regs[i] + pc_increment);
+        } else {
+            gba_bus_write_word(gba, dest_addr, gba->cpu->regs[i]);
+        }
 
         if (!(p))
             dest_addr += 4;
@@ -307,7 +312,7 @@ static inline void stm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, b
 static inline bool ldm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, bool w) {
     int8_t transfer_size = stdc_count_ones(rlist) * 4;
     if (rlist == 0) {
-        SET_BIT(rlist, 15);
+        SET_BIT(rlist, REG_PC);
         transfer_size = 64;
     }
 
@@ -326,7 +331,12 @@ static inline bool ldm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, b
         if (p)
             dest_addr += 4;
 
-        gba->cpu->regs[i] = gba_bus_read_word(gba, dest_addr);
+        if (i == REG_PC) {
+            uint8_t align = CPSR_CHECK_FLAG(gba->cpu, CPSR_T) ? 2 : 4;
+            gba->cpu->regs[i] = ALIGN(gba_bus_read_word(gba, dest_addr), align);
+        } else {
+            gba->cpu->regs[i] = gba_bus_read_word(gba, dest_addr);
+        }
 
         if (!p)
             dest_addr += 4;
@@ -1904,18 +1914,18 @@ static bool thumb_bx_handler(gba_t *gba, uint32_t instr) {
 
 static bool thumb_pc_relative_ldr_handler(gba_t *gba, uint32_t instr) {
     uint32_t word8 = (instr & 0xFF) << 2;
-    uint8_t rd = (instr & 0x700) >> 8;
+    uint8_t rd = (instr >> 8) & 0x07;
 
-    uint32_t val = (gba->cpu->regs[REG_PC] & ~2) + (word8 << 2);
+    uint32_t addr = ((gba->cpu->regs[REG_PC]) & ~2) + word8;
 
-    gba->cpu->regs[rd] = gba_bus_read_word(gba, val);
+    gba->cpu->regs[rd] = gba_bus_read_word(gba, addr);
 
-    LOG_DEBUG("(0x%04X) LDR %s, Lxx_#0x%08X\n", instr, reg_names[rd], val);
+    LOG_DEBUG("(0x%04X) LDR %s, Lxx_#0x%08X\n", instr, reg_names[rd], addr);
 
     return true;
 }
 
-static bool thumb_reg_str_handler(gba_t *gba, uint32_t instr) {
+static bool thumb_str_reg_handler(gba_t *gba, uint32_t instr) {
     uint8_t rd = instr & 0x07;
     uint8_t rb = (instr >> 3) & 0x07;
     uint8_t ro = (instr >> 6) & 0x07;
@@ -1924,25 +1934,150 @@ static bool thumb_reg_str_handler(gba_t *gba, uint32_t instr) {
 
     LOG_DEBUG("(0x%04X) STR%s %s, [%s, %s]\n", instr, b ? "B" : "", reg_names[rd], reg_names[rb], reg_names[ro]);
 
-    LOG_DEBUG("%d %d %X\n", gba->cpu->regs[rb], gba->cpu->regs[rb], (int) gba->cpu->regs[rb]);
-    // todo("%u %d %X", (unsigned int) gba->cpu->regs[ro], gba->cpu->regs[ro], (int) gba->cpu->regs[ro]);
+    uint32_t addr = gba->cpu->regs[rb] + gba->cpu->regs[ro];
 
     if (b)
-        gba_bus_write_byte(gba, gba->cpu->regs[rd], gba->cpu->regs[rb] + gba->cpu->regs[ro]);
+        gba_bus_write_byte(gba, addr, gba->cpu->regs[rd]);
     else
-        gba_bus_write_word(gba, gba->cpu->regs[rd], gba->cpu->regs[rb] + gba->cpu->regs[ro]);
+        gba_bus_write_word(gba, addr, gba->cpu->regs[rd]);
+
+    return true;
+}
+
+static bool thumb_ldr_reg_handler(gba_t *gba, uint32_t instr) {
+    uint8_t rd = instr & 0x07;
+    uint8_t rb = (instr >> 3) & 0x07;
+    uint8_t ro = (instr >> 6) & 0x07;
+
+    bool b = CHECK_BIT(instr, 10);
+
+    LOG_DEBUG("(0x%04X) LDR%s %s, [%s, %s]\n", instr, b ? "B" : "", reg_names[rd], reg_names[rb], reg_names[ro]);
+
+    uint32_t addr = gba->cpu->regs[rb] + gba->cpu->regs[ro];
+
+    if (b) {
+        gba->cpu->regs[rd] = gba_bus_read_byte(gba, addr);
+    } else {
+        uint32_t data = gba_bus_read_word(gba, addr);
+        uint8_t amount = (addr & 0x03) << 3;
+        gba->cpu->regs[rd] = ROR(data, amount);
+    }
+
+    return true;
+}
+
+static bool thumb_strh_reg_handler(gba_t *gba, uint32_t instr) {
+    uint8_t rd = instr & 0x07;
+    uint8_t rb = (instr >> 3) & 0x07;
+    uint8_t ro = (instr >> 6) & 0x07;
+
+    LOG_DEBUG("(0x%04X) STRH %s, [%s, %s]\n", instr, reg_names[rd], reg_names[rb], reg_names[ro]);
+
+    uint32_t addr = gba->cpu->regs[rb] + gba->cpu->regs[ro];
+    gba_bus_write_half(gba, addr, gba->cpu->regs[rd]);
+
+    return true;
+}
+
+static bool thumb_ldrh_reg_handler(gba_t *gba, uint32_t instr) {
+    bool h = CHECK_BIT(instr, 11);
+    bool s = CHECK_BIT(instr, 10);
+
+    uint8_t rd = instr & 0x07;
+    uint8_t rb = (instr >> 3) & 0x07;
+    uint8_t ro = (instr >> 6) & 0x07;
+
+    LOG_DEBUG("(0x%04X) LDR%s%s %s, [%s, %s]\n", instr, s ? "S" : "", h ? "H" : "B", reg_names[rd], reg_names[rb], reg_names[ro]);
+
+    uint32_t addr = gba->cpu->regs[rb] + gba->cpu->regs[ro];
+
+    uint8_t amount;
+    uint32_t data;
+    switch ((s << 1) | h) {
+    case 0b01:
+        data = gba_bus_read_half(gba, addr);
+        amount = (addr & 0x01) << 3;
+        data = ROR(data, amount);
+        break;
+    case 0b10:
+        data = (int8_t) gba_bus_read_byte(gba, addr);
+        break;
+    case 0b11:
+        data = (int16_t) gba_bus_read_half(gba, addr);
+        amount = (addr & 0x01) << 3;
+        data = (int16_t) ROR(data, amount);
+        break;
+    case 0b00:
+    default:
+        todo();
+    }
+
+    gba->cpu->regs[rd] = data;
+
+    return true;
+}
+
+static bool thumb_strh_imm_handler(gba_t *gba, uint32_t instr) {
+    bool b = CHECK_BIT(instr, 12);
+
+    uint8_t rd = instr & 0x07;
+    uint8_t rb = (instr >> 3) & 0x07;
+    uint8_t offset5 = (instr >> 6) & 0x1F;
+
+    LOG_DEBUG("(0x%04X) STR%s %s, [%s, #0x%04X]\n", instr, b ? "B" : "", reg_names[rd], reg_names[rb], b ? offset5 : offset5 << 2);
+
+    if (b)
+        gba_bus_write_byte(gba, gba->cpu->regs[rb] + offset5, gba->cpu->regs[rd]);
+    else
+        gba_bus_write_word(gba, gba->cpu->regs[rb] + (offset5 << 2), gba->cpu->regs[rd]);
+
+    return true;
+}
+
+static bool thumb_ldrh_imm_handler(gba_t *gba, uint32_t instr) {
+    bool b = CHECK_BIT(instr, 12);
+
+    uint8_t rd = instr & 0x07;
+    uint8_t rb = (instr >> 3) & 0x07;
+    uint8_t offset5 = (instr >> 6) & 0x1F;
+
+    LOG_DEBUG("(0x%04X) LDR%s %s, [%s, #0x%04X]\n", instr, b ? "B" : "", reg_names[rd], reg_names[rb], b ? offset5 : offset5 << 2);
+
+    if (b) {
+        gba->cpu->regs[rd] = gba_bus_read_byte(gba, gba->cpu->regs[rb] + offset5);
+    } else {
+        uint32_t addr = gba->cpu->regs[rb] + (offset5 << 2);
+        gba->cpu->regs[rd] = gba_bus_read_word(gba, addr);
+        uint8_t amount = (addr & 0x03) << 3;
+        gba->cpu->regs[rd] = ROR(gba->cpu->regs[rd], amount);
+    }
 
     return true;
 }
 
 static bool thumb_strh_handler(gba_t *gba, uint32_t instr) {
-    uint8_t offset5 = (instr >> 6) & 0x1F;
+    uint8_t offset5 = ((instr >> 6) & 0x1F) << 1;
     uint8_t rb = (instr >> 3) & 0x07;
     uint8_t rd = instr & 0x07;
 
+    LOG_DEBUG("(0x%04X) STRH %s, [%s, #0x%02X]\n", instr, reg_names[rd], reg_names[rb], offset5);
+
     gba_bus_write_half(gba, gba->cpu->regs[rb] + offset5, gba->cpu->regs[rd]);
 
-    LOG_DEBUG("(0x%04X) STRH %s, [%s, #0x%02X]\n", instr, reg_names[rd], reg_names[rb], offset5);
+    return true;
+}
+
+static bool thumb_ldrh_handler(gba_t *gba, uint32_t instr) {
+    uint8_t offset5 = ((instr >> 6) & 0x1F) << 1;
+    uint8_t rb = (instr >> 3) & 0x07;
+    uint8_t rd = instr & 0x07;
+
+    LOG_DEBUG("(0x%04X) LDRH %s, [%s, #0x%02X]\n", instr, reg_names[rd], reg_names[rb], offset5);
+
+    uint32_t addr = gba->cpu->regs[rb] + offset5;
+    gba->cpu->regs[rd] = gba_bus_read_half(gba, addr);
+    uint8_t amount = (addr & 0x01) << 3;
+    gba->cpu->regs[rd] = ROR(gba->cpu->regs[rd], amount);
 
     return true;
 }
@@ -1954,6 +2089,20 @@ static bool thumb_str_sp_handler(gba_t *gba, uint32_t instr) {
     LOG_DEBUG("(0x%04X) STR %s, [%s, #0x%04X]\n", instr, reg_names[rd], reg_names[REG_SP], offset);
 
     gba_bus_write_word(gba, gba->cpu->regs[REG_SP] + offset, gba->cpu->regs[rd]);
+
+    return true;
+}
+
+static bool thumb_ldr_sp_handler(gba_t *gba, uint32_t instr) {
+    uint8_t rd = (instr >> 8) & 0x07;
+    uint16_t offset = (instr & 0x00FF) << 2;
+
+    LOG_DEBUG("(0x%04X) LDR %s, [%s, #0x%04X]\n", instr, reg_names[rd], reg_names[REG_SP], offset);
+
+    uint32_t addr = gba->cpu->regs[REG_SP] + offset;
+    gba->cpu->regs[rd] = gba_bus_read_word(gba, addr);
+    uint8_t amount = (addr & 0x03) << 3;
+    gba->cpu->regs[rd] = ROR(gba->cpu->regs[rd], amount);
 
     return true;
 }
@@ -1991,33 +2140,59 @@ static bool thumb_stm_handler(gba_t *gba, uint32_t instr) {
     uint8_t rb = (instr >> 8) & 0x07;
     uint8_t rlist = instr & 0xFF;
 
-    todo();
-    stm(gba, rb, rlist, 4, false, true);
-
     LOG_DEBUG("(0x%04X) STMIA %s! {%s}\n", instr, reg_names[rb], rlist_to_str(rlist));
+
+    stm(gba, rb, rlist, false, true, true);
+
+    return true;
+}
+
+static bool thumb_ldm_handler(gba_t *gba, uint32_t instr) {
+    uint8_t rb = (instr >> 8) & 0x07;
+    uint8_t rlist = instr & 0xFF;
+
+    LOG_DEBUG("(0x%04X) LDMIA %s! {%s}\n", instr, reg_names[rb], rlist_to_str(rlist));
+
+    bool branch = ldm(gba, rb, rlist, false, true, true);
+
+    if (branch) {
+        flush_pipeline(gba);
+        return false;
+    }
 
     return true;
 }
 
 static bool thumb_push_handler(gba_t *gba, uint32_t instr) {
     bool r = CHECK_BIT(instr, 8);
-    uint8_t rlist = instr & 0xFF;
+    uint16_t rlist = instr & 0xFF;
 
-    if (r) {
-        gba_bus_write_word(gba, gba->cpu->regs[REG_SP], gba->cpu->regs[REG_LR]);
-        gba->cpu->regs[REG_SP] -= 4;
-    }
+    if (r)
+        SET_BIT(rlist, REG_LR);
 
-    todo();
-    stm(gba, REG_SP, rlist, -4, false, true);
+    LOG_DEBUG("(0x%04X) PUSH {%s}\n", instr, rlist_to_str(rlist));
 
-    LOG_DEBUG("(0x%04X) PUSH {%s%s%s}\n", instr, rlist_to_str(rlist), rlist ? "," : "", r ? reg_names[REG_LR] : "");
+    stm(gba, REG_SP, rlist, true, false, true);
 
     return true;
 }
 
 static bool thumb_pop_handler(gba_t *gba, uint32_t instr) {
-    todo("thumb_pop_handler");
+    bool r = CHECK_BIT(instr, 8);
+    uint16_t rlist = instr & 0xFF;
+
+    if (r)
+        SET_BIT(rlist, REG_PC);
+
+    LOG_DEBUG("(0x%04X) POP {%s}\n", instr, rlist_to_str(rlist));
+
+    bool branch = ldm(gba, REG_SP, rlist, false, true, true);
+
+    if (branch) {
+        flush_pipeline(gba);
+        return false;
+    }
+
     return true;
 }
 
@@ -2128,14 +2303,22 @@ static bool thumb_bl_handler(gba_t *gba, uint32_t instr) {
     X(thumb_mov_hi_reg_handler)      \
     X(thumb_bx_handler)              \
     X(thumb_pc_relative_ldr_handler) \
-    X(thumb_reg_str_handler)         \
+    X(thumb_str_reg_handler)         \
+    X(thumb_ldr_reg_handler)         \
+    X(thumb_strh_reg_handler)        \
+    X(thumb_ldrh_reg_handler)        \
+    X(thumb_ldrh_imm_handler)        \
+    X(thumb_strh_imm_handler)        \
     X(thumb_strh_handler)            \
+    X(thumb_ldrh_handler)            \
     X(thumb_str_sp_handler)          \
+    X(thumb_ldr_sp_handler)          \
     X(thumb_add_addr_handler)        \
     X(thumb_add_sp_handler)          \
     X(thumb_push_handler)            \
     X(thumb_pop_handler)             \
     X(thumb_stm_handler)             \
+    X(thumb_ldm_handler)             \
     X(thumb_b_cond_handler)          \
     X(thumb_b_handler)               \
     X(thumb_bl_handler)
@@ -2242,7 +2425,6 @@ static void arm_handlers_init(void) {
 // thumb_decoder_rules definition order is important: they are matched in the order they are defined in the thumb_decoder_rules array
 // TODO '_' == '*' for now, its to visually help me find relevant bits: '_' are alway ignored because they are not relevant in the instruction hash
 decoder_rule_t thumb_decoder_rules[] = {
-    // --> needs another way to distinguish them
     {"00000***________", HANDLER_ID(thumb_lsl_handler)},             // Move shifted register
     {"00001***________", HANDLER_ID(thumb_lsr_handler)},             // Move shifted register
     {"00010***________", HANDLER_ID(thumb_asr_handler)},             // Move shifted register
@@ -2258,20 +2440,25 @@ decoder_rule_t thumb_decoder_rules[] = {
     {"01000111________", HANDLER_ID(thumb_bx_handler)},              // Hi register operations/branch exchange
     {"010000**________", HANDLER_ID(thumb_alu_ops_handler)},         // ALU operations
     {"01001***________", HANDLER_ID(thumb_pc_relative_ldr_handler)}, // PC-relative load
-    {"01010*0*________", HANDLER_ID(thumb_reg_str_handler)},         // Load/store with register offset
+    {"01010*0*________", HANDLER_ID(thumb_str_reg_handler)},         // Load/store with register offset
+    {"01011*0*________", HANDLER_ID(thumb_ldr_reg_handler)},         // Load/store with register offset
+    {"0101001*________", HANDLER_ID(thumb_strh_reg_handler)},        // Load/store with sign-extended byte/halfword
+    {"0101**1*________", HANDLER_ID(thumb_ldrh_reg_handler)},        // Load/store with sign-extended byte/halfword
+    {"011*00**________", HANDLER_ID(thumb_strh_imm_handler)},        // Load/store with immediate offset
+    {"011*1***________", HANDLER_ID(thumb_ldrh_imm_handler)},        // Load/store with immediate offset
     {"10000***________", HANDLER_ID(thumb_strh_handler)},            // Load/store halfword
-    // {"10001***________", HANDLER_ID(thumb_ldrh_handler)},            // Load/store halfword
-    {"10010***________", HANDLER_ID(thumb_str_sp_handler)}, // SP-relative load/store
-    // {"10011***________", HANDLER_ID(thumb_ldr_sp_handler)},          // SP-relative load/store
-    {"1010****________", HANDLER_ID(thumb_add_addr_handler)}, // Load address
-    {"10110000________", HANDLER_ID(thumb_add_sp_handler)},   // Add offset to stack pointer
-    {"1011010*________", HANDLER_ID(thumb_push_handler)},     // Push/pop registers
-    {"1011110*________", HANDLER_ID(thumb_pop_handler)},      // Push/pop registers
-    {"11000***________", HANDLER_ID(thumb_stm_handler)},      // Multiple load/store
-    // {"11001***________", HANDLER_ID(thumb_ldm_handler)},          // Multiple load/store
-    {"1101****________", HANDLER_ID(thumb_b_cond_handler)}, // Conditonal branch
-    {"11100***________", HANDLER_ID(thumb_b_handler)},      // Unconditional branch
-    {"1111****________", HANDLER_ID(thumb_bl_handler)},     // Long branch with link
+    {"10001***________", HANDLER_ID(thumb_ldrh_handler)},            // Load/store halfword
+    {"10010***________", HANDLER_ID(thumb_str_sp_handler)},          // SP-relative load/store
+    {"10011***________", HANDLER_ID(thumb_ldr_sp_handler)},          // SP-relative load/store
+    {"1010****________", HANDLER_ID(thumb_add_addr_handler)},        // Load address
+    {"10110000________", HANDLER_ID(thumb_add_sp_handler)},          // Add offset to stack pointer
+    {"1011010*________", HANDLER_ID(thumb_push_handler)},            // Push/pop registers
+    {"1011110*________", HANDLER_ID(thumb_pop_handler)},             // Push/pop registers
+    {"11000***________", HANDLER_ID(thumb_stm_handler)},             // Multiple load/store
+    {"11001***________", HANDLER_ID(thumb_ldm_handler)},             // Multiple load/store
+    {"1101****________", HANDLER_ID(thumb_b_cond_handler)},          // Conditonal branch
+    {"11100***________", HANDLER_ID(thumb_b_handler)},               // Unconditional branch
+    {"1111****________", HANDLER_ID(thumb_bl_handler)},              // Long branch with link
     // {"11011111________", HANDLER_ID(thumb_sw_int_handler)}, // Software interrupt
 };
 uint8_t get_thumb_handler(uint32_t instr) {
