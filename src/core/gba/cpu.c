@@ -456,12 +456,12 @@ static bool mul_handler(gba_t *gba, uint32_t instr) {
     uint8_t rm = instr & 0x0F;
     bool s = CHECK_BIT(instr, 20);
 
-    if (s)
-        todo("s");
+    LOG_DEBUG("(0x%08X) MUL%s%s %s,%s,%s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rd], reg_names[rm], reg_names[rs]);
 
     gba->cpu->regs[rd] = gba->cpu->regs[rm] * gba->cpu->regs[rs];
 
-    LOG_DEBUG("(0x%08X) MUL%s%s %s,%s,%s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rd], reg_names[rm], reg_names[rs]);
+    if (s)
+        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
 
     if (rd == REG_PC) {
         flush_pipeline(gba);
@@ -478,12 +478,12 @@ static bool mla_handler(gba_t *gba, uint32_t instr) {
     uint8_t rm = instr & 0x0F;
     bool s = CHECK_BIT(instr, 20);
 
-    if (s)
-        todo("s");
+    LOG_DEBUG("(0x%08X) MLA%s%s %s,%s,%s,%s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rd], reg_names[rm], reg_names[rs], reg_names[rn]);
 
     gba->cpu->regs[rd] = (gba->cpu->regs[rm] * gba->cpu->regs[rs]) + gba->cpu->regs[rn];
 
-    LOG_DEBUG("(0x%08X) MLA%s%s %s,%s,%s,%s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rd], reg_names[rm], reg_names[rs], reg_names[rn]);
+    if (s)
+        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
 
     if (rd == REG_PC) {
         flush_pipeline(gba);
@@ -501,8 +501,7 @@ static bool mull_handler(gba_t *gba, uint32_t instr) {
     bool u = CHECK_BIT(instr, 22);
     bool s = CHECK_BIT(instr, 20);
 
-    if (s)
-        todo("s");
+    LOG_DEBUG("(0x%08X) %cMULL%s%s %s,%s,%s,%s\n", instr, u ? 'S' : 'U', cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rdlo], reg_names[rdhi], reg_names[rm], reg_names[rs]);
 
     uint64_t res;
     if (u)
@@ -513,7 +512,34 @@ static bool mull_handler(gba_t *gba, uint32_t instr) {
     gba->cpu->regs[rdhi] = res >> 32;
     gba->cpu->regs[rdlo] = res;
 
-    LOG_DEBUG("(0x%08X) %cMULL%s%s %s,%s,%s,%s\n", instr, u ? 'S' : 'U', cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rdlo], reg_names[rdhi], reg_names[rm], reg_names[rs]);
+    if (s)
+        compute_flags_nz(gba->cpu, gba->cpu->regs[rdlo]);
+
+    return true;
+}
+
+static bool mlal_handler(gba_t *gba, uint32_t instr) {
+    uint8_t rdhi = (instr >> 16) & 0x0F;
+    uint8_t rdlo = (instr >> 12) & 0x0F;
+    uint8_t rs = (instr >> 8) & 0x0F;
+    uint8_t rm = instr & 0x0F;
+    bool u = CHECK_BIT(instr, 22);
+    bool s = CHECK_BIT(instr, 20);
+
+    LOG_DEBUG("(0x%08X) %cMLAL%s%s %s,%s,%s,%s\n", instr, u ? 'S' : 'U', cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rdlo], reg_names[rdhi], reg_names[rm], reg_names[rs]);
+
+    uint64_t res;
+    uint64_t acc = ((uint64_t) gba->cpu->regs[rdhi] << 32) | gba->cpu->regs[rdlo];
+    if (u)
+        res = ((uint64_t) gba->cpu->regs[rm] * (uint64_t) gba->cpu->regs[rs]) + acc;
+    else
+        res = (((int64_t) (int32_t) gba->cpu->regs[rm]) * ((int64_t) (int32_t) gba->cpu->regs[rs])) + (int64_t) acc;
+
+    gba->cpu->regs[rdhi] = res >> 32;
+    gba->cpu->regs[rdlo] = res;
+
+    if (s)
+        compute_flags_nz(gba->cpu, gba->cpu->regs[rdlo]);
 
     return true;
 }
@@ -521,6 +547,8 @@ static bool mull_handler(gba_t *gba, uint32_t instr) {
 static bool bx_handler(gba_t *gba, uint32_t instr) {
     uint8_t rn = instr & 0x0F;
     uint32_t pc_dest = gba->cpu->regs[rn];
+
+    LOG_DEBUG("(0x%08X) BX%s %s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[rn]);
 
     if (rn == REG_PC)
         todo("undefined behaviour");
@@ -530,8 +558,6 @@ static bool bx_handler(gba_t *gba, uint32_t instr) {
 
     if (CPSR_CHECK_FLAG(gba->cpu, CPSR_T))
         pc_dest -= 1;
-
-    LOG_DEBUG("(0x%08X) BX%s %s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[rn]);
 
     gba->cpu->regs[REG_PC] = pc_dest;
 
@@ -950,7 +976,7 @@ static bool swp_handler(gba_t *gba, uint32_t instr) {
         gba_bus_write_word(gba, gba->cpu->regs[rn], gba->cpu->regs[rm]);
     }
 
-        gba->cpu->regs[rd] = data;
+    gba->cpu->regs[rd] = data;
 
     if (rd == REG_PC) {
         flush_pipeline(gba);
@@ -991,11 +1017,7 @@ static bool strh_reg_handler(gba_t *gba, uint32_t instr) {
         gba_bus_write_half(gba, addr, data);
         break;
     case 0b10:
-        todo("0b10");
-        break;
     case 0b11:
-        todo("0b11");
-        break;
     case 0b00:
     default:
         todo();
@@ -1040,11 +1062,7 @@ static bool strh_imm_handler(gba_t *gba, uint32_t instr) {
         gba_bus_write_half(gba, addr, data);
         break;
     case 0b10:
-        todo("0b10");
-        break;
     case 0b11:
-        todo("0b11");
-        break;
     case 0b00:
     default:
         todo();
@@ -2224,6 +2242,7 @@ static bool thumb_bl_handler(gba_t *gba, uint32_t instr) {
     X(mul_handler)                   \
     X(mla_handler)                   \
     X(mull_handler)                  \
+    X(mlal_handler)                  \
     X(swp_handler)                   \
     X(strh_reg_handler)              \
     X(strh_imm_handler)              \
@@ -2278,7 +2297,8 @@ typedef enum {
 } handler_id_t;
 
 handler_t handlers[] = {
-    FOREACH_HANDLER(HANDLER_FUNC_PTR_GENERATOR)};
+    FOREACH_HANDLER(HANDLER_FUNC_PTR_GENERATOR)
+};
 
 typedef struct {
     const char match_string[32]; // '1': bit MUST be set, '0': bit MUST be reset, '*': bit can be set OR reset
@@ -2291,7 +2311,7 @@ decoder_rule_t arm_decoder_rules[] = {
     {"____0000000*____________1001____", HANDLER_ID(mul_handler)},                              // Multiply
     {"____0000001*____________1001____", HANDLER_ID(mla_handler)},                              // Multiply
     {"____00001*0*____________1001____", HANDLER_ID(mull_handler)},                             // Multiply Long
-    {"____00001*1*____________1001____", HANDLER_ID(/*mlal_handler*/ not_implemented_handler)}, // Multiply Long
+    {"____00001*1*____________1001____", HANDLER_ID(mlal_handler)},                             // Multiply Long
     {"____00*0000*____________****____", HANDLER_ID(and_handler)},                              // Data processing
     {"____00010*00____________0000____", HANDLER_ID(mrs_handler)},                              // PSR Transfer
     {"____00*10*10____________****____", HANDLER_ID(msr_handler)},                              // PSR Transfer
@@ -2323,49 +2343,6 @@ decoder_rule_t arm_decoder_rules[] = {
     {"____1011****____________****____", HANDLER_ID(bl_handler)},                               // Branch
     {"____1111****____________****____", HANDLER_ID(/*swi_handler*/ not_implemented_handler)},  // Software Interrupt
 };
-
-uint8_t get_arm_handler(uint32_t instr) {
-    for (size_t i = 0; i < sizeof(arm_decoder_rules) / sizeof(*arm_decoder_rules); i++) {
-        decoder_rule_t *rule = &arm_decoder_rules[i];
-
-        bool match = true;
-        for (size_t j = 0; j < sizeof(rule->match_string) && match; j++) {
-            switch (rule->match_string[sizeof(rule->match_string) - j - 1]) {
-            case '*':
-                break;
-            case '_':
-                // jump to next relevant char
-                if (j == 0)
-                    j = 3;
-                else if (j == 8)
-                    j = 19;
-                else
-                    j = sizeof(rule->match_string);
-                break;
-            case '0':
-                match = GET_BIT(instr, j) == 0;
-                break;
-            case '1':
-                match = GET_BIT(instr, j) == 1;
-                break;
-            }
-        }
-
-        if (match)
-            return rule->handler_id;
-    }
-
-    return HANDLER_ID(not_implemented_handler);
-}
-
-static void arm_handlers_init(void) {
-    for (size_t i = 0; i < sizeof(arm_handlers) / sizeof(*arm_handlers); i++) {
-        uint8_t hi = (i & 0xFF0) >> 4;
-        uint8_t lo = (i & 0x00F);
-        uint32_t instr = (hi << 20) | (lo << 4);
-        arm_handlers[i] = get_arm_handler(instr);
-    }
-}
 
 // thumb_decoder_rules definition order is important: they are matched in the order they are defined in the thumb_decoder_rules array
 decoder_rule_t thumb_decoder_rules[] = {
@@ -2406,18 +2383,19 @@ decoder_rule_t thumb_decoder_rules[] = {
     // {"11011111________", HANDLER_ID(thumb_sw_int_handler)}, // Software interrupt
 };
 
-uint8_t get_thumb_handler(uint32_t instr) {
-    for (size_t i = 0; i < sizeof(thumb_decoder_rules) / sizeof(*thumb_decoder_rules); i++) {
-        decoder_rule_t *rule = &thumb_decoder_rules[i];
+uint8_t get_handler(uint32_t instr, decoder_rule_t *decoder_rules, size_t decoder_rules_size) {
+    size_t rule_size = strnlen(decoder_rules[0].match_string, sizeof(decoder_rules[0].match_string));
+
+    for (size_t i = 0; i < decoder_rules_size; i++) {
+        decoder_rule_t *rule = &decoder_rules[i];
 
         bool match = true;
-        for (size_t j = 0; j < sizeof(rule->match_string) / 2 && match; j++) {
-            switch (rule->match_string[(sizeof(rule->match_string) / 2) - j - 1]) {
+        for (size_t j = 0; j < rule_size && match; j++) {
+            switch (rule->match_string[rule_size - j - 1]) {
             case '*':
                 break;
             case '_':
-                // jump to next relevant char
-                j = 7;
+                j += 3;
                 break;
             case '0':
                 match = GET_BIT(instr, j) == 0;
@@ -2433,13 +2411,6 @@ uint8_t get_thumb_handler(uint32_t instr) {
     }
 
     return HANDLER_ID(not_implemented_handler);
-}
-
-static void thumb_handlers_init(void) {
-    for (size_t i = 0; i < sizeof(thumb_handlers) / sizeof(*thumb_handlers); i++) {
-        uint32_t instr = i << 8;
-        thumb_handlers[i] = get_thumb_handler(instr);
-    }
 }
 
 void gba_cpu_init(gba_t *gba) {
@@ -2467,9 +2438,20 @@ void gba_cpu_init(gba_t *gba) {
     // generate handlers only once when initializing the first cpu instance
     static bool handlers_generated = false;
     if (!handlers_generated) {
-        printf("Generating ARM7TDMI cpu handlers\n");
-        arm_handlers_init();
-        thumb_handlers_init();
+        LOG_DEBUG("Generating ARM7TDMI cpu handlers\n");
+
+        for (size_t i = 0; i < sizeof(arm_handlers) / sizeof(*arm_handlers); i++) {
+            uint8_t hi = (i & 0xFF0) >> 4;
+            uint8_t lo = (i & 0x00F);
+            uint32_t instr = (hi << 20) | (lo << 4);
+            arm_handlers[i] = get_handler(instr, arm_decoder_rules, sizeof(arm_decoder_rules) / sizeof(*arm_decoder_rules));
+        }
+
+        for (size_t i = 0; i < sizeof(thumb_handlers) / sizeof(*thumb_handlers); i++) {
+            uint32_t instr = i << 8;
+            thumb_handlers[i] = get_handler(instr, thumb_decoder_rules, sizeof(thumb_decoder_rules) / sizeof(*thumb_decoder_rules));
+        }
+
         handlers_generated = true;
     }
 }
