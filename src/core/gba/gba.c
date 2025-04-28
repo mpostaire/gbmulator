@@ -84,11 +84,11 @@ char *gba_get_rom_title(gba_t *gba) {
 }
 
 uint16_t gba_get_joypad_state(gba_t *gba) {
-    return (~((gba->bus->io_regs[IO_KEYINPUT + 1] << 8) | gba->bus->io_regs[IO_KEYINPUT])) & 0x03FF;
+    return ((gba->bus->io_regs[IO_KEYINPUT + 1] << 8) | gba->bus->io_regs[IO_KEYINPUT]) & 0x03FF;
 }
 
 void gba_set_joypad_state(gba_t *gba, uint16_t state) {
-    state = (state) & 0x03FF;
+    state &= 0x03FF;
 
     gba->bus->io_regs[IO_KEYINPUT] = state;
     gba->bus->io_regs[IO_KEYINPUT + 1] = state >> 8;
