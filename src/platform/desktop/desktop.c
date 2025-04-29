@@ -55,7 +55,9 @@ static config_t config = {
         BTN_A,
         BTN_B,
         BTN_SELECT,
-        BTN_START
+        BTN_START,
+        BTN_TR,
+        BTN_TL,
     },
     .gamepad_button_parser = (keycode_parser_t) gamepad_gamepad_button_parser,
     .gamepad_button_name_parser = (keyname_parser_t) gamepad_button_name_parser,
@@ -68,7 +70,9 @@ static config_t config = {
         GDK_KEY_KP_0,
         GDK_KEY_period,
         GDK_KEY_KP_2,
-        GDK_KEY_KP_1
+        GDK_KEY_KP_1,
+        GDK_KEY_KP_5,
+        GDK_KEY_KP_4,
     },
     .keycode_filter = keycode_filter,
     .keycode_parser = gdk_keyval_name,
@@ -96,7 +100,9 @@ static setter_handler_t key_handlers[] = {
     { "key_setter_a", "key_setter_a_label", 4, NULL },
     { "key_setter_b", "key_setter_b_label", 5, NULL },
     { "key_setter_select", "key_setter_select_label", 6, NULL },
-    { "key_setter_start", "key_setter_start_label", 7, NULL }
+    { "key_setter_start", "key_setter_start_label", 7, NULL },
+    { "key_setter_r", "key_setter_r_label", 8, NULL },
+    { "key_setter_l", "key_setter_l_label", 9, NULL }
 };
 
 static setter_handler_t gamepad_handlers[] = {
@@ -107,7 +113,9 @@ static setter_handler_t gamepad_handlers[] = {
     { "gamepad_setter_a", "gamepad_setter_a_label", 4, NULL },
     { "gamepad_setter_b", "gamepad_setter_b_label", 5, NULL },
     { "gamepad_setter_select", "gamepad_setter_select_label", 6, NULL },
-    { "gamepad_setter_start", "gamepad_setter_start_label", 7, NULL }
+    { "gamepad_setter_start", "gamepad_setter_start_label", 7, NULL },
+    { "gamepad_setter_r", "gamepad_setter_r_label", 8, NULL },
+    { "gamepad_setter_l", "gamepad_setter_l_label", 9, NULL }
 };
 
 static const char *joypad_names[] = {
@@ -118,7 +126,9 @@ static const char *joypad_names[] = {
     "A:",
     "B:",
     "Select:",
-    "Start:"
+    "Start:",
+    "R:",
+    "L:"
 };
 
 static gint argc;
@@ -671,7 +681,7 @@ static void set_keybinding(GtkDialog *self, gint response_id, gpointer user_data
         unsigned int keyval = gdk_keyval_from_name(keyname);
 
         // detect if the key is already attributed, if yes, swap them
-        for (int i = JOYPAD_RIGHT; i < JOYPAD_START; i++) {
+        for (int i = 0; i < 10; i++) {
             if (config.keybindings[i] == keyval && current_bind_setter != i) {
                 config.keybindings[i] = config.keybindings[current_bind_setter];
                 gtk_label_set_label(GTK_LABEL(key_handlers[i].widget), gdk_keyval_name(config.keybindings[i]));
@@ -692,7 +702,7 @@ static void set_gamepad_binding(GtkDialog *self, gint response_id, gpointer user
         unsigned int button = gamepad_button_name_parser(button_name);
 
         // detect if the key is already attributed, if yes, swap them
-        for (int i = JOYPAD_RIGHT; i < JOYPAD_START; i++) {
+        for (int i = 0; i < 10; i++) {
             if (config.gamepad_bindings[i] == button && current_bind_setter != i) {
                 config.gamepad_bindings[i] = config.gamepad_bindings[current_bind_setter];
                 gtk_label_set_label(GTK_LABEL(gamepad_handlers[i].widget), gamepad_gamepad_button_parser(config.gamepad_bindings[i]));
@@ -1092,13 +1102,13 @@ static void gamepad_button_release_event_cb(ManetteDevice *emitter, ManetteEvent
     }
 }
 
-static void gamepad_disconnected_cb(ManetteDevice *emitter, gpointer user_data) {
-    printf("%s: disconnected\n", manette_device_get_name(emitter));
-    g_object_unref(G_OBJECT(emitter));
+static void gamepad_disconnected_cb(ManetteDevice *device, gpointer user_data) {
+    printf("%s: disconnected\n", manette_device_get_name(device));
 }
 
-static void gamepad_connected_cb(ManetteMonitor *emitter, ManetteDevice *device, gpointer user_data) {
+static void gamepad_connected_cb(ManetteMonitor *self, ManetteDevice *device, gpointer user_data) {
     printf("%s: connected\n", manette_device_get_name(device));
+
     g_signal_connect_object(G_OBJECT(device), "disconnected", (GCallback) gamepad_disconnected_cb, NULL, 0);
     g_signal_connect_object(G_OBJECT(device), "button-press-event", (GCallback) gamepad_button_press_event_cb, NULL, 0);
     g_signal_connect_object(G_OBJECT(device), "button-release-event", (GCallback) gamepad_button_release_event_cb, NULL, 0);
@@ -1407,141 +1417,10 @@ int main(int argc, char **argv) {
 
     ManetteDevice *device;
     while (manette_monitor_iter_next(iter, &device))
-        gamepad_connected_cb(NULL, device, NULL);
+        gamepad_connected_cb(monitor, device, NULL);
 
     alrenderer_init(0);
 
     gst_init(&argc, &argv);
     return g_application_run(G_APPLICATION(app), argc, argv);
 }
-
-
-
-
-
-
-
-
-
-
-
-// #include <stdlib.h>
-// #include <stdio.h>
-// #include <assert.h>
-
-// #include "json.h"
-// #include "core/gba/gba_priv.h"
-
-// static bool check_extension(const char *path, const char *extension) {
-//     const char *dot = strrchr(path, '.');
-//     if (!dot || (strncmp(dot, extension, MAX(strlen(dot), strlen(extension))))) {
-//         eprintf("%s: wrong file extension (expected %s)", path, extension);
-//         return false;
-//     }
-//     return true;
-// }
-
-// static uint8_t *read_file(const char *path, size_t *size) {
-//     FILE *f = fopen(path, "rb");
-//     if (!f) {
-//         errnoprintf("opening file %s", path);
-//         return NULL;
-//     }
-
-//     fseek(f, 0, SEEK_END);
-//     size_t len = ftell(f);
-//     fseek(f, 0, SEEK_SET);
-
-//     uint8_t *bytes = xmalloc(len);
-//     if (!fread(bytes, len, 1, f)) {
-//         errnoprintf("reading %s", path);
-//         fclose(f);
-//         return NULL;
-//     }
-//     fclose(f);
-
-//     if (size)
-//         *size = len;
-//     return bytes;
-// }
-
-// int main(int argc, char **argv) {
-//     if (argc < 2) {
-//         printf("Usage: %s path/to/rom.gba\n", argv[0]);
-//         return EXIT_FAILURE;
-//     }
-
-//     if (!check_extension(argv[1], ".gba"))
-//         return EXIT_FAILURE;
-
-//     size_t rom_size;
-//     uint8_t *rom = read_file(argv[1], &rom_size);
-//     if (!rom)
-//         return EXIT_SUCCESS;
-
-//     // TODO json tests
-
-//     FILE *f = fopen("gba_json_tests/arm_b_bl.json", "r");
-//     if (!f) {
-//         errnoprintf("fopen");
-//         return EXIT_FAILURE;
-//     }
-
-//     fseek(f, 0, SEEK_END);
-//     long sz = ftell(f);
-//     fseek(f, 0, SEEK_SET);
-
-//     char *json = xmalloc(sz);
-//     fread(json, sz, 1, f);
-
-//     json_value_t *root = json_parse(json, strlen(json));
-//     assert(root->type == json_type_array);
-
-//     typedef struct {
-//         gba_cpu_t final;
-
-//         struct {
-
-//         } transactions[8];
-//     } gba_cpu_json_test_t;
-
-//     for (json_array_element_t *test = ((json_array_t *) root->payload)->start; test; test = test->next) {
-//         assert(test->value->type == json_type_object);
-
-//         gba_t *gba = gba_init(rom, rom_size, NULL);
-//         if (!gba)
-//             return EXIT_FAILURE;
-
-//         gba_cpu_json_test_t test_data = {};
-
-//         for (json_object_element_t *test_elem = ((json_object_t *) test->value->payload)->start; test_elem; test_elem = test_elem->next) {
-//             if (!strncmp("initial", test_elem->name->string, test_elem->name->string_size)) {
-//                 assert(test_elem->value->type == json_type_object);
-//             } else if (!strncmp("final:", test_elem->name->string, test_elem->name->string_size)) {
-//                 assert(test_elem->value->type == json_type_object);
-//             } else if (!strncmp("transactions:", test_elem->name->string, test_elem->name->string_size)) {
-//                 assert(test_elem->value->type == json_type_array);
-//             } else if (!strncmp("opcode:", test_elem->name->string, test_elem->name->string_size)) {
-//                 assert(test_elem->value->type == json_type_number);
-//                 gba->cpu->pipeline[1] = strtoul(((json_number_t *) test_elem->value->payload)->number, NULL, 0);
-//             } else if (!strncmp("base_addr:", test_elem->name->string, test_elem->name->string_size)) {
-//                 assert(test_elem->value->type == json_type_number);
-//             } else {
-//                 eprintf("%s\n", test_elem->name->string);
-//                 return EXIT_FAILURE;
-//             }
-//         }
-
-//         gba_step(gba); // TODO prepare ui for gba
-//     }
-
-//     // int max_step_count = 2048;
-//     // for (int i = 0; i < max_step_count; i++)
-//         // gba_step(gba);
-// // 
-//     // printf("EXECUTED FIRST %d STEPS\n", max_step_count);
-//     // gba_quit(gba);
-//     free(rom);
-
-//     return EXIT_SUCCESS;
-// }

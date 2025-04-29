@@ -111,6 +111,18 @@ static void parse_config_line(config_t *config, const char *line) {
                 config->keybindings[JOYPAD_START] = key;
             return;
         }
+        if (sscanf(line, "keyboard_l=%15[^\t\n]", key_name)) {
+            key = config->keyname_parser(key_name);
+            if (config->keycode_filter(key))
+                config->keybindings[JOYPAD_L] = key;
+            return;
+        }
+        if (sscanf(line, "keyboard_r=%15[^\t\n]", key_name)) {
+            key = config->keyname_parser(key_name);
+            if (config->keycode_filter(key))
+                config->keybindings[JOYPAD_R] = key;
+            return;
+        }
     }
 
     if (config->gamepad_button_parser) {
@@ -152,6 +164,16 @@ static void parse_config_line(config_t *config, const char *line) {
         if (sscanf(line, "gamepad_start=%15[^\t\n]", key_name)) {
             key = config->gamepad_button_name_parser(key_name);
             config->gamepad_bindings[JOYPAD_START] = key;
+            return;
+        }
+        if (sscanf(line, "gamepad_l=%15[^\t\n]", key_name)) {
+            key = config->gamepad_button_name_parser(key_name);
+            config->gamepad_bindings[JOYPAD_L] = key;
+            return;
+        }
+        if (sscanf(line, "gamepad_r=%15[^\t\n]", key_name)) {
+            key = config->gamepad_button_name_parser(key_name);
+            config->gamepad_bindings[JOYPAD_R] = key;
             return;
         }
     }
@@ -199,6 +221,10 @@ char *config_save_to_string(config_t *config) {
         len = strlen(buf);
         snprintf(&buf[len], 512 - len, "keyboard_start=%s\n", config->keycode_parser(config->keybindings[JOYPAD_START]));
         len = strlen(buf);
+        snprintf(&buf[len], 512 - len, "keyboard_l=%s\n", config->keycode_parser(config->keybindings[JOYPAD_L]));
+        len = strlen(buf);
+        snprintf(&buf[len], 512 - len, "keyboard_r=%s\n", config->keycode_parser(config->keybindings[JOYPAD_R]));
+        len = strlen(buf);
     }
 
     if (config->gamepad_button_parser) {
@@ -217,6 +243,10 @@ char *config_save_to_string(config_t *config) {
         snprintf(&buf[len], 512 - len, "gamepad_select=%s\n", config->gamepad_button_parser(config->gamepad_bindings[JOYPAD_SELECT]));
         len = strlen(buf);
         snprintf(&buf[len], 512 - len, "gamepad_start=%s\n", config->gamepad_button_parser(config->gamepad_bindings[JOYPAD_START]));
+        len = strlen(buf);
+        snprintf(&buf[len], 512 - len, "gamepad_l=%s\n", config->gamepad_button_parser(config->gamepad_bindings[JOYPAD_L]));
+        len = strlen(buf);
+        snprintf(&buf[len], 512 - len, "gamepad_r=%s\n", config->gamepad_button_parser(config->gamepad_bindings[JOYPAD_R]));
     }
 
     return buf;
