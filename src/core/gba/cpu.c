@@ -1848,19 +1848,23 @@ static bool thumb_mov_hi_reg_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool thumb_bx_handler(gba_t *gba, uint32_t instr) {
-    if (CHECK_BIT(instr, 7))
+    bool h1 = CHECK_BIT(instr, 7);
+    bool h2 = CHECK_BIT(instr, 6);
+
+    if (h1)
         todo("undefined behaviour");
 
     uint8_t rd = (instr >> 3) & 0x07;
-    uint8_t rn = CHECK_BIT(instr, 6) ? rd + 8 : rd;
+    uint8_t rn = h2 ? rd + 8 : rd;
 
     LOG_DEBUG("(0x%04X) BX %s\n", instr, reg_names[rn]);
 
     uint32_t pc_dest = gba->cpu->regs[rn];
 
-    // TODO this should be undefined behaviour only if jumping from a non word aligned address (with -4 or -2 offset? or none?) AND rn == REG_PC
-    if (rn == REG_PC)
-        todo("undefined behaviour");
+    // // // TODO this should be undefined behaviour only if jumping from a non word aligned address (with -4 or -2 offset? or none?) AND rn == REG_PC
+    // if (rn == REG_PC)
+    //     pc_dest += 4;
+    //     // todo("undefined behaviour");
 
     bool change_instr_set = GET_BIT(pc_dest, 0);
     // change cpu state to THUMB/ARM
@@ -2365,7 +2369,7 @@ decoder_rule_t thumb_decoder_rules[] = {
     {"01011*0*________", HANDLER_ID(thumb_ldr_reg_handler)},         // Load/store with register offset
     {"0101001*________", HANDLER_ID(thumb_strh_reg_handler)},        // Load/store with sign-extended byte/halfword
     {"0101**1*________", HANDLER_ID(thumb_ldrh_reg_handler)},        // Load/store with sign-extended byte/halfword
-    {"011*00**________", HANDLER_ID(thumb_strh_imm_handler)},        // Load/store with immediate offset
+    {"011*0***________", HANDLER_ID(thumb_strh_imm_handler)},        // Load/store with immediate offset
     {"011*1***________", HANDLER_ID(thumb_ldrh_imm_handler)},        // Load/store with immediate offset
     {"10000***________", HANDLER_ID(thumb_strh_handler)},            // Load/store halfword
     {"10001***________", HANDLER_ID(thumb_ldrh_handler)},            // Load/store halfword

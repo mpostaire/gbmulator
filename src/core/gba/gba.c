@@ -83,14 +83,26 @@ char *gba_get_rom_title(gba_t *gba) {
     return gba->rom_title;
 }
 
-uint16_t gba_get_joypad_state(gba_t *gba) {
-    return ((gba->bus->io_regs[IO_KEYINPUT + 1] << 8) | gba->bus->io_regs[IO_KEYINPUT]) & 0x03FF;
-}
-
 void gba_set_joypad_state(gba_t *gba, uint16_t state) {
     state &= 0x03FF;
 
     gba->bus->io_regs[IO_KEYINPUT] = state;
     gba->bus->io_regs[IO_KEYINPUT + 1] = state >> 8;
     // TODO interrupts
+}
+
+uint8_t *gba_get_save(gba_t *gba, size_t *save_length) {
+    todo();
+}
+
+bool gba_load_save(gba_t *gba, uint8_t *save_data, size_t save_length) {
+    todo();
+}
+
+uint8_t *gba_get_savestate(gba_t *gba, size_t *length, bool is_compressed) {
+    todo();
+}
+
+bool gba_load_savestate(gba_t *gba, uint8_t *data, size_t length) {
+    todo();
 }

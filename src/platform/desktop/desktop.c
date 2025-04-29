@@ -146,7 +146,7 @@ static gboolean printer_save_dialog_resume_loop = FALSE;
 static gboolean is_paused = TRUE, link_is_server = TRUE;
 static int steps_per_frame;
 static gbmulator_t *gb = NULL;
-static uint16_t joypad_state = 0xFF;
+static uint16_t joypad_state = 0xFFFF;
 static double accel_x, accel_y;
 static gb_printer_t *printer = NULL;
 

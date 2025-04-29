@@ -35,24 +35,7 @@ void gb_rewind(gb_t *gb);
  * Runs the emulator for one cpu step. If `gb` is linked to another device, it is also run for one step.
  * @returns the amount of cycles the emulator has run for
  */
-int gb_step(gb_t *gb);
-
-/**
- * Runs the emulator for the given amount of cpu steps (1 step == 4 cycles).
- * @param steps_limit the amount of steps the emulator will run for
- */
-static inline void gb_run_steps(gb_t *gb, long steps_limit) {
-    for (long steps_count = 0; steps_count < steps_limit; steps_count++)
-        gb_step(gb);
-}
-
-/**
- * Runs the emulator for the given amount of frames.
- * @param frames_limit the amount of frames the emulator will run for
- */
-static inline void gb_run_frames(gb_t *gb, long frames_limit) {
-    gb_run_steps(gb, frames_limit * GB_CPU_STEPS_PER_FRAME);
-}
+void gb_step(gb_t *gb);
 
 int gb_is_rom_valid(const uint8_t *rom);
 
@@ -120,9 +103,7 @@ void gb_joypad_press(gb_t *gb, joypad_button_t key);
 
 void gb_joypad_release(gb_t *gb, joypad_button_t key);
 
-uint8_t gb_get_joypad_state(gb_t *gb);
-
-void gb_set_joypad_state(gb_t *gb, uint8_t state);
+void gb_set_joypad_state(gb_t *gb, uint16_t state);
 
 uint8_t *gb_get_save(gb_t *gb, size_t *save_length);
 
