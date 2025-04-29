@@ -19,11 +19,11 @@ typedef struct {
     char link_host[INET6_ADDRSTRLEN];
     char link_port[6];
 
-    unsigned int gamepad_bindings[8];
+    unsigned int gamepad_bindings[10];
     keycode_parser_t gamepad_button_parser;
     keyname_parser_t gamepad_button_name_parser;
 
-    unsigned int keybindings[8];
+    unsigned int keybindings[10];
     keycode_filter_t keycode_filter;
     keycode_parser_t keycode_parser;
     keyname_parser_t keyname_parser;
