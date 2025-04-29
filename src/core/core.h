@@ -16,10 +16,7 @@
 #   define false 0
 #endif
 
-typedef struct {
-    gbmulator_mode_t mode;
-    void *impl;
-} gbmulator_t;
+typedef struct gbmulator_t gbmulator_t;
 
 gbmulator_t *gbmulator_init(const uint8_t *rom, size_t rom_size, gbmulator_options_t *opts);
 

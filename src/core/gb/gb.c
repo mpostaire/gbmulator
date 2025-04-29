@@ -77,7 +77,7 @@ void gb_rewind(gb_t *gb) {
     rewind_pop(gb);
 }
 
-static inline int gb_step_linked(gb_t *gb, uint8_t step_linked_device) {
+static inline void gb_step_linked(gb_t *gb, uint8_t step_linked_device) {
     if (gb->rewind_stack.states) {
         static size_t step_counter = 0;
         step_counter++;
@@ -114,12 +114,10 @@ static inline int gb_step_linked(gb_t *gb, uint8_t step_linked_device) {
         case LINK_TYPE_PRINTER: gb_printer_step(gb->link->linked_device.device); break;
         }
     }
-
-    return 4 << double_speed; // double_speed ? 8 : 4
 }
 
-int gb_step(gb_t *gb) {
-    return gb_step_linked(gb, 1);
+void gb_step(gb_t *gb) {
+    gb_step_linked(gb, 1);
 }
 
 int gb_is_rom_valid(const uint8_t *rom) {
@@ -364,11 +362,7 @@ void gb_joypad_release(gb_t *gb, joypad_button_t key) {
     joypad_release(gb, key);
 }
 
-uint8_t gb_get_joypad_state(gb_t *gb) {
-    return (gb->joypad->action & 0x0F) << 4 | (gb->joypad->direction & 0x0F);
-}
-
-void gb_set_joypad_state(gb_t *gb, uint8_t state) {
+void gb_set_joypad_state(gb_t *gb, uint16_t state) {
     gb_joypad_t *joypad = gb->joypad;
 
     uint8_t direction = state & 0x0F;

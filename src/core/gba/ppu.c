@@ -55,7 +55,7 @@ void gba_ppu_quit(gba_ppu_t *ppu) {
 static inline void draw_mode3(gba_t *gba) {
     gba_ppu_t *ppu = gba->ppu;
 
-    uint32_t pixel_addr_offset = gba->bus->io_regs[IO_VCOUNT] * GBA_SCREEN_WIDTH + ppu->x;
+    uint32_t pixel_addr_offset = (gba->bus->io_regs[IO_VCOUNT] << 1) * GBA_SCREEN_WIDTH + (ppu->x << 1);
 
     uint16_t color = gba_bus_read_half(gba, BUS_VRAM + pixel_addr_offset);
 
