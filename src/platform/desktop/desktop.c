@@ -155,14 +155,14 @@ static gboolean printer_window_allowed_to_close = FALSE;
 static gboolean printer_save_dialog_resume_loop = FALSE;
 static gboolean is_paused = TRUE, link_is_server = TRUE;
 static int steps_per_frame;
-static gbmulator_t *gb = NULL;
+static gbmulator_t *emu = NULL;
 static uint16_t joypad_state = 0xFFFF;
 static double accel_x, accel_y;
 static gb_printer_t *printer = NULL;
 
 static GCancellable *link_task_cancellable;
 static GTask *link_task;
-static gbmulator_t *linked_gb = NULL;
+static gbmulator_t *linked_emu = NULL;
 static int sfd = -1;
 
 static char *rom_path, *forced_save_path, *config_path;
@@ -320,20 +320,20 @@ static void show_toast(const char *text) {
 }
 
 static inline gboolean loop(gpointer user_data) {
-    gbmulator_set_joypad_state(gb, joypad_state);
+    gbmulator_set_joypad_state(emu, joypad_state);
 
     // // TODO async or timeout link_exchange_joypad to avoid blocking the gui
-    // if (linked_gb) {
-    //     if (!link_exchange_joypad(sfd, gb, linked_gb)) {
-    //         linked_gb = NULL;
+    // if (linked_emu) {
+    //     if (!link_exchange_joypad(sfd, emu, linked_emu)) {
+    //         linked_emu = NULL;
     //         sfd = -1;
     //         set_link_gui_actions(TRUE, TRUE);
     //         steps_per_frame = GB_CPU_STEPS_PER_FRAME * config.speed;
-    //         gb_set_apu_speed(gb, config.speed);
+    //         gb_set_apu_speed(emu, config.speed);
     //         show_toast("Link Cable disconnected");
     //     }
     // }
-    gbmulator_run_steps(gb, steps_per_frame);
+    gbmulator_run_steps(emu, steps_per_frame);
 
     gtk_gl_area_queue_render(GTK_GL_AREA(emu_gl_area));
 
@@ -446,7 +446,7 @@ static void set_accelerometer_data(double *x, double *y) {
 }
 
 static void toggle_pause(GSimpleAction *action, GVariant *parameter, gpointer app) {
-    if (gb && !linked_gb && !link_task) {
+    if (emu && !linked_emu && !link_task) {
         show_toast(is_paused ? "Resumed" : "Paused");
         toggle_loop();
     }
@@ -455,14 +455,14 @@ static void toggle_pause(GSimpleAction *action, GVariant *parameter, gpointer ap
 static void restart_emulator(AdwAlertDialog *self, gchar *response, gpointer user_data) {
     // if (!strncmp(response, "restart", 8)) {
     //     start_loop();
-    //     gb_reset(gb, config.mode);
-    //     gbmulator_print_status(gb);
+    //     gb_reset(emu, config.mode);
+    //     gbmulator_print_status(emu);
     //     alrenderer_clear_queue();
     // }
 }
 
 static void ask_restart_emulator(GSimpleAction *action, GVariant *parameter, gpointer app) {
-    if (gb && !linked_gb && !link_task) {
+    if (emu && !linked_emu && !link_task) {
         gamepad_state = GAMEPAD_DISABLED;
         adw_dialog_present(restart_dialog, main_window);
     }
@@ -499,10 +499,10 @@ void start_link_thread(GTask *task, gpointer source_object, gpointer task_data, 
     //     sfd = link_connect_to_server(config.link_host, config.link_port);
 
     // gb_t *new_linked_gb;
-    // if (sfd > 0 && link_init_transfer(sfd, gb, &new_linked_gb)) {
-    //     linked_gb = new_linked_gb;
+    // if (sfd > 0 && link_init_transfer(sfd, emu, &new_linked_gb)) {
+    //     linked_emu = new_linked_gb;
     //     steps_per_frame = GB_CPU_STEPS_PER_FRAME;
-    //     gb_set_apu_speed(gb, 1.0f);
+    //     gb_set_apu_speed(emu, 1.0f);
     //     g_task_return_boolean(link_task, TRUE);
     // } else {
     //     g_task_return_boolean(link_task, FALSE);
@@ -512,7 +512,7 @@ void start_link_thread(GTask *task, gpointer source_object, gpointer task_data, 
 
 static void link_dialog_response(GtkDialog *self, gint response_id, gpointer user_data) {
     gtk_window_close(GTK_WINDOW(self));
-    if (response_id != GTK_RESPONSE_OK || !gb)
+    if (response_id != GTK_RESPONSE_OK || !emu)
         return;
 
     stop_loop();
@@ -531,7 +531,7 @@ static void link_dialog_response(GtkDialog *self, gint response_id, gpointer use
 }
 
 static void show_link_emu_dialog(GSimpleAction *action, GVariant *parameter, gpointer app) {
-    if (!gb)
+    if (!emu)
         return;
 
     gamepad_state = GAMEPAD_DISABLED;
@@ -539,11 +539,11 @@ static void show_link_emu_dialog(GSimpleAction *action, GVariant *parameter, gpo
 }
 
 static void show_printer_window(GSimpleAction *action, GVariant *parameter, gpointer app) {
-    // if (!gb)
+    // if (!emu)
     //     return;
 
     // printer = gb_printer_init(printer_new_line_cb, printer_start_cb, printer_finish_cb);
-    // gb_link_connect_printer(gb, printer);
+    // gb_link_connect_printer(emu, printer);
     // set_link_gui_actions(FALSE, FALSE);
     // gamepad_state = GAMEPAD_DISABLED;
     // gtk_window_present(GTK_WINDOW(printer_window));
@@ -559,12 +559,12 @@ static void show_printer_window(GSimpleAction *action, GVariant *parameter, gpoi
 // }
 
 static int load_cartridge(char *path) {
-    if (!gb && !path) return 0;
+    if (!emu && !path) return 0;
 
-    if (gb) {
+    if (emu) {
         stop_loop();
         char *save_path = get_save_path(rom_path);
-        save_battery_to_file(gb, forced_save_path ? forced_save_path : save_path);
+        save_battery_to_file(emu, forced_save_path ? forced_save_path : save_path);
         free(save_path);
     }
 
@@ -582,7 +582,7 @@ static int load_cartridge(char *path) {
             return 0;
         }
     } else {
-        // uint8_t *data = gb_get_rom(gb, &rom_size);
+        // uint8_t *data = gb_get_rom(emu, &rom_size);
         // rom = xmalloc(rom_size);
         // memcpy(rom, data, rom_size);
         todo("");
@@ -606,13 +606,13 @@ static int load_cartridge(char *path) {
     load_battery_from_file(new_emu, forced_save_path ? forced_save_path : save_path);
     free(save_path);
 
-    if (gb) {
-        // if (linked_gb)
+    if (emu) {
+        // if (linked_emu)
         //     on_link_disconnect();
-        gbmulator_quit(gb);
+        gbmulator_quit(emu);
     }
-    gb = new_emu;
-    gbmulator_print_status(gb);
+    emu = new_emu;
+    gbmulator_print_status(emu);
     alrenderer_clear_queue();
 
     if (config.mode == GBMULATOR_MODE_GBA) {
@@ -629,17 +629,17 @@ static int load_cartridge(char *path) {
     };
     g_action_map_add_action_entries(G_ACTION_MAP(app), app_entries, G_N_ELEMENTS(app_entries), app);
 
-    adw_window_title_set_subtitle(ADW_WINDOW_TITLE(window_title), gbmulator_get_rom_title(gb));
+    adw_window_title_set_subtitle(ADW_WINDOW_TITLE(window_title), gbmulator_get_rom_title(emu));
     set_emu_gl_area_size();
 
-    // if (gb_has_accelerometer(gb)) {
+    // if (gb_has_accelerometer(emu)) {
     //     motion_event_handler = g_signal_connect(motion_event_controller, "motion", G_CALLBACK(mouse_motion), NULL);
     // } else if (motion_event_handler) {
     //     g_signal_handler_disconnect(motion_event_controller, motion_event_handler);
     //     motion_event_handler = 0;
     // }
 
-    // if (gb_has_camera(gb))
+    // if (gb_has_camera(emu))
     //     camera_play();
     // else
     //     camera_pause();
@@ -653,8 +653,8 @@ static int load_cartridge(char *path) {
 static void set_speed(GtkRange *self, gpointer user_data) {
     // config.speed = gtk_range_get_value(self);
     // steps_per_frame = GB_CPU_STEPS_PER_FRAME * config.speed;
-    // if (gb)
-    //     gb_set_apu_speed(gb, config.speed);
+    // if (emu)
+    //     gb_set_apu_speed(emu, config.speed);
 }
 
 static void set_sound(GtkRange *self, gpointer user_data) {
@@ -669,8 +669,8 @@ static void set_sound_drc(AdwSwitchRow *self, gpointer user_data) {
 
 static void set_palette(AdwComboRow *self, GParamSpec *pspec, gpointer user_data) {
     // config.color_palette = adw_combo_row_get_selected(self);
-    // if (gb)
-    //     gb_set_palette(gb, config.color_palette);
+    // if (emu)
+    //     gb_set_palette(emu, config.color_palette);
 }
 
 static void set_keybinding(GtkDialog *self, gint response_id, gpointer user_data) {
@@ -756,7 +756,7 @@ static void set_camera(AdwComboRow *self, GParamSpec *pspec, gpointer user_data)
     // if (selected_camera < len) {
     //     camera_quit();
     //     camera_init((*paths)[selected_camera]);
-    //     if (gb_has_camera(gb))
+    //     if (gb_has_camera(emu))
     //         camera_play();
     // }
 }
@@ -830,7 +830,7 @@ static void open_btn_clicked(AdwActionRow *self, gpointer user_data) {
 
         g_autoptr(GtkFileFilter) filter = gtk_file_filter_new();
         // add basic extension pattern in case the mime type is not available
-        gtk_file_filter_add_pattern(filter, "*.gb");
+        gtk_file_filter_add_pattern(filter, "*.emu");
         gtk_file_filter_add_pattern(filter, "*.gbc");
         gtk_file_filter_add_pattern(filter, "*.gba");
         gtk_file_filter_add_mime_type(filter, "application/x-gameboy-rom");
@@ -961,13 +961,13 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
         return TRUE;
     }
 
-    // if (keyval == GDK_KEY_r && gb && !linked_gb) {
-    //     gb_rewind(gb);
+    // if (keyval == GDK_KEY_r && emu && !linked_emu) {
+    //     gb_rewind(emu);
     //     stop_loop();
     //     return TRUE;
     // }
 
-    if (!gb || is_paused) return FALSE;
+    if (!emu || is_paused) return FALSE;
 
     switch (keyval) {
     case GDK_KEY_F11:
@@ -980,21 +980,21 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
     case GDK_KEY_F3: case GDK_KEY_F4:
     case GDK_KEY_F5: case GDK_KEY_F6:
     case GDK_KEY_F7: case GDK_KEY_F8:
-        // if (linked_gb)
-        //     return TRUE;
+        if (linked_emu)
+            return TRUE;
 
-        // char *savestate_path = get_savestate_path(rom_path, keyval - GDK_KEY_F1);
-        // if (state & GDK_SHIFT_MASK) {
-        //     save_state_to_file(gb, savestate_path, 1);
-        // } else {
-        //     int ret = load_state_from_file(gb, savestate_path);
-        //     if (ret > 0) {
-        //         config.mode = ret;
-        //         adw_combo_row_set_selected(ADW_COMBO_ROW(mode_setter), config.mode);
-        //         set_emu_gl_area_size();
-        //     }
-        // }
-        // free(savestate_path);
+        char *savestate_path = get_savestate_path(rom_path, keyval - GDK_KEY_F1);
+        if (state & GDK_SHIFT_MASK) {
+            save_state_to_file(emu, savestate_path, 1);
+        } else {
+            int ret = load_state_from_file(emu, savestate_path);
+            if (ret > 0) {
+                config.mode = ret;
+                adw_combo_row_set_selected(ADW_COMBO_ROW(mode_setter), config.mode);
+                set_emu_gl_area_size();
+            }
+        }
+        free(savestate_path);
         return TRUE;
     }
 
@@ -1006,12 +1006,12 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
 }
 
 static gboolean key_released_main(GtkEventControllerKey *self, guint keyval, guint keycode, GdkModifierType state, gpointer user_data) {
-    if (keyval == GDK_KEY_r && gb && !linked_gb) {
+    if (keyval == GDK_KEY_r && emu && !linked_emu) {
         start_loop();
         return TRUE;
     }
 
-    if (!gb || is_paused) return FALSE;
+    if (!emu || is_paused) return FALSE;
 
     // don't use gb_joypad_release() here as we want to keep track of the joypad state and set it once per loop for link cable synchronization
     int joypad = keycode_to_joypad(&config, keyval);
@@ -1070,7 +1070,7 @@ static void gamepad_button_press_event_cb(ManetteDevice *emitter, ManetteEvent *
     case GAMEPAD_DISABLED:
         break;
     case GAMEPAD_PLAYING:;
-        if (!gb || is_paused) return;
+        if (!emu || is_paused) return;
         if (manette_event_get_button(event, &button)) {
             int joypad = button_to_joypad(&config, button);
             if (joypad < 0) return;
@@ -1089,7 +1089,7 @@ static void gamepad_button_release_event_cb(ManetteDevice *emitter, ManetteEvent
     case GAMEPAD_DISABLED:
         break;
     case GAMEPAD_PLAYING:
-        if (!gb || is_paused) return;
+        if (!emu || is_paused) return;
         guint16 button;
         if (manette_event_get_button(event, &button)) {
             int joypad = button_to_joypad(&config, button);
@@ -1115,7 +1115,7 @@ static void gamepad_connected_cb(ManetteMonitor *self, ManetteDevice *device, gp
 }
 
 static void secondary_window_hide_cb(GtkWidget *self, gpointer user_data) {
-    gamepad_state = (!gb || is_paused) ? GAMEPAD_DISABLED : GAMEPAD_PLAYING;
+    gamepad_state = (!emu || is_paused) ? GAMEPAD_DISABLED : GAMEPAD_PLAYING;
 }
 
 static gboolean printer_window_close_request_cb(GtkWindow *self, gpointer user_data) {
@@ -1130,7 +1130,7 @@ static gboolean printer_window_close_request_cb(GtkWindow *self, gpointer user_d
 
 static void printer_quit_dialog_response_cb(AdwMessageDialog *self, gchar *response, gpointer user_data) {
     // if (!strncmp(response, "disconnect", 11)) {
-    //     gb_link_disconnect(gb);
+    //     gb_link_disconnect(emu);
     //     gb_printer_quit(printer);
     //     printer = NULL;
     //     clear_printer_gl_area();
@@ -1380,11 +1380,11 @@ static void activate_cb(GtkApplication *app) {
 }
 
 static void shutdown_cb(GtkApplication *app) {
-    if (gb) {
+    if (emu) {
         char *save_path = get_save_path(rom_path);
-        save_battery_to_file(gb, forced_save_path ? forced_save_path : save_path);
+        save_battery_to_file(emu, forced_save_path ? forced_save_path : save_path);
         free(save_path);
-        gbmulator_quit(gb);
+        gbmulator_quit(emu);
     }
     config_save_to_file(&config, config_path);
     free(config_path);

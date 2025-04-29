@@ -133,10 +133,12 @@ void load_battery_from_file(gbmulator_t *emu, const char *path) {
 }
 
 int save_state_to_file(gbmulator_t *emu, const char *path, int compressed) {
-    make_parent_dirs(path);
-
     size_t len;
     uint8_t *buf = gbmulator_get_savestate(emu, &len, compressed);
+    if (!buf)
+        return 0;
+
+    make_parent_dirs(path);
 
     FILE *f = fopen(path, "wb");
     if (!f) {
@@ -145,7 +147,7 @@ int save_state_to_file(gbmulator_t *emu, const char *path, int compressed) {
     }
 
     if (!fwrite(buf, len, 1, f)) {
-        eprintf("writing savestate to %s\n", path);
+        errnoprintf("writing savestate to %s", path);
         fclose(f);
         free(buf);
         return 0;
