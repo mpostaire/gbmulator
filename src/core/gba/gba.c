@@ -110,3 +110,8 @@ bool gba_load_savestate(gba_t *gba, uint8_t *data, size_t length) {
     // TODO
     return false;
 }
+
+uint8_t *gba_get_rom(gba_t *gba, size_t *rom_size) {
+    *rom_size = gba->bus->rom_size;
+    return gba->bus->game_rom;
+}

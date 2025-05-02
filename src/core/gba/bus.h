@@ -167,7 +167,7 @@ typedef struct {
     uint8_t game_rom[BUS_GAME_ROM1 - BUS_GAME_ROM0];
     uint8_t game_sram[BUS_GAME_UNUSED - BUS_GAME_SRAM];
 
-    bool is_writeable;
+    size_t rom_size;
 } gba_bus_t;
 
 uint8_t gba_bus_read_byte(gba_t *gba, uint32_t address);
