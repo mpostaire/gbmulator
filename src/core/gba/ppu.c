@@ -33,9 +33,9 @@
 
 #define SET_PIXEL_COLOR(gba, x, y, c)            \
     do {                                         \
-        uint8_t r = color & 0x001F;              \
-        uint8_t g = (color >> 5) & 0x001F;       \
-        uint8_t b = (color >> 10) & 0x001F;      \
+        uint8_t r = c & 0x001F;                  \
+        uint8_t g = (c >> 5) & 0x001F;           \
+        uint8_t b = (c >> 10) & 0x001F;          \
         r = (r << 3) | (r >> 2);                 \
         g = (g << 3) | (g >> 2);                 \
         b = (b << 3) | (b >> 2);                 \
@@ -76,6 +76,22 @@ static inline void draw_mode4(gba_t *gba) {
     SET_PIXEL_COLOR(gba, ppu->x, gba->bus->io_regs[IO_VCOUNT], color);
 }
 
+static inline void draw_mode5(gba_t *gba) {
+    gba_ppu_t *ppu = gba->ppu;
+
+    if (gba->bus->io_regs[IO_VCOUNT] >= 128 || ppu->x >= 160) {
+        SET_PIXEL_COLOR(gba, ppu->x, gba->bus->io_regs[IO_VCOUNT], 0xFFFF); // TODO what color in this case?
+        return;
+    }
+
+    uint32_t pixel_base_addr = BUS_VRAM + (PPU_GET_FRAME(gba) * 0xA000);
+    uint32_t pixel_addr_offset = (gba->bus->io_regs[IO_VCOUNT] << 1) * 160 + (ppu->x << 1);
+
+    uint16_t color = gba_bus_read_half(gba, pixel_base_addr + pixel_addr_offset);
+
+    SET_PIXEL_COLOR(gba, ppu->x, gba->bus->io_regs[IO_VCOUNT], color);
+}
+
 void gba_ppu_step(gba_t *gba) {
     gba_ppu_t *ppu = gba->ppu;
 
@@ -102,6 +118,7 @@ void gba_ppu_step(gba_t *gba) {
             draw_mode4(gba);
             break;
         case PPU_MODE5:
+            draw_mode5(gba);
             break;
         default:
             todo();
