@@ -41,3 +41,5 @@ char *gbmulator_get_rom_title(gbmulator_t *emu);
 void gbmulator_print_status(gbmulator_t *emu);
 
 void gbmulator_set_joypad_state(gbmulator_t *emu, uint16_t state);
+
+uint8_t *gbmulator_get_rom(gbmulator_t *emu, size_t *rom_size);

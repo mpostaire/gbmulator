@@ -48,14 +48,14 @@ static config_t config = {
     .link_port = "7777",
 
     .gamepad_bindings = {
-        BTN_DPAD_RIGHT,
-        BTN_DPAD_LEFT,
-        BTN_DPAD_UP,
-        BTN_DPAD_DOWN,
         BTN_A,
         BTN_B,
         BTN_SELECT,
         BTN_START,
+        BTN_DPAD_RIGHT,
+        BTN_DPAD_LEFT,
+        BTN_DPAD_UP,
+        BTN_DPAD_DOWN,
         BTN_TR,
         BTN_TL,
     },
@@ -63,14 +63,14 @@ static config_t config = {
     .gamepad_button_name_parser = (keyname_parser_t) gamepad_button_name_parser,
 
     .keybindings = {
-        GDK_KEY_Right,
-        GDK_KEY_Left,
-        GDK_KEY_Up,
-        GDK_KEY_Down,
         GDK_KEY_KP_0,
         GDK_KEY_period,
         GDK_KEY_KP_2,
         GDK_KEY_KP_1,
+        GDK_KEY_Right,
+        GDK_KEY_Left,
+        GDK_KEY_Up,
+        GDK_KEY_Down,
         GDK_KEY_KP_5,
         GDK_KEY_KP_4,
     },
@@ -93,27 +93,27 @@ typedef struct {
 } setter_handler_t;
 
 static setter_handler_t key_handlers[] = {
-    { "key_setter_right", "key_setter_right_label", 0, NULL },
-    { "key_setter_left", "key_setter_left_label", 1, NULL },
-    { "key_setter_up", "key_setter_up_label", 2, NULL },
-    { "key_setter_down", "key_setter_down_label", 3, NULL },
     { "key_setter_a", "key_setter_a_label", 4, NULL },
     { "key_setter_b", "key_setter_b_label", 5, NULL },
     { "key_setter_select", "key_setter_select_label", 6, NULL },
     { "key_setter_start", "key_setter_start_label", 7, NULL },
+    { "key_setter_right", "key_setter_right_label", 0, NULL },
+    { "key_setter_left", "key_setter_left_label", 1, NULL },
+    { "key_setter_up", "key_setter_up_label", 2, NULL },
+    { "key_setter_down", "key_setter_down_label", 3, NULL },
     { "key_setter_r", "key_setter_r_label", 8, NULL },
     { "key_setter_l", "key_setter_l_label", 9, NULL }
 };
 
 static setter_handler_t gamepad_handlers[] = {
-    { "gamepad_setter_right", "gamepad_setter_right_label", 0, NULL },
-    { "gamepad_setter_left", "gamepad_setter_left_label", 1, NULL },
-    { "gamepad_setter_up", "gamepad_setter_up_label", 2, NULL },
-    { "gamepad_setter_down", "gamepad_setter_down_label", 3, NULL },
     { "gamepad_setter_a", "gamepad_setter_a_label", 4, NULL },
     { "gamepad_setter_b", "gamepad_setter_b_label", 5, NULL },
     { "gamepad_setter_select", "gamepad_setter_select_label", 6, NULL },
     { "gamepad_setter_start", "gamepad_setter_start_label", 7, NULL },
+    { "gamepad_setter_right", "gamepad_setter_right_label", 0, NULL },
+    { "gamepad_setter_left", "gamepad_setter_left_label", 1, NULL },
+    { "gamepad_setter_up", "gamepad_setter_up_label", 2, NULL },
+    { "gamepad_setter_down", "gamepad_setter_down_label", 3, NULL },
     { "gamepad_setter_r", "gamepad_setter_r_label", 8, NULL },
     { "gamepad_setter_l", "gamepad_setter_l_label", 9, NULL }
 };
@@ -582,10 +582,9 @@ static int load_cartridge(char *path) {
             return 0;
         }
     } else {
-        // uint8_t *data = gb_get_rom(emu, &rom_size);
-        // rom = xmalloc(rom_size);
-        // memcpy(rom, data, rom_size);
-        todo("");
+        uint8_t *data = gbmulator_get_rom(emu, &rom_size);
+        rom = xmalloc(rom_size);
+        memcpy(rom, data, rom_size);
     }
 
     gbmulator_options_t opts = {

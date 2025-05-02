@@ -110,6 +110,62 @@
                     <object class="AdwPreferencesGroup">
                         <property name="title">Keyboard bindings</property>
                         <child>
+                            <object class="AdwActionRow" id="key_setter_a">
+                                <property name="title">A</property>
+                                <property name="activatable">true</property>
+                                <child>
+                                    <object class="GtkLabel" id="key_setter_a_label">
+                                        <style>
+                                            <class name="dim-label"/>
+                                        </style>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+
+                        <child>
+                            <object class="AdwActionRow" id="key_setter_b">
+                                <property name="title">B</property>
+                                <property name="activatable">true</property>
+                                <child>
+                                    <object class="GtkLabel" id="key_setter_b_label">
+                                        <style>
+                                            <class name="dim-label"/>
+                                        </style>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+
+                        <child>
+                            <object class="AdwActionRow" id="key_setter_select">
+                                <property name="title">Select</property>
+                                <property name="activatable">true</property>
+                                <child>
+                                    <object class="GtkLabel" id="key_setter_select_label">
+                                        <style>
+                                            <class name="dim-label"/>
+                                        </style>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+
+                        <child>
+                            <object class="AdwActionRow" id="key_setter_start">
+                                <property name="title">Start</property>
+                                <property name="activatable">true</property>
+                                <child>
+                                    <object class="GtkLabel" id="key_setter_start_label">
+                                        <style>
+                                            <class name="dim-label"/>
+                                        </style>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+
+                        <child>
                             <object class="AdwActionRow" id="key_setter_right">
                                 <property name="title">Right</property>
                                 <property name="activatable">true</property>
@@ -167,62 +223,6 @@
                         </child>
 
                         <child>
-                            <object class="AdwActionRow" id="key_setter_a">
-                                <property name="title">A</property>
-                                <property name="activatable">true</property>
-                                <child>
-                                    <object class="GtkLabel" id="key_setter_a_label">
-                                        <style>
-                                            <class name="dim-label"/>
-                                        </style>
-                                    </object>
-                                </child>
-                            </object>
-                        </child>
-
-                        <child>
-                            <object class="AdwActionRow" id="key_setter_b">
-                                <property name="title">B</property>
-                                <property name="activatable">true</property>
-                                <child>
-                                    <object class="GtkLabel" id="key_setter_b_label">
-                                        <style>
-                                            <class name="dim-label"/>
-                                        </style>
-                                    </object>
-                                </child>
-                            </object>
-                        </child>
-
-                        <child>
-                            <object class="AdwActionRow" id="key_setter_select">
-                                <property name="title">Select</property>
-                                <property name="activatable">true</property>
-                                <child>
-                                    <object class="GtkLabel" id="key_setter_select_label">
-                                        <style>
-                                            <class name="dim-label"/>
-                                        </style>
-                                    </object>
-                                </child>
-                            </object>
-                        </child>
-
-                        <child>
-                            <object class="AdwActionRow" id="key_setter_start">
-                                <property name="title">Start</property>
-                                <property name="activatable">true</property>
-                                <child>
-                                    <object class="GtkLabel" id="key_setter_start_label">
-                                        <style>
-                                            <class name="dim-label"/>
-                                        </style>
-                                    </object>
-                                </child>
-                            </object>
-                        </child>
-
-                        <child>
                             <object class="AdwActionRow" id="key_setter_r">
                                 <property name="title">R</property>
                                 <property name="activatable">true</property>
@@ -255,62 +255,6 @@
                 <child>
                     <object class="AdwPreferencesGroup">
                         <property name="title">Game controller bindings</property>
-                        <child>
-                            <object class="AdwActionRow" id="gamepad_setter_right">
-                                <property name="title">Right</property>
-                                <property name="activatable">true</property>
-
-                                <child>
-                                    <object class="GtkLabel" id="gamepad_setter_right_label">
-                                        <style>
-                                            <class name="dim-label"/>
-                                        </style>
-                                    </object>
-                                </child>
-                            </object>
-                        </child>
-
-                        <child>
-                            <object class="AdwActionRow" id="gamepad_setter_left">
-                                <property name="title">Left</property>
-                                <property name="activatable">true</property>
-                                <child>
-                                    <object class="GtkLabel" id="gamepad_setter_left_label">
-                                        <style>
-                                            <class name="dim-label"/>
-                                        </style>
-                                    </object>
-                                </child>
-                            </object>
-                        </child>
-
-                        <child>
-                            <object class="AdwActionRow" id="gamepad_setter_up">
-                                <property name="title">Up</property>
-                                <property name="activatable">true</property>
-                                <child>
-                                    <object class="GtkLabel" id="gamepad_setter_up_label">
-                                        <style>
-                                            <class name="dim-label"/>
-                                        </style>
-                                    </object>
-                                </child>
-                            </object>
-                        </child>
-
-                        <child>
-                            <object class="AdwActionRow" id="gamepad_setter_down">
-                                <property name="title">Down</property>
-                                <property name="activatable">true</property>
-                                <child>
-                                    <object class="GtkLabel" id="gamepad_setter_down_label">
-                                        <style>
-                                            <class name="dim-label"/>
-                                        </style>
-                                    </object>
-                                </child>
-                            </object>
-                        </child>
 
                         <child>
                             <object class="AdwActionRow" id="gamepad_setter_a">
@@ -360,6 +304,63 @@
                                 <property name="activatable">true</property>
                                 <child>
                                     <object class="GtkLabel" id="gamepad_setter_start_label">
+                                        <style>
+                                            <class name="dim-label"/>
+                                        </style>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+
+                        <child>
+                            <object class="AdwActionRow" id="gamepad_setter_right">
+                                <property name="title">Right</property>
+                                <property name="activatable">true</property>
+
+                                <child>
+                                    <object class="GtkLabel" id="gamepad_setter_right_label">
+                                        <style>
+                                            <class name="dim-label"/>
+                                        </style>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+
+                        <child>
+                            <object class="AdwActionRow" id="gamepad_setter_left">
+                                <property name="title">Left</property>
+                                <property name="activatable">true</property>
+                                <child>
+                                    <object class="GtkLabel" id="gamepad_setter_left_label">
+                                        <style>
+                                            <class name="dim-label"/>
+                                        </style>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+
+                        <child>
+                            <object class="AdwActionRow" id="gamepad_setter_up">
+                                <property name="title">Up</property>
+                                <property name="activatable">true</property>
+                                <child>
+                                    <object class="GtkLabel" id="gamepad_setter_up_label">
+                                        <style>
+                                            <class name="dim-label"/>
+                                        </style>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+
+                        <child>
+                            <object class="AdwActionRow" id="gamepad_setter_down">
+                                <property name="title">Down</property>
+                                <property name="activatable">true</property>
+                                <child>
+                                    <object class="GtkLabel" id="gamepad_setter_down_label">
                                         <style>
                                             <class name="dim-label"/>
                                         </style>
