@@ -405,10 +405,10 @@ static void io_regs_write_byte(gba_t *gba, uint16_t address, uint8_t data) {
         todo("IO_VCOUNT\n");
         break;
     case IO_BG0CNT ... IO_BG0CNT + 1:
-        todo("IO_BG0CNT\n");
+        LOG_DEBUG("IO_BG0CNT\n");
         break;
     case IO_BG1CNT ... IO_BG1CNT + 1:
-        todo("IO_BG1CNT\n");
+        LOG_DEBUG("IO_BG1CNT\n");
         break;
     case IO_BG2CNT ... IO_BG2CNT + 1:
         todo("IO_BG2CNT\n");
@@ -417,10 +417,10 @@ static void io_regs_write_byte(gba_t *gba, uint16_t address, uint8_t data) {
         todo("IO_BG3CNT\n");
         break;
     case IO_BG0HOFS ... IO_BG0HOFS + 1:
-        todo("IO_BG0HOFS\n");
+        LOG_DEBUG("IO_BG0HOFS\n");
         break;
     case IO_BG0VOFS ... IO_BG0VOFS + 1:
-        todo("IO_BG0VOFS\n");
+        LOG_DEBUG("IO_BG0VOFS\n");
         break;
     case IO_BG1HOFS ... IO_BG1HOFS + 1:
         todo("IO_BG1HOFS\n");
