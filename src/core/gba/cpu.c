@@ -890,19 +890,26 @@ static bool mov_handler(gba_t *gba, uint32_t instr) {
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
+    bool s = CHECK_BIT(instr, 20);
 
     LOG_DEBUG("(0x%08X) MOV%s%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], op2);
 
     gba->cpu->regs[rd] = op2;
 
+    if (rd == REG_PC) {
+        if (s) {
+            uint8_t old_mode = CPSR_GET_MODE(gba->cpu);
+            gba->cpu->cpsr = gba->cpu->spsr[regs_mode_hashes[old_mode & 0x0F]];
+            bank_registers(gba->cpu, old_mode, CPSR_GET_MODE(gba->cpu));
+        }
+
+        flush_pipeline(gba);
+        return false;
+    }
+
     if (set_flags) {
         compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
-    }
-
-    if (rd == REG_PC) {
-        flush_pipeline(gba);
-        return false;
     }
 
     return true;
@@ -1482,6 +1489,7 @@ void gba_cpu_step(gba_t *gba) {
         LOG_DEBUG("execute: 0x%0*X\n", 1 << pc_increment_shift, instr);
         for (size_t i = 0; i < sizeof(cpu->regs) / sizeof(*cpu->regs); i++)
             LOG_DEBUG("\t%s=0x%08X\n", reg_names[i], gba->cpu->regs[i]);
+        LOG_DEBUG("\tCPSR=0x%08X\n", gba->cpu->cpsr);
 #endif
 
         if (CPSR_CHECK_FLAG(gba->cpu, CPSR_T)) {
@@ -2166,8 +2174,27 @@ static bool thumb_pop_handler(gba_t *gba, uint32_t instr) {
     return true;
 }
 
+static bool thumb_swi_handler(gba_t *gba, uint32_t instr) {
+    LOG_DEBUG("(0x%04X) SWI\n", instr);
+
+    gba->cpu->spsr[regs_mode_hashes[CPSR_MODE_SVC & 0x0F]] = gba->cpu->cpsr;
+
+    bank_registers(gba->cpu, CPSR_GET_MODE(gba->cpu), CPSR_MODE_SVC);
+    CPSR_SET_MODE(gba->cpu, CPSR_MODE_SVC);
+
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_T, 0);
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_I, 1);
+
+    gba->cpu->regs[REG_LR] = gba->cpu->regs[REG_PC] - 2; // store addr of next instr before jumping
+    gba->cpu->regs[REG_PC] = VECTOR_SOFTWARE_INTERRUPT;
+
+    flush_pipeline(gba);
+
+    return false;
+}
+
 static bool thumb_b_cond_handler(gba_t *gba, uint32_t instr) {
-    int8_t soffset8 = ((int8_t) (instr & 0xFF)) << 1;
+    uint32_t soffset8 = (uint32_t) ((int8_t) (instr & 0xFF)) << 1;
     uint8_t cond = (instr >> 8) & 0x0F;
 
     if (!verif_cond(gba->cpu, cond))
@@ -2289,6 +2316,7 @@ static bool thumb_bl_handler(gba_t *gba, uint32_t instr) {
     X(thumb_pop_handler)             \
     X(thumb_stm_handler)             \
     X(thumb_ldm_handler)             \
+    X(thumb_swi_handler)             \
     X(thumb_b_cond_handler)          \
     X(thumb_b_handler)               \
     X(thumb_bl_handler)
@@ -2381,10 +2409,10 @@ decoder_rule_t thumb_decoder_rules[] = {
     {"1011110*________", HANDLER_ID(thumb_pop_handler)},             // Push/pop registers
     {"11000***________", HANDLER_ID(thumb_stm_handler)},             // Multiple load/store
     {"11001***________", HANDLER_ID(thumb_ldm_handler)},             // Multiple load/store
+    {"11011111________", HANDLER_ID(thumb_swi_handler)},             // Software interrupt
     {"1101****________", HANDLER_ID(thumb_b_cond_handler)},          // Conditonal branch
     {"11100***________", HANDLER_ID(thumb_b_handler)},               // Unconditional branch
     {"1111****________", HANDLER_ID(thumb_bl_handler)},              // Long branch with link
-    // {"11011111________", HANDLER_ID(thumb_sw_int_handler)}, // Software interrupt
 };
 
 uint8_t get_handler(uint32_t instr, decoder_rule_t *decoder_rules, size_t decoder_rules_size) {
