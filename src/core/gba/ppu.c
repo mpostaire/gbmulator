@@ -187,8 +187,8 @@ static inline void draw_obj(gba_t *gba) {
     if (ppu->scanline_cycles < OBJ_FETCH_DELAY || (ppu->scanline_cycles % PIXEL_CYCLES) != PIXEL_CYCLES - 1)
         return;
 
-    uint32_t x = (ppu->scanline_cycles - OBJ_FETCH_DELAY) / PIXEL_CYCLES;
-    uint32_t y = gba->bus->io_regs[IO_VCOUNT];
+    int32_t x = (ppu->scanline_cycles - OBJ_FETCH_DELAY) / PIXEL_CYCLES;
+    int32_t y = gba->bus->io_regs[IO_VCOUNT];
 
     if (x >= GBA_SCREEN_WIDTH)
         return;
@@ -199,14 +199,18 @@ static inline void draw_obj(gba_t *gba) {
 
     uint32_t attrs01 = gba_bus_read_word(gba, BUS_OAM + (obj_id * 6));
 
-    uint8_t obj_y = attrs01 & 0xFF;
+    int32_t obj_y = attrs01 & 0xFF;
+    if (obj_y >= GBA_SCREEN_HEIGHT)
+        obj_y -= 256;
     uint8_t om = (attrs01 >> 8) & 0x03;
     uint8_t gm = (attrs01 >> 10) & 0x03;
     bool mos = CHECK_BIT(attrs01, 12);
     bool is_8bpp = CHECK_BIT(attrs01, 13);
     uint8_t sh = (attrs01 >> 14) & 0x03;
 
-    uint8_t obj_x = (attrs01 >> 16) & 0xFF;
+    int32_t obj_x = (attrs01 >> 16) & 0x01FF;
+    if (obj_x >= GBA_SCREEN_WIDTH)
+        obj_x -= 512;
     bool flip_x = CHECK_BIT(attrs01, 28);
     bool flip_y = CHECK_BIT(attrs01, 29);
     uint8_t sz = (attrs01 >> 30) & 0x03;
@@ -217,7 +221,9 @@ static inline void draw_obj(gba_t *gba) {
         {{8, 16}, {8, 32}, {16, 32}, {32, 64}}
     };
 
-    // TODO prevent obj_dims OOB
+    if (sh == 0b11)
+        todo("forbidden");
+
     uint8_t obj_w = obj_dims[sh][sz][0];
     uint8_t obj_h = obj_dims[sh][sz][1];
 
