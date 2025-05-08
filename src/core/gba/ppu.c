@@ -69,7 +69,7 @@ static inline uint8_t render_text_tile_8bpp(gba_t *gba, uint32_t tile_base_addr,
     return gba_bus_read_byte(gba, char_data_addr);
 }
 
-static inline uint8_t render_text_tile_4bpp(gba_t *gba, uint32_t tile_base_addr, uint16_t tile_id, uint32_t x, uint32_t y, bool flip_x, bool flip_y, uint8_t palette_index_hi) {
+static inline uint8_t render_text_tile_4bpp(gba_t *gba, uint32_t tile_base_addr, uint16_t tile_id, uint32_t x, uint32_t y, bool flip_x, bool flip_y) {
     uint32_t tile_x = x % 8;
     uint32_t tile_y = y % 8;
 
@@ -95,7 +95,7 @@ static inline uint8_t render_text_tile_4bpp(gba_t *gba, uint32_t tile_base_addr,
 
     uint8_t palette_index_lo = char_data & 0x0F;
 
-    return (palette_index_hi << 4) | palette_index_lo;
+    return palette_index_lo;
 }
 
 static inline void draw_text_bg(gba_t *gba, uint8_t bg, uint32_t x, uint32_t y) {
@@ -172,8 +172,9 @@ static inline void draw_text_bg(gba_t *gba, uint8_t bg, uint32_t x, uint32_t y) 
     if (is_8bpp) {
         ppu->line_layers[bg][x] = render_text_tile_8bpp(gba, char_base, tile_id, base_x, base_y, flip_x, flip_y);
     } else { // 4bpp
-        uint8_t palette_index_hi = (sbe >> 12) & 0x0F;
-        ppu->line_layers[bg][x] = render_text_tile_4bpp(gba, char_base, tile_id, base_x, base_y, flip_x, flip_y, palette_index_hi);
+        uint8_t palette_bank = (sbe >> 12) & 0x0F;
+        // store palette bank in hi byte of line layer to be used by compositing step later
+        ppu->line_layers[bg][x] = (palette_bank << 8) | render_text_tile_4bpp(gba, char_base, tile_id, base_x, base_y, flip_x, flip_y);
     }
 }
 
@@ -227,7 +228,7 @@ static inline void draw_obj(gba_t *gba) {
     uint8_t obj_w = obj_dims[sh][sz][0];
     uint8_t obj_h = obj_dims[sh][sz][1];
 
-    bool ignore_pixel = om == 0b10 || y < obj_y || y > obj_y + obj_h || x < obj_x || x > obj_x + obj_w;
+    bool ignore_pixel = om == 0b10 || y < obj_y || y >= obj_y + obj_h || x < obj_x || x >= obj_x + obj_w;
     if (ignore_pixel) {
         ppu->line_layers[4][x] = 0;
         return;
@@ -253,8 +254,9 @@ static inline void draw_obj(gba_t *gba) {
     if (is_8bpp) {
         ppu->line_layers[4][x] = render_text_tile_8bpp(gba, VRAM_OBJ_BASE_ADDR, tile_id, x - obj_x, y - obj_y, flip_x, flip_y);
     } else { // 4bpp
-        uint8_t palette_index_hi = (attr2 >> 12) & 0x0F;
-        ppu->line_layers[4][x] = render_text_tile_4bpp(gba, VRAM_OBJ_BASE_ADDR, tile_id, x - obj_x, y - obj_y, flip_x, flip_y, palette_index_hi);
+        uint8_t palette_bank = (attr2 >> 12) & 0x0F;
+        // store palette bank in hi byte of line layer to be used by compositing step later
+        ppu->line_layers[4][x] = (palette_bank << 8) | render_text_tile_4bpp(gba, VRAM_OBJ_BASE_ADDR, tile_id, x - obj_x, y - obj_y, flip_x, flip_y);
     }
 }
 
@@ -407,9 +409,12 @@ static inline void compositing(gba_t *gba) {
         if (mode == 3 || mode == 5) {
             color = ppu->line_layers[i][x];
         } else {
-            uint16_t palette_index = ppu->line_layers[i][x];
-            // TODO palette_index can be != 0 but still should be transparent --> in 4bpp the hi nibble may be != 0 but we should only loot at the lo nibble
+            uint16_t palette_bank = ppu->line_layers[i][x] >> 8;
+            uint16_t palette_index = ppu->line_layers[i][x] & 0x0F;
+
             if (palette_index != 0) {
+                if (palette_bank)
+                    palette_index |= palette_bank << 4;
                 uint32_t palette_base_addr = i == 4 ? BUS_PALETTE_RAM + 0x0200 : BUS_PALETTE_RAM;
                 color = gba_bus_read_half(gba, palette_base_addr + (palette_index << 1));
             }
