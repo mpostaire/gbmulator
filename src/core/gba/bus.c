@@ -71,7 +71,7 @@ static uint8_t io_regs_read_byte(gba_t *gba, uint16_t address) {
         LOG_DEBUG("IO_GREENSWAP\n");
         break;
     case IO_DISPSTAT ... IO_DISPSTAT + 1:
-        todo("IO_DISPSTAT\n");
+        LOG_DEBUG("IO_DISPSTAT\n");
         break;
     case IO_VCOUNT ... IO_VCOUNT + 1:
         LOG_DEBUG("IO_VCOUNT\n");
