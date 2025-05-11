@@ -16,8 +16,6 @@
 #define VBLANK_CYCLES (SCANLINE_CYCLES * VBLANK_HEIGHT)
 #define REFRESH_CYCLES (VDRAW_CYCLES + VBLANK_CYCLES)
 
-#define PPU_GET_MODE(gba) (gba)->bus->io_regs[IO_DISPCNT] & 0x07
-
 #define PPU_GET_FRAME(gba) GET_BIT((gba)->bus->io_regs[IO_DISPCNT], 4)
 
 #define VRAM_OBJ_BASE_ADDR (BUS_VRAM + (4 * 0x4000))
@@ -333,7 +331,7 @@ static inline void draw_bg_mode3(gba_t *gba) {
 
         ppu->line_layers[2][x] = gba_bus_read_half(gba, pixel_base_addr + pixel_addr_offset);
     } else {
-        ppu->line_layers[2][x] = gba_bus_read_half(gba, BUS_PALETTE_RAM);
+        ppu->line_layers[2][x] = gba_bus_read_half(gba, BUS_PRAM);
     }
 }
 
@@ -379,7 +377,7 @@ static inline void draw_bg_mode5(gba_t *gba) {
     
         ppu->line_layers[2][x] = gba_bus_read_half(gba, pixel_base_addr + pixel_addr_offset);
     } else {
-        ppu->line_layers[2][x] = gba_bus_read_half(gba, BUS_PALETTE_RAM);
+        ppu->line_layers[2][x] = gba_bus_read_half(gba, BUS_PRAM);
     }
 }
 
@@ -399,7 +397,7 @@ static inline void compositing(gba_t *gba) {
 
     uint8_t mode = PPU_GET_MODE(gba);
 
-    uint16_t color = gba_bus_read_half(gba, BUS_PALETTE_RAM); // backdrop color
+    uint16_t color = gba_bus_read_half(gba, BUS_PRAM); // backdrop color
 
     for (uint8_t i = 0; i < 5; i++) {
         bool bg_enabled = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT + 1], i);
@@ -415,7 +413,7 @@ static inline void compositing(gba_t *gba) {
             if (palette_index != 0) {
                 if (palette_bank)
                     palette_index |= palette_bank << 4;
-                uint32_t palette_base_addr = i == 4 ? BUS_PALETTE_RAM + 0x0200 : BUS_PALETTE_RAM;
+                uint32_t palette_base_addr = i == 4 ? BUS_PRAM + 0x0200 : BUS_PRAM;
                 color = gba_bus_read_half(gba, palette_base_addr + (palette_index << 1));
             }
         }
@@ -460,7 +458,6 @@ void gba_ppu_step(gba_t *gba) {
             draw_bg_mode5(gba);
             break;
         default:
-            todo();
             break;
         }
 
