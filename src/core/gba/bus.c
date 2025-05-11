@@ -717,24 +717,30 @@ static void io_regs_write_byte(gba_t *gba, uint16_t address, uint8_t data) {
     gba->bus->io_regs[address] = data;
 }
 
-static void *bus_access(gba_t *gba, uint32_t address, bool is_write) {
+static void *bus_access(gba_t *gba, uint32_t address, uint8_t size, bool is_write) {
     gba_bus_t *bus = gba->bus;
 
     switch (address) {
     case BUS_BIOS_ROM ... BUS_BIOS_ROM_UNUSED - 1:
         return is_write ? NULL : &bus->bios_rom[address - BUS_BIOS_ROM];
-    case BUS_WRAM_BOARD ... BUS_WRAM_BOARD_UNUSED - 1:
-        return &bus->wram_board[address - BUS_WRAM_BOARD];
-    case BUS_WRAM_CHIP ... BUS_WRAM_CHIP_UNUSED - 1:
-        return &bus->wram_chip[address - BUS_WRAM_CHIP];
+    case BUS_EWRAM ... BUS_IWRAM - 1:
+        return &bus->ewram[(address - BUS_EWRAM) % (BUS_EWRAM_UNUSED - BUS_EWRAM)];
+    case BUS_IWRAM ... BUS_IO_REGS - 1:
+        return &bus->iwram[(address - BUS_IWRAM) % (BUS_IWRAM_UNUSED - BUS_IWRAM)];
     case BUS_IO_REGS ... BUS_IO_REGS_UNUSED - 1:
         return bus->io_regs;
-    case BUS_PALETTE_RAM ... BUS_PALETTE_RAM_UNUSED - 1:
-        return &bus->palette_ram[address - BUS_PALETTE_RAM];
-    case BUS_VRAM ... BUS_VRAM_UNUSED - 1:
-        return &bus->vram[address - BUS_VRAM];
-    case BUS_OAM ... BUS_OAM_UNUSED - 1:
-        return &bus->oam[address - BUS_OAM];
+    case BUS_PRAM ... BUS_VRAM - 1:
+        return &bus->palette_ram[(address - BUS_PRAM) % (BUS_PRAM_UNUSED - BUS_PRAM)];
+    case BUS_VRAM ... BUS_OAM - 1:
+        uint32_t vram_upper_bound = PPU_GET_MODE(gba) < 3 ? 0x10000 : 0x14000;
+        address = (address - (BUS_VRAM_UNUSED + 0x8000)) % 0x20000;
+        if (address >= vram_upper_bound && address >= 0x18000)
+            return is_write ? NULL : &bus->vram[address % 0x8000];
+        return &bus->vram[address % 0x20000];
+    case BUS_OAM ... BUS_GAME_ROM0 - 1:
+        if (is_write && size == 1)
+            return NULL;
+        return &bus->oam[(address - BUS_OAM_UNUSED) % (BUS_OAM_UNUSED - BUS_OAM)];
     case BUS_GAME_ROM0 ... BUS_GAME_ROM1 - 1:
         return is_write ? NULL : &bus->game_rom[address - BUS_GAME_ROM0];
     case BUS_GAME_ROM1 ... BUS_GAME_ROM2 - 1:
@@ -749,7 +755,7 @@ static void *bus_access(gba_t *gba, uint32_t address, bool is_write) {
 }
 
 uint8_t gba_bus_read_byte(gba_t *gba, uint32_t address) {
-    uint8_t *ret = bus_access(gba, address, false);
+    uint8_t *ret = bus_access(gba, address, 1, false);
 
     if (ret == gba->bus->io_regs)
         return io_regs_read_byte(gba, address - BUS_IO_REGS);
@@ -760,7 +766,7 @@ uint8_t gba_bus_read_byte(gba_t *gba, uint32_t address) {
 uint16_t gba_bus_read_half(gba_t *gba, uint32_t address) {
     address = ALIGN(address, 2);
 
-    uint16_t *ret = bus_access(gba, address, false);
+    uint16_t *ret = bus_access(gba, address, 2, false);
 
     if ((uint8_t *) ret == gba->bus->io_regs) {
         address -= BUS_IO_REGS;
@@ -774,7 +780,7 @@ uint16_t gba_bus_read_half(gba_t *gba, uint32_t address) {
 uint32_t gba_bus_read_word(gba_t *gba, uint32_t address) {
     address = ALIGN(address, 4);
 
-    uint32_t *ret = bus_access(gba, address, false);
+    uint32_t *ret = bus_access(gba, address, 4, false);
 
     if ((uint8_t *) ret == gba->bus->io_regs) {
         address -= BUS_IO_REGS;
@@ -788,21 +794,25 @@ uint32_t gba_bus_read_word(gba_t *gba, uint32_t address) {
 }
 
 void gba_bus_write_byte(gba_t *gba, uint32_t address, uint8_t data) {
-    uint8_t *ret = bus_access(gba, address, true);
+    uint8_t *ret = bus_access(gba, address, 1, true);
 
     if ((uint8_t *) ret == gba->bus->io_regs) {
         io_regs_write_byte(gba, address - BUS_IO_REGS, data);
         return;
     }
 
-    if (ret)
+    if (ret) {
+        if (address >= BUS_PRAM && address < BUS_OAM)
+            *((uint16_t *) ret) = (data << 8) | data;
+        else
         *ret = data;
+    }
 }
 
 void gba_bus_write_half(gba_t *gba, uint32_t address, uint16_t data) {
     address = ALIGN(address, 2);
 
-    uint16_t *ret = bus_access(gba, address, true);
+    uint16_t *ret = bus_access(gba, address, 2, true);
 
     if ((uint8_t *) ret == gba->bus->io_regs) {
         address -= BUS_IO_REGS;
@@ -818,7 +828,7 @@ void gba_bus_write_half(gba_t *gba, uint32_t address, uint16_t data) {
 void gba_bus_write_word(gba_t *gba, uint32_t address, uint32_t data) {
     address = ALIGN(address, 4);
 
-    uint32_t *ret = bus_access(gba, address, true);
+    uint32_t *ret = bus_access(gba, address, 4, true);
 
     if ((uint8_t *) ret == gba->bus->io_regs) {
         address -= BUS_IO_REGS;
