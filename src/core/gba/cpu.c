@@ -505,9 +505,9 @@ static bool mull_handler(gba_t *gba, uint32_t instr) {
 
     uint64_t res;
     if (u)
-        res = (uint64_t) gba->cpu->regs[rm] * (uint64_t) gba->cpu->regs[rs];
-    else
         res = ((int64_t) (int32_t) gba->cpu->regs[rm]) * ((int64_t) (int32_t) gba->cpu->regs[rs]);
+    else
+        res = (uint64_t) gba->cpu->regs[rm] * (uint64_t) gba->cpu->regs[rs];
 
     gba->cpu->regs[rdhi] = res >> 32;
     gba->cpu->regs[rdlo] = res;
@@ -531,9 +531,9 @@ static bool mlal_handler(gba_t *gba, uint32_t instr) {
     uint64_t res;
     uint64_t acc = ((uint64_t) gba->cpu->regs[rdhi] << 32) | gba->cpu->regs[rdlo];
     if (u)
-        res = ((uint64_t) gba->cpu->regs[rm] * (uint64_t) gba->cpu->regs[rs]) + acc;
-    else
         res = (((int64_t) (int32_t) gba->cpu->regs[rm]) * ((int64_t) (int32_t) gba->cpu->regs[rs])) + (int64_t) acc;
+    else
+        res = ((uint64_t) gba->cpu->regs[rm] * (uint64_t) gba->cpu->regs[rs]) + acc;
 
     gba->cpu->regs[rdhi] = res >> 32;
     gba->cpu->regs[rdlo] = res;
