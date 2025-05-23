@@ -2,6 +2,10 @@
 
 #include "gba.h"
 
+#define REG_SP 13 // Stack Pointer
+#define REG_LR 14 // Link Register
+#define REG_PC 15 // Program Counter
+
 typedef struct {
     uint32_t regs[16];
 
@@ -19,4 +23,4 @@ void gba_cpu_step(gba_t *gba);
 
 void gba_cpu_init(gba_t *gba);
 
-void gba_cpu_quit(gba_cpu_t *cpu);
+void gba_cpu_quit(gba_t *gba);

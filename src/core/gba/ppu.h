@@ -22,6 +22,6 @@ typedef struct {
 
 void gba_ppu_init(gba_t *gba);
 
-void gba_ppu_quit(gba_ppu_t *ppu);
+void gba_ppu_quit(gba_t *gba);
 
 void gba_ppu_step(gba_t *gba);

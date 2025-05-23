@@ -167,6 +167,8 @@ typedef struct {
     uint8_t game_rom[BUS_GAME_ROM1 - BUS_GAME_ROM0];
     uint8_t game_sram[BUS_GAME_UNUSED - BUS_GAME_SRAM];
 
+    uint32_t last_fetched_bios_intr;
+
     size_t rom_size;
 } gba_bus_t;
 
@@ -184,4 +186,4 @@ void gba_bus_write_word(gba_t *gba, uint32_t address, uint32_t data);
 
 bool gba_bus_init(gba_t *gba, const uint8_t *rom, size_t rom_size);
 
-void gba_bus_quit(gba_bus_t *bus);
+void gba_bus_quit(gba_t *gba);
