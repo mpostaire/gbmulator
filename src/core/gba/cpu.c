@@ -15,10 +15,6 @@
 #define CYCLE_N 1
 #define CYCLE_S 1
 
-#define REG_SP 13 // Stack Pointer
-#define REG_LR 14 // Link Register
-#define REG_PC 15 // Program Counter
-
 #define PIPELINE_FETCHING 0
 #define PIPELINE_DECODING 1
 
@@ -1440,6 +1436,13 @@ static inline bool verif_cond(gba_cpu_t *cpu, cond_t cond) {
 void gba_cpu_step(gba_t *gba) {
     gba_cpu_t *cpu = gba->cpu;
 
+    if (gba->dma->active_channels)
+        return;
+
+    if (gba->bus->io_regs[IO_IME] && (gba->bus->io_regs[IO_IE] & gba->bus->io_regs[IO_IF])) {
+        todo("interrupt: %x", gba->bus->io_regs[IO_IE] & gba->bus->io_regs[IO_IF]);
+    }
+
     LOG_DEBUG(
         "--------\n[PC=0x%08X] [COND=%c%c%c%c %c%c%c]\n",
         cpu->regs[REG_PC],
@@ -1461,6 +1464,9 @@ void gba_cpu_step(gba_t *gba) {
         pc_increment_shift = 2;
         fetched_instr = gba_bus_read_word(gba, cpu->regs[REG_PC]);
     }
+
+    if (cpu->regs[REG_PC] < BUS_BIOS_ROM_UNUSED - 1)
+        gba->bus->last_fetched_bios_intr = fetched_instr;
 
     uint32_t instr = cpu->pipeline[PIPELINE_DECODING];
 
@@ -2176,7 +2182,7 @@ static bool thumb_pop_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool thumb_swi_handler(gba_t *gba, uint32_t instr) {
-    LOG_DEBUG("(0x%04X) SWI\n", instr);
+    LOG_DEBUG("(0x%04X) SWI %d\n", instr, instr & 0xFF);
 
     gba->cpu->spsr[regs_mode_hashes[CPSR_MODE_SVC & 0x0F]] = gba->cpu->cpsr;
 
@@ -2226,7 +2232,7 @@ static bool thumb_b_handler(gba_t *gba, uint32_t instr) {
 
 static bool thumb_bl_handler(gba_t *gba, uint32_t instr) {
     bool h = CHECK_BIT(instr, 11);
-    int16_t offset = instr & 0x07FF;
+    uint32_t offset = instr & 0x07FF;
 
     if (h) { // instruction 2
         uint32_t tmp = gba->cpu->regs[REG_PC] - 2;
@@ -2454,7 +2460,7 @@ void gba_cpu_init(gba_t *gba) {
     CPSR_SET_MODE(gba->cpu, CPSR_MODE_SVC);
 
     // TODO what are reg values at reset?
-    // gba->cpu->regs[REG_PC] = VECTOR_RESET;
+    gba->cpu->regs[REG_PC] = VECTOR_RESET;
 
     // TODO reg values after bios boot, remove to boot from bios directly
     CPSR_SET_MODE(gba->cpu, CPSR_MODE_SYS);
@@ -2489,6 +2495,6 @@ void gba_cpu_init(gba_t *gba) {
     }
 }
 
-void gba_cpu_quit(gba_cpu_t *cpu) {
-    free(cpu);
+void gba_cpu_quit(gba_t *gba) {
+    free(gba->cpu);
 }

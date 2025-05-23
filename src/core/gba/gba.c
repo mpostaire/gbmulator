@@ -10,6 +10,8 @@ static const char *makers[] = {
 void gba_step(gba_t *gba) {
     gba_cpu_step(gba);
     gba_ppu_step(gba);
+    gba_tmr_step(gba);
+    gba_dma_step(gba);
 }
 
 gba_t *gba_init(const uint8_t *rom, size_t rom_size, gbmulator_options_t *opts) {
@@ -22,6 +24,8 @@ gba_t *gba_init(const uint8_t *rom, size_t rom_size, gbmulator_options_t *opts) 
 
     gba_cpu_init(gba);
     gba_ppu_init(gba);
+    gba_tmr_init(gba);
+    gba_dma_init(gba);
 
     gba->on_new_frame = opts->on_new_frame;
     gba->on_new_sample = opts->on_new_sample;
@@ -32,9 +36,11 @@ gba_t *gba_init(const uint8_t *rom, size_t rom_size, gbmulator_options_t *opts) 
 }
 
 void gba_quit(gba_t *gba) {
-    gba_cpu_quit(gba->cpu);
-    gba_bus_quit(gba->bus);
-    gba_ppu_quit(gba->ppu);
+    gba_cpu_quit(gba);
+    gba_bus_quit(gba);
+    gba_ppu_quit(gba);
+    gba_tmr_quit(gba);
+    gba_dma_quit(gba);
     free(gba);
 }
 
@@ -87,7 +93,6 @@ void gba_set_joypad_state(gba_t *gba, uint16_t state) {
     state &= 0x03FF;
 
     gba->bus->io_regs[IO_KEYINPUT] = state;
-    gba->bus->io_regs[IO_KEYINPUT + 1] = state >> 8;
     // TODO interrupts
 }
 

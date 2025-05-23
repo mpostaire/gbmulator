@@ -722,7 +722,11 @@ static void *bus_access(gba_t *gba, uint32_t address, uint8_t size, bool is_writ
 
     switch (address) {
     case BUS_BIOS_ROM ... BUS_BIOS_ROM_UNUSED - 1:
-        return is_write ? NULL : &bus->bios_rom[address - BUS_BIOS_ROM];
+        if (is_write)
+            return NULL;
+        if (gba->cpu->regs[REG_PC] >= BUS_BIOS_ROM_UNUSED)
+            return &gba->bus->last_fetched_bios_intr;
+        return &bus->bios_rom[address - BUS_BIOS_ROM];
     case BUS_EWRAM ... BUS_IWRAM - 1:
         return &bus->ewram[(address - BUS_EWRAM) % (BUS_EWRAM_UNUSED - BUS_EWRAM)];
     case BUS_IWRAM ... BUS_IO_REGS - 1:
@@ -852,7 +856,7 @@ bool gba_bus_init(gba_t *gba, const uint8_t *rom, size_t rom_size) {
     memcpy(gba->bus->game_rom, rom, rom_size);
 
     if (!gba_parse_cartridge(gba)) {
-        gba_bus_quit(gba->bus);
+        gba_bus_quit(gba);
         return false;
     }
 
@@ -864,7 +868,7 @@ bool gba_bus_init(gba_t *gba, const uint8_t *rom, size_t rom_size) {
     // TODO do not load bios from hardcoded file path
     FILE *f = fopen("src/bootroms/gba/gba_bios.bin", "r");
     if (!f) {
-        gba_bus_quit(gba->bus);
+        gba_bus_quit(gba);
         return false;
     }
 
@@ -878,6 +882,6 @@ bool gba_bus_init(gba_t *gba, const uint8_t *rom, size_t rom_size) {
     return true;
 }
 
-void gba_bus_quit(gba_bus_t *bus) {
-    free(bus);
+void gba_bus_quit(gba_t *gba) {
+    free(gba->bus);
 }

@@ -1,5 +1,4 @@
 #include "gba_priv.h"
-#include "ppu.h"
 
 #define VBLANK_HEIGHT 68
 
@@ -43,8 +42,8 @@ void gba_ppu_init(gba_t *gba) {
     gba->ppu = xcalloc(1, sizeof(*gba->ppu));
 }
 
-void gba_ppu_quit(gba_ppu_t *ppu) {
-    free(ppu);
+void gba_ppu_quit(gba_t *gba) {
+    free(gba->ppu);
 }
 
 static inline uint8_t render_text_tile_8bpp(gba_t *gba, uint32_t tile_base_addr, uint16_t tile_id, uint32_t x, uint32_t y, bool flip_x, bool flip_y) {
