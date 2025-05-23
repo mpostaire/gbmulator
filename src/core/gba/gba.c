@@ -90,9 +90,7 @@ char *gba_get_rom_title(gba_t *gba) {
 }
 
 void gba_set_joypad_state(gba_t *gba, uint16_t state) {
-    state &= 0x03FF;
-
-    gba->bus->io_regs[IO_KEYINPUT] = state;
+    gba->bus->io_regs[IO_KEYINPUT] = state & 0x03FF;
     // TODO interrupts
 }
 

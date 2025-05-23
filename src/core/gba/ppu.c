@@ -98,22 +98,22 @@ static inline uint8_t render_text_tile_4bpp(gba_t *gba, uint32_t tile_base_addr,
 static inline void draw_text_bg(gba_t *gba, uint8_t bg, uint32_t x, uint32_t y) {
     gba_ppu_t *ppu = gba->ppu;
 
-    uint16_t bgxcnt = IO_BG0CNT + (bg * 2);
-    uint16_t bgxvofs = IO_BG0VOFS + (bg * 2);
-    uint16_t bgxhofs = IO_BG0HOFS + (bg * 2);
+    uint16_t bgxcnt = IO_BG0CNT + bg;
+    uint16_t bgxvofs = IO_BG0VOFS + bg;
+    uint16_t bgxhofs = IO_BG0HOFS + bg;
 
     uint8_t priority = gba->bus->io_regs[bgxcnt] & 0x03;
     uint8_t char_base_block = (gba->bus->io_regs[bgxcnt] >> 2) & 0x03;
     bool mosaic = CHECK_BIT(gba->bus->io_regs[bgxcnt], 6);
     bool is_8bpp = CHECK_BIT(gba->bus->io_regs[bgxcnt], 7);
-    uint8_t screen_base_block = gba->bus->io_regs[bgxcnt + 1] & 0x1F;
-    uint8_t screen_size = (gba->bus->io_regs[bgxcnt + 1] >> 6) & 0x03;
+    uint8_t screen_base_block = (gba->bus->io_regs[bgxcnt] >> 8) & 0x1F;
+    uint8_t screen_size = (gba->bus->io_regs[bgxcnt] >> 14) & 0x03;
 
     uint16_t n_tiles_x = CHECK_BIT(screen_size, 0) ? 64 : 32;
     uint16_t n_tiles_y = CHECK_BIT(screen_size, 1) ? 64 : 32;
 
-    uint32_t voffset = (gba->bus->io_regs[bgxvofs + 1] & 0x03) << 8 | gba->bus->io_regs[bgxvofs];
-    uint32_t hoffset = (gba->bus->io_regs[bgxhofs + 1] & 0x03) << 8 | gba->bus->io_regs[bgxhofs];
+    uint32_t voffset = gba->bus->io_regs[bgxvofs] & 0x03FF;
+    uint32_t hoffset = gba->bus->io_regs[bgxhofs] & 0x03FF;
 
     uint32_t base_x = x + hoffset;
     base_x %= n_tiles_x * 8;
@@ -270,7 +270,7 @@ static inline void draw_bg_mode0(gba_t *gba) {
         return;
 
     for (uint8_t bg = 0; bg < 4; bg++)
-        if (CHECK_BIT(gba->bus->io_regs[IO_DISPCNT + 1], bg))
+        if (CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], bg + 8))
             draw_text_bg(gba, bg, x, y);
 }
 
@@ -287,10 +287,10 @@ static inline void draw_bg_mode1(gba_t *gba) {
         return;
 
     for (uint8_t bg = 0; bg < 2; bg++)
-        if (CHECK_BIT(gba->bus->io_regs[IO_DISPCNT + 1], bg))
+        if (CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], bg + 8))
             draw_text_bg(gba, bg, x, y);
 
-    if (CHECK_BIT(gba->bus->io_regs[IO_DISPCNT + 1], 2))
+    if (CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], 10))
         draw_affine_bg(gba, 2, x, y);
 }
 
@@ -307,7 +307,7 @@ static inline void draw_bg_mode2(gba_t *gba) {
         return;
 
     for (uint8_t bg = 2; bg < 4; bg++)
-        if (CHECK_BIT(gba->bus->io_regs[IO_DISPCNT + 1], bg))
+        if (CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], bg + 8))
             draw_affine_bg(gba, bg, x, y);
 }
 
@@ -323,7 +323,7 @@ static inline void draw_bg_mode3(gba_t *gba) {
     if (x >= GBA_SCREEN_WIDTH)
         return;
 
-    bool display_bg2 = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT + 1], 2);
+    bool display_bg2 = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], 10);
     if (display_bg2) {
         uint32_t pixel_base_addr = BUS_VRAM;
         uint32_t pixel_addr_offset = (y << 1) * GBA_SCREEN_WIDTH + (x << 1);
@@ -346,7 +346,7 @@ static inline void draw_bg_mode4(gba_t *gba) {
     if (x >= GBA_SCREEN_WIDTH)
         return;
 
-    bool display_bg2 = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT + 1], 2);
+    bool display_bg2 = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], 10);
     if (display_bg2) {
         uint32_t pixel_base_addr = BUS_VRAM + (PPU_GET_FRAME(gba) * 0xA000);
         uint32_t pixel_addr_offset = y * GBA_SCREEN_WIDTH + x;
@@ -369,7 +369,7 @@ static inline void draw_bg_mode5(gba_t *gba) {
     if (x >= GBA_SCREEN_WIDTH)
         return;
 
-    bool display_bg2 = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT + 1], 2);
+    bool display_bg2 = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], 10);
     if (display_bg2 || x >= 160 || y >= 128) {
         uint32_t pixel_base_addr = BUS_VRAM + (PPU_GET_FRAME(gba) * 0xA000);
         uint32_t pixel_addr_offset = (y << 1) * 160 + (x << 1);
@@ -399,7 +399,7 @@ static inline void compositing(gba_t *gba) {
     uint16_t color = gba_bus_read_half(gba, BUS_PRAM); // backdrop color
 
     for (uint8_t i = 0; i < 5; i++) {
-        bool bg_enabled = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT + 1], i);
+        bool bg_enabled = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], i + 8);
         if (!bg_enabled)
             continue;
 
@@ -435,7 +435,7 @@ void gba_ppu_step(gba_t *gba) {
         case 0:
             draw_bg_mode0(gba);
 
-            if (CHECK_BIT(gba->bus->io_regs[IO_DISPCNT + 1], 4))
+            if (CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], 12))
                 draw_obj(gba);
             break;
         case 1:
@@ -444,7 +444,7 @@ void gba_ppu_step(gba_t *gba) {
         case 2:
             draw_bg_mode2(gba);
 
-            if (CHECK_BIT(gba->bus->io_regs[IO_DISPCNT + 1], 4))
+            if (CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], 12))
                 draw_obj(gba);
             break;
         case 3:
