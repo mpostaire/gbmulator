@@ -160,35 +160,40 @@ handler_t handlers[];
 uint8_t arm_handlers[1 << 12];
 uint8_t thumb_handlers[1 << 8];
 
-static inline void compute_flags_nz(gba_cpu_t *cpu, uint32_t res) {
+static inline void set_flags_nz_32(gba_cpu_t *cpu, uint32_t res) {
     CPSR_CHANGE_FLAG(cpu, CPSR_N, res >> 31);
+    CPSR_CHANGE_FLAG(cpu, CPSR_Z, res == 0);
+}
+
+static inline void set_flags_nz_64(gba_cpu_t *cpu, uint64_t res) {
+    CPSR_CHANGE_FLAG(cpu, CPSR_N, res >> 63);
     CPSR_CHANGE_FLAG(cpu, CPSR_Z, res == 0);
 }
 
 #define ADD_SET_FLAGS(cpu, res, op1, op2)                                            \
     do {                                                                             \
-        compute_flags_nz((cpu), (res));                                              \
+        set_flags_nz_32((cpu), (res));                                              \
         CPSR_CHANGE_FLAG((cpu), CPSR_C, (res) < (op1));                              \
         CPSR_CHANGE_FLAG((cpu), CPSR_V, (~((op1) ^ (op2)) & ((op2) ^ (res))) >> 31); \
     } while (0)
 
 #define ADC_SET_FLAGS(cpu, res64, op1, op2)                                                         \
     do {                                                                                            \
-        compute_flags_nz((cpu), (res64));                                                           \
+        set_flags_nz_32((cpu), (res64));                                                           \
         CPSR_CHANGE_FLAG((cpu), CPSR_C, GET_BIT(res64, 32));                                        \
         CPSR_CHANGE_FLAG((cpu), CPSR_V, (~((op1) ^ (op2)) & ((op2) ^ ((uint32_t) (res64)))) >> 31); \
     } while (0)
 
 #define SUB_SET_FLAGS(cpu, res, op1, op2)                                           \
     do {                                                                            \
-        compute_flags_nz((cpu), (res));                                             \
+        set_flags_nz_32((cpu), (res));                                             \
         CPSR_CHANGE_FLAG((cpu), CPSR_C, (op2) <= (op1));                            \
         CPSR_CHANGE_FLAG((cpu), CPSR_V, (((op1) ^ (op2)) & ((op1) ^ (res))) >> 31); \
     } while (0)
 
 #define SBC_SET_FLAGS(cpu, res, op1, op2)                                           \
     do {                                                                            \
-        compute_flags_nz((cpu), (res));                                             \
+        set_flags_nz_32((cpu), (res));                                             \
         CPSR_CHANGE_FLAG((cpu), CPSR_C, (op2) <= (op1));                            \
         CPSR_CHANGE_FLAG((cpu), CPSR_V, (((op1) ^ (op2)) & ((op1) ^ (res))) >> 31); \
     } while (0)
@@ -453,7 +458,7 @@ static bool mul_handler(gba_t *gba, uint32_t instr) {
     gba->cpu->regs[rd] = gba->cpu->regs[rm] * gba->cpu->regs[rs];
 
     if (s)
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
 
     if (rd == REG_PC) {
         flush_pipeline(gba);
@@ -475,7 +480,7 @@ static bool mla_handler(gba_t *gba, uint32_t instr) {
     gba->cpu->regs[rd] = (gba->cpu->regs[rm] * gba->cpu->regs[rs]) + gba->cpu->regs[rn];
 
     if (s)
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
 
     if (rd == REG_PC) {
         flush_pipeline(gba);
@@ -505,7 +510,7 @@ static bool mull_handler(gba_t *gba, uint32_t instr) {
     gba->cpu->regs[rdlo] = res;
 
     if (s)
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rdlo]);
+        set_flags_nz_64(gba->cpu, res);
 
     return true;
 }
@@ -531,7 +536,7 @@ static bool mlal_handler(gba_t *gba, uint32_t instr) {
     gba->cpu->regs[rdlo] = res;
 
     if (s)
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rdlo]);
+        set_flags_nz_64(gba->cpu, res);
 
     return true;
 }
@@ -570,7 +575,7 @@ static bool and_handler(gba_t *gba, uint32_t instr) {
     gba->cpu->regs[rd] = op1 & op2;
 
     if (set_flags) {
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
     }
 
@@ -675,7 +680,7 @@ static bool eor_handler(gba_t *gba, uint32_t instr) {
     LOG_DEBUG("(0x%08X) EOR%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[(instr & 0x000F0000) >> 16], op2);
 
     if (set_flags) {
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
     }
 
@@ -856,7 +861,7 @@ static bool rsc_handler(gba_t *gba, uint32_t instr) {
     gba->cpu->regs[rd] = res;
 
     if (set_flags)
-        SBC_SET_FLAGS(gba->cpu, res, op1, (uint64_t) op2 + (uint64_t) tmp);
+        SBC_SET_FLAGS(gba->cpu, res, (uint64_t) op2 + (uint64_t) tmp, op1);
 
     if (rd == REG_PC) {
         if (s) {
@@ -885,7 +890,7 @@ static bool tst_handler(gba_t *gba, uint32_t instr) {
     uint32_t res = op1 & op2;
 
     if (set_flags) {
-        compute_flags_nz(gba->cpu, res);
+        set_flags_nz_32(gba->cpu, res);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
     }
 
@@ -913,7 +918,7 @@ static bool teq_handler(gba_t *gba, uint32_t instr) {
     uint32_t res = op1 ^ op2;
 
     if (set_flags) {
-        compute_flags_nz(gba->cpu, res);
+        set_flags_nz_32(gba->cpu, res);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
     }
 
@@ -993,7 +998,7 @@ static bool orr_handler(gba_t *gba, uint32_t instr) {
     gba->cpu->regs[rd] = op1 | op2;
 
     if (set_flags) {
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
     }
 
@@ -1035,7 +1040,7 @@ static bool mov_handler(gba_t *gba, uint32_t instr) {
     }
 
     if (set_flags) {
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
     }
 
@@ -1055,7 +1060,7 @@ static bool bic_handler(gba_t *gba, uint32_t instr) {
     gba->cpu->regs[rd] = op1 & ~op2;
 
     if (set_flags) {
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
     }
 
@@ -1086,7 +1091,7 @@ static bool mvn_handler(gba_t *gba, uint32_t instr) {
     gba->cpu->regs[rd] = ~op2;
 
     if (set_flags) {
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
     }
 
@@ -1595,6 +1600,8 @@ static inline bool verif_cond(gba_cpu_t *cpu, cond_t cond) {
     }
 }
 
+// TODO test cpu using json tests
+
 void gba_cpu_step(gba_t *gba) {
     gba_cpu_t *cpu = gba->cpu;
 
@@ -1699,7 +1706,7 @@ static bool thumb_lsl_handler(gba_t *gba, uint32_t instr) {
 
     bool c = CPSR_CHECK_FLAG(gba->cpu, CPSR_C);
     gba->cpu->regs[rd] = shift_offset(gba->cpu, 0b00, gba->cpu->regs[rs], offset5, true, &c);
-    compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+    set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
 
     return true;
@@ -1714,7 +1721,7 @@ static bool thumb_lsr_handler(gba_t *gba, uint32_t instr) {
 
     bool c = CPSR_CHECK_FLAG(gba->cpu, CPSR_C);
     gba->cpu->regs[rd] = shift_offset(gba->cpu, 0b01, gba->cpu->regs[rs], offset5, true, &c);
-    compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+    set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
 
     return true;
@@ -1729,7 +1736,7 @@ static bool thumb_asr_handler(gba_t *gba, uint32_t instr) {
 
     bool c = CPSR_CHECK_FLAG(gba->cpu, CPSR_C);
     gba->cpu->regs[rd] = shift_offset(gba->cpu, 0b10, gba->cpu->regs[rs], offset5, true, &c);
-    compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+    set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
 
     return true;
@@ -1792,7 +1799,7 @@ static bool thumb_mov_imm_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu->regs[rd] = offset8;
 
-    compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+    set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
 
     LOG_DEBUG("(0x%04X) MOV %s, #0x%01X\n", instr, reg_names[rd], offset8);
 
@@ -1853,29 +1860,29 @@ static bool thumb_alu_ops_handler(gba_t *gba, uint32_t instr) {
     switch (op) {
     case 0b0000:
         gba->cpu->regs[rd] &= gba->cpu->regs[rs];
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         LOG_DEBUG("(0x%04X) AND %s, %s\n", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b0001:
         gba->cpu->regs[rd] ^= gba->cpu->regs[rs];
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         LOG_DEBUG("(0x%04X) EOR %s, %s\n", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b0010:
         gba->cpu->regs[rd] = shift_offset(gba->cpu, 0b00, gba->cpu->regs[rd], gba->cpu->regs[rs] & 0xFF, false, &c);
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
         LOG_DEBUG("(0x%04X) LSL %s, %s\n", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b0011:
         gba->cpu->regs[rd] = shift_offset(gba->cpu, 0b01, gba->cpu->regs[rd], gba->cpu->regs[rs] & 0xFF, false, &c);
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
         LOG_DEBUG("(0x%04X) LSR %s, %s\n", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b0100:
         gba->cpu->regs[rd] = shift_offset(gba->cpu, 0b10, gba->cpu->regs[rd], gba->cpu->regs[rs] & 0xFF, false, &c);
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
         LOG_DEBUG("(0x%04X) ASR %s, %s\n", instr, reg_names[rd], reg_names[rs]);
         break;
@@ -1893,13 +1900,13 @@ static bool thumb_alu_ops_handler(gba_t *gba, uint32_t instr) {
         break;
     case 0b0111:
         gba->cpu->regs[rd] = shift_offset(gba->cpu, 0b11, gba->cpu->regs[rd], gba->cpu->regs[rs] & 0xFF, false, &c);
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
         LOG_DEBUG("(0x%04X) ROR %s, %s\n", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b1000:
         res = gba->cpu->regs[rd] & gba->cpu->regs[rs];
-        compute_flags_nz(gba->cpu, res);
+        set_flags_nz_32(gba->cpu, res);
         LOG_DEBUG("(0x%04X) TST %s, %s\n", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b1001:
@@ -1920,23 +1927,23 @@ static bool thumb_alu_ops_handler(gba_t *gba, uint32_t instr) {
         break;
     case 0b1100:
         gba->cpu->regs[rd] |= gba->cpu->regs[rs];
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         LOG_DEBUG("(0x%04X) ORR %s, %s\n", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b1101:
         gba->cpu->regs[rd] *= gba->cpu->regs[rs];
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         // TODO set carry flag
         LOG_DEBUG("(0x%04X) MUL %s, %s\n", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b1110:
         gba->cpu->regs[rd] &= ~gba->cpu->regs[rs];
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         LOG_DEBUG("(0x%04X) BIC %s, %s\n", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b1111:
         gba->cpu->regs[rd] = ~gba->cpu->regs[rs];
-        compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         LOG_DEBUG("(0x%04X) MVN %s, %s\n", instr, reg_names[rd], reg_names[rs]);
         break;
     }
