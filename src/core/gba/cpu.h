@@ -6,6 +6,23 @@
 #define REG_LR 14 // Link Register
 #define REG_PC 15 // Program Counter
 
+#define IRQ_VBLANK 0   // LCD V-Blank
+#define IRQ_HBLANK 1   // LCD H-Blank
+#define IRQ_VCOUNT 2   // LCD V-Counter Match
+#define IRQ_TIMER0 3   // Timer 0 Overflow
+#define IRQ_TIMER1 4   // Timer 1 Overflow
+#define IRQ_TIMER2 5   // Timer 2 Overflow
+#define IRQ_TIMER3 6   // Timer 3 Overflow
+#define IRQ_SERIAL 7   // Serial Communication
+#define IRQ_DMA0 8     // DMA 0
+#define IRQ_DMA1 9     // DMA 1
+#define IRQ_DMA2 10    // DMA 2
+#define IRQ_DMA3 11    // DMA 3
+#define IRQ_KEYPAD 12  // Keypad
+#define IRQ_GAMEPAK 13 // Game Pak (external IRQ source)
+
+#define CPU_REQUEST_INTERRUPT(gba, irq) SET_BIT((gba)->bus->io_regs[IO_IF], irq)
+
 typedef struct {
     uint32_t regs[16];
 
