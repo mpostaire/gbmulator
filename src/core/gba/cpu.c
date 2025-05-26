@@ -11,10 +11,6 @@
 // https://vision.gel.ulaval.ca/~jflalonde/cours/1001/h17/docs/arm-instructionset.pdf
 // https://github.com/Normmatt/gba_bios/blob/master/asm/bios.s
 
-#define CYCLE_I 1
-#define CYCLE_N 1
-#define CYCLE_S 1
-
 #define PIPELINE_FETCHING 0
 #define PIPELINE_DECODING 1
 
@@ -41,14 +37,14 @@
 #define CPSR_GET_MODE(cpu) ((cpu)->cpsr & CPSR_MODE_MASK)
 #define CPSR_SET_MODE(cpu, mode) CHANGE_BITS((cpu)->cpsr, CPSR_MODE_MASK, mode)
 
-#define VECTOR_RESET 0x00000000              // Reset --> mode on entry: CPSR_MODE_SVC
-#define VECTOR_UNDEFINED_INSTR 0x00000004    // Undefined instruction --> mode on entry: CPSR_MODE_UND
-#define VECTOR_SOFTWARE_INTERRUPT 0x00000008 // Software interrupt --> mode on entry: CPSR_MODE_SVC
-#define VECTOR_ABORT_PREFETCH 0x0000000C     // Abort (prefetch) --> mode on entry: CPSR_MODE_ABT
-#define VECTOR_ABORT_DATA 0x00000010         // Abort (data) --> mode on entry: CPSR_MODE_ABT
-#define VECTOR_RESERVED 0x00000014           // Reserved Reserved
-#define VECTOR_IRQ 0x00000018                // IRQ --> mode on entry: CPSR_MODE_IRQ
-#define VECTOR_FIQ 0x0000001C                // FIQ --> mode on entry: CPSR_MODE_FIQ
+#define VECTOR_RESET 0x00000000           // Reset --> mode on entry: CPSR_MODE_SVC
+#define VECTOR_UNDEFINED_INSTR 0x00000004 // Undefined instruction --> mode on entry: CPSR_MODE_UND
+#define VECTOR_SWI 0x00000008             // Software interrupt --> mode on entry: CPSR_MODE_SVC
+#define VECTOR_ABORT_PREFETCH 0x0000000C  // Abort (prefetch) --> mode on entry: CPSR_MODE_ABT
+#define VECTOR_ABORT_DATA 0x00000010      // Abort (data) --> mode on entry: CPSR_MODE_ABT
+#define VECTOR_RESERVED 0x00000014        // Reserved Reserved
+#define VECTOR_IRQ 0x00000018             // IRQ --> mode on entry: CPSR_MODE_IRQ
+#define VECTOR_FIQ 0x0000001C             // FIQ --> mode on entry: CPSR_MODE_FIQ
 
 #define ARM_INSTR_GET_COND(instr) ((instr) >> 28)
 
@@ -623,7 +619,6 @@ static bool msr_handler(gba_t *gba, uint32_t instr) {
     bool i = CHECK_BIT(instr, 25);
     bool c = CHECK_BIT(instr, 16);
 
-    // TODO handle R15
     // TODO add undefined behaviour if CPSR_T bit is changed
     // TODO what happens when reserved bits are changed/user mode tries to change mode bits?
 
@@ -657,9 +652,12 @@ static bool mrs_handler(gba_t *gba, uint32_t instr) {
     bool ps = CHECK_BIT(instr, 22);
     uint8_t rd = (instr >> 12) & 0x0F;
 
+    LOG_DEBUG("(0x%08X) MRS%s %s,%cPSR_fc\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[rd], ps ? 'S' : 'C');
+
     gba->cpu->regs[rd] = ps ? gba->cpu->spsr[regs_mode_hashes[CPSR_GET_MODE(gba->cpu) & 0x0F]] : gba->cpu->cpsr;
 
-    LOG_DEBUG("(0x%08X) MRS%s %s,%cPSR_fc\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[rd], ps ? 'S' : 'C');
+    if (rd == REG_PC)
+        todo("mrs rd == REG_PC (undefined behaviour?)");
 
     return true;
 }
@@ -670,6 +668,7 @@ static bool eor_handler(gba_t *gba, uint32_t instr) {
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
+    bool s = CHECK_BIT(instr, 20);
 
     gba->cpu->regs[rd] = op1 ^ op2;
 
@@ -678,6 +677,17 @@ static bool eor_handler(gba_t *gba, uint32_t instr) {
     if (set_flags) {
         compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
+    }
+
+    if (rd == REG_PC) {
+        if (s) {
+            uint8_t old_mode = CPSR_GET_MODE(gba->cpu);
+            gba->cpu->cpsr = gba->cpu->spsr[regs_mode_hashes[old_mode & 0x0F]];
+            bank_registers(gba->cpu, old_mode, CPSR_GET_MODE(gba->cpu));
+        }
+
+        flush_pipeline(gba);
+        return false;
     }
 
     return true;
@@ -689,6 +699,7 @@ static bool sub_handler(gba_t *gba, uint32_t instr) {
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
+    bool s = CHECK_BIT(instr, 20);
 
     LOG_DEBUG("(0x%08X) SUB%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], reg_names[(instr & 0x000F0000) >> 16], op2);
 
@@ -696,6 +707,17 @@ static bool sub_handler(gba_t *gba, uint32_t instr) {
 
     if (set_flags)
         SUB_SET_FLAGS(gba->cpu, gba->cpu->regs[rd], op1, op2);
+
+    if (rd == REG_PC) {
+        if (s) {
+            uint8_t old_mode = CPSR_GET_MODE(gba->cpu);
+            gba->cpu->cpsr = gba->cpu->spsr[regs_mode_hashes[old_mode & 0x0F]];
+            bank_registers(gba->cpu, old_mode, CPSR_GET_MODE(gba->cpu));
+        }
+
+        flush_pipeline(gba);
+        return false;
+    }
 
     return true;
 }
@@ -706,6 +728,7 @@ static bool rsb_handler(gba_t *gba, uint32_t instr) {
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
+    bool s = CHECK_BIT(instr, 20);
 
     LOG_DEBUG("(0x%08X) RSB%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], reg_names[(instr & 0x000F0000) >> 16], op2);
 
@@ -713,6 +736,17 @@ static bool rsb_handler(gba_t *gba, uint32_t instr) {
 
     if (set_flags)
         SUB_SET_FLAGS(gba->cpu, gba->cpu->regs[rd], op2, op1);
+
+    if (rd == REG_PC) {
+        if (s) {
+            uint8_t old_mode = CPSR_GET_MODE(gba->cpu);
+            gba->cpu->cpsr = gba->cpu->spsr[regs_mode_hashes[old_mode & 0x0F]];
+            bank_registers(gba->cpu, old_mode, CPSR_GET_MODE(gba->cpu));
+        }
+
+        flush_pipeline(gba);
+        return false;
+    }
 
     return true;
 }
@@ -723,6 +757,7 @@ static bool add_handler(gba_t *gba, uint32_t instr) {
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
+    bool s = CHECK_BIT(instr, 20);
 
     LOG_DEBUG("(0x%08X) ADD%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], reg_names[(instr & 0x000F0000) >> 16], op2);
 
@@ -730,6 +765,17 @@ static bool add_handler(gba_t *gba, uint32_t instr) {
 
     if (set_flags)
         ADD_SET_FLAGS(gba->cpu, gba->cpu->regs[rd], op1, op2);
+
+    if (rd == REG_PC) {
+        if (s) {
+            uint8_t old_mode = CPSR_GET_MODE(gba->cpu);
+            gba->cpu->cpsr = gba->cpu->spsr[regs_mode_hashes[old_mode & 0x0F]];
+            bank_registers(gba->cpu, old_mode, CPSR_GET_MODE(gba->cpu));
+        }
+
+        flush_pipeline(gba);
+        return false;
+    }
 
     return true;
 }
@@ -740,6 +786,7 @@ static bool adc_handler(gba_t *gba, uint32_t instr) {
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
+    bool s = CHECK_BIT(instr, 20);
 
     LOG_DEBUG("(0x%08X) ADC%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], reg_names[(instr & 0x000F0000) >> 16], op2);
 
@@ -748,6 +795,17 @@ static bool adc_handler(gba_t *gba, uint32_t instr) {
 
     if (set_flags)
         ADC_SET_FLAGS(gba->cpu, res, op1, op2);
+
+    if (rd == REG_PC) {
+        if (s) {
+            uint8_t old_mode = CPSR_GET_MODE(gba->cpu);
+            gba->cpu->cpsr = gba->cpu->spsr[regs_mode_hashes[old_mode & 0x0F]];
+            bank_registers(gba->cpu, old_mode, CPSR_GET_MODE(gba->cpu));
+        }
+
+        flush_pipeline(gba);
+        return false;
+    }
 
     return true;
 }
@@ -758,6 +816,7 @@ static bool sbc_handler(gba_t *gba, uint32_t instr) {
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
+    bool s = CHECK_BIT(instr, 20);
 
     LOG_DEBUG("(0x%08X) SBC%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], reg_names[(instr & 0x000F0000) >> 16], op2);
 
@@ -768,6 +827,17 @@ static bool sbc_handler(gba_t *gba, uint32_t instr) {
     if (set_flags)
         SBC_SET_FLAGS(gba->cpu, res, op1, (uint64_t) op2 + (uint64_t) tmp);
 
+    if (rd == REG_PC) {
+        if (s) {
+            uint8_t old_mode = CPSR_GET_MODE(gba->cpu);
+            gba->cpu->cpsr = gba->cpu->spsr[regs_mode_hashes[old_mode & 0x0F]];
+            bank_registers(gba->cpu, old_mode, CPSR_GET_MODE(gba->cpu));
+        }
+
+        flush_pipeline(gba);
+        return false;
+    }
+
     return true;
 }
 
@@ -777,6 +847,7 @@ static bool rsc_handler(gba_t *gba, uint32_t instr) {
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
+    bool s = CHECK_BIT(instr, 20);
 
     LOG_DEBUG("(0x%08X) RSC%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], reg_names[(instr & 0x000F0000) >> 16], op2);
 
@@ -787,6 +858,17 @@ static bool rsc_handler(gba_t *gba, uint32_t instr) {
     if (set_flags)
         SBC_SET_FLAGS(gba->cpu, res, op1, (uint64_t) op2 + (uint64_t) tmp);
 
+    if (rd == REG_PC) {
+        if (s) {
+            uint8_t old_mode = CPSR_GET_MODE(gba->cpu);
+            gba->cpu->cpsr = gba->cpu->spsr[regs_mode_hashes[old_mode & 0x0F]];
+            bank_registers(gba->cpu, old_mode, CPSR_GET_MODE(gba->cpu));
+        }
+
+        flush_pipeline(gba);
+        return false;
+    }
+
     return true;
 }
 
@@ -796,6 +878,7 @@ static bool tst_handler(gba_t *gba, uint32_t instr) {
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
+    bool s = CHECK_BIT(instr, 20);
 
     LOG_DEBUG("(0x%08X) TST%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[(instr & 0x000F0000) >> 16], op2);
 
@@ -804,6 +887,14 @@ static bool tst_handler(gba_t *gba, uint32_t instr) {
     if (set_flags) {
         compute_flags_nz(gba->cpu, res);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
+    }
+
+    if (rd == REG_PC) {
+        if (s) {
+            uint8_t old_mode = CPSR_GET_MODE(gba->cpu);
+            gba->cpu->cpsr = gba->cpu->spsr[regs_mode_hashes[old_mode & 0x0F]];
+            bank_registers(gba->cpu, old_mode, CPSR_GET_MODE(gba->cpu));
+        }
     }
 
     return true;
@@ -815,6 +906,7 @@ static bool teq_handler(gba_t *gba, uint32_t instr) {
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
+    bool s = CHECK_BIT(instr, 20);
 
     LOG_DEBUG("(0x%08X) TEQ%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[(instr & 0x000F0000) >> 16], op2);
 
@@ -823,6 +915,14 @@ static bool teq_handler(gba_t *gba, uint32_t instr) {
     if (set_flags) {
         compute_flags_nz(gba->cpu, res);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
+    }
+
+    if (rd == REG_PC) {
+        if (s) {
+            uint8_t old_mode = CPSR_GET_MODE(gba->cpu);
+            gba->cpu->cpsr = gba->cpu->spsr[regs_mode_hashes[old_mode & 0x0F]];
+            bank_registers(gba->cpu, old_mode, CPSR_GET_MODE(gba->cpu));
+        }
     }
 
     return true;
@@ -834,6 +934,7 @@ static bool cmp_handler(gba_t *gba, uint32_t instr) {
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
+    bool s = CHECK_BIT(instr, 20);
 
     LOG_DEBUG("(0x%08X) CMP%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[(instr & 0x000F0000) >> 16], op2);
 
@@ -841,6 +942,14 @@ static bool cmp_handler(gba_t *gba, uint32_t instr) {
 
     if (set_flags)
         SUB_SET_FLAGS(gba->cpu, res, op1, op2);
+
+    if (rd == REG_PC) {
+        if (s) {
+            uint8_t old_mode = CPSR_GET_MODE(gba->cpu);
+            gba->cpu->cpsr = gba->cpu->spsr[regs_mode_hashes[old_mode & 0x0F]];
+            bank_registers(gba->cpu, old_mode, CPSR_GET_MODE(gba->cpu));
+        }
+    }
 
     return true;
 }
@@ -851,6 +960,7 @@ static bool cmn_handler(gba_t *gba, uint32_t instr) {
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
+    bool s = CHECK_BIT(instr, 20);
 
     LOG_DEBUG("(0x%08X) CMN%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[(instr & 0x000F0000) >> 16], op2);
 
@@ -858,6 +968,14 @@ static bool cmn_handler(gba_t *gba, uint32_t instr) {
 
     if (set_flags)
         ADD_SET_FLAGS(gba->cpu, res, op1, op2);
+
+    if (rd == REG_PC) {
+        if (s) {
+            uint8_t old_mode = CPSR_GET_MODE(gba->cpu);
+            gba->cpu->cpsr = gba->cpu->spsr[regs_mode_hashes[old_mode & 0x0F]];
+            bank_registers(gba->cpu, old_mode, CPSR_GET_MODE(gba->cpu));
+        }
+    }
 
     return true;
 }
@@ -868,14 +986,26 @@ static bool orr_handler(gba_t *gba, uint32_t instr) {
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
-
-    gba->cpu->regs[rd] = op1 | op2;
+    bool s = CHECK_BIT(instr, 20);
 
     LOG_DEBUG("(0x%08X) ORR%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[(instr & 0x000F0000) >> 16], op2);
+
+    gba->cpu->regs[rd] = op1 | op2;
 
     if (set_flags) {
         compute_flags_nz(gba->cpu, gba->cpu->regs[rd]);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
+    }
+
+    if (rd == REG_PC) {
+        if (s) {
+            uint8_t old_mode = CPSR_GET_MODE(gba->cpu);
+            gba->cpu->cpsr = gba->cpu->spsr[regs_mode_hashes[old_mode & 0x0F]];
+            bank_registers(gba->cpu, old_mode, CPSR_GET_MODE(gba->cpu));
+        }
+
+        flush_pipeline(gba);
+        return false;
     }
 
     return true;
@@ -918,6 +1048,7 @@ static bool bic_handler(gba_t *gba, uint32_t instr) {
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
+    bool s = CHECK_BIT(instr, 20);
 
     LOG_DEBUG("(0x%08X) BIC%s%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], op2);
 
@@ -929,6 +1060,12 @@ static bool bic_handler(gba_t *gba, uint32_t instr) {
     }
 
     if (rd == REG_PC) {
+        if (s) {
+            uint8_t old_mode = CPSR_GET_MODE(gba->cpu);
+            gba->cpu->cpsr = gba->cpu->spsr[regs_mode_hashes[old_mode & 0x0F]];
+            bank_registers(gba->cpu, old_mode, CPSR_GET_MODE(gba->cpu));
+        }
+
         flush_pipeline(gba);
         return false;
     }
@@ -942,6 +1079,7 @@ static bool mvn_handler(gba_t *gba, uint32_t instr) {
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
+    bool s = CHECK_BIT(instr, 20);
 
     LOG_DEBUG("(0x%08X) MVN%s%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], op2);
 
@@ -953,6 +1091,12 @@ static bool mvn_handler(gba_t *gba, uint32_t instr) {
     }
 
     if (rd == REG_PC) {
+        if (s) {
+            uint8_t old_mode = CPSR_GET_MODE(gba->cpu);
+            gba->cpu->cpsr = gba->cpu->spsr[regs_mode_hashes[old_mode & 0x0F]];
+            bank_registers(gba->cpu, old_mode, CPSR_GET_MODE(gba->cpu));
+        }
+
         flush_pipeline(gba);
         return false;
     }
@@ -1395,6 +1539,24 @@ static bool bl_handler(gba_t *gba, uint32_t instr) {
     return false;
 }
 
+static bool swi_handler(gba_t *gba, uint32_t instr) {
+    LOG_DEBUG("(0x%04X) SWI %d\n", instr, instr & 0xFF);
+
+    gba->cpu->spsr[regs_mode_hashes[CPSR_MODE_SVC & 0x0F]] = gba->cpu->cpsr;
+
+    bank_registers(gba->cpu, CPSR_GET_MODE(gba->cpu), CPSR_MODE_SVC);
+    CPSR_SET_MODE(gba->cpu, CPSR_MODE_SVC);
+
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_I, 1);
+
+    gba->cpu->regs[REG_LR] = gba->cpu->regs[REG_PC] - 4; // store addr of next instr before jumping
+    gba->cpu->regs[REG_PC] = VECTOR_SWI;
+
+    flush_pipeline(gba);
+
+    return false;
+}
+
 static inline bool verif_cond(gba_cpu_t *cpu, cond_t cond) {
     switch (cond) {
     case COND_EQ:
@@ -1439,8 +1601,25 @@ void gba_cpu_step(gba_t *gba) {
     if (gba->dma->active_channels)
         return;
 
-    if (gba->bus->io_regs[IO_IME] && (gba->bus->io_regs[IO_IE] & gba->bus->io_regs[IO_IF])) {
-        todo("interrupt: %x", gba->bus->io_regs[IO_IE] & gba->bus->io_regs[IO_IF]);
+    if (gba->bus->io_regs[IO_IME] && !CPSR_CHECK_FLAG(cpu, CPSR_I) && (gba->bus->io_regs[IO_IE] & gba->bus->io_regs[IO_IF])) {
+        LOG_DEBUG("IRQ: %x\n", gba->bus->io_regs[IO_IE] & gba->bus->io_regs[IO_IF]);
+
+        gba->cpu->spsr[regs_mode_hashes[CPSR_MODE_IRQ & 0x0F]] = gba->cpu->cpsr;
+
+        bank_registers(gba->cpu, CPSR_GET_MODE(gba->cpu), CPSR_MODE_IRQ);
+        CPSR_SET_MODE(gba->cpu, CPSR_MODE_IRQ);
+
+        uint8_t next_instr_offset = 4;
+        if (CPSR_CHECK_FLAG(gba->cpu, CPSR_T))
+            next_instr_offset = 2;
+
+        CPSR_CHANGE_FLAG(gba->cpu, CPSR_T, 0);
+        CPSR_CHANGE_FLAG(gba->cpu, CPSR_I, 1);
+
+        gba->cpu->regs[REG_LR] = gba->cpu->regs[REG_PC] - next_instr_offset; // store addr of next instr before jumping
+        gba->cpu->regs[REG_PC] = VECTOR_IRQ;
+
+        flush_pipeline(gba);
     }
 
     LOG_DEBUG(
@@ -2193,7 +2372,7 @@ static bool thumb_swi_handler(gba_t *gba, uint32_t instr) {
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_I, 1);
 
     gba->cpu->regs[REG_LR] = gba->cpu->regs[REG_PC] - 2; // store addr of next instr before jumping
-    gba->cpu->regs[REG_PC] = VECTOR_SOFTWARE_INTERRUPT;
+    gba->cpu->regs[REG_PC] = VECTOR_SWI;
 
     flush_pipeline(gba);
 
@@ -2292,6 +2471,7 @@ static bool thumb_bl_handler(gba_t *gba, uint32_t instr) {
     X(ldm_handler)                   \
     X(b_handler)                     \
     X(bl_handler)                    \
+    X(swi_handler)                   \
     X(thumb_lsl_handler)             \
     X(thumb_lsr_handler)             \
     X(thumb_asr_handler)             \
@@ -2346,41 +2526,41 @@ typedef struct {
 
 // arm_decoder_rules definition order is important: they are matched in the order they are defined in the arm_decoder_rules array
 decoder_rule_t arm_decoder_rules[] = {
-    {"____00010010____________0001____", HANDLER_ID(bx_handler)},                               // Branch and exchange
-    {"____0000000*____________1001____", HANDLER_ID(mul_handler)},                              // Multiply
-    {"____0000001*____________1001____", HANDLER_ID(mla_handler)},                              // Multiply
-    {"____00001*0*____________1001____", HANDLER_ID(mull_handler)},                             // Multiply Long
-    {"____00001*1*____________1001____", HANDLER_ID(mlal_handler)},                             // Multiply Long
-    {"____00*0000*____________****____", HANDLER_ID(and_handler)},                              // Data processing
-    {"____00010*00____________0000____", HANDLER_ID(mrs_handler)},                              // PSR Transfer
-    {"____00*10*10____________****____", HANDLER_ID(msr_handler)},                              // PSR Transfer
-    {"____00010*00____________1001____", HANDLER_ID(swp_handler)},                              // Single Data Swap
-    {"____000**0*0____________1**1____", HANDLER_ID(strh_reg_handler)},                         // Halfword Data Transfer
-    {"____000**1*0____________1**1____", HANDLER_ID(strh_imm_handler)},                         // Halfword Data Transfer
-    {"____000**0*1____________1**1____", HANDLER_ID(ldrh_reg_handler)},                         // Halfword Data Transfer
-    {"____000**1*1____________1**1____", HANDLER_ID(ldrh_imm_handler)},                         // Halfword Data Transfer
-    {"____00*0001*____________****____", HANDLER_ID(eor_handler)},                              // Data processing
-    {"____00*0010*____________****____", HANDLER_ID(sub_handler)},                              // Data processing
-    {"____00*0011*____________****____", HANDLER_ID(rsb_handler)},                              // Data processing
-    {"____00*0100*____________****____", HANDLER_ID(add_handler)},                              // Data processing
-    {"____00*0101*____________****____", HANDLER_ID(adc_handler)},                              // Data processing
-    {"____00*0110*____________****____", HANDLER_ID(sbc_handler)},                              // Data processing
-    {"____00*0111*____________****____", HANDLER_ID(rsc_handler)},                              // Data processing
-    {"____00*10001____________****____", HANDLER_ID(tst_handler)},                              // Data processing
-    {"____00*10011____________****____", HANDLER_ID(teq_handler)},                              // Data processing
-    {"____00*10101____________****____", HANDLER_ID(cmp_handler)},                              // Data processing
-    {"____00*10111____________****____", HANDLER_ID(cmn_handler)},                              // Data processing
-    {"____00*1100*____________****____", HANDLER_ID(orr_handler)},                              // Data processing
-    {"____00*1101*____________****____", HANDLER_ID(mov_handler)},                              // Data processing
-    {"____00*1110*____________****____", HANDLER_ID(bic_handler)},                              // Data processing
-    {"____00*1111*____________****____", HANDLER_ID(mvn_handler)},                              // Data processing
-    {"____01*****0____________****____", HANDLER_ID(str_handler)},                              // Single Data Transfer
-    {"____01*****1____________****____", HANDLER_ID(ldr_handler)},                              // Single Data Transfer
-    {"____100****0____________****____", HANDLER_ID(stm_handler)},                              // Block Data Transfer
-    {"____100****1____________****____", HANDLER_ID(ldm_handler)},                              // Block Data Transfer
-    {"____1010****____________****____", HANDLER_ID(b_handler)},                                // Branch
-    {"____1011****____________****____", HANDLER_ID(bl_handler)},                               // Branch
-    {"____1111****____________****____", HANDLER_ID(/*swi_handler*/ not_implemented_handler)},  // Software Interrupt
+    {"____00010010____________0001____", HANDLER_ID(bx_handler)},       // Branch and exchange
+    {"____0000000*____________1001____", HANDLER_ID(mul_handler)},      // Multiply
+    {"____0000001*____________1001____", HANDLER_ID(mla_handler)},      // Multiply
+    {"____00001*0*____________1001____", HANDLER_ID(mull_handler)},     // Multiply Long
+    {"____00001*1*____________1001____", HANDLER_ID(mlal_handler)},     // Multiply Long
+    {"____00*0000*____________****____", HANDLER_ID(and_handler)},      // Data processing
+    {"____00010*00____________0000____", HANDLER_ID(mrs_handler)},      // PSR Transfer
+    {"____00*10*10____________****____", HANDLER_ID(msr_handler)},      // PSR Transfer
+    {"____00010*00____________1001____", HANDLER_ID(swp_handler)},      // Single Data Swap
+    {"____000**0*0____________1**1____", HANDLER_ID(strh_reg_handler)}, // Halfword Data Transfer
+    {"____000**1*0____________1**1____", HANDLER_ID(strh_imm_handler)}, // Halfword Data Transfer
+    {"____000**0*1____________1**1____", HANDLER_ID(ldrh_reg_handler)}, // Halfword Data Transfer
+    {"____000**1*1____________1**1____", HANDLER_ID(ldrh_imm_handler)}, // Halfword Data Transfer
+    {"____00*0001*____________****____", HANDLER_ID(eor_handler)},      // Data processing
+    {"____00*0010*____________****____", HANDLER_ID(sub_handler)},      // Data processing
+    {"____00*0011*____________****____", HANDLER_ID(rsb_handler)},      // Data processing
+    {"____00*0100*____________****____", HANDLER_ID(add_handler)},      // Data processing
+    {"____00*0101*____________****____", HANDLER_ID(adc_handler)},      // Data processing
+    {"____00*0110*____________****____", HANDLER_ID(sbc_handler)},      // Data processing
+    {"____00*0111*____________****____", HANDLER_ID(rsc_handler)},      // Data processing
+    {"____00*10001____________****____", HANDLER_ID(tst_handler)},      // Data processing
+    {"____00*10011____________****____", HANDLER_ID(teq_handler)},      // Data processing
+    {"____00*10101____________****____", HANDLER_ID(cmp_handler)},      // Data processing
+    {"____00*10111____________****____", HANDLER_ID(cmn_handler)},      // Data processing
+    {"____00*1100*____________****____", HANDLER_ID(orr_handler)},      // Data processing
+    {"____00*1101*____________****____", HANDLER_ID(mov_handler)},      // Data processing
+    {"____00*1110*____________****____", HANDLER_ID(bic_handler)},      // Data processing
+    {"____00*1111*____________****____", HANDLER_ID(mvn_handler)},      // Data processing
+    {"____01*****0____________****____", HANDLER_ID(str_handler)},      // Single Data Transfer
+    {"____01*****1____________****____", HANDLER_ID(ldr_handler)},      // Single Data Transfer
+    {"____100****0____________****____", HANDLER_ID(stm_handler)},      // Block Data Transfer
+    {"____100****1____________****____", HANDLER_ID(ldm_handler)},      // Block Data Transfer
+    {"____1010****____________****____", HANDLER_ID(b_handler)},        // Branch
+    {"____1011****____________****____", HANDLER_ID(bl_handler)},       // Branch
+    {"____1111****____________****____", HANDLER_ID(swi_handler)},      // Software Interrupt
 };
 
 // thumb_decoder_rules definition order is important: they are matched in the order they are defined in the thumb_decoder_rules array
@@ -2464,6 +2644,8 @@ void gba_cpu_init(gba_t *gba) {
 
     // TODO reg values after bios boot, remove to boot from bios directly
     CPSR_SET_MODE(gba->cpu, CPSR_MODE_SYS);
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_I, 0);
+    CPSR_CHANGE_FLAG(gba->cpu, CPSR_F, 0);
     gba->cpu->banked_regs_13_14[regs_mode_hashes[CPSR_MODE_SVC & 0x0F]][0] = 0x03007FE0;
     gba->cpu->banked_regs_13_14[regs_mode_hashes[CPSR_MODE_IRQ & 0x0F]][0] = 0x03007FA0;
     gba->cpu->regs[13] = 0x03007F00;

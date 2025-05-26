@@ -473,6 +473,9 @@ void gba_ppu_step(gba_t *gba) {
         if (ppu->scanline_cycles >= HDRAW_CYCLES) {
             ppu->period = GBA_PPU_PERIOD_HBLANK;
             SET_BIT(gba->bus->io_regs[IO_DISPSTAT], 1);
+
+            if (gba->bus->io_regs[IO_DISPSTAT] & 0b010010)
+                CPU_REQUEST_INTERRUPT(gba, IRQ_HBLANK);
         }
         break;
     case GBA_PPU_PERIOD_HBLANK:
@@ -480,12 +483,19 @@ void gba_ppu_step(gba_t *gba) {
             ppu->scanline_cycles = 0;
 
             gba->bus->io_regs[IO_VCOUNT]++;
+            CHANGE_BIT(gba->bus->io_regs[IO_DISPSTAT], 2, gba->bus->io_regs[IO_VCOUNT] == gba->bus->io_regs[IO_DISPCNT] >> 8);
+
+            if (gba->bus->io_regs[IO_DISPSTAT] & 0b100100)
+                CPU_REQUEST_INTERRUPT(gba, IRQ_VCOUNT);
 
             ppu->period = GBA_PPU_PERIOD_HDRAW;
             if (gba->bus->io_regs[IO_VCOUNT] >= GBA_SCREEN_HEIGHT) {
                 ppu->period = GBA_PPU_PERIOD_VBLANK;
                 RESET_BIT(gba->bus->io_regs[IO_DISPSTAT], 1);
                 SET_BIT(gba->bus->io_regs[IO_DISPSTAT], 0);
+
+                if (gba->bus->io_regs[IO_DISPSTAT] & 0b001001)
+                    CPU_REQUEST_INTERRUPT(gba, IRQ_VBLANK);
             }
         }
         break;
@@ -494,6 +504,10 @@ void gba_ppu_step(gba_t *gba) {
             ppu->scanline_cycles = 0;
 
             gba->bus->io_regs[IO_VCOUNT]++;
+            CHANGE_BIT(gba->bus->io_regs[IO_DISPSTAT], 2, gba->bus->io_regs[IO_VCOUNT] == gba->bus->io_regs[IO_DISPCNT] >> 8);
+
+            if (gba->bus->io_regs[IO_DISPSTAT] & 0b100100)
+                CPU_REQUEST_INTERRUPT(gba, IRQ_VCOUNT);
 
             if (gba->bus->io_regs[IO_VCOUNT] >= GBA_SCREEN_HEIGHT + VBLANK_HEIGHT) {
                 gba->bus->io_regs[IO_VCOUNT] = 0;
