@@ -547,9 +547,6 @@ static bool bx_handler(gba_t *gba, uint32_t instr) {
 
     LOG_DEBUG("(0x%08X) BX%s %s\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[rn]);
 
-    if (rn == REG_PC)
-        todo("undefined behaviour");
-
     // change cpu state to THUMB/ARM
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_T, GET_BIT(pc_dest, 0));
 
@@ -1600,8 +1597,6 @@ static inline bool verif_cond(gba_cpu_t *cpu, cond_t cond) {
     }
 }
 
-// TODO test cpu using json tests
-
 void gba_cpu_step(gba_t *gba) {
     gba_cpu_t *cpu = gba->cpu;
 
@@ -1651,8 +1646,8 @@ void gba_cpu_step(gba_t *gba) {
         fetched_instr = gba_bus_read_word(gba, cpu->regs[REG_PC]);
     }
 
-    if (cpu->regs[REG_PC] < BUS_BIOS_ROM_UNUSED - 1)
-        gba->bus->last_fetched_bios_intr = fetched_instr;
+    if (cpu->regs[REG_PC] < BUS_BIOS_ROM_UNUSED)
+        gba->bus->last_fetched_bios_instr = fetched_instr;
 
     uint32_t instr = cpu->pipeline[PIPELINE_DECODING];
 
@@ -1968,7 +1963,6 @@ static bool thumb_add_hi_reg_handler(gba_t *gba, uint32_t instr) {
         rs_hs += 8;
         break;
     default:
-        todo("undefined behaviour");
         break;
     }
 
@@ -2002,7 +1996,6 @@ static bool thumb_cmp_hi_reg_handler(gba_t *gba, uint32_t instr) {
         rs_hs += 8;
         break;
     default:
-        todo("undefined behaviour");
         break;
     }
 
@@ -2031,7 +2024,6 @@ static bool thumb_mov_hi_reg_handler(gba_t *gba, uint32_t instr) {
         rs_hs += 8;
         break;
     default:
-        todo("undefined behaviour");
         break;
     }
 
@@ -2049,11 +2041,7 @@ static bool thumb_mov_hi_reg_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool thumb_bx_handler(gba_t *gba, uint32_t instr) {
-    bool h1 = CHECK_BIT(instr, 7);
     bool h2 = CHECK_BIT(instr, 6);
-
-    if (h1)
-        todo("undefined behaviour");
 
     uint8_t rd = (instr >> 3) & 0x07;
     uint8_t rn = h2 ? rd + 8 : rd;
@@ -2062,19 +2050,12 @@ static bool thumb_bx_handler(gba_t *gba, uint32_t instr) {
 
     uint32_t pc_dest = gba->cpu->regs[rn];
 
-    // // // TODO this should be undefined behaviour only if jumping from a non word aligned address (with -4 or -2 offset? or none?) AND rn == REG_PC
-    // if (rn == REG_PC)
-    //     pc_dest += 4;
-    //     // todo("undefined behaviour");
-
     bool change_instr_set = GET_BIT(pc_dest, 0);
     // change cpu state to THUMB/ARM
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_T, change_instr_set);
 
     if (CPSR_CHECK_FLAG(gba->cpu, CPSR_T))
         pc_dest = ALIGN(pc_dest, 2);
-    else
-        pc_dest = ALIGN(pc_dest, 4);
 
     gba->cpu->regs[REG_PC] = pc_dest;
 
@@ -2390,6 +2371,9 @@ static bool thumb_b_cond_handler(gba_t *gba, uint32_t instr) {
     uint32_t soffset8 = (uint32_t) ((int8_t) (instr & 0xFF)) << 1;
     uint8_t cond = (instr >> 8) & 0x0F;
 
+    if (cond == 0x0F)
+        todo("undefined opcode exception"); // https://github.com/SingleStepTests/ARM7TDMI/issues/2
+
     if (!verif_cond(gba->cpu, cond))
         return true;
 
@@ -2403,9 +2387,9 @@ static bool thumb_b_cond_handler(gba_t *gba, uint32_t instr) {
 }
 
 static bool thumb_b_handler(gba_t *gba, uint32_t instr) {
-    int16_t offset11 = ((instr & 0x03FF) << 1);
-    if (CHECK_BIT(offset11, 10))
-        offset11 |= 0xF800;
+    uint32_t offset11 = ((instr & 0x07FF) << 1);
+    if (CHECK_BIT(offset11, 11))
+        offset11 |= 0xFFFFF800;
 
     gba->cpu->regs[REG_PC] += offset11;
 
@@ -2646,7 +2630,6 @@ void gba_cpu_init(gba_t *gba) {
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_F, 1);
     CPSR_SET_MODE(gba->cpu, CPSR_MODE_SVC);
 
-    // TODO what are reg values at reset?
     gba->cpu->regs[REG_PC] = VECTOR_RESET;
 
     // TODO reg values after bios boot, remove to boot from bios directly

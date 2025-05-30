@@ -732,7 +732,7 @@ static void *bus_access(gba_t *gba, uint32_t address, uint8_t size, bool is_writ
         if (is_write)
             return NULL;
         if (gba->cpu->regs[REG_PC] >= BUS_BIOS_ROM_UNUSED)
-            return &gba->bus->last_fetched_bios_intr;
+            return &gba->bus->last_fetched_bios_instr;
         return &bus->bios_rom[address - BUS_BIOS_ROM];
     case BUS_EWRAM ... BUS_IWRAM - 1:
         return &bus->ewram[(address - BUS_EWRAM) % (BUS_EWRAM_UNUSED - BUS_EWRAM)];

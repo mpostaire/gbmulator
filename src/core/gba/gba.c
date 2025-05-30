@@ -27,10 +27,12 @@ gba_t *gba_init(const uint8_t *rom, size_t rom_size, gbmulator_options_t *opts) 
     gba_tmr_init(gba);
     gba_dma_init(gba);
 
-    gba->on_new_frame = opts->on_new_frame;
-    gba->on_new_sample = opts->on_new_sample;
-    gba->on_accelerometer_request = opts->on_accelerometer_request;
-    gba->on_camera_capture_image = opts->on_camera_capture_image;
+    if (opts) {
+        gba->on_new_frame = opts->on_new_frame;
+        gba->on_new_sample = opts->on_new_sample;
+        gba->on_accelerometer_request = opts->on_accelerometer_request;
+        gba->on_camera_capture_image = opts->on_camera_capture_image;
+    }
 
     return gba;
 }
