@@ -621,27 +621,35 @@ static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
     // Timer Registers
     case IO_TM0CNT_L:
         LOG_DEBUG("IO_TM0CNT_L 0x%04X\n", data);
+        gba->tmr->instance[0].reload = data;
         break;
     case IO_TM0CNT_H:
         LOG_DEBUG("IO_TM0CNT_H 0x%04X\n", data);
+        gba_tmr_set(gba, data, 0);
         break;
     case IO_TM1CNT_L:
         LOG_DEBUG("IO_TM1CNT_L 0x%04X\n", data);
+        gba->tmr->instance[1].reload = data;
         break;
     case IO_TM1CNT_H:
         LOG_DEBUG("IO_TM1CNT_H 0x%04X\n", data);
+        gba_tmr_set(gba, data, 1);
         break;
     case IO_TM2CNT_L:
         LOG_DEBUG("IO_TM2CNT_L 0x%04X\n", data);
+        gba->tmr->instance[2].reload = data;
         break;
     case IO_TM2CNT_H:
         LOG_DEBUG("IO_TM2CNT_H 0x%04X\n", data);
+        gba_tmr_set(gba, data, 2);
         break;
     case IO_TM3CNT_L:
         LOG_DEBUG("IO_TM3CNT_L 0x%04X\n", data);
+        gba->tmr->instance[3].reload = data;
         break;
     case IO_TM3CNT_H:
         LOG_DEBUG("IO_TM3CNT_H 0x%04X\n", data);
+        gba_tmr_set(gba, data, 3);
         break;
 
     // Serial Communication (1)
@@ -835,8 +843,8 @@ void gba_bus_write_word(gba_t *gba, uint32_t address, uint32_t data) {
 
     if ((uint16_t *) ret == gba->bus->io_regs) {
         address -= BUS_IO_REGS;
-        io_regs_write(gba, address + 2, data >> 16);
         io_regs_write(gba, address, data);
+        io_regs_write(gba, address + 2, data >> 16);
         return;
     }
 
