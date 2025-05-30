@@ -20,4 +20,5 @@ struct gba_t {
     gba_bus_t *bus;
     gba_ppu_t *ppu;
     gba_dma_t *dma;
+    gba_tmr_t *tmr;
 };
