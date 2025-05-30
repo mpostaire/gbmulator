@@ -169,7 +169,7 @@ typedef struct {
     uint8_t game_rom[BUS_GAME_ROM1 - BUS_GAME_ROM0];
     uint8_t game_sram[BUS_GAME_UNUSED - BUS_GAME_SRAM];
 
-    uint32_t last_fetched_bios_intr;
+    uint32_t last_fetched_bios_instr;
 
     size_t rom_size;
 } gba_bus_t;
