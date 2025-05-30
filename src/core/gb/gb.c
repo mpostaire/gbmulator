@@ -429,7 +429,7 @@ uint8_t *gb_get_save(gb_t *gb, size_t *save_length) {
     return save_data;
 }
 
-int gb_load_save(gb_t *gb, uint8_t *save_data, size_t save_length) {
+bool gb_load_save(gb_t *gb, uint8_t *save_data, size_t save_length) {
     if (gb->mmu->mbc.type == MBC7) {
         if (save_length != sizeof(gb->mmu->mbc.mbc7.eeprom.data))
             return 0;

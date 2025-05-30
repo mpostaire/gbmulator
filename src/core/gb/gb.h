@@ -107,7 +107,7 @@ void gb_set_joypad_state(gb_t *gb, uint16_t state);
 
 uint8_t *gb_get_save(gb_t *gb, size_t *save_length);
 
-int gb_load_save(gb_t *gb, uint8_t *save_data, size_t save_length);
+bool gb_load_save(gb_t *gb, uint8_t *save_data, size_t save_length);
 
 uint8_t *gb_get_savestate(gb_t *gb, size_t *length, bool is_compressed);
 
