@@ -179,28 +179,32 @@ static inline void draw_affine_bg(gba_t *gba, uint8_t bg, uint32_t x, uint32_t y
     // TODO
 }
 
-static inline void draw_obj(gba_t *gba) {
+static inline void draw_obj(gba_t *gba, int32_t y) {
     gba_ppu_t *ppu = gba->ppu;
 
-    if (ppu->scanline_cycles < OBJ_FETCH_DELAY || (ppu->scanline_cycles % PIXEL_CYCLES) != PIXEL_CYCLES - 1)
+    if (y >= GBA_SCREEN_HEIGHT)
         return;
 
-    int32_t x = (ppu->scanline_cycles - OBJ_FETCH_DELAY) / PIXEL_CYCLES;
-    int32_t y = gba->bus->io_regs[IO_VCOUNT];
+    #define OBJ_ATTR_FETCH_CYCLES 2
+    #define OAM_ENTRY_SIZE 8
 
-    if (x >= GBA_SCREEN_WIDTH)
+    if (ppu->scanline_cycles < OBJ_FETCH_DELAY || (ppu->scanline_cycles % OBJ_ATTR_FETCH_CYCLES) != OBJ_ATTR_FETCH_CYCLES - 1)
         return;
 
-    bool is_1d_mapping = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], 6);
+    // TODO obj are fetched the previous scanline. unlike bg, they do not follow the current ppu.x coord, instead they insert at their attribute coord
 
-    uint32_t obj_id = 0;
-
-    uint32_t attrs01 = gba_bus_read_word(gba, BUS_OAM + (obj_id * 6));
+    // TODO 32 bit read takes 2 cycles
+    uint32_t attrs01 = gba_bus_read_word(gba, BUS_OAM + (ppu->obj_id * OAM_ENTRY_SIZE));
 
     int32_t obj_y = attrs01 & 0xFF;
     if (obj_y >= GBA_SCREEN_HEIGHT)
         obj_y -= 256;
     uint8_t om = (attrs01 >> 8) & 0x03;
+
+    // TODO
+    // For regular sprites width / 2 16-bit VRAM accesses are performed (one access every two cycles). With each access
+    // two pixels are rendered (even for 4BPP tile data).
+
     uint8_t gm = (attrs01 >> 10) & 0x03;
     bool mos = CHECK_BIT(attrs01, 12);
     bool is_8bpp = CHECK_BIT(attrs01, 13);
@@ -225,36 +229,44 @@ static inline void draw_obj(gba_t *gba) {
     uint8_t obj_w = obj_dims[sh][sz][0];
     uint8_t obj_h = obj_dims[sh][sz][1];
 
-    bool ignore_pixel = om == 0b10 || y < obj_y || y >= obj_y + obj_h || x < obj_x || x >= obj_x + obj_w;
-    if (ignore_pixel) {
-        ppu->line_layers[4][x] = 0;
+    if (om == 0b10 || y < obj_y || y >= obj_y + obj_h) {
+        ppu->obj_id = (ppu->obj_id + 1) % 128;
         return;
     }
 
-    uint16_t attr2 = gba_bus_read_half(gba, BUS_OAM + (obj_id * 6) + 4);
+    uint16_t attr2 = gba_bus_read_half(gba, BUS_OAM + (ppu->obj_id * OAM_ENTRY_SIZE) + 4);
 
     uint16_t base_tile_id = attr2 & 0x03FF;
     uint8_t priority = (attr2 >> 10) & 0x03;
 
+    bool is_1d_mapping = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], 6);
     uint16_t mapping_width = is_1d_mapping ? 8 : 32;
 
-    uint32_t tile_x = x - obj_x;
-    uint32_t tile_y = y - obj_y;
+    for (int32_t x = MAX(obj_x, 0); x < obj_x + obj_w && x < GBA_SCREEN_WIDTH; x++) { // TODO x/y oob
+        uint32_t tile_x = x - obj_x;
+        uint32_t tile_y = y - obj_y;
 
-    if (flip_x)
-        tile_x = (obj_w - 1) - tile_x;
-    if (flip_y)
-        tile_y = (obj_h - 1) - tile_y;
+        // TODO Sprite rendering for the current scanline starts at cycle #40 of the previous scanline and continues
+        // either until the horizontal blanking period of that previous scanline (if DISPCNT.bit5 = 1) or until cycle
+        // #40 of the current scanline (if DISPCNT.bit5 = 0).
 
-    uint16_t tile_id = base_tile_id + ((tile_y / 8) * mapping_width) + tile_x / 8;
+        if (flip_x)
+            tile_x = (obj_w - 1) - tile_x;
+        if (flip_y)
+            tile_y = (obj_h - 1) - tile_y;
 
-    if (is_8bpp) {
-        ppu->line_layers[4][x] = render_text_tile_8bpp(gba, VRAM_OBJ_BASE_ADDR, tile_id, x - obj_x, y - obj_y, flip_x, flip_y);
-    } else { // 4bpp
-        uint8_t palette_bank = (attr2 >> 12) & 0x0F;
-        // store palette bank in hi byte of line layer to be used by compositing step later
-        ppu->line_layers[4][x] = (palette_bank << 8) | render_text_tile_4bpp(gba, VRAM_OBJ_BASE_ADDR, tile_id, x - obj_x, y - obj_y, flip_x, flip_y);
+        uint16_t tile_id = base_tile_id + ((tile_y / 8) * mapping_width) + tile_x / 8;
+
+        if (is_8bpp) {
+            ppu->obj_layers[y & 1][x] = render_text_tile_8bpp(gba, VRAM_OBJ_BASE_ADDR, tile_id, x - obj_x, y - obj_y, flip_x, flip_y);
+        } else { // 4bpp
+            uint8_t palette_bank = (attr2 >> 12) & 0x0F;
+            // store palette bank in hi byte of line layer to be used by compositing step later
+            ppu->obj_layers[y & 1][x] = (palette_bank << 8) | render_text_tile_4bpp(gba, VRAM_OBJ_BASE_ADDR, tile_id, x - obj_x, y - obj_y, flip_x, flip_y);
+        }
     }
+
+    ppu->obj_id = (ppu->obj_id + 1) % 128;
 }
 
 static inline void draw_bg_mode0(gba_t *gba) {
@@ -398,7 +410,7 @@ static inline void compositing(gba_t *gba) {
 
     uint16_t color = gba_bus_read_half(gba, BUS_PRAM); // backdrop color
 
-    for (uint8_t i = 0; i < 5; i++) {
+    for (uint8_t i = 0; i < 4; i++) {
         bool bg_enabled = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], i + 8);
         if (!bg_enabled)
             continue;
@@ -412,9 +424,24 @@ static inline void compositing(gba_t *gba) {
             if (palette_index != 0) {
                 if (palette_bank)
                     palette_index |= palette_bank << 4;
-                uint32_t palette_base_addr = i == 4 ? BUS_PRAM + 0x0200 : BUS_PRAM;
-                color = gba_bus_read_half(gba, palette_base_addr + (palette_index << 1));
+                color = gba_bus_read_half(gba, BUS_PRAM + (palette_index << 1));
             }
+        }
+    }
+
+    bool obj_enabled = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], 12);
+    if (obj_enabled && (mode == 0 || mode == 2)) { // TODO is this mode check accurate?
+        uint8_t current_obj_layer = y & 1;
+
+        uint16_t palette_bank = ppu->obj_layers[current_obj_layer][x] >> 8;
+        uint16_t palette_index = ppu->obj_layers[current_obj_layer][x] & 0x0F;
+
+        ppu->obj_layers[current_obj_layer][x] = 0;
+
+        if (palette_index != 0) {
+            if (palette_bank)
+                palette_index |= palette_bank << 4;
+            color = gba_bus_read_half(gba, (BUS_PRAM + 0x0200) + (palette_index << 1));
         }
     }
 
@@ -429,23 +456,29 @@ void gba_ppu_step(gba_t *gba) {
     // TODO bg state machine that emulate accurate bg vram accesses
     // TODO obj state machine that emulate accurate obj vram accesses --> renders objs 1 line before the current line
 
+    switch (PPU_GET_MODE(gba)) {
+    case 0:
+    case 2:
+        if (gba->bus->io_regs[IO_VCOUNT] == GBA_SCREEN_HEIGHT + VBLANK_HEIGHT - 1)
+            draw_obj(gba, 0);
+        else
+            draw_obj(gba, gba->bus->io_regs[IO_VCOUNT] + 1);
+        break;
+    default:
+        break;
+    }
+
     switch (ppu->period) {
     case GBA_PPU_PERIOD_HDRAW:
         switch (PPU_GET_MODE(gba)) {
         case 0:
             draw_bg_mode0(gba);
-
-            if (CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], 12))
-                draw_obj(gba);
             break;
         case 1:
             draw_bg_mode1(gba);
             break;
         case 2:
             draw_bg_mode2(gba);
-
-            if (CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], 12))
-                draw_obj(gba);
             break;
         case 3:
             draw_bg_mode3(gba);
