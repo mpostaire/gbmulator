@@ -14,8 +14,10 @@ typedef struct {
     uint32_t scanline_cycles;
     gba_ppu_period_t period;
 
-    // 0-3: bg, 4: obj
-    uint16_t line_layers[5][GBA_SCREEN_WIDTH]; // TODO this may be optimized to be smaller // TODO only line_layers[2] needs to be uint16_t in bitmap modes 3 and 5
+    uint8_t obj_id;
+
+    uint16_t line_layers[4][GBA_SCREEN_WIDTH];
+    uint16_t obj_layers[2][GBA_SCREEN_WIDTH];
 
     uint8_t pixels[GBA_SCREEN_WIDTH * GBA_SCREEN_HEIGHT * 4];
 } gba_ppu_t;
