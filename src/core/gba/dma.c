@@ -16,9 +16,9 @@
 #define GET_DMA_SRC_TYPE(gba, channel) ((IO_DMAxCNT((gba), (channel)) >> 7) & 0x03)
 #define GET_DMA_START(gba, channel) ((IO_DMAxCNT_H((gba), (channel)) >> 12) & 0x03)
 
-#define IS_DMA_REPEAT(gba, channel) CHECK_BIT(IO_DMAxCNT_H((gba), (channel)), 8)
-#define IS_DMA_HALF(gba, channel) (!CHECK_BIT(IO_DMAxCNT_H((gba), (channel)), 9))
-#define IS_DMA3_DRQ(gba, channel) CHECK_BIT(IO_DMAxCNT_H((gba), (channel)), 10)
+#define IS_DMA_REPEAT(gba, channel) CHECK_BIT(IO_DMAxCNT_H((gba), (channel)), 9)
+#define IS_DMA_HALF(gba, channel) (!CHECK_BIT(IO_DMAxCNT_H((gba), (channel)), 10))
+#define IS_DMA3_DRQ(gba, channel) CHECK_BIT(IO_DMAxCNT_H((gba), (channel)), 11)
 #define IS_DMA_END_IRQ(gba, channel) CHECK_BIT(IO_DMAxCNT_H((gba), (channel)), 14)
 #define IS_DMA_ENABLED(gba, channel) CHECK_BIT(IO_DMAxCNT_H((gba), (channel)), 15)
 
@@ -91,9 +91,8 @@ static inline void check_dma_requests(gba_t *gba) {
         channel->count = IO_DMAxCNT_L(gba, i) & count_mask;
         if (channel->count == 0)
             channel->count = count_mask;
-        channel->count++;
 
-        uint32_t addr_mask = i == 3 ? 0x07FFFFFF : 0x0FFFFFFF;
+        uint32_t addr_mask = i == 3 ? 0x0FFFFFFF : 0x07FFFFFF;
         channel->src = IO_DMAxSAD(gba, i) & addr_mask;
         channel->dst = IO_DMAxDAD(gba, i) & addr_mask;
 
