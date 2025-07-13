@@ -15,7 +15,7 @@
 #define VBLANK_CYCLES (SCANLINE_CYCLES * VBLANK_HEIGHT)
 #define REFRESH_CYCLES (VDRAW_CYCLES + VBLANK_CYCLES)
 
-#define PPU_GET_FRAME(gba) GET_BIT((gba)->bus->io_regs[IO_DISPCNT], 4)
+#define PPU_GET_FRAME(gba) GET_BIT((gba)->bus->io[IO_DISPCNT], 4)
 
 #define VRAM_OBJ_BASE_ADDR (BUS_VRAM + (4 * 0x4000))
 
@@ -102,18 +102,18 @@ static inline void draw_text_bg(gba_t *gba, uint8_t bg, uint32_t x, uint32_t y) 
     uint16_t bgxvofs = IO_BG0VOFS + bg;
     uint16_t bgxhofs = IO_BG0HOFS + bg;
 
-    uint8_t priority = gba->bus->io_regs[bgxcnt] & 0x03;
-    uint8_t char_base_block = (gba->bus->io_regs[bgxcnt] >> 2) & 0x03;
-    bool mosaic = CHECK_BIT(gba->bus->io_regs[bgxcnt], 6);
-    bool is_8bpp = CHECK_BIT(gba->bus->io_regs[bgxcnt], 7);
-    uint8_t screen_base_block = (gba->bus->io_regs[bgxcnt] >> 8) & 0x1F;
-    uint8_t screen_size = (gba->bus->io_regs[bgxcnt] >> 14) & 0x03;
+    uint8_t priority = gba->bus->io[bgxcnt] & 0x03;
+    uint8_t char_base_block = (gba->bus->io[bgxcnt] >> 2) & 0x03;
+    bool mosaic = CHECK_BIT(gba->bus->io[bgxcnt], 6);
+    bool is_8bpp = CHECK_BIT(gba->bus->io[bgxcnt], 7);
+    uint8_t screen_base_block = (gba->bus->io[bgxcnt] >> 8) & 0x1F;
+    uint8_t screen_size = (gba->bus->io[bgxcnt] >> 14) & 0x03;
 
     uint16_t n_tiles_x = CHECK_BIT(screen_size, 0) ? 64 : 32;
     uint16_t n_tiles_y = CHECK_BIT(screen_size, 1) ? 64 : 32;
 
-    uint32_t voffset = gba->bus->io_regs[bgxvofs] & 0x03FF;
-    uint32_t hoffset = gba->bus->io_regs[bgxhofs] & 0x03FF;
+    uint32_t voffset = gba->bus->io[bgxvofs] & 0x03FF;
+    uint32_t hoffset = gba->bus->io[bgxhofs] & 0x03FF;
 
     uint32_t base_x = x + hoffset;
     base_x %= n_tiles_x * 8;
@@ -239,7 +239,7 @@ static inline void draw_obj(gba_t *gba, int32_t y) {
     uint16_t base_tile_id = attr2 & 0x03FF;
     uint8_t priority = (attr2 >> 10) & 0x03;
 
-    bool is_1d_mapping = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], 6);
+    bool is_1d_mapping = CHECK_BIT(gba->bus->io[IO_DISPCNT], 6);
     uint16_t mapping_width = is_1d_mapping ? 8 : 32;
 
     for (int32_t x = MAX(obj_x, 0); x < obj_x + obj_w && x < GBA_SCREEN_WIDTH; x++) { // TODO x/y oob
@@ -276,13 +276,13 @@ static inline void draw_bg_mode0(gba_t *gba) {
         return;
 
     uint32_t x = (ppu->scanline_cycles - BG_FETCH_DELAY) / PIXEL_CYCLES;
-    uint32_t y = gba->bus->io_regs[IO_VCOUNT];
+    uint32_t y = gba->bus->io[IO_VCOUNT];
 
     if (x >= GBA_SCREEN_WIDTH)
         return;
 
     for (uint8_t bg = 0; bg < 4; bg++)
-        if (CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], bg + 8))
+        if (CHECK_BIT(gba->bus->io[IO_DISPCNT], bg + 8))
             draw_text_bg(gba, bg, x, y);
 }
 
@@ -293,16 +293,16 @@ static inline void draw_bg_mode1(gba_t *gba) {
         return;
 
     uint32_t x = (ppu->scanline_cycles - BG_FETCH_DELAY) / PIXEL_CYCLES;
-    uint32_t y = gba->bus->io_regs[IO_VCOUNT];
+    uint32_t y = gba->bus->io[IO_VCOUNT];
 
     if (x >= GBA_SCREEN_WIDTH)
         return;
 
     for (uint8_t bg = 0; bg < 2; bg++)
-        if (CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], bg + 8))
+        if (CHECK_BIT(gba->bus->io[IO_DISPCNT], bg + 8))
             draw_text_bg(gba, bg, x, y);
 
-    if (CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], 10))
+    if (CHECK_BIT(gba->bus->io[IO_DISPCNT], 10))
         draw_affine_bg(gba, 2, x, y);
 }
 
@@ -313,13 +313,13 @@ static inline void draw_bg_mode2(gba_t *gba) {
         return;
 
     uint32_t x = (ppu->scanline_cycles - BG_FETCH_DELAY) / PIXEL_CYCLES;
-    uint32_t y = gba->bus->io_regs[IO_VCOUNT];
+    uint32_t y = gba->bus->io[IO_VCOUNT];
 
     if (x >= GBA_SCREEN_WIDTH)
         return;
 
     for (uint8_t bg = 2; bg < 4; bg++)
-        if (CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], bg + 8))
+        if (CHECK_BIT(gba->bus->io[IO_DISPCNT], bg + 8))
             draw_affine_bg(gba, bg, x, y);
 }
 
@@ -330,12 +330,12 @@ static inline void draw_bg_mode3(gba_t *gba) {
         return;
 
     uint32_t x = (ppu->scanline_cycles - BG_FETCH_DELAY) / PIXEL_CYCLES;
-    uint32_t y = gba->bus->io_regs[IO_VCOUNT];
+    uint32_t y = gba->bus->io[IO_VCOUNT];
 
     if (x >= GBA_SCREEN_WIDTH)
         return;
 
-    bool display_bg2 = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], 10);
+    bool display_bg2 = CHECK_BIT(gba->bus->io[IO_DISPCNT], 10);
     if (display_bg2) {
         uint32_t pixel_base_addr = BUS_VRAM;
         uint32_t pixel_addr_offset = (y << 1) * GBA_SCREEN_WIDTH + (x << 1);
@@ -353,12 +353,12 @@ static inline void draw_bg_mode4(gba_t *gba) {
         return;
 
     uint32_t x = (ppu->scanline_cycles - BG_FETCH_DELAY) / PIXEL_CYCLES;
-    uint32_t y = gba->bus->io_regs[IO_VCOUNT];
+    uint32_t y = gba->bus->io[IO_VCOUNT];
 
     if (x >= GBA_SCREEN_WIDTH)
         return;
 
-    bool display_bg2 = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], 10);
+    bool display_bg2 = CHECK_BIT(gba->bus->io[IO_DISPCNT], 10);
     if (display_bg2) {
         uint32_t pixel_base_addr = BUS_VRAM + (PPU_GET_FRAME(gba) * 0xA000);
         uint32_t pixel_addr_offset = y * GBA_SCREEN_WIDTH + x;
@@ -376,12 +376,12 @@ static inline void draw_bg_mode5(gba_t *gba) {
         return;
 
     uint32_t x = (ppu->scanline_cycles - BG_FETCH_DELAY) / PIXEL_CYCLES;
-    uint32_t y = gba->bus->io_regs[IO_VCOUNT];
+    uint32_t y = gba->bus->io[IO_VCOUNT];
 
     if (x >= GBA_SCREEN_WIDTH)
         return;
 
-    bool display_bg2 = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], 10);
+    bool display_bg2 = CHECK_BIT(gba->bus->io[IO_DISPCNT], 10);
     if (display_bg2 || x >= 160 || y >= 128) {
         uint32_t pixel_base_addr = BUS_VRAM + (PPU_GET_FRAME(gba) * 0xA000);
         uint32_t pixel_addr_offset = (y << 1) * 160 + (x << 1);
@@ -401,7 +401,7 @@ static inline void compositing(gba_t *gba) {
         return;
 
     uint32_t x = (ppu->scanline_cycles - COMPOSITING_DELAY) / PIXEL_CYCLES;
-    uint32_t y = gba->bus->io_regs[IO_VCOUNT];
+    uint32_t y = gba->bus->io[IO_VCOUNT];
 
     if (x >= GBA_SCREEN_WIDTH)
         return;
@@ -411,7 +411,7 @@ static inline void compositing(gba_t *gba) {
     uint16_t color = gba_bus_read_half(gba, BUS_PRAM); // backdrop color
 
     for (uint8_t i = 0; i < 4; i++) {
-        bool bg_enabled = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], i + 8);
+        bool bg_enabled = CHECK_BIT(gba->bus->io[IO_DISPCNT], i + 8);
         if (!bg_enabled)
             continue;
 
@@ -429,7 +429,7 @@ static inline void compositing(gba_t *gba) {
         }
     }
 
-    bool obj_enabled = CHECK_BIT(gba->bus->io_regs[IO_DISPCNT], 12);
+    bool obj_enabled = CHECK_BIT(gba->bus->io[IO_DISPCNT], 12);
     if (obj_enabled && (mode == 0 || mode == 2)) { // TODO is this mode check accurate?
         uint8_t current_obj_layer = y & 1;
 
@@ -459,10 +459,10 @@ void gba_ppu_step(gba_t *gba) {
     switch (PPU_GET_MODE(gba)) {
     case 0:
     case 2:
-        if (gba->bus->io_regs[IO_VCOUNT] == GBA_SCREEN_HEIGHT + VBLANK_HEIGHT - 1)
+        if (gba->bus->io[IO_VCOUNT] == GBA_SCREEN_HEIGHT + VBLANK_HEIGHT - 1)
             draw_obj(gba, 0);
         else
-            draw_obj(gba, gba->bus->io_regs[IO_VCOUNT] + 1);
+            draw_obj(gba, gba->bus->io[IO_VCOUNT] + 1);
         break;
     default:
         break;
@@ -493,7 +493,7 @@ void gba_ppu_step(gba_t *gba) {
             break;
         }
 
-        if (CHECK_BIT(gba->bus->io_regs[IO_GREENSWAP], 0))
+        if (CHECK_BIT(gba->bus->io[IO_GREENSWAP], 0))
             todo("green swap");
 
         // TODO composite step
@@ -505,9 +505,9 @@ void gba_ppu_step(gba_t *gba) {
 
         if (ppu->scanline_cycles >= HDRAW_CYCLES) {
             ppu->period = GBA_PPU_PERIOD_HBLANK;
-            SET_BIT(gba->bus->io_regs[IO_DISPSTAT], 1);
+            SET_BIT(gba->bus->io[IO_DISPSTAT], 1);
 
-            if (gba->bus->io_regs[IO_DISPSTAT] & 0b010010)
+            if (gba->bus->io[IO_DISPSTAT] & 0b010010)
                 CPU_REQUEST_INTERRUPT(gba, IRQ_HBLANK);
         }
         break;
@@ -515,19 +515,19 @@ void gba_ppu_step(gba_t *gba) {
         if (ppu->scanline_cycles >= SCANLINE_CYCLES) {
             ppu->scanline_cycles = 0;
 
-            gba->bus->io_regs[IO_VCOUNT]++;
-            CHANGE_BIT(gba->bus->io_regs[IO_DISPSTAT], 2, gba->bus->io_regs[IO_VCOUNT] == gba->bus->io_regs[IO_DISPCNT] >> 8);
+            gba->bus->io[IO_VCOUNT]++;
+            CHANGE_BIT(gba->bus->io[IO_DISPSTAT], 2, gba->bus->io[IO_VCOUNT] == gba->bus->io[IO_DISPCNT] >> 8);
 
-            if (gba->bus->io_regs[IO_DISPSTAT] & 0b100100)
+            if (gba->bus->io[IO_DISPSTAT] & 0b100100)
                 CPU_REQUEST_INTERRUPT(gba, IRQ_VCOUNT);
 
             ppu->period = GBA_PPU_PERIOD_HDRAW;
-            if (gba->bus->io_regs[IO_VCOUNT] >= GBA_SCREEN_HEIGHT) {
+            if (gba->bus->io[IO_VCOUNT] >= GBA_SCREEN_HEIGHT) {
                 ppu->period = GBA_PPU_PERIOD_VBLANK;
-                RESET_BIT(gba->bus->io_regs[IO_DISPSTAT], 1);
-                SET_BIT(gba->bus->io_regs[IO_DISPSTAT], 0);
+                RESET_BIT(gba->bus->io[IO_DISPSTAT], 1);
+                SET_BIT(gba->bus->io[IO_DISPSTAT], 0);
 
-                if (gba->bus->io_regs[IO_DISPSTAT] & 0b001001)
+                if (gba->bus->io[IO_DISPSTAT] & 0b001001)
                     CPU_REQUEST_INTERRUPT(gba, IRQ_VBLANK);
             }
         }
@@ -536,16 +536,16 @@ void gba_ppu_step(gba_t *gba) {
         if (ppu->scanline_cycles >= SCANLINE_CYCLES) {
             ppu->scanline_cycles = 0;
 
-            gba->bus->io_regs[IO_VCOUNT]++;
-            CHANGE_BIT(gba->bus->io_regs[IO_DISPSTAT], 2, gba->bus->io_regs[IO_VCOUNT] == gba->bus->io_regs[IO_DISPCNT] >> 8);
+            gba->bus->io[IO_VCOUNT]++;
+            CHANGE_BIT(gba->bus->io[IO_DISPSTAT], 2, gba->bus->io[IO_VCOUNT] == gba->bus->io[IO_DISPCNT] >> 8);
 
-            if (gba->bus->io_regs[IO_DISPSTAT] & 0b100100)
+            if (gba->bus->io[IO_DISPSTAT] & 0b100100)
                 CPU_REQUEST_INTERRUPT(gba, IRQ_VCOUNT);
 
-            if (gba->bus->io_regs[IO_VCOUNT] >= GBA_SCREEN_HEIGHT + VBLANK_HEIGHT) {
-                gba->bus->io_regs[IO_VCOUNT] = 0;
+            if (gba->bus->io[IO_VCOUNT] >= GBA_SCREEN_HEIGHT + VBLANK_HEIGHT) {
+                gba->bus->io[IO_VCOUNT] = 0;
                 ppu->period = GBA_PPU_PERIOD_HDRAW;
-                RESET_BIT(gba->bus->io_regs[IO_DISPSTAT], 0);
+                RESET_BIT(gba->bus->io[IO_DISPSTAT], 0);
 
                 if (gba->on_new_frame)
                     gba->on_new_frame(ppu->pixels);

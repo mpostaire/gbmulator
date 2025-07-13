@@ -2,7 +2,7 @@
 
 #include "gba.h"
 
-#define PPU_GET_MODE(gba) ((gba)->bus->io_regs[IO_DISPCNT] & 0x07)
+#define PPU_GET_MODE(gba) ((gba)->bus->io[IO_DISPCNT] & 0x07)
 
 typedef enum {
     GBA_PPU_PERIOD_HDRAW,
