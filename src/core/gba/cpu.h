@@ -21,7 +21,7 @@
 #define IRQ_KEYPAD 12  // Keypad
 #define IRQ_GAMEPAK 13 // Game Pak (external IRQ source)
 
-#define CPU_REQUEST_INTERRUPT(gba, irq) SET_BIT((gba)->bus->io_regs[IO_IF], irq)
+#define CPU_REQUEST_INTERRUPT(gba, irq) SET_BIT((gba)->bus->io[IO_IF], irq)
 
 typedef struct {
     uint32_t regs[16];

@@ -47,15 +47,15 @@ void gba_quit(gba_t *gba) {
 }
 
 void gba_print_status(gba_t *gba) {
-    uint8_t language = gba->bus->game_rom[0xAF];
-    uint16_t maker_code = ((gba->bus->game_rom[0xB0] - 0x30) * 10) + (gba->bus->game_rom[0xB1] - 0x30); // maker_code is 2 chars
-    uint8_t version = gba->bus->game_rom[0xBC];
+    uint8_t language = gba->bus->rom[0xAF];
+    uint16_t maker_code = ((gba->bus->rom[0xB0] - 0x30) * 10) + (gba->bus->rom[0xB1] - 0x30); // maker_code is 2 chars
+    uint8_t version = gba->bus->rom[0xBC];
 
     char maker_buf[32];
     if (maker_code < sizeof(makers))
         snprintf(maker_buf, sizeof(maker_buf), "%s", makers[maker_code]);
     else
-        snprintf(maker_buf, sizeof(maker_buf), "%c%c", gba->bus->game_rom[0xB0], gba->bus->game_rom[0xB1]);
+        snprintf(maker_buf, sizeof(maker_buf), "%c%c", gba->bus->rom[0xB0], gba->bus->rom[0xB1]);
 
     char *language_str;
     switch (language) {
@@ -92,7 +92,7 @@ char *gba_get_rom_title(gba_t *gba) {
 }
 
 void gba_set_joypad_state(gba_t *gba, uint16_t state) {
-    gba->bus->io_regs[IO_KEYINPUT] = state & 0x03FF;
+    gba->bus->io[IO_KEYINPUT] = state & 0x03FF;
     // TODO interrupts
 }
 
@@ -118,5 +118,5 @@ bool gba_load_savestate(gba_t *gba, uint8_t *data, size_t length) {
 
 uint8_t *gba_get_rom(gba_t *gba, size_t *rom_size) {
     *rom_size = gba->bus->rom_size;
-    return gba->bus->game_rom;
+    return gba->bus->rom;
 }

@@ -1,7 +1,7 @@
 #include "gba_priv.h"
 
-#define IO_TMxCNT_L(gba, channel) (gba)->bus->io_regs[IO_TM0CNT_L + ((IO_TM1CNT_L - IO_TM0CNT_L) * (channel))]
-#define IO_TMxCNT_H(gba, channel) (gba)->bus->io_regs[IO_TM0CNT_H + ((IO_TM1CNT_H - IO_TM0CNT_H) * (channel))]
+#define IO_TMxCNT_L(gba, channel) (gba)->bus->io[IO_TM0CNT_L + ((IO_TM1CNT_L - IO_TM0CNT_L) * (channel))]
+#define IO_TMxCNT_H(gba, channel) (gba)->bus->io[IO_TM0CNT_H + ((IO_TM1CNT_H - IO_TM0CNT_H) * (channel))]
 
 #define IS_TM_COUNTUP(gba, channel) (channel != 0 && CHECK_BIT(IO_TMxCNT_H((gba), (channel)), 2))
 #define IS_TM_IRQ(gba, channel) CHECK_BIT(IO_TMxCNT_H((gba), (channel)), 6)

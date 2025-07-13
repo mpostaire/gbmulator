@@ -6,14 +6,14 @@
 
 typedef enum {
     // General Internal Memory
-    BUS_BIOS_ROM = 0x00000000,        // BIOS - System ROM (16 KBytes)
-    BUS_BIOS_ROM_UNUSED = 0x00004000, // Not used
-    BUS_EWRAM = 0x02000000,           // WRAM - On-board Work RAM (256 KBytes) 2 Wait
-    BUS_EWRAM_UNUSED = 0x02040000,    // Not used
-    BUS_IWRAM = 0x03000000,           // WRAM - On-chip Work RAM (32 KBytes)
-    BUS_IWRAM_UNUSED = 0x03008000,    // Not used
-    BUS_IO_REGS = 0x04000000,         // I/O Registers
-    BUS_IO_REGS_UNUSED = 0x04000400,  // Not used
+    BUS_BIOS = 0x00000000,           // BIOS - System ROM (16 KBytes)
+    BUS_BIOS_UNUSED = 0x00004000,    // Not used
+    BUS_EWRAM = 0x02000000,          // WRAM - On-board Work RAM (256 KBytes) 2 Wait
+    BUS_EWRAM_UNUSED = 0x02040000,   // Not used
+    BUS_IWRAM = 0x03000000,          // WRAM - On-chip Work RAM (32 KBytes)
+    BUS_IWRAM_UNUSED = 0x03008000,   // Not used
+    BUS_IO = 0x04000000,        // I/O Registers
+    BUS_IO_UNUSED = 0x04000400, // Not used
 
     // Internal Display Memory
     BUS_PRAM = 0x05000000,        // BG/OBJ Palette RAM (1 Kbyte)
@@ -24,11 +24,11 @@ typedef enum {
     BUS_OAM_UNUSED = 0x07000400,  // Not used
 
     // External Memory (Game Pak)
-    BUS_GAME_ROM0 = 0x08000000,   // Game Pak ROM/FlashROM (max 32MB) - Wait State 0
-    BUS_GAME_ROM1 = 0x0A000000,   // Game Pak ROM/FlashROM (max 32MB) - Wait State 1
-    BUS_GAME_ROM2 = 0x0C000000,   // Game Pak ROM/FlashROM (max 32MB) - Wait State 2
-    BUS_GAME_SRAM = 0x0E000000,   // Game Pak SRAM (max 64 KBytes) - 8bit Bus width
-    BUS_GAME_UNUSED = 0x0E010000, // Not used
+    BUS_ROM0 = 0x08000000,   // Game Pak ROM/FlashROM (max 32MB) - Wait State 0
+    BUS_ROM1 = 0x0A000000,   // Game Pak ROM/FlashROM (max 32MB) - Wait State 1
+    BUS_ROM2 = 0x0C000000,   // Game Pak ROM/FlashROM (max 32MB) - Wait State 2
+    BUS_SRAM = 0x0E000000,   // Game Pak SRAM (max 64 KBytes) - 8bit Bus width
+    BUS_SRAM_UNUSED = 0x0E010000, // Not used
 
     BUS_UNUSED = 0x10000000 // Not used (upper 4bits of address bus unused)
 } gba_bus_map_t;
@@ -158,33 +158,51 @@ typedef enum {
     // 0x000  4    W    (3DS)     Disable ARM7 bootrom overlay (3DS only)
 } gba_io_reg_map_t;
 
+typedef enum {
+    BUS_ACCESS_N, // Non-sequential bus access
+    BUS_ACCESS_S  // Sequential bus access
+} bus_access_t;
+
 typedef struct {
-    uint8_t bios_rom[BUS_BIOS_ROM_UNUSED - BUS_BIOS_ROM];
+    uint8_t bios[BUS_BIOS_UNUSED - BUS_BIOS];
     uint8_t ewram[BUS_EWRAM_UNUSED - BUS_EWRAM];
     uint8_t iwram[BUS_IWRAM_UNUSED - BUS_IWRAM];
-    uint16_t io_regs[(BUS_IO_REGS_UNUSED - BUS_IO_REGS) / sizeof(uint16_t)];
-    uint8_t palette_ram[BUS_PRAM_UNUSED - BUS_PRAM];
+    uint16_t io[(BUS_IO_UNUSED - BUS_IO) / sizeof(uint16_t)];
+    uint8_t pram[BUS_PRAM_UNUSED - BUS_PRAM];
     uint8_t vram[BUS_VRAM_UNUSED - BUS_VRAM];
     uint8_t oam[BUS_OAM_UNUSED - BUS_OAM];
-    uint8_t game_rom[BUS_GAME_ROM1 - BUS_GAME_ROM0];
-    uint8_t game_sram[BUS_GAME_UNUSED - BUS_GAME_SRAM];
+    uint8_t rom[BUS_ROM1 - BUS_ROM0];
+    uint8_t sram[BUS_SRAM_UNUSED - BUS_SRAM];
 
     uint32_t last_fetched_bios_instr;
+    uint32_t data_latch;
+
+    uint32_t rom_address_latch;
 
     size_t rom_size;
+
+    uint8_t mgba_logstr[0x100];
 } gba_bus_t;
 
-uint8_t gba_bus_read_byte(gba_t *gba, uint32_t address);
+uint8_t _gba_bus_read_byte(gba_t *gba, bus_access_t access, uint32_t address);
 
-uint16_t gba_bus_read_half(gba_t *gba, uint32_t address);
+uint16_t _gba_bus_read_half(gba_t *gba, bus_access_t access, uint32_t address);
 
-uint32_t gba_bus_read_word(gba_t *gba, uint32_t address);
+uint32_t _gba_bus_read_word(gba_t *gba, bus_access_t access, uint32_t address);
 
-void gba_bus_write_byte(gba_t *gba, uint32_t address, uint8_t data);
+void _gba_bus_write_byte(gba_t *gba, bus_access_t access, uint32_t address, uint8_t data);
 
-void gba_bus_write_half(gba_t *gba, uint32_t address, uint16_t data);
+void _gba_bus_write_half(gba_t *gba, bus_access_t access, uint32_t address, uint16_t data);
 
-void gba_bus_write_word(gba_t *gba, uint32_t address, uint32_t data);
+void _gba_bus_write_word(gba_t *gba, bus_access_t access, uint32_t address, uint32_t data);
+
+// TODO remove these macros --> implement accesses in cpu and ppu
+#define gba_bus_read_byte(gba, address) _gba_bus_read_byte(gba, BUS_ACCESS_N, address)
+#define gba_bus_read_half(gba, address) _gba_bus_read_half(gba, BUS_ACCESS_N, address)
+#define gba_bus_read_word(gba, address) _gba_bus_read_word(gba, BUS_ACCESS_N, address)
+#define gba_bus_write_byte(gba, address, data) _gba_bus_write_byte(gba, BUS_ACCESS_N, address, data)
+#define gba_bus_write_half(gba, address, data) _gba_bus_write_half(gba, BUS_ACCESS_N, address, data)
+#define gba_bus_write_word(gba, address, data) _gba_bus_write_word(gba, BUS_ACCESS_N, address, data)
 
 bool gba_bus_init(gba_t *gba, const uint8_t *rom, size_t rom_size);
 
