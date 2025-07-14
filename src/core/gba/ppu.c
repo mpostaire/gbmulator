@@ -217,14 +217,12 @@ static inline void draw_obj(gba_t *gba, int32_t y) {
     bool flip_y = CHECK_BIT(attrs01, 29);
     uint8_t sz = (attrs01 >> 30) & 0x03;
 
-    static const uint8_t obj_dims[3][4][2] = {
+    static const uint8_t obj_dims[4][4][2] = {
         {{8, 8}, {16, 16}, {32, 32}, {64, 64}},
         {{16, 8}, {32, 8}, {32, 16}, {64, 32}},
-        {{8, 16}, {8, 32}, {16, 32}, {32, 64}}
+        {{8, 16}, {8, 32}, {16, 32}, {32, 64}},
+        {{8, 8}, {8, 8}, {8, 8}, {8, 8}}, // undefined behaviour if sh is 0b11
     };
-
-    if (sh == 0b11)
-        todo("forbidden");
 
     uint8_t obj_w = obj_dims[sh][sz][0];
     uint8_t obj_h = obj_dims[sh][sz][1];
