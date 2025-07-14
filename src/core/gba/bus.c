@@ -780,7 +780,7 @@ static void io_write(gba_t *gba, uint16_t address, uint16_t data) {
     CHANGE_BITS(gba->bus->io[address], mask, data);
 }
 
-// TODO this function is too big and ugly
+// TODO this function is too big and ugly --> replace by accessor functions for every region/access sizes
 static void bus_access(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
     gba_bus_t *bus = gba->bus;
     bus_access_t access = mode & 0x01;
@@ -878,10 +878,27 @@ static void bus_access(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data
     case BUS_ROM1 ... BUS_ROM2 - 1:
     case BUS_ROM2 ... BUS_SRAM - 1:
         if (access == BUS_ACCESS_N)
-            bus->rom_address_latch = address;
-        else if (access == BUS_ACCESS_S)
-            bus->rom_address_latch += size;
-        ret = is_write ? NULL : &bus->rom[bus->rom_address_latch & 0x00FFFFFF];
+            bus->rom_address_latch = address & 0x01FFFFFF;
+
+        if (is_write) {
+            ret = NULL;
+            break;
+        }
+
+        ret = &bus->rom[bus->rom_address_latch];
+
+        if (bus->rom_address_latch > bus->rom_size) {
+            // Reading from GamePak ROM when no Cartridge is inserted (or address beyond cartridge capacity)
+            // Because Gamepak uses the same signal-lines for both 16bit data and for lower 16bit halfword address, the
+            // entire gamepak ROM area is effectively filled by incrementing 16bit values (Address/2 AND FFFFh).
+            data = (bus->rom_address_latch >> 1) & 0xFFFF;
+            if (size == 4)
+                data |= (data + 1) << 16;
+            ret = &data;
+        }
+
+        // TODO do writes update the rom_address_latch?
+        bus->rom_address_latch = (bus->rom_address_latch + size) & 0x01FFFFFF;
         break;
     case BUS_SRAM ... BUS_SRAM_UNUSED - 1:
         if (!is_write) {
