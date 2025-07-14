@@ -180,28 +180,28 @@ static inline void set_flags_nz_64(gba_cpu_t *cpu, uint64_t res) {
 
 #define ADD_SET_FLAGS(cpu, res, op1, op2)                                            \
     do {                                                                             \
-        set_flags_nz_32((cpu), (res));                                              \
+        set_flags_nz_32((cpu), (res));                                               \
         CPSR_CHANGE_FLAG((cpu), CPSR_C, (res) < (op1));                              \
         CPSR_CHANGE_FLAG((cpu), CPSR_V, (~((op1) ^ (op2)) & ((op2) ^ (res))) >> 31); \
     } while (0)
 
 #define ADC_SET_FLAGS(cpu, res64, op1, op2)                                                         \
     do {                                                                                            \
-        set_flags_nz_32((cpu), (res64));                                                           \
+        set_flags_nz_32((cpu), (res64));                                                            \
         CPSR_CHANGE_FLAG((cpu), CPSR_C, GET_BIT(res64, 32));                                        \
         CPSR_CHANGE_FLAG((cpu), CPSR_V, (~((op1) ^ (op2)) & ((op2) ^ ((uint32_t) (res64)))) >> 31); \
     } while (0)
 
 #define SUB_SET_FLAGS(cpu, res, op1, op2)                                           \
     do {                                                                            \
-        set_flags_nz_32((cpu), (res));                                             \
+        set_flags_nz_32((cpu), (res));                                              \
         CPSR_CHANGE_FLAG((cpu), CPSR_C, (op2) <= (op1));                            \
         CPSR_CHANGE_FLAG((cpu), CPSR_V, (((op1) ^ (op2)) & ((op1) ^ (res))) >> 31); \
     } while (0)
 
 #define SBC_SET_FLAGS(cpu, res, op1, op2)                                           \
     do {                                                                            \
-        set_flags_nz_32((cpu), (res));                                             \
+        set_flags_nz_32((cpu), (res));                                              \
         CPSR_CHANGE_FLAG((cpu), CPSR_C, (op2) <= (op1));                            \
         CPSR_CHANGE_FLAG((cpu), CPSR_V, (((op1) ^ (op2)) & ((op1) ^ (res))) >> 31); \
     } while (0)
@@ -896,7 +896,7 @@ static bool rsc_handler(gba_t *gba, uint32_t instr) {
     gba->cpu->regs[rd] = res;
 
     if (set_flags)
-        SBC_SET_FLAGS(gba->cpu, res, (uint64_t) op2 + (uint64_t) tmp, op1);
+        SBC_SET_FLAGS(gba->cpu, res, op2, (uint64_t) op1 + (uint64_t) tmp);
 
     if (rd == REG_PC) {
         if (s) {
