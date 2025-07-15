@@ -15,7 +15,7 @@ struct gba_t {
     gbmulator_new_sample_cb_t on_new_sample;
     gbmulator_accelerometer_request_cb_t on_accelerometer_request;
     gbmulator_camera_capture_image_cb_t on_camera_capture_image;
- 
+
     gba_cpu_t *cpu;
     gba_bus_t *bus;
     gba_ppu_t *ppu;
