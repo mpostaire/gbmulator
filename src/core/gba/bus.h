@@ -181,6 +181,7 @@ typedef struct {
 
     size_t rom_size;
 
+    bool mgba_logs_enabled;
     uint8_t mgba_logstr[0x100];
 } gba_bus_t;
 
