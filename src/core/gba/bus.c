@@ -1031,6 +1031,8 @@ static bus_accessors_t accessors[16] = {
     [0x0F] = {.read = unused_read, .write = unused_write},
 };
 
+// TODO accessor address indexing is wrong if hi nybble of MSB of instr is set to anything
+
 uint8_t _gba_bus_read_byte(gba_t *gba, bus_access_t access, uint32_t address) {
     bus_accessors_t accessor = accessors[(address >> 24) & 0x0F];
     uint32_t data = accessor.read(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_READ | access, ALIGN(address, 1));

@@ -6,14 +6,14 @@
 
 typedef enum {
     // General Internal Memory
-    BUS_BIOS = 0x00000000,           // BIOS - System ROM (16 KBytes)
-    BUS_BIOS_UNUSED = 0x00004000,    // Not used
-    BUS_EWRAM = 0x02000000,          // WRAM - On-board Work RAM (256 KBytes) 2 Wait
-    BUS_EWRAM_UNUSED = 0x02040000,   // Not used
-    BUS_IWRAM = 0x03000000,          // WRAM - On-chip Work RAM (32 KBytes)
-    BUS_IWRAM_UNUSED = 0x03008000,   // Not used
-    BUS_IO = 0x04000000,        // I/O Registers
-    BUS_IO_UNUSED = 0x04000400, // Not used
+    BUS_BIOS = 0x00000000,         // BIOS - System ROM (16 KBytes)
+    BUS_BIOS_UNUSED = 0x00004000,  // Not used
+    BUS_EWRAM = 0x02000000,        // WRAM - On-board Work RAM (256 KBytes) 2 Wait
+    BUS_EWRAM_UNUSED = 0x02040000, // Not used
+    BUS_IWRAM = 0x03000000,        // WRAM - On-chip Work RAM (32 KBytes)
+    BUS_IWRAM_UNUSED = 0x03008000, // Not used
+    BUS_IO = 0x04000000,           // I/O Registers
+    BUS_IO_UNUSED = 0x04000400,    // Not used
 
     // Internal Display Memory
     BUS_PRAM = 0x05000000,        // BG/OBJ Palette RAM (1 Kbyte)
@@ -24,10 +24,10 @@ typedef enum {
     BUS_OAM_UNUSED = 0x07000400,  // Not used
 
     // External Memory (Game Pak)
-    BUS_ROM0 = 0x08000000,   // Game Pak ROM/FlashROM (max 32MB) - Wait State 0
-    BUS_ROM1 = 0x0A000000,   // Game Pak ROM/FlashROM (max 32MB) - Wait State 1
-    BUS_ROM2 = 0x0C000000,   // Game Pak ROM/FlashROM (max 32MB) - Wait State 2
-    BUS_SRAM = 0x0E000000,   // Game Pak SRAM (max 64 KBytes) - 8bit Bus width
+    BUS_ROM0 = 0x08000000,        // Game Pak ROM/FlashROM (max 32MB) - Wait State 0
+    BUS_ROM1 = 0x0A000000,        // Game Pak ROM/FlashROM (max 32MB) - Wait State 1
+    BUS_ROM2 = 0x0C000000,        // Game Pak ROM/FlashROM (max 32MB) - Wait State 2
+    BUS_SRAM = 0x0E000000,        // Game Pak SRAM (max 64 KBytes) - 8bit Bus width
     BUS_SRAM_UNUSED = 0x0E010000, // Not used
 
     BUS_UNUSED = 0x10000000 // Not used (upper 4bits of address bus unused)
@@ -146,10 +146,10 @@ typedef enum {
     IO_JOYSTAT = IO_ADDR(0x158),   // 2    R/?  JOYSTAT   SIO JOY Bus Receive Status
 
     // Interrupt, Waitstate, and Power-Down Control
-    IO_IE = IO_ADDR(0x200),      // 2    R/W  IE        Interrupt Enable Register
-    IO_IF = IO_ADDR(0x202),      // 2    R/W  IF        Interrupt Request Flags / IRQ Acknowledge
-    IO_WAITCNT = IO_ADDR(0x204), // 2    R/W  WAITCNT   Game Pak Waitstate Control
-    IO_IME = IO_ADDR(0x208),     // 2    R/W  IME       Interrupt Master Enable Register
+    IO_IE = IO_ADDR(0x200),              // 2    R/W  IE        Interrupt Enable Register
+    IO_IF = IO_ADDR(0x202),              // 2    R/W  IF        Interrupt Request Flags / IRQ Acknowledge
+    IO_WAITCNT = IO_ADDR(0x204),         // 2    R/W  WAITCNT   Game Pak Waitstate Control
+    IO_IME = IO_ADDR(0x208),             // 2    R/W  IME       Interrupt Master Enable Register
     IO_POSTFLG_HALTCNT = IO_ADDR(0x300), // 1    R/W  POSTFLG   Undocumented - Post Boot Flag
     // IO_HALTCNT = IO_ADDR(0x301), // 1    W    HALTCNT   Undocumented - Power Down Control
     // 0x410  ?    ?    ?         Undocumented - Purpose Unknown / Bug ??? 0FFh
