@@ -559,7 +559,7 @@ static bool bx_handler(gba_t *gba, uint32_t instr) {
     CPSR_CHANGE_FLAG(gba->cpu, CPSR_T, GET_BIT(pc_dest, 0));
 
     if (CPSR_CHECK_FLAG(gba->cpu, CPSR_T))
-        pc_dest &= ~1;
+        pc_dest = ALIGN(pc_dest, 2);
 
     gba->cpu->regs[REG_PC] = pc_dest;
 
@@ -574,12 +574,13 @@ static bool and_handler(gba_t *gba, uint32_t instr) {
     uint8_t rd;
     bool c;
     bool set_flags = data_processing_begin(gba, instr, &rd, &op1, &op2, &c);
+    bool s = CHECK_BIT(instr, 20);
 
     LOG_DEBUG("(0x%08X) AND%s%s %s, %s, 0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], reg_names[(instr & 0x000F0000) >> 16], op2);
 
     gba->cpu->regs[rd] = op1 & op2;
 
-    if (set_flags) {
+    if (s) {
         set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
     }
@@ -599,37 +600,37 @@ static inline void bank_registers(gba_cpu_t *cpu, uint8_t old_mode, uint8_t new_
 
     if (old_mode == CPSR_MODE_FIQ) {
         // backup old regs
-        cpu->banked_regs_8_12[1][0] = cpu->regs[8];
-        cpu->banked_regs_8_12[1][1] = cpu->regs[9];
-        cpu->banked_regs_8_12[1][2] = cpu->regs[10];
-        cpu->banked_regs_8_12[1][3] = cpu->regs[11];
-        cpu->banked_regs_8_12[1][4] = cpu->regs[12];
+        cpu->banked_regs_8_12[REG_IDX_FIQ][0] = cpu->regs[8];
+        cpu->banked_regs_8_12[REG_IDX_FIQ][1] = cpu->regs[9];
+        cpu->banked_regs_8_12[REG_IDX_FIQ][2] = cpu->regs[10];
+        cpu->banked_regs_8_12[REG_IDX_FIQ][3] = cpu->regs[11];
+        cpu->banked_regs_8_12[REG_IDX_FIQ][4] = cpu->regs[12];
 
         // use new regs
-        cpu->regs[8] = cpu->banked_regs_8_12[0][0];
-        cpu->regs[9] = cpu->banked_regs_8_12[0][1];
-        cpu->regs[10] = cpu->banked_regs_8_12[0][2];
-        cpu->regs[11] = cpu->banked_regs_8_12[0][3];
-        cpu->regs[12] = cpu->banked_regs_8_12[0][4];
+        cpu->regs[8] = cpu->banked_regs_8_12[REG_IDX_USR_SYS][0];
+        cpu->regs[9] = cpu->banked_regs_8_12[REG_IDX_USR_SYS][1];
+        cpu->regs[10] = cpu->banked_regs_8_12[REG_IDX_USR_SYS][2];
+        cpu->regs[11] = cpu->banked_regs_8_12[REG_IDX_USR_SYS][3];
+        cpu->regs[12] = cpu->banked_regs_8_12[REG_IDX_USR_SYS][4];
     } else if (new_mode == CPSR_MODE_FIQ) {
         // backup old regs
-        cpu->banked_regs_8_12[0][0] = cpu->regs[8];
-        cpu->banked_regs_8_12[0][1] = cpu->regs[9];
-        cpu->banked_regs_8_12[0][2] = cpu->regs[10];
-        cpu->banked_regs_8_12[0][3] = cpu->regs[11];
-        cpu->banked_regs_8_12[0][4] = cpu->regs[12];
+        cpu->banked_regs_8_12[REG_IDX_USR_SYS][0] = cpu->regs[8];
+        cpu->banked_regs_8_12[REG_IDX_USR_SYS][1] = cpu->regs[9];
+        cpu->banked_regs_8_12[REG_IDX_USR_SYS][2] = cpu->regs[10];
+        cpu->banked_regs_8_12[REG_IDX_USR_SYS][3] = cpu->regs[11];
+        cpu->banked_regs_8_12[REG_IDX_USR_SYS][4] = cpu->regs[12];
 
         // use new regs
-        cpu->regs[8] = cpu->banked_regs_8_12[1][0];
-        cpu->regs[9] = cpu->banked_regs_8_12[1][1];
-        cpu->regs[10] = cpu->banked_regs_8_12[1][2];
-        cpu->regs[11] = cpu->banked_regs_8_12[1][3];
-        cpu->regs[12] = cpu->banked_regs_8_12[1][4];
+        cpu->regs[8] = cpu->banked_regs_8_12[REG_IDX_FIQ][0];
+        cpu->regs[9] = cpu->banked_regs_8_12[REG_IDX_FIQ][1];
+        cpu->regs[10] = cpu->banked_regs_8_12[REG_IDX_FIQ][2];
+        cpu->regs[11] = cpu->banked_regs_8_12[REG_IDX_FIQ][3];
+        cpu->regs[12] = cpu->banked_regs_8_12[REG_IDX_FIQ][4];
     }
 
     // backup old regs
     cpu->banked_regs_13_14[old_mode_reg_index][0] = cpu->regs[13];
-    cpu->banked_regs_13_14[old_mode_reg_index][1] = cpu->regs[14];
+    cpu->banked_regs_13_14[old_mode_reg_index][1] = cpu->regs[14]; // TODO reg banks size should be 1 more in case of invalid state to avoid oob
 
     // use new regs
     cpu->regs[13] = cpu->banked_regs_13_14[new_mode_reg_index][0];
@@ -708,7 +709,7 @@ static bool eor_handler(gba_t *gba, uint32_t instr) {
 
     LOG_DEBUG("(0x%08X) EOR%s %s, #0x%X\n", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[(instr & 0x000F0000) >> 16], op2);
 
-    if (set_flags) {
+    if (s) {
         set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
     }
@@ -740,7 +741,7 @@ static bool sub_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu->regs[rd] = op1 - op2;
 
-    if (set_flags)
+    if (s)
         SUB_SET_FLAGS(gba->cpu, gba->cpu->regs[rd], op1, op2);
 
     if (rd == REG_PC) {
@@ -770,7 +771,7 @@ static bool rsb_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu->regs[rd] = op2 - op1;
 
-    if (set_flags)
+    if (s)
         SUB_SET_FLAGS(gba->cpu, gba->cpu->regs[rd], op2, op1);
 
     if (rd == REG_PC) {
@@ -800,7 +801,7 @@ static bool add_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu->regs[rd] = op1 + op2;
 
-    if (set_flags)
+    if (s)
         ADD_SET_FLAGS(gba->cpu, gba->cpu->regs[rd], op1, op2);
 
     if (rd == REG_PC) {
@@ -831,7 +832,7 @@ static bool adc_handler(gba_t *gba, uint32_t instr) {
     uint64_t res = (uint64_t) op1 + (uint64_t) op2 + ((bool) CPSR_CHECK_FLAG(gba->cpu, CPSR_C));
     gba->cpu->regs[rd] = res;
 
-    if (set_flags)
+    if (s)
         ADC_SET_FLAGS(gba->cpu, res, op1, op2);
 
     if (rd == REG_PC) {
@@ -863,7 +864,7 @@ static bool sbc_handler(gba_t *gba, uint32_t instr) {
     uint64_t res = op1 - op2 - tmp;
     gba->cpu->regs[rd] = res;
 
-    if (set_flags)
+    if (s)
         SBC_SET_FLAGS(gba->cpu, res, op1, (uint64_t) op2 + (uint64_t) tmp);
 
     if (rd == REG_PC) {
@@ -895,7 +896,7 @@ static bool rsc_handler(gba_t *gba, uint32_t instr) {
     uint64_t res = op2 - op1 - tmp;
     gba->cpu->regs[rd] = res;
 
-    if (set_flags)
+    if (s)
         SBC_SET_FLAGS(gba->cpu, res, op2, (uint64_t) op1 + (uint64_t) tmp);
 
     if (rd == REG_PC) {
@@ -925,10 +926,8 @@ static bool tst_handler(gba_t *gba, uint32_t instr) {
 
     uint32_t res = op1 & op2;
 
-    if (set_flags) {
         set_flags_nz_32(gba->cpu, res);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
-    }
 
     if (rd == REG_PC) {
         if (s) {
@@ -954,10 +953,8 @@ static bool teq_handler(gba_t *gba, uint32_t instr) {
 
     uint32_t res = op1 ^ op2;
 
-    if (set_flags) {
         set_flags_nz_32(gba->cpu, res);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
-    }
 
     if (rd == REG_PC) {
         if (s) {
@@ -983,7 +980,6 @@ static bool cmp_handler(gba_t *gba, uint32_t instr) {
 
     uint32_t res = op1 - op2;
 
-    if (set_flags)
         SUB_SET_FLAGS(gba->cpu, res, op1, op2);
 
     if (rd == REG_PC) {
@@ -1010,7 +1006,6 @@ static bool cmn_handler(gba_t *gba, uint32_t instr) {
 
     uint32_t res = op1 + op2;
 
-    if (set_flags)
         ADD_SET_FLAGS(gba->cpu, res, op1, op2);
 
     if (rd == REG_PC) {
@@ -1037,7 +1032,7 @@ static bool orr_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu->regs[rd] = op1 | op2;
 
-    if (set_flags) {
+    if (s) {
         set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
     }
@@ -1069,6 +1064,11 @@ static bool mov_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu->regs[rd] = op2;
 
+    if (s) {
+        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
+        CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
+    }
+
     if (rd == REG_PC) {
         if (s) {
             uint8_t old_mode = CPSR_GET_MODE(gba->cpu);
@@ -1079,11 +1079,6 @@ static bool mov_handler(gba_t *gba, uint32_t instr) {
 
         flush_pipeline(gba);
         return false;
-    }
-
-    if (set_flags) {
-        set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
-        CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
     }
 
     return true;
@@ -1101,7 +1096,7 @@ static bool bic_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu->regs[rd] = op1 & ~op2;
 
-    if (set_flags) {
+    if (s) {
         set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
     }
@@ -1133,7 +1128,7 @@ static bool mvn_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu->regs[rd] = ~op2;
 
-    if (set_flags) {
+    if (s) {
         set_flags_nz_32(gba->cpu, gba->cpu->regs[rd]);
         CPSR_CHANGE_FLAG(gba->cpu, CPSR_C, c);
     }
