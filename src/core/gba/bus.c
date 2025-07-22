@@ -1031,27 +1031,36 @@ static bus_accessors_t accessors[16] = {
     [0x0F] = {.read = unused_read, .write = unused_write},
 };
 
-// TODO accessor address indexing is wrong if hi nybble of MSB of instr is set to anything
+static inline uint32_t bus_read(gba_t *gba, uint8_t mode, uint32_t address) {
+    uint32_t address_hi = address >> 24;
+    if (address_hi > 0xF)
+        address_hi = 0xF;
+    return accessors[address_hi].read(gba, mode, address);
+}
+
+static inline void bus_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
+    uint32_t address_hi = address >> 24;
+    if (address_hi > 0xF)
+        address_hi = 0xF;
+    accessors[address_hi].write(gba, mode, address, data);
+}
 
 uint8_t _gba_bus_read_byte(gba_t *gba, bus_access_t access, uint32_t address) {
-    bus_accessors_t accessor = accessors[(address >> 24) & 0x0F];
-    uint32_t data = accessor.read(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_READ | access, ALIGN(address, 1));
+    uint32_t data = bus_read(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_READ | access, ALIGN(address, 1));
     gba->bus->data_latch = (data << 24) | (data << 16) | (data << 8) | data;
 
     return gba->bus->data_latch;
 }
 
 uint16_t _gba_bus_read_half(gba_t *gba, bus_access_t access, uint32_t address) {
-    bus_accessors_t accessor = accessors[(address >> 24) & 0x0F];
-    uint32_t data = accessor.read(gba, BUS_ACCESS_SIZE(2) | BUS_ACCESS_READ | access, ALIGN(address, 2));
+    uint32_t data = bus_read(gba, BUS_ACCESS_SIZE(2) | BUS_ACCESS_READ | access, ALIGN(address, 2));
     gba->bus->data_latch = (data << 16) | data;
 
     return gba->bus->data_latch;
 }
 
 uint32_t _gba_bus_read_word(gba_t *gba, bus_access_t access, uint32_t address) {
-    bus_accessors_t accessor = accessors[(address >> 24) & 0x0F];
-    uint32_t data = accessor.read(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_READ | access, ALIGN(address, 4));
+    uint32_t data = bus_read(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_READ | access, ALIGN(address, 4));
     gba->bus->data_latch = data;
 
     return gba->bus->data_latch;
@@ -1060,22 +1069,19 @@ uint32_t _gba_bus_read_word(gba_t *gba, bus_access_t access, uint32_t address) {
 void _gba_bus_write_byte(gba_t *gba, bus_access_t access, uint32_t address, uint8_t data) {
     gba->bus->data_latch = ((uint32_t) data << 24) | ((uint32_t) data << 16) | ((uint32_t) data << 8) | (uint32_t) data;
 
-    bus_accessors_t accessor = accessors[(address >> 24) & 0x0F];
-    accessor.write(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_WRITE | access, ALIGN(address, 1), gba->bus->data_latch);
+    bus_write(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_WRITE | access, ALIGN(address, 1), gba->bus->data_latch);
 }
 
 void _gba_bus_write_half(gba_t *gba, bus_access_t access, uint32_t address, uint16_t data) {
     gba->bus->data_latch = ((uint32_t) data << 16) | (uint32_t) data;
 
-    bus_accessors_t accessor = accessors[(address >> 24) & 0x0F];
-    accessor.write(gba, BUS_ACCESS_SIZE(2) | BUS_ACCESS_WRITE | access, ALIGN(address, 2), gba->bus->data_latch);
+    bus_write(gba, BUS_ACCESS_SIZE(2) | BUS_ACCESS_WRITE | access, ALIGN(address, 2), gba->bus->data_latch);
 }
 
 void _gba_bus_write_word(gba_t *gba, bus_access_t access, uint32_t address, uint32_t data) {
     gba->bus->data_latch = data;
 
-    bus_accessors_t accessor = accessors[(address >> 24) & 0x0F];
-    accessor.write(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_WRITE | access, ALIGN(address, 4), gba->bus->data_latch);
+    bus_write(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_WRITE | access, ALIGN(address, 4), gba->bus->data_latch);
 }
 
 // TODO this shouldn't be responsible for cartridge loading and parsing (same for gb_mmu_t)
