@@ -80,7 +80,8 @@
     X(LT)               \
     X(GT)               \
     X(LE)               \
-    Y(AL)
+    Y(AL)               \
+    Y(NV)
 #define COND_GENERATOR(name) COND_##name,
 #define COND_NAME_GENERATOR(name) STRINGIFY(name),
 
@@ -1745,9 +1746,10 @@ static inline bool verif_cond(gba_cpu_t *cpu, cond_t cond) {
     case COND_LE:
         return CPSR_CHECK_FLAG(cpu, CPSR_Z) || (!!CPSR_CHECK_FLAG(cpu, CPSR_N) != !!CPSR_CHECK_FLAG(cpu, CPSR_V));
     case COND_AL:
+    case COND_NV:
         return true;
     default:
-        todo("invalid condition code: 0x%02X", cond);
+        todo("invalid condition code: 0x%02X (should never happen)", cond);
         return false;
     }
 }
