@@ -27,10 +27,10 @@ typedef struct {
     uint32_t regs[16];
 
     uint32_t banked_regs_8_12[2][5];
-    uint32_t banked_regs_13_14[6][2];
+    uint32_t banked_regs_13_14[7][2];
 
     uint32_t cpsr; // current program status register
-    uint32_t spsr[6];
+    uint32_t spsr[7];
 
     uint32_t pipeline[2]; // array of instructions (because it is a 3 stage pipeline, we just need to remember 2 instructions)
     uint8_t pipeline_flush_cycles;
@@ -41,3 +41,6 @@ void gba_cpu_step(gba_t *gba);
 void gba_cpu_init(gba_t *gba);
 
 void gba_cpu_quit(gba_t *gba);
+
+// TODO make this private
+void bank_registers(gba_cpu_t *cpu, uint8_t old_mode, uint8_t new_mode);

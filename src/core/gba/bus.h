@@ -175,7 +175,8 @@ typedef struct {
     uint8_t sram[BUS_SRAM_UNUSED - BUS_SRAM];
 
     uint32_t last_fetched_bios_instr;
-    uint32_t data_latch;
+    uint32_t read_data_latch;
+    uint32_t write_data_latch;
 
     uint32_t rom_address_latch;
 
