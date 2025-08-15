@@ -1130,19 +1130,12 @@ bool gba_bus_init(gba_t *gba, const uint8_t *rom, size_t rom_size) {
 
     gba->bus->io[IO_KEYINPUT] = 0x03FF;
 
-    // TODO do not load bios from hardcoded file path
-    FILE *f = fopen("/home/maxime/dev/gbmulator/src/bootroms/gba/gba_bios.bin", "r");
-    if (!f) {
-        gba_bus_quit(gba);
-        return false;
-    }
+    // TODO maybe find better way do to this
+    static const uint8_t gba_bios[] = {
+        #embed "../../bootroms/gba/gba_bios.bin"
+    };
 
-    fseek(f, 0, SEEK_END);
-    long sz = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    fread(gba->bus->bios, sz, 1, f);
-    fclose(f);
+    memcpy(gba->bus->bios, gba_bios, sizeof(gba_bios));
 
     return true;
 }
