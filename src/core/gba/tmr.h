@@ -8,7 +8,7 @@ typedef struct {
     struct {
         uint32_t cycle;
         uint16_t reload;
-        uint16_t prescaler;
+        uint16_t divider;
     } instance[GBA_TMR_COUNT];
 } gba_tmr_t;
 
