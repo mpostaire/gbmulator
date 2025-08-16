@@ -16,6 +16,7 @@ struct gba_t {
     gbmulator_accelerometer_request_cb_t on_accelerometer_request;
     gbmulator_camera_capture_image_cb_t on_camera_capture_image;
 
+    // TODO these don't have to be pointers (same for gb_t)
     gba_cpu_t *cpu;
     gba_bus_t *bus;
     gba_ppu_t *ppu;
