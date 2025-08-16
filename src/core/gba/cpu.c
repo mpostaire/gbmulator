@@ -2642,82 +2642,81 @@ typedef struct {
     uint8_t handler_id;
 } decoder_rule_t;
 
-// arm_decoder_rules definition order is important: they are matched in the order they are defined in the arm_decoder_rules array
+// Decoder rules definition order is important: they are matched in the order they are defined in their array
 decoder_rule_t arm_decoder_rules[] = {
-    {"____00010010____________0001____", HANDLER_ID(bx_handler)      }, // Branch and exchange
-    {"____0000000*____________1001____", HANDLER_ID(mul_handler)     }, // Multiply
-    {"____0000001*____________1001____", HANDLER_ID(mla_handler)     }, // Multiply
-    {"____00001*0*____________1001____", HANDLER_ID(mull_handler)    }, // Multiply Long
-    {"____00001*1*____________1001____", HANDLER_ID(mlal_handler)    }, // Multiply Long
-    {"____00010*00____________0000____", HANDLER_ID(mrs_handler)     }, // PSR Transfer
-    {"____00010*00____________1001____", HANDLER_ID(swp_handler)     }, // Single Data Swap
-    {"____000**0*0____________1**1____", HANDLER_ID(strh_reg_handler)}, // Halfword Data Transfer
-    {"____000**1*0____________1**1____", HANDLER_ID(strh_imm_handler)}, // Halfword Data Transfer
-    {"____000**0*1____________1**1____", HANDLER_ID(ldrh_reg_handler)}, // Halfword Data Transfer
-    {"____000**1*1____________1**1____", HANDLER_ID(ldrh_imm_handler)}, // Halfword Data Transfer
-    {"____00*0000*____________****____", HANDLER_ID(and_handler)     }, // Data processing
-    {"____00*10*10____________****____", HANDLER_ID(msr_handler)     }, // PSR Transfer
-    {"____00*0001*____________****____", HANDLER_ID(eor_handler)     }, // Data processing
-    {"____00*0010*____________****____", HANDLER_ID(sub_handler)     }, // Data processing
-    {"____00*0011*____________****____", HANDLER_ID(rsb_handler)     }, // Data processing
-    {"____00*0100*____________****____", HANDLER_ID(add_handler)     }, // Data processing
-    {"____00*0101*____________****____", HANDLER_ID(adc_handler)     }, // Data processing
-    {"____00*0110*____________****____", HANDLER_ID(sbc_handler)     }, // Data processing
-    {"____00*0111*____________****____", HANDLER_ID(rsc_handler)     }, // Data processing
-    {"____00*10001____________****____", HANDLER_ID(tst_handler)     }, // Data processing
-    {"____00*10011____________****____", HANDLER_ID(teq_handler)     }, // Data processing
-    {"____00*10101____________****____", HANDLER_ID(cmp_handler)     }, // Data processing
-    {"____00*10111____________****____", HANDLER_ID(cmn_handler)     }, // Data processing
-    {"____00*1100*____________****____", HANDLER_ID(orr_handler)     }, // Data processing
-    {"____00*1101*____________****____", HANDLER_ID(mov_handler)     }, // Data processing
-    {"____00*1110*____________****____", HANDLER_ID(bic_handler)     }, // Data processing
-    {"____00*1111*____________****____", HANDLER_ID(mvn_handler)     }, // Data processing
-    {"____01*****0____________****____", HANDLER_ID(str_handler)     }, // Single Data Transfer
-    {"____01*****1____________****____", HANDLER_ID(ldr_handler)     }, // Single Data Transfer
-    {"____100****0____________****____", HANDLER_ID(stm_handler)     }, // Block Data Transfer
-    {"____100****1____________****____", HANDLER_ID(ldm_handler)     }, // Block Data Transfer
-    {"____1010****____________****____", HANDLER_ID(b_handler)       }, // Branch
-    {"____1011****____________****____", HANDLER_ID(bl_handler)      }, // Branch
-    {"____1111****____________****____", HANDLER_ID(swi_handler)     }, // Software Interrupt
+    { "____00010010____________0001____", HANDLER_ID(bx_handler)       }, // Branch and exchange
+    { "____0000000*____________1001____", HANDLER_ID(mul_handler)      }, // Multiply
+    { "____0000001*____________1001____", HANDLER_ID(mla_handler)      }, // Multiply
+    { "____00001*0*____________1001____", HANDLER_ID(mull_handler)     }, // Multiply Long
+    { "____00001*1*____________1001____", HANDLER_ID(mlal_handler)     }, // Multiply Long
+    { "____00010*00____________0000____", HANDLER_ID(mrs_handler)      }, // PSR Transfer
+    { "____00010*00____________1001____", HANDLER_ID(swp_handler)      }, // Single Data Swap
+    { "____000**0*0____________1**1____", HANDLER_ID(strh_reg_handler) }, // Halfword Data Transfer
+    { "____000**1*0____________1**1____", HANDLER_ID(strh_imm_handler) }, // Halfword Data Transfer
+    { "____000**0*1____________1**1____", HANDLER_ID(ldrh_reg_handler) }, // Halfword Data Transfer
+    { "____000**1*1____________1**1____", HANDLER_ID(ldrh_imm_handler) }, // Halfword Data Transfer
+    { "____00*0000*____________****____", HANDLER_ID(and_handler)      }, // Data processing
+    { "____00*10*10____________****____", HANDLER_ID(msr_handler)      }, // PSR Transfer
+    { "____00*0001*____________****____", HANDLER_ID(eor_handler)      }, // Data processing
+    { "____00*0010*____________****____", HANDLER_ID(sub_handler)      }, // Data processing
+    { "____00*0011*____________****____", HANDLER_ID(rsb_handler)      }, // Data processing
+    { "____00*0100*____________****____", HANDLER_ID(add_handler)      }, // Data processing
+    { "____00*0101*____________****____", HANDLER_ID(adc_handler)      }, // Data processing
+    { "____00*0110*____________****____", HANDLER_ID(sbc_handler)      }, // Data processing
+    { "____00*0111*____________****____", HANDLER_ID(rsc_handler)      }, // Data processing
+    { "____00*10001____________****____", HANDLER_ID(tst_handler)      }, // Data processing
+    { "____00*10011____________****____", HANDLER_ID(teq_handler)      }, // Data processing
+    { "____00*10101____________****____", HANDLER_ID(cmp_handler)      }, // Data processing
+    { "____00*10111____________****____", HANDLER_ID(cmn_handler)      }, // Data processing
+    { "____00*1100*____________****____", HANDLER_ID(orr_handler)      }, // Data processing
+    { "____00*1101*____________****____", HANDLER_ID(mov_handler)      }, // Data processing
+    { "____00*1110*____________****____", HANDLER_ID(bic_handler)      }, // Data processing
+    { "____00*1111*____________****____", HANDLER_ID(mvn_handler)      }, // Data processing
+    { "____01*****0____________****____", HANDLER_ID(str_handler)      }, // Single Data Transfer
+    { "____01*****1____________****____", HANDLER_ID(ldr_handler)      }, // Single Data Transfer
+    { "____100****0____________****____", HANDLER_ID(stm_handler)      }, // Block Data Transfer
+    { "____100****1____________****____", HANDLER_ID(ldm_handler)      }, // Block Data Transfer
+    { "____1010****____________****____", HANDLER_ID(b_handler)        }, // Branch
+    { "____1011****____________****____", HANDLER_ID(bl_handler)       }, // Branch
+    { "____1111****____________****____", HANDLER_ID(swi_handler)      }, // Software Interrupt
 };
 
-// thumb_decoder_rules definition order is important: they are matched in the order they are defined in the thumb_decoder_rules array
 decoder_rule_t thumb_decoder_rules[] = {
-    {"00000***________", HANDLER_ID(thumb_lsl_handler)            }, // Move shifted register
-    {"00001***________", HANDLER_ID(thumb_lsr_handler)            }, // Move shifted register
-    {"00010***________", HANDLER_ID(thumb_asr_handler)            }, // Move shifted register
-    {"00011*0*________", HANDLER_ID(thumb_add_handler)            }, // Add/substract
-    {"00011*1*________", HANDLER_ID(thumb_sub_handler)            }, // Add/substract
-    {"00100***________", HANDLER_ID(thumb_mov_imm_handler)        }, // Move/compare/add/substract immediate
-    {"00101***________", HANDLER_ID(thumb_cmp_imm_handler)        }, // Move/compare/add/substract immediate
-    {"00110***________", HANDLER_ID(thumb_add_imm_handler)        }, // Move/compare/add/substract immediate
-    {"00111***________", HANDLER_ID(thumb_sub_imm_handler)        }, // Move/compare/add/substract immediate
-    {"01000100________", HANDLER_ID(thumb_add_hi_reg_handler)     }, // Hi register operations/branch exchange
-    {"01000101________", HANDLER_ID(thumb_cmp_hi_reg_handler)     }, // Hi register operations/branch exchange
-    {"01000110________", HANDLER_ID(thumb_mov_hi_reg_handler)     }, // Hi register operations/branch exchange
-    {"01000111________", HANDLER_ID(thumb_bx_handler)             }, // Hi register operations/branch exchange
-    {"010000**________", HANDLER_ID(thumb_alu_ops_handler)        }, // ALU operations
-    {"01001***________", HANDLER_ID(thumb_pc_relative_ldr_handler)}, // PC-relative load
-    {"01010*0*________", HANDLER_ID(thumb_str_reg_handler)        }, // Load/store with register offset
-    {"01011*0*________", HANDLER_ID(thumb_ldr_reg_handler)        }, // Load/store with register offset
-    {"0101001*________", HANDLER_ID(thumb_strh_reg_handler)       }, // Load/store with sign-extended byte/halfword
-    {"0101**1*________", HANDLER_ID(thumb_ldrh_reg_handler)       }, // Load/store with sign-extended byte/halfword
-    {"011*0***________", HANDLER_ID(thumb_strh_imm_handler)       }, // Load/store with immediate offset
-    {"011*1***________", HANDLER_ID(thumb_ldrh_imm_handler)       }, // Load/store with immediate offset
-    {"10000***________", HANDLER_ID(thumb_strh_handler)           }, // Load/store halfword
-    {"10001***________", HANDLER_ID(thumb_ldrh_handler)           }, // Load/store halfword
-    {"10010***________", HANDLER_ID(thumb_str_sp_handler)         }, // SP-relative load/store
-    {"10011***________", HANDLER_ID(thumb_ldr_sp_handler)         }, // SP-relative load/store
-    {"1010****________", HANDLER_ID(thumb_add_addr_handler)       }, // Load address
-    {"10110000________", HANDLER_ID(thumb_add_sp_handler)         }, // Add offset to stack pointer
-    {"1011010*________", HANDLER_ID(thumb_push_handler)           }, // Push/pop registers
-    {"1011110*________", HANDLER_ID(thumb_pop_handler)            }, // Push/pop registers
-    {"11000***________", HANDLER_ID(thumb_stm_handler)            }, // Multiple load/store
-    {"11001***________", HANDLER_ID(thumb_ldm_handler)            }, // Multiple load/store
-    {"11011111________", HANDLER_ID(thumb_swi_handler)            }, // Software interrupt
-    {"1101****________", HANDLER_ID(thumb_b_cond_handler)         }, // Conditonal branch
-    {"11100***________", HANDLER_ID(thumb_b_handler)              }, // Unconditional branch
-    {"1111****________", HANDLER_ID(thumb_bl_handler)             }, // Long branch with link
+    { "00000***________", HANDLER_ID(thumb_lsl_handler)             }, // Move shifted register
+    { "00001***________", HANDLER_ID(thumb_lsr_handler)             }, // Move shifted register
+    { "00010***________", HANDLER_ID(thumb_asr_handler)             }, // Move shifted register
+    { "00011*0*________", HANDLER_ID(thumb_add_handler)             }, // Add/substract
+    { "00011*1*________", HANDLER_ID(thumb_sub_handler)             }, // Add/substract
+    { "00100***________", HANDLER_ID(thumb_mov_imm_handler)         }, // Move/compare/add/substract immediate
+    { "00101***________", HANDLER_ID(thumb_cmp_imm_handler)         }, // Move/compare/add/substract immediate
+    { "00110***________", HANDLER_ID(thumb_add_imm_handler)         }, // Move/compare/add/substract immediate
+    { "00111***________", HANDLER_ID(thumb_sub_imm_handler)         }, // Move/compare/add/substract immediate
+    { "01000100________", HANDLER_ID(thumb_add_hi_reg_handler)      }, // Hi register operations/branch exchange
+    { "01000101________", HANDLER_ID(thumb_cmp_hi_reg_handler)      }, // Hi register operations/branch exchange
+    { "01000110________", HANDLER_ID(thumb_mov_hi_reg_handler)      }, // Hi register operations/branch exchange
+    { "01000111________", HANDLER_ID(thumb_bx_handler)              }, // Hi register operations/branch exchange
+    { "010000**________", HANDLER_ID(thumb_alu_ops_handler)         }, // ALU operations
+    { "01001***________", HANDLER_ID(thumb_pc_relative_ldr_handler) }, // PC-relative load
+    { "01010*0*________", HANDLER_ID(thumb_str_reg_handler)         }, // Load/store with register offset
+    { "01011*0*________", HANDLER_ID(thumb_ldr_reg_handler)         }, // Load/store with register offset
+    { "0101001*________", HANDLER_ID(thumb_strh_reg_handler)        }, // Load/store with sign-extended byte/halfword
+    { "0101**1*________", HANDLER_ID(thumb_ldrh_reg_handler)        }, // Load/store with sign-extended byte/halfword
+    { "011*0***________", HANDLER_ID(thumb_strh_imm_handler)        }, // Load/store with immediate offset
+    { "011*1***________", HANDLER_ID(thumb_ldrh_imm_handler)        }, // Load/store with immediate offset
+    { "10000***________", HANDLER_ID(thumb_strh_handler)            }, // Load/store halfword
+    { "10001***________", HANDLER_ID(thumb_ldrh_handler)            }, // Load/store halfword
+    { "10010***________", HANDLER_ID(thumb_str_sp_handler)          }, // SP-relative load/store
+    { "10011***________", HANDLER_ID(thumb_ldr_sp_handler)          }, // SP-relative load/store
+    { "1010****________", HANDLER_ID(thumb_add_addr_handler)        }, // Load address
+    { "10110000________", HANDLER_ID(thumb_add_sp_handler)          }, // Add offset to stack pointer
+    { "1011010*________", HANDLER_ID(thumb_push_handler)            }, // Push/pop registers
+    { "1011110*________", HANDLER_ID(thumb_pop_handler)             }, // Push/pop registers
+    { "11000***________", HANDLER_ID(thumb_stm_handler)             }, // Multiple load/store
+    { "11001***________", HANDLER_ID(thumb_ldm_handler)             }, // Multiple load/store
+    { "11011111________", HANDLER_ID(thumb_swi_handler)             }, // Software interrupt
+    { "1101****________", HANDLER_ID(thumb_b_cond_handler)          }, // Conditonal branch
+    { "11100***________", HANDLER_ID(thumb_b_handler)               }, // Unconditional branch
+    { "1111****________", HANDLER_ID(thumb_bl_handler)              }, // Long branch with link
 };
 
 uint8_t get_handler(uint32_t instr, decoder_rule_t *decoder_rules, size_t decoder_rules_size) {
