@@ -24,7 +24,7 @@ typedef enum {
     JOYPAD_DOWN,
     JOYPAD_R,
     JOYPAD_L
-} joypad_button_t;
+} gbmulator_joypad_button_t;
 
 typedef void (*gbmulator_new_frame_cb_t)(const uint8_t *pixels);
 typedef void (*gbmulator_new_sample_cb_t)(const gbmulator_apu_sample_t sample, uint32_t *dynamic_sampling_rate);

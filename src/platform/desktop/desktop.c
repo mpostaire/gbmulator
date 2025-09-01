@@ -453,12 +453,12 @@ static void toggle_pause(GSimpleAction *action, GVariant *parameter, gpointer ap
 }
 
 static void restart_emulator(AdwAlertDialog *self, gchar *response, gpointer user_data) {
-    // if (!strncmp(response, "restart", 8)) {
-    //     start_loop();
-    //     gb_reset(emu, config.mode);
-    //     gbmulator_print_status(emu);
-    //     alrenderer_clear_queue();
-    // }
+    if (!strncmp(response, "restart", 8)) {
+        start_loop();
+        gbmulator_reset(emu, config.mode);
+        gbmulator_print_status(emu);
+        alrenderer_clear_queue();
+    }
 }
 
 static void ask_restart_emulator(GSimpleAction *action, GVariant *parameter, gpointer app) {

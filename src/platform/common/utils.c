@@ -20,7 +20,7 @@ static long fsize(FILE *f) {
     return len;
 }
 
-joypad_button_t keycode_to_joypad(config_t *config, unsigned int keycode) {
+gbmulator_joypad_button_t keycode_to_joypad(config_t *config, unsigned int keycode) {
     if (keycode == config->keybindings[JOYPAD_A]) return JOYPAD_A;
     if (keycode == config->keybindings[JOYPAD_B]) return JOYPAD_B;
     if (keycode == config->keybindings[JOYPAD_SELECT]) return JOYPAD_SELECT;
@@ -34,7 +34,7 @@ joypad_button_t keycode_to_joypad(config_t *config, unsigned int keycode) {
     return -1;
 }
 
-joypad_button_t button_to_joypad(config_t *config, unsigned int button) {
+gbmulator_joypad_button_t button_to_joypad(config_t *config, unsigned int button) {
     if (button == config->gamepad_bindings[JOYPAD_A]) return JOYPAD_A;
     if (button == config->gamepad_bindings[JOYPAD_B]) return JOYPAD_B;
     if (button == config->gamepad_bindings[JOYPAD_SELECT]) return JOYPAD_SELECT;

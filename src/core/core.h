@@ -22,6 +22,8 @@ gbmulator_t *gbmulator_init(const uint8_t *rom, size_t rom_size, gbmulator_optio
 
 void gbmulator_quit(gbmulator_t *emu);
 
+bool gbmulator_reset(gbmulator_t *emu, gbmulator_mode_t new_mode);
+
 void gbmulator_step(gbmulator_t *emu);
 
 void gbmulator_run_steps(gbmulator_t *emu, uint64_t steps_limit);
@@ -43,3 +45,5 @@ void gbmulator_print_status(gbmulator_t *emu);
 void gbmulator_set_joypad_state(gbmulator_t *emu, uint16_t state);
 
 uint8_t *gbmulator_get_rom(gbmulator_t *emu, size_t *rom_size);
+
+void gbmulator_rewind(gbmulator_t *emu, uint64_t frame);

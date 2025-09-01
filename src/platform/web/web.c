@@ -15,7 +15,7 @@ static int keycode_filter(unsigned int key);
 
 // config struct initialized to defaults
 static config_t config = {
-    .mode = GB_MODE_CGB,
+    .mode = GBMULATOR_MODE_GB,
     .color_palette = PPU_COLOR_PALETTE_ORIG,
     .scale = 2,
     .sound = 0.25f,
@@ -68,7 +68,7 @@ static int keycode_filter(unsigned int key) {
 }
 
 static void ppu_vblank_cb(const uint8_t *pixels) {
-    glrenderer_update_texture(renderer, 0, 0, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, pixels);
+    glrenderer_update_texture(renderer, pixels);
 }
 
 // TODO maybe use same loop as desktop platform
@@ -166,7 +166,7 @@ static void save(void) {
 }
 
 void load_cartridge(const uint8_t *rom, size_t rom_size) {
-    gb_options_t opts = {
+    gbmulator_options_t opts = {
         .mode = config.mode,
         .on_new_sample = alrenderer_queue_sample,
         .on_new_frame = ppu_vblank_cb,
@@ -215,12 +215,12 @@ EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
     glrenderer_quit(renderer);
 }
 
-EMSCRIPTEN_KEEPALIVE void on_gui_button_down(gb_joypad_button_t button) {
+EMSCRIPTEN_KEEPALIVE void on_gui_button_down(gbmulator_joypad_button_t button) {
     if (!is_paused)
         RESET_BIT(joypad_state, button);
 }
 
-EMSCRIPTEN_KEEPALIVE void on_gui_button_up(gb_joypad_button_t button) {
+EMSCRIPTEN_KEEPALIVE void on_gui_button_up(gbmulator_joypad_button_t button) {
     if (!is_paused)
         SET_BIT(joypad_state, button);
 }
@@ -283,7 +283,7 @@ bool handle_keyboard_input(int eventType, const EmscriptenKeyboardEvent *e, void
     size_t len;
     char *savestate_path;
     char *rom_title;
-    gb_joypad_button_t joypad;
+    gbmulator_joypad_button_t joypad;
 
     switch (eventType) {
     case EMSCRIPTEN_EVENT_KEYUP:
@@ -353,7 +353,9 @@ bool handle_keyboard_input(int eventType, const EmscriptenKeyboardEvent *e, void
                 uint8_t *savestate = local_storage_get_item(savestate_path, &savestate_length, 1);
                 int ret = gb_load_savestate(gb, savestate, savestate_length);
                 if (ret > 0) {
-                    config.mode = ret;
+                    gbmulator_options_t opts;
+                    gb_get_options(gb, &opts);
+                    config.mode = opts.mode;
                     EM_ASM({
                         document.getElementById("mode-setter").value = $4;
                     }, config.mode);

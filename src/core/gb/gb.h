@@ -52,8 +52,6 @@ gb_t *gb_init(const uint8_t *rom, size_t rom_size, gbmulator_options_t *opts);
  */
 void gb_quit(gb_t *gb);
 
-void gb_reset(gb_t *gb, bool is_cgb);
-
 void gb_print_status(gb_t *gb);
 
 /**
@@ -99,9 +97,9 @@ uint8_t gb_ir_connect(gb_t *gb, gb_t *other_gb);
 */
 void gb_ir_disconnect(gb_t *gb);
 
-void gb_joypad_press(gb_t *gb, joypad_button_t key);
+void gb_joypad_press(gb_t *gb, gbmulator_joypad_button_t key);
 
-void gb_joypad_release(gb_t *gb, joypad_button_t key);
+void gb_joypad_release(gb_t *gb, gbmulator_joypad_button_t key);
 
 void gb_set_joypad_state(gb_t *gb, uint16_t state);
 
