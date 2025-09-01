@@ -15,7 +15,7 @@ typedef void (*set_joypad_state_func_t)(void *impl, uint16_t state);
 typedef uint8_t *(*get_rom_func_t)(void *impl, size_t *rom_size);
 
 struct gbmulator_t {
-    gbmulator_mode_t mode;
+    gbmulator_options_t opts; // TODO gb/gba should use this instead of copying into its own structs
     void *impl;
 
     init_func_t init;
@@ -31,10 +31,7 @@ struct gbmulator_t {
     get_rom_func_t get_rom;
 };
 
-gbmulator_t *gbmulator_init(const uint8_t *rom, size_t rom_size, gbmulator_options_t *opts) {
-    gbmulator_t *emu = xcalloc(1, sizeof(*emu));
-    emu->mode = opts->mode;
-
+static bool set_funcs(gbmulator_t *emu, gbmulator_options_t *opts) {
     switch (opts->mode) {
     case GBMULATOR_MODE_GB:
     case GBMULATOR_MODE_GBC:
@@ -49,7 +46,7 @@ gbmulator_t *gbmulator_init(const uint8_t *rom, size_t rom_size, gbmulator_optio
         emu->print_status = (print_status_func_t) gb_print_status;
         emu->set_joypad_state = (set_joypad_state_func_t) gb_set_joypad_state;
         emu->get_rom = (get_rom_func_t) gb_get_rom;
-        break;
+        return true;
     case GBMULATOR_MODE_GBA:
         emu->init = (init_func_t) gba_init;
         emu->quit = (quit_func_t) gba_quit;
@@ -62,12 +59,22 @@ gbmulator_t *gbmulator_init(const uint8_t *rom, size_t rom_size, gbmulator_optio
         emu->print_status = (print_status_func_t) gba_print_status;
         emu->set_joypad_state = (set_joypad_state_func_t) gba_set_joypad_state;
         emu->get_rom = (get_rom_func_t) gba_get_rom;
-        break;
+        return true;
     default:
-        break;
+        return false;
+    }
+}
+
+gbmulator_t *gbmulator_init(const uint8_t *rom, size_t rom_size, gbmulator_options_t *opts) {
+    gbmulator_t *emu = xcalloc(1, sizeof(*emu));
+    emu->opts = *opts;
+
+    if (!set_funcs(emu, &emu->opts)) {
+        free(emu);
+        return NULL;
     }
 
-    emu->impl = emu->init(rom, rom_size, opts);
+    emu->impl = emu->init(rom, rom_size, &emu->opts);
 
     if (!emu->impl) {
         free(emu);
@@ -79,6 +86,47 @@ gbmulator_t *gbmulator_init(const uint8_t *rom, size_t rom_size, gbmulator_optio
 
 void gbmulator_quit(gbmulator_t *emu) {
     emu->quit(emu->impl);
+    free(emu);
+}
+
+bool gbmulator_reset(gbmulator_t *emu, gbmulator_mode_t new_mode) {
+    size_t rom_size;
+    uint8_t *rom = emu->get_rom(emu->impl, &rom_size);
+
+    if (rom_size == 0 || !rom)
+        return false;
+
+    uint8_t *rom_bak = xmalloc(rom_size);
+    memcpy(rom_bak, rom, rom_size);
+
+    emu->opts.mode = new_mode;
+
+    size_t save_len;
+    uint8_t *save_data = emu->get_save(emu->impl, &save_len);
+
+    emu->quit(emu->impl);
+
+    if (!set_funcs(emu, &emu->opts)) {
+        free(emu);
+        return false;
+    }
+
+    emu->impl = emu->init(rom_bak, rom_size, &emu->opts);
+
+    if (!emu->impl) {
+        free(emu);
+        return false;
+    }
+
+    if (save_data) {
+        emu->load_save(emu->impl, save_data, save_len);
+        free(save_data);
+        return false;
+    }
+
+    free(rom_bak);
+
+    return true;
 }
 
 void gbmulator_step(gbmulator_t *emu) {
@@ -124,4 +172,8 @@ void gbmulator_set_joypad_state(gbmulator_t *emu, uint16_t state) {
 
 uint8_t *gbmulator_get_rom(gbmulator_t *emu, size_t *rom_size) {
     return emu->get_rom(emu->impl, rom_size);
+}
+
+void gbmulator_rewind(gbmulator_t *emu, uint64_t frame) {
+    // TODO
 }

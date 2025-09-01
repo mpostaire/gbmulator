@@ -179,41 +179,6 @@ void gb_quit(gb_t *gb) {
     free(gb);
 }
 
-void gb_reset(gb_t *gb, bool is_cgb) {
-    size_t rom_size = gb->mmu->rom_size;
-    uint8_t *rom = xmalloc(rom_size);
-    memcpy(rom, gb->mmu->rom, rom_size);
-
-    gbmulator_options_t opts;
-    gb_get_options(gb, &opts);
-    opts.mode = is_cgb ? GBMULATOR_MODE_GBC : GBMULATOR_MODE_GB;
-    gb_set_options(gb, &opts);
-
-    size_t save_len;
-    uint8_t *save_data = gb_get_save(gb, &save_len);
-
-    cpu_quit(gb);
-    apu_quit(gb);
-    mmu_quit(gb);
-    ppu_quit(gb);
-    timer_quit(gb);
-    link_quit(gb);
-    joypad_quit(gb);
-
-    mmu_init(gb, rom, rom_size);
-    cpu_init(gb);
-    apu_init(gb);
-    ppu_init(gb);
-    timer_init(gb);
-    link_init(gb);
-    joypad_init(gb);
-
-    if (save_data)
-        gb_load_save(gb, save_data, save_len);
-
-    free(rom);
-}
-
 static const char *old_licensees[] = {
     [0x01] = "Nintendo",[0x08] = "Capcom",[0x09] = "Hot-B",[0x0A] = "Jaleco",[0x0B] = "Coconuts Japan",[0x0C] = "Elite Systems",
     [0x13] = "EA (Electronic Arts)",[0x18] = "Hudsonsoft",[0x19] = "ITC Entertainment",[0x1A] = "Yanoman",[0x1D] = "Japan Clary",[0x1F] = "Virgin Interactive",
@@ -354,11 +319,11 @@ void gb_ir_disconnect(gb_t *gb) {
     gb->ir_gb = NULL;
 }
 
-void gb_joypad_press(gb_t *gb, joypad_button_t key) {
+void gb_joypad_press(gb_t *gb, gbmulator_joypad_button_t key) {
     joypad_press(gb, key);
 }
 
-void gb_joypad_release(gb_t *gb, joypad_button_t key) {
+void gb_joypad_release(gb_t *gb, gbmulator_joypad_button_t key) {
     joypad_release(gb, key);
 }
 
@@ -566,7 +531,7 @@ uint8_t *gb_get_savestate(gb_t *gb, size_t *length, bool is_compressed) {
 bool gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length) {
     if (length <= sizeof(savestate_header_t)) {
         eprintf("invalid savestate length (%zu)\n", length);
-        return 0;
+        return false;
     }
 
     savestate_header_t *savestate_header = xmalloc(sizeof(*savestate_header));
@@ -575,16 +540,16 @@ bool gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length) {
     if (strncmp(savestate_header->identifier, SAVESTATE_STRING, sizeof(SAVESTATE_STRING))) {
         eprintf("invalid format %s\n", savestate_header->identifier);
         free(savestate_header);
-        return 0;
+        return false;
     }
     if (strncmp(savestate_header->rom_title, gb->rom_title, sizeof(savestate_header->rom_title))) {
         eprintf("rom title mismatch (expected: '%.16s'; got: '%.16s')\n", gb->rom_title, savestate_header->rom_title);
         free(savestate_header);
-        return 0;
+        return false;
     }
 
     if ((savestate_header->is_cgb & 0x03) != gb->is_cgb)
-        gb_reset(gb, savestate_header->is_cgb & 0x03);
+        return false;
 
     size_t savestate_data_len = length - sizeof(savestate_header_t);
     uint8_t *savestate_data = xmalloc(savestate_data_len);
@@ -605,7 +570,7 @@ bool gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length) {
             free(dest);
             free(savestate_header);
             free(savestate_data);
-            return 0;
+            return false;
         }
     }
 
@@ -613,7 +578,7 @@ bool gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length) {
         eprintf("invalid savestate data length (expected: %zu; got: %zu)\n", expected_data_len, savestate_data_len);
         free(savestate_header);
         free(savestate_data);
-        return 0;
+        return false;
     }
 
     size_t offset = 0;

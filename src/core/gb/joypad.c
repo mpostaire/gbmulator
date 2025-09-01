@@ -26,7 +26,7 @@ uint8_t joypad_get_input(gb_t *gb) {
         return 0xFF;
 }
 
-void joypad_press(gb_t *gb, joypad_button_t key) {
+void joypad_press(gb_t *gb, gbmulator_joypad_button_t key) {
     gb_joypad_t *joypad = gb->joypad;
     gb_mmu_t *mmu = gb->mmu;
 
@@ -52,7 +52,7 @@ void joypad_press(gb_t *gb, joypad_button_t key) {
     }
 }
 
-void joypad_release(gb_t *gb, joypad_button_t key) {
+void joypad_release(gb_t *gb, gbmulator_joypad_button_t key) {
     gb_joypad_t *joypad = gb->joypad;
 
     switch (key) {

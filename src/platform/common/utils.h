@@ -3,9 +3,9 @@
 #include "../../core/core.h"
 #include "../common/config.h"
 
-joypad_button_t keycode_to_joypad(config_t *config, unsigned int keycode);
+gbmulator_joypad_button_t keycode_to_joypad(config_t *config, unsigned int keycode);
 
-joypad_button_t button_to_joypad(config_t *config, unsigned int button);
+gbmulator_joypad_button_t button_to_joypad(config_t *config, unsigned int button);
 
 /**
  * @returns 1 if directory_path is a directory, 0 otherwise.
