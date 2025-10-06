@@ -1,5 +1,4 @@
 #include <stdlib.h>
-#include <stdbit.h>
 
 #include "gba_priv.h"
 
@@ -2638,7 +2637,7 @@ handler_t handlers[] = {
 };
 
 typedef struct {
-    const char __attribute_nonstring__ match_string[32]; // '1': bit MUST be set, '0': bit MUST be reset, '*': bit can be set OR reset
+    const char match_string[33]; // '1': bit MUST be set, '0': bit MUST be reset, '*': bit can be set OR reset
     uint8_t handler_id;
 } decoder_rule_t;
 

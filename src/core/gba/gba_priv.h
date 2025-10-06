@@ -6,15 +6,13 @@
 #include "ppu.h"
 #include "tmr.h"
 #include "dma.h"
-#include "../utils.h"
+
+#include "../core_priv.h"
 
 struct gba_t {
-    char rom_title[13]; // title is max 12 chars
+    const gbmulator_t *base;
 
-    gbmulator_new_frame_cb_t on_new_frame;
-    gbmulator_new_sample_cb_t on_new_sample;
-    gbmulator_accelerometer_request_cb_t on_accelerometer_request;
-    gbmulator_camera_capture_image_cb_t on_camera_capture_image;
+    char rom_title[13]; // title is max 12 chars
 
     // TODO these don't have to be pointers (same for gb_t)
     gba_cpu_t *cpu;

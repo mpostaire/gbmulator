@@ -328,8 +328,8 @@ uint8_t mbc_read_eram(gb_t *gb, uint16_t address) {
     }
 
     if (mbc->type == HuC1 && mbc->huc1.ir_mode) {
-        if (gb->ir_gb)
-            return 0xC0 | gb->ir_gb->mmu->mbc.huc1.ir_led;
+        if (gb->base->ir.other_device)
+            return 0xC0 | ((gb_t *) gb->base->ir.other_device->impl)->mmu->mbc.huc1.ir_led;
         return 0xC0;
     }
 
@@ -388,8 +388,8 @@ void mbc_write_eram(gb_t *gb, uint16_t address, uint8_t data) {
                 // TODO accelerometer is buggy (see kirby tilt n tumble)
                 double x = 0.0f;
                 double y = 0.0f;
-                if (gb->on_accelerometer_request)
-                    gb->on_accelerometer_request(&x, &y);
+                if (gb->base->opts.on_accelerometer_request)
+                    gb->base->opts.on_accelerometer_request(&x, &y);
                 mbc->mbc7.accelerometer.latched_x = 0x81D0 + (0x70 * x); // accelerometer_center + gravity * x
                 mbc->mbc7.accelerometer.latched_y = 0x81D0 + (0x70 * y); // accelerometer_center + gravity * y
                 mbc->mbc7.accelerometer.latch_ready = 0;

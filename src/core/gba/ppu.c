@@ -545,8 +545,8 @@ void gba_ppu_step(gba_t *gba) {
                 ppu->period = GBA_PPU_PERIOD_HDRAW;
                 RESET_BIT(gba->bus->io[IO_DISPSTAT], 0);
 
-                if (gba->on_new_frame)
-                    gba->on_new_frame(ppu->pixels);
+                if (gba->base->opts.on_new_frame)
+                    gba->base->opts.on_new_frame(ppu->pixels);
             }
         }
         break;

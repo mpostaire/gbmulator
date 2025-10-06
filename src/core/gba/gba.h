@@ -15,13 +15,15 @@ typedef struct gba_t gba_t;
 
 void gba_step(gba_t *gba);
 
-gba_t *gba_init(const uint8_t *rom, size_t rom_size, gbmulator_options_t *opts);
+gba_t *gba_init(gbmulator_t *base);
 
 void gba_quit(gba_t *gba);
 
 void gba_print_status(gba_t *gba);
 
 char *gba_get_rom_title(gba_t *gba);
+
+uint16_t gba_get_joypad_state(gba_t *gba);
 
 void gba_set_joypad_state(gba_t *gba, uint16_t state);
 

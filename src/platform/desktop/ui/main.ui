@@ -74,7 +74,6 @@
                                                 <property name="vexpand">true</property>
                                                 <property name="hexpand">true</property>
                                                 <property name="focusable">true</property>
-                                                <property name="allowed-apis">GDK_GL_API_GL</property>
                                             </object>
                                         </child>
                                     </object>

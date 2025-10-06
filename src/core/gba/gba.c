@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "gba_priv.h"
+#include "../core_priv.h"
 
 static const char *makers[] = {
     [0x01] = "Nintendo"
@@ -14,10 +15,11 @@ void gba_step(gba_t *gba) {
     gba_dma_step(gba);
 }
 
-gba_t *gba_init(const uint8_t *rom, size_t rom_size, gbmulator_options_t *opts) {
+gba_t *gba_init(gbmulator_t *base) {
     gba_t *gba = xcalloc(1, sizeof(*gba));
+    gba->base = base;
 
-    if (!gba_bus_init(gba, rom, rom_size)) {
+    if (!gba_bus_init(gba, base->opts.rom, base->opts.rom_size)) {
         free(gba);
         return NULL;
     }
@@ -26,13 +28,6 @@ gba_t *gba_init(const uint8_t *rom, size_t rom_size, gbmulator_options_t *opts) 
     gba_ppu_init(gba);
     gba_tmr_init(gba);
     gba_dma_init(gba);
-
-    if (opts) {
-        gba->on_new_frame = opts->on_new_frame;
-        gba->on_new_sample = opts->on_new_sample;
-        gba->on_accelerometer_request = opts->on_accelerometer_request;
-        gba->on_camera_capture_image = opts->on_camera_capture_image;
-    }
 
     return gba;
 }
@@ -89,6 +84,10 @@ void gba_print_status(gba_t *gba) {
 
 char *gba_get_rom_title(gba_t *gba) {
     return gba->rom_title;
+}
+
+uint16_t gba_get_joypad_state(gba_t *gba) {
+    return gba->bus->io[IO_KEYINPUT] & 0x03FF;
 }
 
 void gba_set_joypad_state(gba_t *gba, uint16_t state) {

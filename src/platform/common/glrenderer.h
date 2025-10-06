@@ -2,14 +2,7 @@
 
 #include <GLES3/gl3.h>
 
-#define GLRENDERER_CONF_UNIFORM_COLOR_CORRECTION "color_correction"
-
 typedef struct glrenderer_t glrenderer_t;
-
-typedef enum {
-    COLOR_CORRECTION_NONE,
-    COLOR_CORRECTION_CGB
-} glrenderer_color_correction_t;
 
 glrenderer_t *glrenderer_init(GLsizei width, GLsizei height, const GLvoid *pixels);
 

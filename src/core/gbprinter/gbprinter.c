@@ -1,6 +1,10 @@
 #include <stdlib.h>
 
-#include "gb_priv.h"
+#include "gbprinter_priv.h"
+
+#include "../gb/gb_defs.h"
+#include "../utils.h"
+#include "../core_priv.h"
 
 // Because the documentation is incomplete and sources contradict each other, the implementation is based on SameBoy:
 // https://github.com/LIJI32/SameBoy/blob/master/Core/printer.c 
@@ -15,7 +19,8 @@
 #define STATUS_PRINTING 0x06
 #define STATUS_READY 0x08
 
-#define PRINTER_LINE_SIZE (GB_PRINTER_IMG_WIDTH * 2)
+#define PRINTER_IMG_WIDTH 160
+#define PRINTER_LINE_SIZE (PRINTER_IMG_WIDTH * 2)
 #define N_LINES_TO_PRINT(printer) ((printer)->ram_len / (PRINTER_LINE_SIZE / 8))
 #define LINE_PRINTING_TIME (GB_CPU_FREQ / 8) // 8 lines per second
 
@@ -39,33 +44,36 @@ typedef enum {
     STATUS = 0x0F
 } printer_cmd_t;
 
-gb_printer_t *gb_printer_init(gb_new_printer_line_cb_t new_line_cb, gb_start_printing_cb_t start_printing_cb, gb_finish_printing_cb_t finish_printing_cb) {
-    gb_printer_t *printer = xcalloc(1, sizeof(*printer));
-    printer->on_new_line = new_line_cb;
-    printer->on_start_printing = start_printing_cb;
-    printer->on_finish_printing = finish_printing_cb;
-    return printer;
+typedef enum {
+    COLOR_WHITE,
+    COLOR_LIGHT_GRAY,
+    COLOR_DARK_GRAY,
+    COLOR_BLACK
+} gbprinter_color_t;
+
+gbprinter_t *gbprinter_init(gbmulator_t *base) {
+    return xcalloc(1, sizeof(gbprinter_t));
 }
 
-void gb_printer_quit(gb_printer_t *printer) {
+void gbprinter_quit(gbprinter_t *printer) {
     free(printer->image.data);
     free(printer);
 }
 
-uint8_t *gb_printer_get_image(gb_printer_t *printer, size_t *height) {
+uint8_t *gbprinter_get_image(gbprinter_t *printer, size_t *height) {
     *height = printer->image.height;
     return printer->image.data;
 }
 
-void gb_printer_clear_image(gb_printer_t *printer) {
+void gbprinter_clear_image(gbprinter_t *printer) {
     printer->image.height = 0;
     printer->image.allocated_height = 0;
     free(printer->image.data);
     printer->image.data = NULL; // important to avoid the xrealloc of the PRINT command to cause a double free (because it would realloc on an freed pointer)
 }
 
-static inline void render_line(gb_printer_t *printer) {
-    for (uint8_t tile_number = 0; tile_number < 20; tile_number++) { // GB_PRINTER_IMG_WIDTH / 8 == 20 tiles per line
+static inline void render_line(gbprinter_t *printer) {
+    for (uint8_t tile_number = 0; tile_number < 20; tile_number++) { // PRINTER_IMG_WIDTH / 8 == 20 tiles per line
         uint16_t line_offset = ((printer->ram_printing_line_index % 8) * 2) + ((printer->ram_printing_line_index / 8) * PRINTER_LINE_SIZE);
         uint16_t tileslice_index = line_offset + (tile_number * 16);
 
@@ -82,24 +90,24 @@ static inline void render_line(gb_printer_t *printer) {
             color = (palette >> (color << 1)) & 0x03;
 
             int x = (tile_number * 8) + bit_number;
-            int image_data_index = (printer->image.height * GB_PRINTER_IMG_WIDTH * 4) + (x * 4);
+            int image_data_index = (printer->image.height * PRINTER_IMG_WIDTH * 4) + (x * 4);
             switch (color) {
-            case DMG_WHITE:
+            case COLOR_WHITE:
                 printer->image.data[image_data_index] = 0xFF;
                 printer->image.data[image_data_index + 1] = 0xFF;
                 printer->image.data[image_data_index + 2] = 0xFF;
                 break;
-            case DMG_LIGHT_GRAY:
+            case COLOR_LIGHT_GRAY:
                 printer->image.data[image_data_index] = 0xAA;
                 printer->image.data[image_data_index + 1] = 0xAA;
                 printer->image.data[image_data_index + 2] = 0xAA;
                 break;
-            case DMG_DARK_GRAY:
+            case COLOR_DARK_GRAY:
                 printer->image.data[image_data_index] = 0x55;
                 printer->image.data[image_data_index + 1] = 0x55;
                 printer->image.data[image_data_index + 2] = 0x55;
                 break;
-            case DMG_BLACK:
+            case COLOR_BLACK:
                 printer->image.data[image_data_index] = 0x00;
                 printer->image.data[image_data_index + 1] = 0x00;
                 printer->image.data[image_data_index + 2] = 0x00;
@@ -111,12 +119,9 @@ static inline void render_line(gb_printer_t *printer) {
 
     printer->ram_printing_line_index++;
     printer->image.height++;
-
-    if (printer->on_new_line)
-        printer->on_new_line(printer->image.data, printer->image.height);
 }
 
-void gb_printer_step(gb_printer_t *printer) {
+void gbprinter_step(gbprinter_t *printer) {
     if (printer->status != STATUS_PRINTING)
         return;
 
@@ -126,16 +131,16 @@ void gb_printer_step(gb_printer_t *printer) {
 
     render_line(printer);
 
-    if (printer->image.height == printer->image.allocated_height) {
+    if (printer->base->opts.on_new_line)
+        printer->base->opts.on_new_line(printer->image.data, printer->image.height, printer->image.allocated_height);
+
+    if (printer->image.height == printer->image.allocated_height)
         printer->status = STATUS_DONE;
-        if (printer->on_finish_printing)
-            printer->on_finish_printing(printer->image.data, printer->image.height);
-    } else {
+    else
         printer->printing_line_time_remaining = LINE_PRINTING_TIME;
-    }
 }
 
-static inline uint8_t check_ram_len(gb_printer_t *printer) {
+static inline uint8_t check_ram_len(gbprinter_t *printer) {
     if (printer->ram_len >= sizeof(printer->ram)) {
         // not sure about this...
         SET_BIT(printer->status, 4); // bit 4: packet error
@@ -145,7 +150,7 @@ static inline uint8_t check_ram_len(gb_printer_t *printer) {
     return 1;
 }
 
-static void exec_command(gb_printer_t *printer) {
+static void exec_command(gbprinter_t *printer) {
     switch (printer->cmd) {
     case INIT:
         printer->status = STATUS_IDLE;
@@ -161,8 +166,8 @@ static void exec_command(gb_printer_t *printer) {
 
         printer->got_eof = 0;
         // Pokemon tcg sometimes sends an INIT, FILL eof and PRINT.
-        // There are no documentation for a PRINT of size < PRINTER_CHUNK_SIZE so we just allow it but we don't actually print anyting.
-        if (printer->ram_len < PRINTER_CHUNK_SIZE)
+        // There are no documentation for a PRINT of size < GBPRINTER_CHUNK_SIZE so we just allow it but we don't actually print anyting.
+        if (printer->ram_len < GBPRINTER_CHUNK_SIZE)
             break;
 
         // printer->cmd_data[0] is always 0x01 and has unknown purpose
@@ -170,13 +175,10 @@ static void exec_command(gb_printer_t *printer) {
         // uint8_t exposure = printer->cmd_data[3] & 0x7F; // 0x00 -> -25% darkness, 0x7F -> +25% darkness
 
         printer->image.allocated_height = printer->image.height + N_LINES_TO_PRINT(printer);
-        printer->image.data = xrealloc(printer->image.data, printer->image.allocated_height * GB_PRINTER_IMG_WIDTH * 4);
+        printer->image.data = xrealloc(printer->image.data, printer->image.allocated_height * PRINTER_IMG_WIDTH * 4);
 
         printer->printing_line_time_remaining = LINE_PRINTING_TIME;
         printer->delayed_status = STATUS_PRINTING;
-
-        if (printer->on_start_printing)
-            printer->on_start_printing(printer->image.data, printer->image.height);
         break;
     case FILL:
         printer->got_eof = printer->cmd_data_len == 0;
@@ -206,7 +208,7 @@ static void exec_command(gb_printer_t *printer) {
 
         if (printer->status & 0xF1) {
             // error or invalid checksum
-        } else if (printer->ram_len >= PRINTER_CHUNK_SIZE) {
+        } else if (printer->ram_len >= GBPRINTER_CHUNK_SIZE) {
             printer->status = STATUS_READY; // bit 3: unprocessed data in memory (ready to print)
         }
         break;
@@ -221,17 +223,14 @@ static void exec_command(gb_printer_t *printer) {
         printer->status = STATUS_IDLE;
 }
 
-uint8_t gb_printer_linked_shift_bit(void *device, uint8_t in_bit) {
-    gb_printer_t *printer = device;
+uint8_t gbprinter_link_shift_bit(gbprinter_t *printer, uint8_t in_bit) {
     uint8_t out_bit = GET_BIT(printer->sb, 7);
     printer->sb <<= 1;
     CHANGE_BIT(printer->sb, 0, in_bit);
     return out_bit;
 }
 
-void gb_printer_linked_data_received(void *device) {
-    gb_printer_t *printer = device;
-
+void gbprinter_link_data_received(gbprinter_t *printer) {
     switch (printer->state) {
     case WAIT_MAGIC_1:
         if (printer->sb == MAGIC_1)
@@ -269,7 +268,7 @@ void gb_printer_linked_data_received(void *device) {
         break;
     case WAIT_DATA_LEN_HI:
         printer->cmd_data_len |= printer->sb << 8;
-        printer->cmd_data_len = MIN(printer->cmd_data_len, PRINTER_CHUNK_SIZE);
+        printer->cmd_data_len = MIN(printer->cmd_data_len, GBPRINTER_CHUNK_SIZE);
         printer->cmd_data_recv_index = 0;
         printer->checksum += printer->sb;
         printer->sb = 0x00;

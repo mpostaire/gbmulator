@@ -69,13 +69,13 @@ static inline void set_mode(gb_t *gb, uint8_t mode) {
         ppu_update_stat_irq_line(gb);
         gb->ppu->mode = mode;
 
-        if (!gb->is_cgb) {
+        if (gb->base->opts.mode == GBMULATOR_MODE_GBC) {
+            gb->ppu->pending_stat_mode = mode;
+        } else {
             // no delay to set STAT mode bits and request VBLANK irq
             PPU_SET_STAT_MODE(gb, mode);
             ppu_update_stat_irq_line(gb);
             CPU_REQUEST_INTERRUPT(gb, IRQ_VBLANK);
-        } else {
-            gb->ppu->pending_stat_mode = mode;
         }
         break;
     case PPU_MODE_HBLANK:
@@ -99,7 +99,7 @@ static inline gb_dmg_color_t dmg_get_color(gb_mmu_t *mmu, gb_pixel_t *pixel, uin
 /**
  * @returns cgb colors in r, g, b arguments after applying palette.
  */
-static inline void cgb_get_color(gb_mmu_t *mmu, gb_pixel_t *pixel, uint8_t is_obj, uint8_t enable_color_correction, uint8_t *r, uint8_t *g, uint8_t *b) {
+static inline void cgb_get_color(gb_mmu_t *mmu, gb_pixel_t *pixel, uint8_t is_obj, uint8_t *r, uint8_t *g, uint8_t *b) {
     uint16_t color_data;
     if (pixel) {
         uint8_t color_address = pixel->palette * 8 + pixel->color * 2;
@@ -115,20 +115,13 @@ static inline void cgb_get_color(gb_mmu_t *mmu, gb_pixel_t *pixel, uint8_t is_ob
     *g = (color_data & 0x3E0) >> 5;
     *b = (color_data & 0x7C00) >> 10;
 
-    if (enable_color_correction) {
-        int R = (26 * *r) + (4 * *g) + (2 * *b);
-        int G = (24 * *g) + (8 * *b);
-        int B = (6 * *r) + (4 * *g) + (22 * *b);
+    int R = (26 * *r) + (4 * *g) + (2 * *b);
+    int G = (24 * *g) + (8 * *b);
+    int B = (6 * *r) + (4 * *g) + (22 * *b);
 
-        *r = MIN(960, R) >> 2;
-        *g = MIN(960, G) >> 2;
-        *b = MIN(960, B) >> 2;
-    } else {
-        // from 5 bit depth to 8 bit depth (no color correction)
-        *r = (*r << 3) | (*r >> 2);
-        *g = (*g << 3) | (*g >> 2);
-        *b = (*b << 3) | (*b >> 2);
-    }
+    *r = MIN(960, R) >> 2;
+    *g = MIN(960, G) >> 2;
+    *b = MIN(960, B) >> 2;
 }
 
 static inline uint8_t cgb_get_bg_win_tile_attributes(gb_t *gb) {
@@ -272,7 +265,7 @@ static inline uint8_t get_tileslice(gb_t *gb, uint16_t tiledata_address, uint8_t
     gb_mmu_t *mmu = gb->mmu;
 
     uint8_t flip_x = CHECK_BIT(attributes, 5);
-    if (gb->is_cgb) {
+    if (gb->base->opts.mode == GBMULATOR_MODE_GBC) {
         if (CHECK_BIT(attributes, 3)) // tile is in VRAM bank 1
             return flip_x ? reverse_bits_order(mmu->vram[tiledata_address - MMU_VRAM + VRAM_BANK_SIZE]) : mmu->vram[tiledata_address - MMU_VRAM + VRAM_BANK_SIZE];
         else
@@ -288,13 +281,13 @@ static inline void fetch_tileslice_low(gb_t *gb) {
     uint8_t tileslice = 0;
     switch (ppu->pixel_fetcher.mode) {
         case FETCH_BG: {
-            uint8_t attributes = gb->is_cgb ? cgb_get_bg_win_tile_attributes(gb) : 0;
+            uint8_t attributes = gb->base->opts.mode == GBMULATOR_MODE_GBC ? cgb_get_bg_win_tile_attributes(gb) : 0;
             uint16_t tiledata_address = get_bg_tiledata_address(gb, 0, CHECK_BIT(attributes, 6));
             tileslice = get_tileslice(gb, tiledata_address, attributes);
             break;
         }
         case FETCH_WIN: {
-            uint8_t attributes = gb->is_cgb ? cgb_get_bg_win_tile_attributes(gb) : 0;
+            uint8_t attributes = gb->base->opts.mode == GBMULATOR_MODE_GBC ? cgb_get_bg_win_tile_attributes(gb) : 0;
             uint16_t tiledata_address = get_win_tiledata_address(gb, 0, CHECK_BIT(attributes, 6));
             tileslice = get_tileslice(gb, tiledata_address, attributes);
             break;
@@ -322,7 +315,7 @@ static inline void fetch_tileslice_high(gb_t *gb) {
     // leading to potential bitplane desync
     switch (ppu->pixel_fetcher.mode) {
         case FETCH_BG: {
-            if (gb->is_cgb) {
+            if (gb->base->opts.mode == GBMULATOR_MODE_GBC) {
                 attributes = cgb_get_bg_win_tile_attributes(gb);
                 palette = IS_CGB_COMPAT_MODE(gb) ? 0 : attributes & 0x07;
             } else {
@@ -333,7 +326,7 @@ static inline void fetch_tileslice_high(gb_t *gb) {
             break;
         }
         case FETCH_WIN: {
-            if (gb->is_cgb) {
+            if (gb->base->opts.mode == GBMULATOR_MODE_GBC) {
                 attributes = cgb_get_bg_win_tile_attributes(gb);
                 palette = IS_CGB_COMPAT_MODE(gb) ? 0 : attributes & 0x07;
             } else {
@@ -349,7 +342,7 @@ static inline void fetch_tileslice_high(gb_t *gb) {
             tileslice = get_tileslice(gb, tiledata_address, attributes);
             oam_pos = ppu->oam_scan.objs_oam_pos[ppu->pixel_fetcher.curr_oam_index];
 
-            uint8_t is_cgb_mode = gb->is_cgb && !IS_CGB_COMPAT_MODE(gb);
+            uint8_t is_cgb_mode = gb->base->opts.mode == GBMULATOR_MODE_GBC && !IS_CGB_COMPAT_MODE(gb);
             palette = is_cgb_mode ? attributes & 0x07 : GET_BIT(attributes, 4);
             break;
         }
@@ -383,7 +376,7 @@ static inline uint8_t push(gb_t *gb) {
             if (ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].x < 8)
                 offset = 8 - ppu->oam_scan.objs[ppu->pixel_fetcher.curr_oam_index].x;
 
-            uint8_t is_cgb_mode = gb->is_cgb && !CHECK_BIT(gb->mmu->io_registers[IO_OPRI], 0);
+            uint8_t is_cgb_mode = gb->base->opts.mode == GBMULATOR_MODE_GBC && !CHECK_BIT(gb->mmu->io_registers[IO_OPRI], 0);
             for (uint8_t fetcher_index = offset; fetcher_index < PIXEL_FIFO_SIZE; fetcher_index++) {
                 uint8_t fifo_index = ((fetcher_index - offset) + ppu->obj_fifo.head) % PIXEL_FIFO_SIZE;
 
@@ -408,7 +401,7 @@ static inline uint8_t push(gb_t *gb) {
 }
 
 static inline gb_pixel_t *select_pixel(gb_t *gb, gb_pixel_t *bg_win_pixel, gb_pixel_t *obj_pixel) {
-    uint8_t is_cgb_mode = gb->is_cgb && !IS_CGB_COMPAT_MODE(gb);
+    uint8_t is_cgb_mode = gb->base->opts.mode == GBMULATOR_MODE_GBC && !IS_CGB_COMPAT_MODE(gb);
     if (is_cgb_mode) {
         if (!obj_pixel || !IS_OBJ_ENABLED(gb) || obj_pixel->color == DMG_WHITE)
             return bg_win_pixel;
@@ -460,7 +453,7 @@ static inline gb_pixel_t *handle_window(gb_t *gb) {
     // https://www.reddit.com/r/EmuDev/comments/6q2tom/gb_changing_window_registers_midframe/
     // https://github.com/LIJI32/SameBoy/commit/cbbaf2ee843870d96e72380e2dedbdbda471ca76
     uint8_t wx_scx_compare = ((mmu->io_registers[IO_WX] & 7) == 7 - (mmu->io_registers[IO_SCX] & 7));
-    if (ppu->saved_wly != -1 && !gb->is_cgb && !IS_WIN_ENABLED(gb) && ppu->is_wx_triggered && wx_scx_compare)
+    if (ppu->saved_wly != -1 && gb->base->opts.mode != GBMULATOR_MODE_GBC && !IS_WIN_ENABLED(gb) && ppu->is_wx_triggered && wx_scx_compare)
         return &glitched_pixel;
 
     if (ppu->pixel_fetcher.mode == FETCH_BG && IS_INSIDE_WINDOW(gb)) {
@@ -590,12 +583,12 @@ static inline void drawing_step(gb_t *gb) {
     gb_pixel_t *selected_pixel = select_pixel(gb, bg_win_pixel, obj_pixel);
     uint8_t selected_is_obj = selected_pixel == obj_pixel;
 
-    if (gb->is_cgb) {
+    if (gb->base->opts.mode == GBMULATOR_MODE_GBC) {
         if (IS_CGB_COMPAT_MODE(gb))
             selected_pixel->color = dmg_get_color(mmu, selected_pixel, selected_is_obj);
 
         uint8_t r, g, b;
-        cgb_get_color(mmu, selected_pixel, selected_is_obj, !gb->disable_cgb_color_correction, &r, &g, &b);
+        cgb_get_color(mmu, selected_pixel, selected_is_obj, &r, &g, &b);
 
         SET_PIXEL_CGB(gb, ppu->lcd_x, mmu->io_registers[IO_LY], r, g, b);
     } else {
@@ -683,8 +676,8 @@ static inline void hblank_step(gb_t *gb) {
             return;
         }
 
-        if (gb->on_new_frame)
-            gb->on_new_frame(ppu->pixels);
+        if (gb->base->opts.on_new_frame)
+            gb->base->opts.on_new_frame(ppu->pixels);
     } else {
         ppu->oam_scan.size = 0;
         set_mode(gb, PPU_MODE_OAM);
@@ -755,9 +748,9 @@ void ppu_disable_lcd(gb_t *gb) {
     // white screen
     for (int x = 0; x < GB_SCREEN_WIDTH; x++) {
         for (int y = 0; y < GB_SCREEN_HEIGHT; y++) {
-            if (gb->is_cgb) {
+            if (gb->base->opts.mode == GBMULATOR_MODE_GBC) {
                 uint8_t r, g, b;
-                cgb_get_color(mmu, NULL, 0, !gb->disable_cgb_color_correction, &r, &g, &b);
+                cgb_get_color(mmu, NULL, 0, &r, &g, &b);
                 SET_PIXEL_CGB(gb, x, y, r, g, b);
             } else {
                 SET_PIXEL_DMG(gb, x, y, DMG_WHITE);
@@ -765,8 +758,8 @@ void ppu_disable_lcd(gb_t *gb) {
         }
     }
 
-    if (gb->on_new_frame)
-        gb->on_new_frame(gb->ppu->pixels);
+    if (gb->base->opts.on_new_frame)
+        gb->base->opts.on_new_frame(gb->ppu->pixels);
 }
 
 void ppu_update_stat_irq_line(gb_t *gb) {

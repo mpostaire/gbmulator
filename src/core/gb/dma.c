@@ -105,6 +105,6 @@ static inline void oam_dma_step(gb_t *gb) {
 
 void dma_step(gb_t *gb) {
     oam_dma_step(gb);
-    if (gb->is_cgb)
+    if (gb->base->opts.mode == GBMULATOR_MODE_GBC)
         gdma_hdma_step(gb);
 }
