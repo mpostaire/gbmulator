@@ -192,77 +192,77 @@ void apu_step(gb_t *gb) {
             apu->frame_sequencer_cycles_count = 0;
             switch (apu->frame_sequencer) {
             case 0:
-                channel_length(gb, &apu->channel1);
-                channel_length(gb, &apu->channel2);
-                channel_length(gb, &apu->channel3);
-                channel_length(gb, &apu->channel4);
+                channel_length(gb, &apu->channels[0]);
+                channel_length(gb, &apu->channels[1]);
+                channel_length(gb, &apu->channels[2]);
+                channel_length(gb, &apu->channels[3]);
                 break;
             case 2:
-                channel_length(gb, &apu->channel1);
-                channel_sweep(gb, &apu->channel1);
-                channel_length(gb, &apu->channel2);
-                channel_length(gb, &apu->channel3);
-                channel_length(gb, &apu->channel4);
+                channel_length(gb, &apu->channels[0]);
+                channel_sweep(gb, &apu->channels[0]);
+                channel_length(gb, &apu->channels[1]);
+                channel_length(gb, &apu->channels[2]);
+                channel_length(gb, &apu->channels[3]);
                 break;
             case 4:
-                channel_length(gb, &apu->channel1);
-                channel_length(gb, &apu->channel2);
-                channel_length(gb, &apu->channel3);
-                channel_length(gb, &apu->channel4);
+                channel_length(gb, &apu->channels[0]);
+                channel_length(gb, &apu->channels[1]);
+                channel_length(gb, &apu->channels[2]);
+                channel_length(gb, &apu->channels[3]);
                 break;
             case 6:
-                channel_length(gb, &apu->channel1);
-                channel_sweep(gb, &apu->channel1);
-                channel_length(gb, &apu->channel2);
-                channel_length(gb, &apu->channel3);
-                channel_length(gb, &apu->channel4);
+                channel_length(gb, &apu->channels[0]);
+                channel_sweep(gb, &apu->channels[0]);
+                channel_length(gb, &apu->channels[1]);
+                channel_length(gb, &apu->channels[2]);
+                channel_length(gb, &apu->channels[3]);
                 break;
             case 7:
-                channel_envelope(&apu->channel1);
-                channel_envelope(&apu->channel2);
-                channel_envelope(&apu->channel4);
+                channel_envelope(&apu->channels[0]);
+                channel_envelope(&apu->channels[1]);
+                channel_envelope(&apu->channels[3]);
                 break;
             }
             apu->frame_sequencer = (apu->frame_sequencer + 1) % 8;
         }
 
-        channel_step(&apu->channel1);
-        channel_step(&apu->channel2);
-        channel_step(&apu->channel3);
-        channel_step(&apu->channel4);
+        channel_step(&apu->channels[0]);
+        channel_step(&apu->channels[1]);
+        channel_step(&apu->channels[2]);
+        channel_step(&apu->channels[3]);
 
-        if (gb->apu_speed > 2.0f || !gb->on_new_sample)  // don't collect samples when emulation speed increases too much
+        if (gb->base->opts.apu_speed > 2.0f || !gb->base->opts.on_new_sample)  // don't collect samples when emulation speed increases too much
             continue;
 
         apu->take_sample_cycles_count++;
-        if (apu->take_sample_cycles_count >= (GB_CPU_FREQ / apu->dynamic_sampling_rate) * gb->apu_speed) {
+        if (apu->take_sample_cycles_count >= (GB_CPU_FREQ / apu->dynamic_sampling_rate) * gb->base->opts.apu_speed) {
             apu->take_sample_cycles_count = 0;
 
             float S01_volume = ((mmu->io_registers[IO_NR50] & 0x07) + 1) / 8.0f; // keep it between 0.0f and 1.0f
             float S02_volume = (((mmu->io_registers[IO_NR50] & 0x70) >> 4) + 1) / 8.0f; // keep it between 0.0f and 1.0f
-            float S01_output = ((CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_1) ? channel_dac(gb, &apu->channel1) : 0.0f)
-                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_2) ? channel_dac(gb, &apu->channel2) : 0.0f)
-                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_3) ? channel_dac(gb, &apu->channel3) : 0.0f)
-                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_4) ? channel_dac(gb, &apu->channel4) : 0.0f)) / 4.0f;
-            float S02_output = ((CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_1 + 4) ? channel_dac(gb, &apu->channel1) : 0.0f)
-                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_2 + 4) ? channel_dac(gb, &apu->channel2) : 0.0f)
-                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_3 + 4) ? channel_dac(gb, &apu->channel3) : 0.0f)
-                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_4 + 4) ? channel_dac(gb, &apu->channel4) : 0.0f)) / 4.0f;
+            float S01_output = ((CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_1) ? channel_dac(gb, &apu->channels[0]) : 0.0f)
+                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_2) ? channel_dac(gb, &apu->channels[1]) : 0.0f)
+                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_3) ? channel_dac(gb, &apu->channels[2]) : 0.0f)
+                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_4) ? channel_dac(gb, &apu->channels[3]) : 0.0f)) / 4.0f;
+            float S02_output = ((CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_1 + 4) ? channel_dac(gb, &apu->channels[0]) : 0.0f)
+                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_2 + 4) ? channel_dac(gb, &apu->channels[1]) : 0.0f)
+                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_3 + 4) ? channel_dac(gb, &apu->channels[2]) : 0.0f)
+                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_4 + 4) ? channel_dac(gb, &apu->channels[3]) : 0.0f)) / 4.0f;
 
             // apply channel volume to its output
             S01_output *= S01_volume;
             S02_output *= S02_volume;
 
-            gb->on_new_sample((gbmulator_apu_sample_t) {.l = S02_output * 32767, .r = S01_output * 32767}, &apu->dynamic_sampling_rate);
+            gb->base->opts.on_new_sample((gbmulator_apu_sample_t) {.l = S02_output * 32767, .r = S01_output * 32767}, &apu->dynamic_sampling_rate);
         }
     }
 }
 
 void apu_init(gb_t *gb) {
     apu_t *apu = xcalloc(1, sizeof(*apu));
-    apu->dynamic_sampling_rate = gb->apu_sampling_rate;
+    apu->dynamic_sampling_rate = gb->base->opts.apu_sampling_rate;
 
-    apu->channel1 = (gb_channel_t) {
+    apu->channels[0] = (gb_channel_t) {
         .NRx0 = &gb->mmu->io_registers[IO_NR10],
         .NRx1 = &gb->mmu->io_registers[IO_NR11],
         .NRx2 = &gb->mmu->io_registers[IO_NR12],
@@ -270,14 +270,14 @@ void apu_init(gb_t *gb) {
         .NRx4 = &gb->mmu->io_registers[IO_NR14],
         .id = APU_CHANNEL_1
     };
-    apu->channel2 = (gb_channel_t) { 
+    apu->channels[1] = (gb_channel_t) { 
         .NRx1 = &gb->mmu->io_registers[IO_NR21],
         .NRx2 = &gb->mmu->io_registers[IO_NR22],
         .NRx3 = &gb->mmu->io_registers[IO_NR23],
         .NRx4 = &gb->mmu->io_registers[IO_NR24],
         .id = APU_CHANNEL_2
     };
-    apu->channel3 = (gb_channel_t) {
+    apu->channels[2] = (gb_channel_t) {
         .NRx0 = &gb->mmu->io_registers[IO_NR30],
         .NRx1 = &gb->mmu->io_registers[IO_NR31],
         .NRx2 = &gb->mmu->io_registers[IO_NR32],
@@ -285,7 +285,7 @@ void apu_init(gb_t *gb) {
         .NRx4 = &gb->mmu->io_registers[IO_NR34],
         .id = APU_CHANNEL_3
     };
-    apu->channel4 = (gb_channel_t) { 
+    apu->channels[3] = (gb_channel_t) { 
         .NRx1 = &gb->mmu->io_registers[IO_NR41],
         .NRx2 = &gb->mmu->io_registers[IO_NR42],
         .NRx3 = &gb->mmu->io_registers[IO_NR43],

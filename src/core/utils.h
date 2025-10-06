@@ -52,6 +52,31 @@
 #   define LOG_DEBUG(...)
 #endif
 
+#if __has_include(<stdbit.h>)
+#   include <stdbit.h>
+#else
+static inline unsigned int stdc_count_ones_impl(unsigned long long v) {
+    int count = 0;
+    while (v) {
+        v >>= 1;
+        count++;
+    }
+    return count;
+}
+
+static inline unsigned int stdc_first_trailing_one_impl(unsigned long long v) {
+    int idx = 0;
+    while ((v & 1) == 0) {
+        v >>= 1;
+        idx++;
+    }
+    return idx + 1;
+}
+
+#define stdc_count_ones stdc_count_ones_impl
+#define stdc_first_trailing_one stdc_first_trailing_one_impl
+#endif
+
 void *xmalloc(size_t size);
 
 void *xcalloc(size_t nmemb, size_t size);

@@ -38,19 +38,13 @@ static config_t config = {
     // .keyname_parser = (keyname_parser_t) emscripten_compute_dom_pk_code
 };
 
-static bool is_paused = 1;
-
+static bool is_paused = true;
 static glrenderer_t *renderer;
-
 static uint8_t scale;
-
 static int editing_keybind = -1;
-
 static char window_title[sizeof(EMULATOR_NAME) + 19];
-
 static uint8_t joypad_state = 0xFF;
-
-static gb_t *gb;
+static gbmulator_t *emu;
 
 static int keycode_filter(unsigned int key) {
     switch (key) {
@@ -77,16 +71,16 @@ static void loop(void) {
         emscripten_cancel_main_loop();
     }
 
-    gb_set_joypad_state(gb, joypad_state);
+    gbmulator_set_joypad_state(emu, joypad_state);
 
     // run the emulator for the approximate number of steps it takes for the ppu to render a frame
-    gb_run_steps(gb, GB_CPU_STEPS_PER_FRAME * config.speed);
+    gbmulator_run_steps(emu, GB_CPU_STEPS_PER_FRAME * config.speed);
 
     glrenderer_render(renderer);
 }
 
 EMSCRIPTEN_KEEPALIVE void set_pause(uint8_t value) {
-    if (!gb) return;
+    if (!emu) return;
 
     is_paused = value;
 
@@ -159,14 +153,16 @@ static void save_config(const char *path) {
 
 static void save(void) {
     size_t save_length;
-    uint8_t *save_data = gb_get_save(gb, &save_length);
+    uint8_t *save_data = gbmulator_get_save(emu, &save_length);
     if (!save_data) return;
-    local_storage_set_item(gb_get_rom_title(gb), save_data, 1, save_length);
+    local_storage_set_item(gbmulator_get_rom_title(emu), save_data, 1, save_length);
     free(save_data);
 }
 
 void load_cartridge(const uint8_t *rom, size_t rom_size) {
     gbmulator_options_t opts = {
+        .rom = rom,
+        .rom_size = rom_size,
         .mode = config.mode,
         .on_new_sample = alrenderer_queue_sample,
         .on_new_frame = ppu_vblank_cb,
@@ -174,21 +170,21 @@ void load_cartridge(const uint8_t *rom, size_t rom_size) {
         .apu_sampling_rate = alrenderer_get_sampling_rate(),
         .palette = config.color_palette
     };
-    gb_t *new_emu = gb_init(rom, rom_size, &opts);
+    gbmulator_t *new_emu = gbmulator_init(&opts);
     if (!new_emu) return;
 
-    if (gb) {
+    if (emu) {
         save();
-        gb_quit(gb);
+        gbmulator_quit(emu);
     }
-    gb = new_emu;
-    char *rom_title = gb_get_rom_title(gb);
+    emu = new_emu;
+    char *rom_title = gbmulator_get_rom_title(emu);
     alrenderer_clear_queue();
 
     size_t save_length;
     unsigned char *save = local_storage_get_item(rom_title, &save_length, 1);
     if (save) {
-        gb_load_save(gb, save, save_length);
+        gbmulator_load_save(emu, save, save_length);
         free(save);
     }
 
@@ -203,9 +199,9 @@ void load_cartridge(const uint8_t *rom, size_t rom_size) {
 }
 
 EMSCRIPTEN_KEEPALIVE void on_before_unload(void) {
-    if (gb) {
+    if (emu) {
         save();
-        gb_quit(gb);
+        gbmulator_quit(emu);
     }
 
     // save config
@@ -231,8 +227,8 @@ EMSCRIPTEN_KEEPALIVE void receive_rom(uint8_t *rom, size_t rom_size) {
 }
 
 EMSCRIPTEN_KEEPALIVE void reset_rom(void) {
-    if (!gb) return;
-    gb_reset(gb, config.mode);
+    if (!emu) return;
+    gbmulator_reset(emu, config.mode);
     alrenderer_clear_queue();
     set_pause(0);
     EM_ASM({
@@ -250,9 +246,9 @@ EMSCRIPTEN_KEEPALIVE void set_scale(uint8_t value) {
 }
 
 EMSCRIPTEN_KEEPALIVE void set_speed(float value) {
-    config.speed = value;
-    if (gb)
-        gb_set_apu_speed(gb, config.speed);
+    // config.speed = value;
+    // if (emu)
+    //     gbmulator_set_apu_speed(emu, config.speed);
 }
 
 EMSCRIPTEN_KEEPALIVE void set_sound(float value) {
@@ -261,14 +257,14 @@ EMSCRIPTEN_KEEPALIVE void set_sound(float value) {
 }
 
 EMSCRIPTEN_KEEPALIVE void set_color(uint8_t value) {
-    config.color_palette = value;
-    if (gb)
-        gb_set_palette(gb, config.color_palette);
+    // config.color_palette = value;
+    // if (emu)
+    //     gb_set_palette(emu, config.color_palette);
 }
 
 EMSCRIPTEN_KEEPALIVE void set_mode(float value) {
     config.mode = value;
-    if (!gb) {
+    if (!emu) {
         EM_ASM({
             setTheme($0);
         }, config.mode);
@@ -287,7 +283,7 @@ bool handle_keyboard_input(int eventType, const EmscriptenKeyboardEvent *e, void
 
     switch (eventType) {
     case EMSCRIPTEN_EVENT_KEYUP:
-        if (!gb || is_paused) return 0;
+        if (!emu || is_paused) return 0;
 
         joypad = keycode_to_joypad(&config, e->keyCode);
         if (joypad < 0) return 1;
@@ -336,29 +332,29 @@ bool handle_keyboard_input(int eventType, const EmscriptenKeyboardEvent *e, void
         case DOM_VK_F3: case DOM_VK_F4:
         case DOM_VK_F5: case DOM_VK_F6:
         case DOM_VK_F7: case DOM_VK_F8:
-            if (!gb)
+            if (!emu)
                 break;
 
-            rom_title = gb_get_rom_title(gb);
+            rom_title = gbmulator_get_rom_title(emu);
             len = strlen(rom_title);
             savestate_path = xmalloc(len + 10);
             snprintf(savestate_path, len + 9, "%s-state-%d", rom_title, e->keyCode - DOM_VK_F1);
             if (e->shiftKey) {
                 size_t savestate_length;
-                uint8_t *savestate = gb_get_savestate(gb, &savestate_length, 1);
+                uint8_t *savestate = gbmulator_get_savestate(emu, &savestate_length, 1);
                 local_storage_set_item(savestate_path, savestate, 1, savestate_length);
                 free(savestate);
             } else {
                 size_t savestate_length;
                 uint8_t *savestate = local_storage_get_item(savestate_path, &savestate_length, 1);
-                int ret = gb_load_savestate(gb, savestate, savestate_length);
+                int ret = gbmulator_load_savestate(emu, savestate, savestate_length);
                 if (ret > 0) {
-                    gbmulator_options_t opts;
-                    gb_get_options(gb, &opts);
-                    config.mode = opts.mode;
-                    EM_ASM({
-                        document.getElementById("mode-setter").value = $4;
-                    }, config.mode);
+                    // gbmulator_options_t opts;
+                    // gb_get_options(emu, &opts);
+                    // config.mode = opts.mode;
+                    // EM_ASM({
+                    //     document.getElementById("mode-setter").value = $4;
+                    // }, config.mode);
                 }
                 free(savestate);
             }
@@ -376,10 +372,9 @@ bool handle_keyboard_input(int eventType, const EmscriptenKeyboardEvent *e, void
 }
 
 int main(int argc, char **argv) {
-    // load_config() must be called before gb_init()
-    // config.keybindings[JOYPAD_B] = DOM_VK_PERIOD; // change default B key to DOM_VK_PERIOD as DOM_VK_KP_PERIOD doesn't work for web
+    // load_config() must be called before gbmulator_init()
     load_config("config");
-    gb = NULL;
+    emu = NULL;
 
     EM_ASM({
         document.getElementById("speed-slider").value = $0;

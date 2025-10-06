@@ -45,10 +45,7 @@ typedef struct {
     uint8_t frame_sequencer;
     uint32_t frame_sequencer_cycles_count;
 
-    gb_channel_t channel1;
-    gb_channel_t channel2;
-    gb_channel_t channel3;
-    gb_channel_t channel4;
+    gb_channel_t channels[4];
 } apu_t;
 
 void apu_channel_trigger(gb_t *gb, gb_channel_t *c);

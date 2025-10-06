@@ -190,8 +190,8 @@ uint8_t *get_rom(const char *path, size_t *rom_size) {
     const char *dot = strrchr(path, '.');
     if (!dot ||
         (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) &&
-        strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc")) &&
-        strncmp(dot, ".gba", MAX(strlen(dot), sizeof(".gba")))))
+        strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))) &&
+        strncmp(dot, ".gba", MAX(strlen(dot), sizeof(".gba"))))
     ) {
         eprintf("%s: wrong file extension (expected .gb, .gbc or .gba)\n", path);
         return NULL;

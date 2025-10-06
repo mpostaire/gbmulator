@@ -135,9 +135,9 @@ void camera_write_reg(gb_t *gb, uint16_t address, uint8_t data) {
             mmu->mbc.camera.capture_cycles_remaining = 4 * (32448 + (CHECK_BIT(mmu->mbc.camera.regs[1], 7) ? 0 : 512) + (exposure * 16));
             memcpy(mmu->mbc.camera.work_regs, mmu->mbc.camera.regs, GB_CAMERA_N_REGS);
 
-            uint8_t generate_noise_image = gb->on_camera_capture_image == NULL;
+            uint8_t generate_noise_image = gb->base->opts.on_camera_capture_image == NULL;
             if (!generate_noise_image)
-                generate_noise_image |= !gb->on_camera_capture_image(mmu->mbc.camera.sensor_image);
+                generate_noise_image |= !gb->base->opts.on_camera_capture_image(mmu->mbc.camera.sensor_image);
             if (generate_noise_image) {
                 for (int i = 0; i < GB_CAMERA_SENSOR_HEIGHT * GB_CAMERA_SENSOR_WIDTH; i++)
                     mmu->mbc.camera.sensor_image[i] = fastrand();

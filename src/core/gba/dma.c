@@ -1,5 +1,3 @@
-#include <stdbit.h>
-
 #include "gba_priv.h"
 
 #define IO_DMAxCNT_H(gba, channel) (gba)->bus->io[(IO_DMA0CNT_H + ((IO_DMA1CNT_H - IO_DMA0CNT_H) * (channel)))]

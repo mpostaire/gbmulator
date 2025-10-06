@@ -8,9 +8,9 @@ int link_start_server(const char *port);
 
 int link_connect_to_server(const char *address, const char *port);
 
-int link_init_transfer(int sfd, gb_t *gb, gb_t **linked_gb);
+bool link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu);
 
 /**
  * @return 0 if connection is lost, else 1
  */
-int link_exchange_joypad(int sfd, gb_t *gb, gb_t *linked_gb);
+bool link_exchange_joypad(int sfd, gbmulator_t *emu, gbmulator_t *linked_emu);

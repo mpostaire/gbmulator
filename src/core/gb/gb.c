@@ -4,6 +4,7 @@
 #include <zlib.h>
 
 #include "gb_priv.h"
+#include "../core_priv.h"
 
 #define SAVESTATE_STRING EMULATOR_NAME"-sav"
 
@@ -15,7 +16,6 @@ typedef struct __attribute__((packed)) {
 
 gbmulator_options_t defaults_opts = {
     .mode = GBMULATOR_MODE_GBC,
-    .disable_color_correction = 0,
     .palette = PPU_COLOR_PALETTE_ORIG,
     .apu_speed = 1.0f,
     .apu_sampling_rate = 44100,
@@ -43,50 +43,7 @@ const char *mbc_names[] = {
     STRINGIFY(TAMA5)
 };
 
-#define N_REWIND_STATES (8 * GB_FRAMES_PER_SECOND)
-static size_t get_savestate_expected_len(gb_t *gb, size_t *cpu_len, size_t *timer_len, size_t *ppu_len, size_t *mmu_len);
-
-void rewind_push(gb_t *gb) {
-    // eprintf("rewind_push\n");
-    gb->rewind_stack.head = (gb->rewind_stack.head + 1) % N_REWIND_STATES;
-    if (gb->rewind_stack.len < N_REWIND_STATES)
-        gb->rewind_stack.len++;
-
-    uint8_t *savestate_data = gb_get_savestate(gb, &gb->rewind_stack.state_size, 0); // TODO specify the dest buffer to avoid redundant memcpy
-    // eprintf("gb_get_savestate push head=%ld sz=%ld expected_sz=%ld\n", gb->rewind_stack.head, gb->rewind_stack.state_size, get_savestate_expected_len(gb, NULL, NULL, NULL, NULL));
-    memcpy(&gb->rewind_stack.states[gb->rewind_stack.head * gb->rewind_stack.state_size], savestate_data, gb->rewind_stack.state_size);
-    free(savestate_data);
-    // eprintf("ok push %ld\n", gb->rewind_stack.head);
-}
-
-void rewind_pop(gb_t *gb) {
-    eprintf("rewind pop\n");
-    if (gb->rewind_stack.len == 0)
-        return;
-
-    eprintf("gb_load_savestate pop %ld\n", gb->rewind_stack.head);
-    gb_load_savestate(gb, &gb->rewind_stack.states[gb->rewind_stack.head * gb->rewind_stack.state_size], gb->rewind_stack.state_size);
-
-    gb->rewind_stack.head = gb->rewind_stack.head == 0 ? (N_REWIND_STATES - 1) : gb->rewind_stack.head - 1;
-    gb->rewind_stack.len--;
-    // if len == 0, set head back to -1??
-}
-
-void gb_rewind(gb_t *gb) {
-    // TODO while rewind button is pressed, pause the emulation (do not step)
-    rewind_pop(gb);
-}
-
-static inline void gb_step_linked(gb_t *gb, uint8_t step_linked_device) {
-    if (gb->rewind_stack.states) {
-        static size_t step_counter = 0;
-        step_counter++;
-        if (step_counter == GB_CPU_STEPS_PER_FRAME) {
-            step_counter = 0;
-            rewind_push(gb);
-        }
-    }
-
+void gb_step(gb_t *gb) {
     uint8_t double_speed = IS_DOUBLE_SPEED(gb);
     for (int i = double_speed + 1; i; i--) {
         // stop execution of the program while a GDMA or HDMA is active
@@ -106,48 +63,17 @@ static inline void gb_step_linked(gb_t *gb, uint8_t step_linked_device) {
     //      behave in a weird way: https://gbdev.io/pandocs/CGB_Registers.html?highlight=key1#ff4d--key1-cgb-mode-only-prepare-speed-switch
     ppu_step(gb);
     apu_step(gb);
-
-    if (step_linked_device) {
-        switch (gb->link->linked_device.type) {
-        case LINK_TYPE_NONE: break;
-        case LINK_TYPE_GB: gb_step_linked(gb->link->linked_device.device, 0); break;
-        case LINK_TYPE_PRINTER: gb_printer_step(gb->link->linked_device.device); break;
-        }
-    }
-}
-
-void gb_step(gb_t *gb) {
-    gb_step_linked(gb, 1);
 }
 
 int gb_is_rom_valid(const uint8_t *rom) {
     return parse_header_mbc_byte(rom[0x0147], NULL, NULL, NULL, NULL, NULL) && validate_header_checksum(rom);
 }
 
-static size_t get_savestate_expected_len(gb_t *gb, size_t *cpu_len, size_t *timer_len, size_t *ppu_len, size_t *mmu_len) {
-    size_t cpu, timer, ppu, mmu;
-    cpu = cpu_serialized_length(gb);
-    timer = timer_serialized_length(gb);
-    ppu = ppu_serialized_length(gb);
-    mmu = mmu_serialized_length(gb);
-
-    if (cpu_len)
-        *cpu_len = cpu;
-    if (timer_len)
-        *timer_len = timer;
-    if (ppu_len)
-        *ppu_len = ppu;
-    if (mmu_len)
-        *mmu_len = mmu;
-
-    return cpu + timer + ppu + mmu + sizeof(savestate_header_t);
-}
-
-gb_t *gb_init(const uint8_t *rom, size_t rom_size, gbmulator_options_t *opts) {
+gb_t *gb_init(gbmulator_t *base) {
     gb_t *gb = xcalloc(1, sizeof(*gb));
-    gb_set_options(gb, opts);
+    gb->base = base;
 
-    if (!mmu_init(gb, rom, rom_size)) {
+    if (!mmu_init(gb, base->opts.rom, base->opts.rom_size)) {
         free(gb);
         return NULL;
     }
@@ -157,9 +83,6 @@ gb_t *gb_init(const uint8_t *rom, size_t rom_size, gbmulator_options_t *opts) {
     timer_init(gb);
     link_init(gb);
     joypad_init(gb);
-
-    gb->rewind_stack.states = xmalloc(N_REWIND_STATES * get_savestate_expected_len(gb, NULL, NULL, NULL, NULL));
-    gb->rewind_stack.head = -1;
 
     return gb;
 }
@@ -172,9 +95,6 @@ void gb_quit(gb_t *gb) {
     timer_quit(gb);
     link_quit(gb);
     joypad_quit(gb);
-
-    if (gb->rewind_stack.states)
-        free(gb->rewind_stack.states);
 
     free(gb);
 }
@@ -238,7 +158,7 @@ void gb_print_status(gb_t *gb) {
         snprintf(str_buf, 30, " by %s", licensee);
 
     printf("[%s] Playing %s (v%d)%s\n",
-            gb->is_cgb ? "CGB" : "DMG",
+            gb->base->opts.mode == GBMULATOR_MODE_GBC ? "CGB" : "DMG",
             gb->rom_title,
             mmu->rom[0x014C],
             licensee ? str_buf : ""
@@ -257,66 +177,16 @@ void gb_print_status(gb_t *gb) {
     );
 }
 
-void gb_link_connect_gb(gb_t *gb, gb_t *other_gb) {
-    gb_link_disconnect(gb);
-
-    gb->link->linked_device.device = other_gb;
-    gb->link->linked_device.type = LINK_TYPE_GB;
-    gb->link->linked_device.shift_bit = gb_linked_shift_bit;
-    gb->link->linked_device.data_received = gb_linked_data_received;
-
-    other_gb->link->linked_device.device = gb;
-    other_gb->link->linked_device.type = LINK_TYPE_GB;
-    other_gb->link->linked_device.shift_bit = gb_linked_shift_bit;
-    other_gb->link->linked_device.data_received = gb_linked_data_received;
+uint8_t gb_link_shift_bit(gb_t *gb, uint8_t in_bit) {
+    uint8_t out_bit = GET_BIT(gb->mmu->io_registers[IO_SB], 7);
+    gb->mmu->io_registers[IO_SB] <<= 1;
+    CHANGE_BIT(gb->mmu->io_registers[IO_SB], 0, in_bit);
+    return out_bit;
 }
 
-void gb_link_connect_printer(gb_t *gb, gb_printer_t *printer) {
-    gb_link_disconnect(gb);
-
-    gb->link->linked_device.device = printer;
-    gb->link->linked_device.type = LINK_TYPE_PRINTER;
-    gb->link->linked_device.shift_bit = gb_printer_linked_shift_bit;
-    gb->link->linked_device.data_received = gb_printer_linked_data_received;
-}
-
-void gb_link_disconnect(gb_t *gb) {
-    if (gb->link->linked_device.type == LINK_TYPE_GB) {
-        gb_t *linked_gb = gb->link->linked_device.device;
-        linked_gb->link->linked_device.device = NULL;
-        linked_gb->link->linked_device.type = LINK_TYPE_NONE;
-        linked_gb->link->linked_device.shift_bit = NULL;
-        linked_gb->link->linked_device.data_received = NULL;
-    }
-
-    gb->link->linked_device.device = NULL;
-    gb->link->linked_device.type = LINK_TYPE_NONE;
-    gb->link->linked_device.shift_bit = NULL;
-    gb->link->linked_device.data_received = NULL;
-}
-
-uint8_t gb_ir_connect(gb_t *gb, gb_t *other_gb) {
-    if (!gb->is_cgb && gb->mmu->mbc.type != HuC1 && gb->mmu->mbc.type != HuC3)
-        return 0;
-    if (!other_gb->is_cgb && other_gb->mmu->mbc.type != HuC1 && other_gb->mmu->mbc.type != HuC3)
-        return 0;
-
-    gb_ir_disconnect(gb);
-
-    gb->ir_gb = other_gb;
-    other_gb->ir_gb = gb;
-
-    return 1;
-}
-
-void gb_ir_disconnect(gb_t *gb) {
-    if (!gb->is_cgb)
-        return;
-
-    if (gb->ir_gb && gb->ir_gb->is_cgb)
-        gb->ir_gb->ir_gb = NULL;
-
-    gb->ir_gb = NULL;
+void gb_link_data_received(gb_t *gb) {
+    RESET_BIT(gb->mmu->io_registers[IO_SC], 7);
+    CPU_REQUEST_INTERRUPT(gb, IRQ_SERIAL);
 }
 
 void gb_joypad_press(gb_t *gb, gbmulator_joypad_button_t key) {
@@ -327,18 +197,24 @@ void gb_joypad_release(gb_t *gb, gbmulator_joypad_button_t key) {
     joypad_release(gb, key);
 }
 
+uint16_t gb_get_joypad_state(gb_t *gb) {
+    gb_joypad_t *joypad = gb->joypad;
+
+    return ((joypad->direction << 4) & 0xF0) | (joypad->action & 0x0F);
+}
+
 void gb_set_joypad_state(gb_t *gb, uint16_t state) {
     gb_joypad_t *joypad = gb->joypad;
 
-    uint8_t direction = state & 0x0F;
-    uint8_t action = (state >> 4) & 0x0F;
+    uint8_t direction = (state >> 4) & 0x0F;
+    uint8_t action = state & 0x0F;
 
     // request interrupt if it is enabled and any button bit goes from released to pressed (1 -> 0)
     uint8_t direction_changed = (joypad->direction & ~direction) && !CHECK_BIT(gb->mmu->io_registers[IO_P1], 4);
     uint8_t action_changed = (joypad->action & ~action) && !CHECK_BIT(gb->mmu->io_registers[IO_P1], 5);
     if (direction_changed || action_changed)
         CPU_REQUEST_INTERRUPT(gb, IRQ_JOYPAD);
- 
+
     joypad->action = action;
     joypad->direction = direction;
 }
@@ -469,7 +345,7 @@ bool gb_load_save(gb_t *gb, uint8_t *save_data, size_t save_length) {
 uint8_t *gb_get_savestate(gb_t *gb, size_t *length, bool is_compressed) {
     // make savestate header
     savestate_header_t *savestate_header = xmalloc(sizeof(*savestate_header));
-    savestate_header->is_cgb = gb->is_cgb;
+    savestate_header->is_cgb = gb->base->opts.mode == GBMULATOR_MODE_GBC;
     memcpy(savestate_header->identifier, SAVESTATE_STRING, sizeof(savestate_header->identifier));
     memcpy(savestate_header->rom_title, gb->rom_title, sizeof(savestate_header->rom_title));
 
@@ -548,15 +424,18 @@ bool gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length) {
         return false;
     }
 
-    if ((savestate_header->is_cgb & 0x03) != gb->is_cgb)
+    if ((savestate_header->is_cgb & 0x03) != (gb->base->opts.mode == GBMULATOR_MODE_GBC))
         return false;
 
     size_t savestate_data_len = length - sizeof(savestate_header_t);
     uint8_t *savestate_data = xmalloc(savestate_data_len);
     memcpy(savestate_data, data + sizeof(savestate_header_t), savestate_data_len);
 
-    size_t cpu_len, timer_len, ppu_len, mmu_len;
-    size_t expected_data_len = get_savestate_expected_len(gb, &cpu_len, &timer_len, &ppu_len, &mmu_len) - sizeof(savestate_header_t);
+    size_t expected_data_len = 0;
+    expected_data_len += cpu_serialized_length(gb);
+    expected_data_len += timer_serialized_length(gb);
+    expected_data_len += ppu_serialized_length(gb);
+    expected_data_len += mmu_serialized_length(gb);
 
     if (CHECK_BIT(savestate_header->is_cgb, 7)) {
         uint8_t *dest = xmalloc(expected_data_len);
@@ -582,13 +461,10 @@ bool gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length) {
     }
 
     size_t offset = 0;
-    cpu_unserialize(gb, savestate_data);
-    offset += cpu_len;
-    timer_unserialize(gb, &savestate_data[offset]);
-    offset += timer_len;
-    ppu_unserialize(gb, &savestate_data[offset]);
-    offset += ppu_len;
-    mmu_unserialize(gb, &savestate_data[offset]);
+    offset += cpu_unserialize(gb, &savestate_data[offset]);
+    offset += timer_unserialize(gb, &savestate_data[offset]);
+    offset += ppu_unserialize(gb, &savestate_data[offset]);
+    offset += mmu_unserialize(gb, &savestate_data[offset]);
 
     free(savestate_header);
     free(savestate_data);
@@ -597,7 +473,7 @@ bool gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length) {
     apu_quit(gb);
     apu_init(gb);
 
-    return gb->is_cgb;
+    return true;
 }
 
 char *gb_get_rom_title(gb_t *gb) {
@@ -608,63 +484,6 @@ uint8_t *gb_get_rom(gb_t *gb, size_t *rom_size) {
     if (rom_size)
         *rom_size = gb->mmu->rom_size;
     return gb->mmu->rom;
-}
-
-void gb_get_options(gb_t *gb, gbmulator_options_t *opts) {
-    opts->mode = gb->is_cgb ? GBMULATOR_MODE_GBC : GBMULATOR_MODE_GB;
-    opts->disable_color_correction = gb->disable_cgb_color_correction;
-    opts->apu_speed = gb->apu_speed;
-    opts->apu_sampling_rate = gb->apu_sampling_rate;
-    opts->palette = gb->dmg_palette;
-    opts->on_new_sample = gb->on_new_sample;
-    opts->on_new_frame = gb->on_new_frame;
-    opts->on_accelerometer_request = gb->on_accelerometer_request;
-    opts->on_camera_capture_image = gb->on_camera_capture_image;
-}
-
-void gb_set_options(gb_t *gb, gbmulator_options_t *opts) {
-    if (!opts)
-        opts = &defaults_opts;
-
-    // allow changes of mode and apu_sampling_rate only once (inside gb_init())
-    if (!gb->cpu) {
-        gb->is_cgb = opts->mode == GBMULATOR_MODE_GBC;
-        gb->cgb_mode_enabled = gb->is_cgb;
-        gb->apu_sampling_rate = opts->apu_sampling_rate == 0 ? defaults_opts.apu_sampling_rate : opts->apu_sampling_rate;
-    }
-
-    gb->disable_cgb_color_correction = opts->disable_color_correction;
-    gb->apu_speed = opts->apu_speed < 1.0f ? defaults_opts.apu_speed : opts->apu_speed;
-    gb->dmg_palette = opts->palette >= 0 && opts->palette < PPU_COLOR_PALETTE_MAX ? opts->palette : defaults_opts.palette;
-    gb->on_new_frame = opts->on_new_frame;
-    gb->on_new_sample = opts->on_new_sample;
-    gb->on_accelerometer_request = opts->on_accelerometer_request;
-    gb->on_camera_capture_image = opts->on_camera_capture_image;
-}
-
-bool gb_is_cgb(gb_t *gb) {
-    return gb->is_cgb;
-}
-
-uint16_t gb_get_cartridge_checksum(gb_t *gb) {
-    uint16_t checksum = 0;
-    for (unsigned int i = 0; i < gb->mmu->rom_size; i += 2)
-        checksum = checksum - (gb->mmu->rom[i] + gb->mmu->rom[i + 1]) - 1;
-    return checksum;
-}
-
-void gb_set_apu_speed(gb_t *gb, float speed) {
-    gbmulator_options_t opts;
-    gb_get_options(gb, &opts);
-    opts.apu_speed = speed;
-    gb_set_options(gb, &opts);
-}
-
-void gb_set_palette(gb_t *gb, gb_color_palette_t palette) {
-    gbmulator_options_t opts;
-    gb_get_options(gb, &opts);
-    opts.palette = palette;
-    gb_set_options(gb, &opts);
 }
 
 uint8_t gb_has_accelerometer(gb_t *gb) {

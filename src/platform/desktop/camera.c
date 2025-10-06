@@ -8,6 +8,12 @@ static uint8_t *camera_data = NULL;
 static guint new_sample_src_id;
 static guint bus_error_src_id;
 
+static GstElement *pipeline;
+
+static gsize devices_len;
+static gchar **devices_paths;
+static GtkStringList *devices_names;
+
 static GstFlowReturn gstreamer_new_sample_cb(GstElement *sink, gpointer userdata) {
     GstSample *sample;
 
@@ -52,12 +58,6 @@ uint8_t gb_camera_capture_image_cb(uint8_t *pixels) {
         return 0;
     }
 }
-
-static GstElement *pipeline;
-
-static gsize devices_len;
-static gchar **devices_paths;
-static GtkStringList *devices_names;
 
 gboolean camera_find_devices(void) {
     // TODO return list of name and path (elem[i] == path_i, elem[i + 1] == name_i)
