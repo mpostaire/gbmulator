@@ -15,7 +15,9 @@ typedef struct {
     uint8_t scale;
     float speed;
     float sound;
+    float joypad_opacity;
     uint8_t sound_drc;
+    uint8_t enable_joypad;
     char link_host[INET6_ADDRSTRLEN];
     char link_port[6];
 

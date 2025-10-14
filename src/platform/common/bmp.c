@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include <stdlib.h>
 
 #include "bmp.h"
 
@@ -69,15 +69,13 @@ static bool parse_file_header(uint8_t **data, bmp_file_header_t *file_header) {
     read_u32(data); // reserved
     file_header->offset = read_u32(data);
 
-    printf("file_size=%d offset=%d\n", file_header->file_size, file_header->offset);
-
     return true;
 }
 
 static bool parse_v5_header(uint8_t **data, bmp_v5_header_t *v5_header) {
     v5_header->header_size = read_u32(data);
-    v5_header->w = read_u32(data);
-    v5_header->h = read_u32(data);
+    v5_header->w           = read_u32(data);
+    v5_header->h           = read_u32(data);
 
     v5_header->np = read_u16(data);
     if (v5_header->np != 1)
@@ -92,8 +90,8 @@ static bool parse_v5_header(uint8_t **data, bmp_v5_header_t *v5_header) {
         return false;
 
     v5_header->img_size = read_u32(data);
-    v5_header->hres = read_u32(data);
-    v5_header->vres = read_u32(data);
+    v5_header->hres     = read_u32(data);
+    v5_header->vres     = read_u32(data);
 
     v5_header->n_palette_colors = read_u32(data);
     if (v5_header->n_palette_colors != 0)
@@ -109,11 +107,11 @@ static bool parse_v5_header(uint8_t **data, bmp_v5_header_t *v5_header) {
     v5_header->a_bitmask = read_u32(data);
 
     v5_header->color_space_endpoints = read_u32(data);
-    v5_header->r_gamma = read_u32(data);
-    v5_header->g_gamma = read_u32(data);
-    v5_header->b_gamma = read_u32(data);
-    v5_header->intent = read_u32(data);
-    v5_header->icc_profile_data = read_u32(data);
+    v5_header->r_gamma               = read_u32(data);
+    v5_header->g_gamma               = read_u32(data);
+    v5_header->b_gamma               = read_u32(data);
+    v5_header->intent                = read_u32(data);
+    v5_header->icc_profile_data      = read_u32(data);
 
     v5_header->icc_profile_size = read_u32(data);
     if (v5_header->icc_profile_size != 0)
@@ -128,9 +126,9 @@ bmp_image_t *bmp_decode(uint8_t *data, size_t size) {
     if (size < 50)
         return NULL;
 
-    uint8_t *data_ptr = data;
+    uint8_t          *data_ptr    = data;
     bmp_file_header_t file_header = {};
-    bmp_v5_header_t v5_header = {};
+    bmp_v5_header_t   v5_header   = {};
 
     if (!parse_file_header(&data_ptr, &file_header))
         return NULL;
@@ -145,33 +143,31 @@ bmp_image_t *bmp_decode(uint8_t *data, size_t size) {
     uint32_t b_bitshift = get_shift_from_mask(v5_header.b_bitmask);
     uint32_t a_bitshift = get_shift_from_mask(v5_header.a_bitmask);
 
-    uint8_t padding = (v5_header.w * (v5_header.depth / 4)) % 4;
-
-    printf("w=%d h=%d img_size=%d padding=%d\n", v5_header.w, v5_header.h, v5_header.img_size, padding);
-    printf("r_bitmask=0x%08X g_bitmask=0x%08X b_bitmask=0x%08X a_bitmask=0x%08X\n", v5_header.r_bitmask, v5_header.g_bitmask, v5_header.b_bitmask, v5_header.a_bitmask);
-    printf("r_bitshift=%d g_bitshift=%d b_bitshift=%d a_bitshift=%d\n", r_bitshift, g_bitshift, b_bitshift, a_bitshift);
+    bmp_image_t *img = malloc(sizeof(*img) + (v5_header.w * v5_header.h * (v5_header.depth / 4)));
+    if (!img)
+        return NULL;
 
     // bmp data rows are stored bottom to top and 0-padded at the end to the nearest 4-byte boundary
-
-    static uint8_t buff[240][280][4] = {};
-    static bmp_image_t img = {};
-    img.data = (uint8_t *) &buff;
-    img.w = v5_header.w;
-    img.h = v5_header.h;
+    uint8_t padding = (v5_header.w * (v5_header.depth / 4)) % 4;
 
     for (int32_t y = v5_header.h - 1; y >= 0; y--) {
         for (uint32_t x = 0; x < v5_header.w; x++) {
             uint32_t pixel = read_u32(&data_ptr);
 
-            buff[y][x][0] = (pixel & v5_header.r_bitmask) >> r_bitshift;
-            buff[y][x][1] = (pixel & v5_header.g_bitmask) >> g_bitshift;
-            buff[y][x][2] = (pixel & v5_header.b_bitmask) >> b_bitshift;
-            buff[y][x][3] = (pixel & v5_header.a_bitmask) >> a_bitshift;
+            uint32_t offset = (y * (v5_header.w * 4)) + (x * 4);
+
+            img->data[offset++] = (pixel & v5_header.r_bitmask) >> r_bitshift;
+            img->data[offset++] = (pixel & v5_header.g_bitmask) >> g_bitshift;
+            img->data[offset++] = (pixel & v5_header.b_bitmask) >> b_bitshift;
+            img->data[offset]   = (pixel & v5_header.a_bitmask) >> a_bitshift;
         }
 
         for (uint8_t i = 0; i < padding; i++)
             read_u8(&data_ptr);
     }
 
-    return &img;
+    img->w = v5_header.w;
+    img->h = v5_header.h;
+
+    return img;
 }

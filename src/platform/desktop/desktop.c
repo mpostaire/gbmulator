@@ -42,6 +42,8 @@ static config_t config = {
     .sound = 1.0f,
     .sound_drc = 1,
     .speed = 1.0f,
+    .joypad_opacity = 1.0f,
+    .enable_joypad = 0,
     .link_host = "127.0.0.1",
     .link_port = "7777",
 
@@ -142,10 +144,7 @@ static GtkWidget *joypad_name, *link_emu_dialog, *printer_window, *status, *bind
 static GtkWidget *printer_clear_btn, *speed_slider_container, *open_btn, *link_spinner_revealer, *link_spinner;
 static AdwDialog *restart_dialog, *printer_dialog, *preferences_dialog;
 static GtkAdjustment *printer_scroll_adj;
-static GtkEventController *motion_event_controller;
-static glong motion_event_handler = 0;
 static GtkFileDialog *open_rom_dialog, *save_printer_image_dialog;
-static GtkAspectFrame *aspect_frame;
 static guint loop_source = 0;
 
 static gsize printer_gl_area_height = GB_SCREEN_HEIGHT;
@@ -381,14 +380,12 @@ static void set_emu_gl_area_size(void) {
     case GBMULATOR_MODE_GBC:
         gtk_widget_set_size_request(emu_gl_area, GB_SCREEN_WIDTH * 2, GB_SCREEN_HEIGHT * 2);
         gtk_widget_set_size_request(status, GB_SCREEN_WIDTH * 2, GB_SCREEN_HEIGHT * 2);
-        glrenderer_resize_texture(emu_renderer, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-        gtk_aspect_frame_set_ratio(aspect_frame, GB_SCREEN_WIDTH / (float) GB_SCREEN_HEIGHT);
+        glrenderer_resize_screen(emu_renderer, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
         break;
     case GBMULATOR_MODE_GBA:
         gtk_widget_set_size_request(emu_gl_area, GBA_SCREEN_WIDTH * 2, GBA_SCREEN_HEIGHT * 2);
         gtk_widget_set_size_request(status, GBA_SCREEN_WIDTH * 2, GBA_SCREEN_HEIGHT * 2);
-        glrenderer_resize_texture(emu_renderer, GBA_SCREEN_WIDTH, GBA_SCREEN_HEIGHT);
-        gtk_aspect_frame_set_ratio(aspect_frame, GBA_SCREEN_WIDTH / (float) GBA_SCREEN_HEIGHT);
+        glrenderer_resize_screen(emu_renderer, GBA_SCREEN_WIDTH, GBA_SCREEN_HEIGHT);
         break;
     default:
         break;
@@ -402,19 +399,27 @@ static void on_emu_realize(GtkGLArea *area, gpointer user_data) {
         return;
     }
 
+    int viewport_w = gtk_widget_get_width(GTK_WIDGET(area));
+    int viewport_h = gtk_widget_get_height(GTK_WIDGET(area));
+
     switch (config.mode) {
     case GBMULATOR_MODE_GB:
     case GBMULATOR_MODE_GBC:
-        emu_renderer = glrenderer_init(GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, NULL);
+        emu_renderer = glrenderer_init(GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, viewport_w, viewport_h, true);
         break;
     case GBMULATOR_MODE_GBA:
-        emu_renderer = glrenderer_init(GBA_SCREEN_WIDTH, GBA_SCREEN_HEIGHT, NULL);
+        emu_renderer = glrenderer_init(GBA_SCREEN_WIDTH, GBA_SCREEN_HEIGHT, viewport_w, viewport_h, true);
         break;
     default:
         break;
     }
 
     set_emu_gl_area_size();
+
+    glrenderer_set_show_buttons(emu_renderer, config.enable_joypad);
+    if (config.enable_joypad)
+        for (glrenderer_obj_id_t obj_id = 0; obj_id < GLRENDERER_OBJ_ID_SCREEN; obj_id++)
+            glrenderer_set_obj_alpha(emu_renderer, obj_id, config.joypad_opacity);
 }
 
 static void on_emu_unrealize(GtkGLArea *area, gpointer user_data) {
@@ -427,6 +432,10 @@ static gboolean on_emu_render(GtkGLArea *area, GdkGLContext *context, gpointer u
     return TRUE;
 }
 
+void on_emu_resize(GtkGLArea* area, gint width, gint height, gpointer user_data) {
+    glrenderer_resize_viewport(emu_renderer, width, height);
+}
+
 static void on_printer_realize(GtkGLArea *area, gpointer user_data) {
     gtk_gl_area_make_current(area);
     if (gtk_gl_area_get_error(area) != NULL) {
@@ -434,7 +443,10 @@ static void on_printer_realize(GtkGLArea *area, gpointer user_data) {
         return;
     }
 
-    printer_renderer = glrenderer_init(GBPRINTER_IMG_WIDTH, printer_gl_area_height, NULL);
+    int viewport_w = gtk_widget_get_width(GTK_WIDGET(area));
+    int viewport_h = gtk_widget_get_height(GTK_WIDGET(area));
+
+    printer_renderer = glrenderer_init(GBPRINTER_IMG_WIDTH, printer_gl_area_height, viewport_w, viewport_h, false);
 }
 
 static gboolean on_printer_render(GtkGLArea *area, GdkGLContext *context, gpointer user_data) {
@@ -449,7 +461,7 @@ static gboolean on_printer_resize(GtkGLArea *area, GdkGLContext *context) {
 }
 
 static void on_new_frame_cb(const uint8_t *pixels) {
-    glrenderer_update_texture(emu_renderer, pixels);
+    glrenderer_update_screen(emu_renderer, pixels);
 }
 
 static void printer_new_line_cb(const uint8_t *pixels, size_t current_height, size_t total_height) {
@@ -461,11 +473,11 @@ static void printer_new_line_cb(const uint8_t *pixels, size_t current_height, si
         printer_gl_area_height++;
         height_offset = printer_gl_area_height - current_height;
 
-        glrenderer_resize_texture(printer_renderer, GB_SCREEN_WIDTH, printer_gl_area_height);
+        glrenderer_resize_screen(printer_renderer, GB_SCREEN_WIDTH, printer_gl_area_height);
         gtk_widget_set_size_request(GTK_WIDGET(printer_gl_area), GB_SCREEN_WIDTH * 2, printer_gl_area_height * 2);
     }
 
-    glrenderer_update_texture(printer_renderer, pixels);
+    glrenderer_update_screen(printer_renderer, pixels);
     gtk_gl_area_queue_render(GTK_GL_AREA(printer_gl_area));
 
     if (current_height == 0 || current_height >= total_height) {
@@ -592,12 +604,57 @@ static void show_printer_window(GSimpleAction *action, GVariant *parameter, gpoi
     gtk_window_present(GTK_WINDOW(printer_window));
 }
 
-static gboolean mouse_motion(GtkEventControllerMotion *self, gdouble x, gdouble y, gpointer user_data) {
-    x = CLAMP(x / 2, 0, GB_SCREEN_WIDTH);
-    y = CLAMP(y / 2, 0, GB_SCREEN_HEIGHT);
-    accel_x = (x - 80) / -80.0;
-    accel_y = (y - 72) / -72.0;
-    printf("(%lf, %lf) accel_x=%lf accel_y=%lf\n", x, y, accel_x, accel_y);
+static gbmulator_joypad_button_t mouse_hover_joypad = 0xFF; // TODO better value to mean no joypad hovered
+static bool is_mouse_pressed = false;
+void on_mouse_pressed(GtkGestureClick* self, gint n_press, gdouble x, gdouble y, gpointer user_data) {
+    // TODO get_obj_at_coord is good but it doesn't work for dpad multpile directions at once in corners
+    glrenderer_obj_id_t obj_id = glrenderer_get_obj_at_coord(emu_renderer, x, y);
+    is_mouse_pressed = true;
+
+    if (obj_id == GLRENDERER_OBJ_ID_SCREEN)
+        return;
+
+    mouse_hover_joypad = (gbmulator_joypad_button_t) obj_id;
+    RESET_BIT(joypad_state, mouse_hover_joypad);
+    glrenderer_set_obj_tint(emu_renderer, obj_id, 0.5f);
+}
+
+void on_mouse_released(GtkGestureClick* self, gint n_press, gdouble x, gdouble y, gpointer user_data) {
+    is_mouse_pressed = false;
+    SET_BIT(joypad_state, mouse_hover_joypad);
+    glrenderer_set_obj_tint(emu_renderer, (glrenderer_obj_id_t) mouse_hover_joypad, 1.0f);
+    mouse_hover_joypad = 0xFF;
+}
+
+static gboolean on_mouse_motion(GtkEventControllerMotion *self, gdouble x, gdouble y, gpointer user_data) {
+    // x = CLAMP(x / 2, 0, GB_SCREEN_WIDTH);
+    // y = CLAMP(y / 2, 0, GB_SCREEN_HEIGHT);
+    // accel_x = (x - 80) / -80.0;
+    // accel_y = (y - 72) / -72.0;
+    // printf("(%lf, %lf) accel_x=%lf accel_y=%lf\n", x, y, accel_x, accel_y);
+
+    if (is_mouse_pressed) {
+        glrenderer_obj_id_t obj_id = glrenderer_get_obj_at_coord(emu_renderer, x, y);
+
+        if (obj_id == GLRENDERER_OBJ_ID_SCREEN) {
+            SET_BIT(joypad_state, mouse_hover_joypad);
+            if (mouse_hover_joypad != 0xFF)
+                glrenderer_set_obj_tint(emu_renderer, (glrenderer_obj_id_t) mouse_hover_joypad, 1.0f);
+            mouse_hover_joypad = 0xFF;
+        } else if (mouse_hover_joypad != 0xFF) {
+            SET_BIT(joypad_state, mouse_hover_joypad);
+            glrenderer_set_obj_tint(emu_renderer, mouse_hover_joypad, 1.0f);
+
+            mouse_hover_joypad = (gbmulator_joypad_button_t) obj_id;
+            RESET_BIT(joypad_state, mouse_hover_joypad);
+            glrenderer_set_obj_tint(emu_renderer, obj_id, 0.5f);
+        } else {
+            mouse_hover_joypad = (gbmulator_joypad_button_t) obj_id;
+            RESET_BIT(joypad_state, mouse_hover_joypad);
+            glrenderer_set_obj_tint(emu_renderer, obj_id, 0.5f);
+        }
+    }
+
     return TRUE;
 }
 
@@ -676,13 +733,6 @@ static int load_cartridge(char *path) {
     adw_window_title_set_subtitle(ADW_WINDOW_TITLE(window_title), gbmulator_get_rom_title(emu));
     set_emu_gl_area_size();
 
-    if (gbmulator_has_peripheral(emu, GBMULATOR_PERIPHERAL_ACCELEROMETER)) {
-        motion_event_handler = g_signal_connect(motion_event_controller, "motion", G_CALLBACK(mouse_motion), NULL);
-    } else if (motion_event_handler) {
-        g_signal_handler_disconnect(motion_event_controller, motion_event_handler);
-        motion_event_handler = 0;
-    }
-
     if (gbmulator_has_peripheral(emu, GBMULATOR_PERIPHERAL_CAMERA))
         camera_play();
     else
@@ -710,12 +760,26 @@ static void set_sound(GtkRange *self, gpointer user_data) {
     alrenderer_set_level(config.sound);
 }
 
+static void set_joypad_opacity(GtkRange *self, gpointer user_data) {
+    config.joypad_opacity = gtk_range_get_value(self);
+
+    for (glrenderer_obj_id_t obj_id = 0; obj_id < GLRENDERER_OBJ_ID_SCREEN; obj_id++)
+        glrenderer_set_obj_alpha(emu_renderer, obj_id, config.joypad_opacity);
+}
+
+static void set_enable_joypad(AdwExpanderRow *self, GParamSpec *pspec, gpointer user_data) {
+    config.enable_joypad = adw_expander_row_get_enable_expansion(self);
+    glrenderer_set_show_buttons(emu_renderer, config.enable_joypad);
+    gtk_gl_area_queue_render(GTK_GL_AREA(emu_gl_area));
+}
+
 static void set_sound_drc(AdwSwitchRow *self, gpointer user_data) {
     config.sound_drc = adw_switch_row_get_active(self);
     alrenderer_enable_dynamic_rate_control(config.sound_drc);
 }
 
 static void set_palette(AdwComboRow *self, GParamSpec *pspec, gpointer user_data) {
+    // TODO
     // config.color_palette = adw_combo_row_get_selected(self);
     // if (emu)
     //     gb_set_palette(emu, config.color_palette);
@@ -972,12 +1036,12 @@ static void printer_save_btn_clicked(AdwActionRow *self, gpointer user_data) {
 }
 
 static void clear_printer_gl_area(void) {
-    glrenderer_resize_texture(printer_renderer, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
+    glrenderer_resize_screen(printer_renderer, GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
     gtk_widget_set_size_request(GTK_WIDGET(printer_gl_area), GB_SCREEN_WIDTH * 2, GB_SCREEN_HEIGHT * 2);
     printer_gl_area_height = GB_SCREEN_HEIGHT;
 
     void *pixels = xcalloc(1, GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 4);
-    glrenderer_update_texture(printer_renderer, pixels);
+    glrenderer_update_screen(printer_renderer, pixels);
     free(pixels);
 
     gtk_gl_area_queue_render(GTK_GL_AREA(printer_gl_area));
@@ -1003,9 +1067,6 @@ static gboolean key_pressed_main(GtkEventControllerKey *self, guint keyval, guin
             break;
         case GDK_KEY_r:
             ask_restart_emulator(NULL, NULL, NULL);
-            break;
-        case GDK_KEY_l:
-            show_link_emu_dialog(NULL, NULL, NULL);
             break;
         }
         return TRUE;
@@ -1105,11 +1166,11 @@ static gboolean on_drop(GtkDropTarget *target, const GValue *value, double x, do
     return TRUE;
 }
 
-static gchar *sound_slider_format(GtkScale *self, gdouble value, gpointer user_data) {
+static gchar *slider_format_percent(GtkScale *self, gdouble value, gpointer user_data) {
     return g_strdup_printf("%d%%", (int) (value * 100));
 }
 
-static gchar *speed_slider_format(GtkScale *self, gdouble value, gpointer user_data) {
+static gchar *slider_format_scale(GtkScale *self, gdouble value, gpointer user_data) {
     return g_strdup_printf("x%0.1f", value);
 }
 
@@ -1223,11 +1284,10 @@ static void activate_cb(GtkApplication *app) {
     g_signal_connect(emu_gl_area, "realize", G_CALLBACK(on_emu_realize), NULL);
     g_signal_connect(emu_gl_area, "unrealize", G_CALLBACK(on_emu_unrealize), NULL);
     g_signal_connect(emu_gl_area, "render", G_CALLBACK(on_emu_render), NULL);
+    g_signal_connect(emu_gl_area, "resize", G_CALLBACK(on_emu_resize), NULL);
 
     open_btn = GTK_WIDGET(gtk_builder_get_object(builder, "open_btn"));
     g_signal_connect(open_btn, "clicked", G_CALLBACK(open_btn_clicked), NULL);
-
-    aspect_frame = GTK_ASPECT_FRAME(gtk_builder_get_object(builder, "aspect_frame"));
 
     toast_overlay = GTK_WIDGET(gtk_builder_get_object(builder, "overlay"));
 
@@ -1259,7 +1319,7 @@ static void activate_cb(GtkApplication *app) {
 
     GtkWidget *widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_sound"));
     GtkAdjustment *sound_adjustment = gtk_adjustment_new(config.sound, 0.0, 1.0, 0.05, 0.25, 0.0);
-    gtk_scale_set_format_value_func(GTK_SCALE(widget), sound_slider_format, NULL, NULL);
+    gtk_scale_set_format_value_func(GTK_SCALE(widget), slider_format_percent, NULL, NULL);
     gtk_range_set_adjustment(GTK_RANGE(widget), sound_adjustment);
     g_signal_connect(widget, "value-changed", G_CALLBACK(set_sound), NULL);
 
@@ -1270,7 +1330,7 @@ static void activate_cb(GtkApplication *app) {
     speed_slider_container = GTK_WIDGET(gtk_builder_get_object(builder, "pref_speed_container"));
     widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_speed"));
     GtkAdjustment *speed_adjustment = gtk_adjustment_new(config.speed, 1.0, 8.0, 0.5, 1, 0.0);
-    gtk_scale_set_format_value_func(GTK_SCALE(widget), speed_slider_format, NULL, NULL);
+    gtk_scale_set_format_value_func(GTK_SCALE(widget), slider_format_scale, NULL, NULL);
     gtk_range_set_adjustment(GTK_RANGE(widget), speed_adjustment);
     g_signal_connect(widget, "value-changed", G_CALLBACK(set_speed), NULL);
     g_signal_connect(widget, "notify::selected", G_CALLBACK(set_speed), NULL);
@@ -1309,6 +1369,18 @@ static void activate_cb(GtkApplication *app) {
             camera_init((*camera_paths)[selected_camera]);
         }
     }
+
+    widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_enable_jyp"));
+    g_signal_connect(widget, "notify::enable-expansion", G_CALLBACK(set_enable_joypad), NULL);
+    adw_expander_row_set_enable_expansion(ADW_EXPANDER_ROW(widget), config.enable_joypad);
+    adw_expander_row_set_expanded(ADW_EXPANDER_ROW(widget), config.enable_joypad);
+
+    widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_jyp_opacity"));
+    GtkAdjustment *jyp_opacity_adjustment = gtk_adjustment_new(config.joypad_opacity, 0.0, 1.0, 0.05, 0.25, 0.0);
+    gtk_scale_set_format_value_func(GTK_SCALE(widget), slider_format_percent, NULL, NULL);
+    gtk_range_set_adjustment(GTK_RANGE(widget), jyp_opacity_adjustment);
+    g_signal_connect(widget, "value-changed", G_CALLBACK(set_joypad_opacity), NULL);
+    g_signal_connect(widget, "notify::selected", G_CALLBACK(set_joypad_opacity), NULL);
 
     g_object_unref(builder);
 
@@ -1391,9 +1463,17 @@ static void activate_cb(GtkApplication *app) {
 
     g_object_unref(builder);
 
+    // Mouse click
+    GtkGesture *gesture_click = gtk_gesture_click_new();
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(gesture_click), 0);
+    gtk_widget_add_controller(GTK_WIDGET(emu_gl_area), GTK_EVENT_CONTROLLER(gesture_click));
+    g_signal_connect(gesture_click, "pressed", G_CALLBACK(on_mouse_pressed), NULL);
+    g_signal_connect(gesture_click, "released", G_CALLBACK(on_mouse_released), NULL);
+
     // Mouse motion
-    motion_event_controller = gtk_event_controller_motion_new();
+    GtkEventController *motion_event_controller = gtk_event_controller_motion_new();
     gtk_widget_add_controller(GTK_WIDGET(emu_gl_area), GTK_EVENT_CONTROLLER(motion_event_controller));
+    g_signal_connect(motion_event_controller, "motion", G_CALLBACK(on_mouse_motion), NULL);
 
     // Keyboard input (main)
     GtkEventController *key_event_controller = gtk_event_controller_key_new();
