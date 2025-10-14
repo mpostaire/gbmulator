@@ -6,8 +6,8 @@
 #include "../../core/core.h"
 
 static void parse_config_line(config_t *config, const char *line) {
-    uint8_t scale, color_palette, sound_drc;
-    float speed, sound;
+    uint8_t scale, color_palette, sound_drc, enable_joypad;
+    float speed, sound, joypad_opacity;
     char link_host[INET6_ADDRSTRLEN], link_port[6];
     uint8_t mode;
 
@@ -39,13 +39,21 @@ static void parse_config_line(config_t *config, const char *line) {
             config->sound = sound;
         return;
     }
-    if (sscanf(line, "sound_drc=%hhu", &sound_drc)) {
-        if (sound_drc < 0.0f)
-            config->sound_drc = 0.0f;
-        else if (sound_drc > 1.0f)
-            config->sound_drc = 1.0f;
+    if (sscanf(line, "joypad_opacity=%f", &joypad_opacity)) {
+        if (joypad_opacity < 0.0f)
+            config->joypad_opacity = 0.0f;
+        else if (joypad_opacity > 1.0f)
+            config->joypad_opacity = 1.0f;
         else
-            config->sound_drc = sound_drc;
+            config->joypad_opacity = joypad_opacity;
+        return;
+    }
+    if (sscanf(line, "sound_drc=%hhu", &sound_drc)) {
+        config->sound_drc = sound_drc;
+        return;
+    }
+    if (sscanf(line, "enable_joypad=%hhu", &enable_joypad)) {
+        config->enable_joypad = enable_joypad;
         return;
     }
     if (sscanf(line, "color_palette=%hhu", &color_palette)) {
@@ -191,12 +199,14 @@ char *config_save_to_string(config_t *config) {
     char *buf = xmalloc(512);
 
     snprintf(buf, 512,
-        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\nsound_drc=%d\ncolor_palette=%d\nlink_host=%s\nlink_port=%s\n",
+        "mode=%d\nscale=%d\nspeed=%.1f\nsound=%.2f\njoypad_opacity=%.2f\nsound_drc=%d\nenable_joypad=%d\ncolor_palette=%d\nlink_host=%s\nlink_port=%s\n",
         config->mode,
         config->scale,
         config->speed,
         config->sound,
+        config->joypad_opacity,
         config->sound_drc,
+        config->enable_joypad,
         config->color_palette,
         config->link_host,
         config->link_port

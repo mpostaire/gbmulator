@@ -86,7 +86,7 @@ debug_web: web
 	emrun web_build/index.html
 
 web_build/index.html: $(SDIR)/platform/web/template.html $(OBJ)
-	$(CC) -o $@ $(OBJ) $(CFLAGS) -lopenal -sINITIAL_MEMORY=96MB -sUSE_WEBGL2=1 -sWASM=1 -sEXPORTED_FUNCTIONS="['_main', '_malloc']" -sEXPORTED_RUNTIME_METHODS="['ccall']" -sASYNCIFY --shell-file $<
+	$(CC) -o $@ $(OBJ) $(CFLAGS) -lopenal -sINITIAL_MEMORY=96MB -sUSE_WEBGL2=1 -sWASM=1 -sEXPORTED_FUNCTIONS="['_main', '_malloc']" -sEXPORTED_RUNTIME_METHODS="['ccall', 'HEAPU8']" -sASYNCIFY --shell-file $<
 
 test:
 	$(MAKE) -C test

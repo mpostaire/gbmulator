@@ -4,6 +4,8 @@
     <requires lib="libadwaita" version="1.6"/>
 
     <object class="AdwPreferencesDialog" id="dialog">
+        <property name="search-enabled">true</property>
+
         <child>
             <object class="AdwPreferencesPage">
                 <property name="icon-name">applications-system-symbolic</property>
@@ -77,7 +79,7 @@
                                 <property name="activatable">false</property>
                                 <property name="focusable">false</property>
                                 <property name="title">Sound</property>
-                                <property name="subtitle">Sets the sound level.              </property>
+                                <property name="subtitle">Sets the sound level.</property>
                                 <child>
                                     <object class="GtkScale" id="pref_sound">
                                         <property name="hexpand">true</property>
@@ -99,13 +101,44 @@
                     </object>
                 </child>
 
+                <child>
+                    <object class="AdwPreferencesGroup">
+                        <property name="title">Controls</property>
+
+                        <child>
+                            <object class="AdwExpanderRow" id="pref_enable_jyp">
+                                <property name="title">Enable on-screen joypad</property>
+                                <property name="show-enable-switch">true</property>
+
+                                <child>
+                                    <object class="AdwActionRow">
+                                        <property name="activatable">false</property>
+                                        <property name="focusable">false</property>
+                                        <property name="title">On-screen joypad opacity</property>
+                                        <child>
+                                            <object class="GtkScale" id="pref_jyp_opacity">
+                                                <property name="hexpand">true</property>
+                                                <property name="draw-value">true</property>
+                                                <property name="value-pos">right</property>
+                                                <property name="digits">2</property>
+                                            </object>
+                                        </child>
+                                    </object>
+                                </child>
+
+                            </object>
+                        </child>
+
+                    </object>
+                </child>
+
             </object>
         </child>
 
         <child>
             <object class="AdwPreferencesPage">
                 <property name="icon-name">input-keyboard-symbolic</property>
-                <property name="title">Controls</property>
+                <property name="title">Bindings</property>
                 <child>
                     <object class="AdwPreferencesGroup">
                         <property name="title">Keyboard bindings</property>

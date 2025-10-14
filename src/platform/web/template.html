@@ -66,8 +66,8 @@
                     <div>
                         <span id="mode-setter-label">Mode:</span>
                         <select onchange="setMode(this)" id="mode-setter">
-                            <option value="1">DMG</option>
-                            <option value="2">CGB</option>
+                            <option value="0">DMG</option>
+                            <option value="1">CGB</option>
                         </select>
                     </div>
                 </div>
@@ -266,10 +266,10 @@
 
         var setTheme = function(theme) {
             switch (theme) {
-                case 1:
+                case 0:
                     document.documentElement.className = 'theme-dmg';
                     break;
-                case 2:
+                case 1:
                     document.documentElement.className = 'theme-cgb';
                     break;
                 default:
@@ -291,7 +291,7 @@
             });
         }
         if (!done)
-            setTheme(2);
+            setTheme(1);
 
         Module.setStatus('Downloading...');
         window.onerror = function () {

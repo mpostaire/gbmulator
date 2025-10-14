@@ -269,7 +269,7 @@ bool link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
     bool can_compress = 0;
     bool is_cable_link = 0;
     bool is_ir_link = 0;
-    size_t rom_size;
+    size_t rom_size = 0;
     uint8_t *rom = NULL;
     size_t savestate_len;
     uint8_t *savestate_data = NULL;

@@ -61,8 +61,8 @@ static int keycode_filter(unsigned int key) {
     }
 }
 
-static void ppu_vblank_cb(const uint8_t *pixels) {
-    glrenderer_update_texture(renderer, pixels);
+static void on_new_frame_cb(const uint8_t *pixels) {
+    glrenderer_update_screen(renderer, pixels);
 }
 
 // TODO maybe use same loop as desktop platform
@@ -159,13 +159,13 @@ static void save(void) {
     free(save_data);
 }
 
-void load_cartridge(const uint8_t *rom, size_t rom_size) {
+void load_cartridge(uint8_t *rom, size_t rom_size) {
     gbmulator_options_t opts = {
         .rom = rom,
         .rom_size = rom_size,
         .mode = config.mode,
         .on_new_sample = alrenderer_queue_sample,
-        .on_new_frame = ppu_vblank_cb,
+        .on_new_frame = on_new_frame_cb,
         .apu_speed = config.speed,
         .apu_sampling_rate = alrenderer_get_sampling_rate(),
         .palette = config.color_palette
@@ -293,14 +293,14 @@ bool handle_keyboard_input(int eventType, const EmscriptenKeyboardEvent *e, void
         if (is_paused) {
             if (e->keyCode == DOM_VK_ESCAPE || e->keyCode == DOM_VK_PAUSE) {
                 set_pause(0);
-                if (editing_keybind >= JOYPAD_RIGHT && editing_keybind <= JOYPAD_START) {
+                if (editing_keybind >= 0 && editing_keybind <= JOYPAD_DOWN) {
                     EM_ASM({
                         toggleEditingKeybind($0);
                         editingKeybind = -1;
                     }, editing_keybind);
                     editing_keybind = -1;
                 }
-            } else if (editing_keybind >= JOYPAD_RIGHT && editing_keybind <= JOYPAD_START && config.keycode_filter(e->keyCode)) {
+            } else if (editing_keybind >= 0 && editing_keybind <= JOYPAD_DOWN && config.keycode_filter(e->keyCode)) {
                 // check if another keybind is already bound to this key and swap them if this is the case
                 for (int i = JOYPAD_RIGHT; i <= JOYPAD_START; i++) {
                     if (i != editing_keybind && config.keybindings[i] == e->keyCode) {
@@ -413,7 +413,7 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    renderer = glrenderer_init(GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, NULL);
+    renderer = glrenderer_init(GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, GB_SCREEN_WIDTH * scale, GB_SCREEN_HEIGHT * scale, NULL);
     emscripten_set_window_title(EMULATOR_NAME);
 
     alrenderer_init(0);
