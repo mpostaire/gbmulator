@@ -3,7 +3,6 @@
 #include <adwaita.h>
 #include <libmanette.h>
 #include <linux/input-event-codes.h>
-#include <ctype.h>
 #include <netdb.h>
 #include <string.h>
 

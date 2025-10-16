@@ -4,7 +4,6 @@
 #include <zlib.h>
 
 #include "gb_priv.h"
-#include "../core_priv.h"
 
 #define SAVESTATE_STRING EMULATOR_NAME"-sav"
 

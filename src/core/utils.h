@@ -37,7 +37,7 @@
 #define XSTRINGIFY(x) #x
 #define STRINGIFY(x) XSTRINGIFY(x)
 
-#define eprintf(format, ...) fprintf(stderr, "[ERROR] %s:%d - %s() - "format"\n", __FILE__, __LINE__, __func__, ##__VA_ARGS__)
+#define eprintf(format, ...) fprintf(stderr, "[ERROR] %s:%d - %s() - " format "\n", __FILE__, __LINE__, __func__, ##__VA_ARGS__)
 #define errnoprintf(format, ...) eprintf(format": %s", ##__VA_ARGS__, strerror(errno));
 
 #define todo(format, ...)               \

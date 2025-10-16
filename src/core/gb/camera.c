@@ -125,7 +125,7 @@ uint8_t camera_read_reg(gb_t *gb, uint16_t address) {
 void camera_write_reg(gb_t *gb, uint16_t address, uint8_t data) {
     gb_mmu_t *mmu = gb->mmu;
 
-    uint8_t reg = MIN(address & 0x003F, GB_CAMERA_N_REGS);
+    uint8_t reg = MIN(address & 0x003F, GB_CAMERA_N_REGS - 1);
     if (reg == 0) {
         uint8_t request_capture = !CHECK_BIT(mmu->mbc.camera.regs[reg], 0) && CHECK_BIT(data, 0);
         uint8_t capture_in_progress = mmu->mbc.camera.capture_cycles_remaining > 0;
@@ -144,7 +144,7 @@ void camera_write_reg(gb_t *gb, uint16_t address, uint8_t data) {
             }
         }
         mmu->mbc.camera.regs[reg] = data & 0x07;
-    } else {
+    } else if (reg < GB_CAMERA_N_REGS) {
         mmu->mbc.camera.regs[reg] = data;
     }
 }
