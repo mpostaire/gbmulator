@@ -42,7 +42,6 @@ ICONS= \
 	$(ICONDIR)/16x16/$(BIN).png
 
 UI:=$(wildcard $(SDIR)/platform/desktop/ui/*.ui)
-SHADERS:=$(wildcard $(SDIR)/platform/desktop/ui/*.glsl)
 
 all: desktop
 
@@ -54,7 +53,7 @@ desktop: CFLAGS+=$(shell pkg-config --cflags gtk4 libadwaita-1 zlib manette-0.2 
 desktop: LDLIBS+=$(shell pkg-config --libs gtk4 libadwaita-1 zlib manette-0.2 opengl openal gstreamer-1.0)
 desktop: $(PLATFORM_ODIR_STRUCTURE) $(BIN) $(ICONS)
 
-$(SDIR)/platform/desktop/resources.c: $(SDIR)/platform/desktop/ui/gbmulator.gresource.xml $(UI) $(SHADERS)
+$(SDIR)/platform/desktop/resources.c: $(SDIR)/platform/desktop/ui/gbmulator.gresource.xml $(UI)
 	glib-compile-resources $< --target=$@ --generate-source
 
 profile: CFLAGS+=-pg
