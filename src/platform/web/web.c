@@ -40,7 +40,6 @@ static config_t config = {
 
 static bool is_paused = true;
 static glrenderer_t *renderer;
-static uint8_t scale;
 static int editing_keybind = -1;
 static char window_title[sizeof(EMULATOR_NAME) + 19];
 static uint8_t joypad_state = 0xFF;
@@ -238,11 +237,8 @@ EMSCRIPTEN_KEEPALIVE void reset_rom(void) {
 
 EMSCRIPTEN_KEEPALIVE void set_scale(uint8_t value) {
     config.scale = value;
-    if (scale != config.scale) {
-        scale = config.scale;
-        emscripten_set_canvas_element_size("#canvas", GB_SCREEN_WIDTH * scale, GB_SCREEN_HEIGHT * scale);
-        glrenderer_resize_viewport(renderer, GB_SCREEN_WIDTH * scale, GB_SCREEN_HEIGHT * scale);
-    }
+    emscripten_set_canvas_element_size("#canvas", GB_SCREEN_WIDTH * config.scale, GB_SCREEN_HEIGHT * config.scale);
+    glrenderer_resize_viewport(renderer, GB_SCREEN_WIDTH * config.scale, GB_SCREEN_HEIGHT * config.scale);
 }
 
 EMSCRIPTEN_KEEPALIVE void set_speed(float value) {
@@ -392,10 +388,6 @@ int main(int argc, char **argv) {
         }, i, emscripten_dom_vk_to_string(config.keybindings[i]));
     }
 
-    scale = config.scale;
-
-    emscripten_set_canvas_element_size("#canvas", GB_SCREEN_WIDTH * scale, GB_SCREEN_HEIGHT * scale);
-
     EmscriptenWebGLContextAttributes attr;
     emscripten_webgl_init_context_attributes(&attr);
 
@@ -413,10 +405,12 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    renderer = glrenderer_init(GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, GB_SCREEN_WIDTH * scale, GB_SCREEN_HEIGHT * scale, NULL);
-    emscripten_set_window_title(EMULATOR_NAME);
+    renderer = glrenderer_init(GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT, GB_SCREEN_WIDTH * config.scale, GB_SCREEN_HEIGHT * config.scale, NULL);
+    set_scale(config.scale);
 
     alrenderer_init(0);
+    set_sound(config.sound);
+    alrenderer_enable_dynamic_rate_control(config.sound_drc);
 
     emscripten_set_keydown_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, 0, 1, handle_keyboard_input);
     emscripten_set_keyup_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, 0, 1, handle_keyboard_input);
