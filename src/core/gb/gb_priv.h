@@ -16,7 +16,9 @@
 struct gb_t {
     const gbmulator_t *base;
 
-    bool cgb_mode_enabled; // this is 1 if CGB is in CGB mode, 0 if it is in DMG compatibility mode // TODO understand this better
+    // this is true if CGB is in CGB mode, false if it is in DMG compatibility mode
+    // TODO understand this better because what's the difference with gb->base->opts.mode == GBMULATOR_MODE_GBC?
+    bool cgb_mode_enabled;
 
     uint8_t dmg_palette;
 
