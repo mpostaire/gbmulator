@@ -2,14 +2,6 @@
 
 #include "gba_priv.h"
 
-// // links I used while implementing this
-// https://emudev.org/system_resources
-// https://mgba.io/2015/06/27/cycle-counting-prefetch/
-// https://problemkaputt.de/gbatek.htm#armcpureference
-// https://github.com/nba-emu/NanoBoyAdvance/blob/master/src/nba/src/arm/handlers/arithmetic.inl#L84
-// https://vision.gel.ulaval.ca/~jflalonde/cours/1001/h17/docs/arm-instructionset.pdf
-// https://github.com/Normmatt/gba_bios/blob/master/asm/bios.s
-
 #define PIPELINE_FETCHING 0
 #define PIPELINE_DECODING 1
 
