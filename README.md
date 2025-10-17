@@ -1,7 +1,9 @@
 # GBmulator
-A Game Boy Color emulator with fast Link Cable and IR sensor support over TCP. 
+A Game Boy Color and emulator with fast Link Cable and IR sensor support over TCP.
 
-You can compile and run it on your linux machine or use it in your browser [here](https://mpostaire.github.io/gbmulator) (Note: the browser version does not have support for the link cable).
+You can compile and run it on your linux machine or use it in your browser [here](https://mpostaire.github.io/gbmulator) (Note: the browser version does not have link cable support).
+
+Game Boy Advance is also in early development: only some test roms can run.
 
 ## Screenshots
 
@@ -13,7 +15,7 @@ You can compile and run it on your linux machine or use it in your browser [here
 ## Features
 
 - GameBoy and GameBoy Color emulator
-- PPU implements fifo rendering
+- PPU implements FIFO rendering
 - Audio with dynamic rate control
 - Fast TCP Link Cable and IR sensor
 - Support for MBC1, MBC1M, MBC2, MBC3, MBC30, MBC5, MBC7 and HuC1 cartridges
@@ -83,12 +85,12 @@ There is also support for gamepad controllers.
 
 ### TODO
 
-- implement other MBCs
-- find out what are the accurate timings for the ppu pixel fifo/fetcher (especially for corner cases)
-- android link cable via bluetooth + cross platform link cable
-- rewrite Makefile (it's a mess) maybe use CMake instead
+- Implement other GB/GBC MBCs
+- Find out what are the accurate timings for the ppu pixel FIFO/fetcher (especially for corner cases)
 
 ## Resources used
+
+GB/GBC:
 
 - https://gbdev.io/pandocs/
 - http://marc.rawer.de/Gameboy/Docs/GBCPUman.pdf
@@ -99,3 +101,12 @@ There is also support for gamepad controllers.
 - https://github.com/AntonioND/giibiiadvance/blob/master/docs/TCAGBD.pdf
 - https://pixelbits.16-b.it/GBEDG/ppu/
 - https://shonumi.github.io/articles/art2.html
+
+GBA:
+
+- https://emudev.org/system_resources
+- https://mgba.io/2015/06/27/cycle-counting-prefetch/
+- https://problemkaputt.de/gbatek.htm#armcpureference
+- https://github.com/nba-emu/NanoBoyAdvance/blob/master/src/nba/src/arm/handlers/arithmetic.inl#L84
+- https://vision.gel.ulaval.ca/~jflalonde/cours/1001/h17/docs/arm-instructionset.pdf
+- https://github.com/Normmatt/gba_bios/blob/master/asm/bios.s
