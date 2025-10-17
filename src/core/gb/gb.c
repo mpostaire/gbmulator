@@ -13,17 +13,6 @@ typedef struct __attribute__((packed)) {
     uint8_t is_cgb; // bit 7 set --> savestate data is compressed
 } savestate_header_t;
 
-gbmulator_options_t defaults_opts = {
-    .mode = GBMULATOR_MODE_GBC,
-    .palette = PPU_COLOR_PALETTE_ORIG,
-    .apu_speed = 1.0f,
-    .apu_sampling_rate = 44100,
-    .on_new_sample = NULL,
-    .on_new_frame = NULL,
-    .on_accelerometer_request = NULL,
-    .on_camera_capture_image = NULL
-};
-
 const char *mbc_names[] = {
     STRINGIFY(ROM_ONLY),
     STRINGIFY(MBC1),
@@ -71,6 +60,8 @@ int gb_is_rom_valid(const uint8_t *rom) {
 gb_t *gb_init(gbmulator_t *base) {
     gb_t *gb = xcalloc(1, sizeof(*gb));
     gb->base = base;
+
+    gb->cgb_mode_enabled = gb->base->opts.mode == GBMULATOR_MODE_GBC;
 
     if (!mmu_init(gb, base->opts.rom, base->opts.rom_size)) {
         free(gb);
