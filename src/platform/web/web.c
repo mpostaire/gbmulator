@@ -22,14 +22,14 @@ static config_t config = {
     .speed = 1.0f,
 
     .keybindings = {
-        DOM_VK_RIGHT,
-        DOM_VK_LEFT,
-        DOM_VK_UP,
-        DOM_VK_DOWN,
         DOM_VK_NUMPAD0,
         DOM_VK_PERIOD,
         DOM_VK_NUMPAD2,
-        DOM_VK_NUMPAD1
+        DOM_VK_NUMPAD1,
+        DOM_VK_RIGHT,
+        DOM_VK_LEFT,
+        DOM_VK_UP,
+        DOM_VK_DOWN
     },
     .keycode_filter = (keycode_filter_t) keycode_filter,
     // TODO uncomment both lines below to save/load config for keybindings (emscripten_dom_pk_code_to_string and
