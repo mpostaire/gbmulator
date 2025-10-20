@@ -31,7 +31,7 @@ typedef enum {
     GLRENDERER_OBJ_ID_SCREEN // must be the last element of this enum
 } glrenderer_obj_id_t;
 
-glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, GLsizei viewport_w, GLsizei viewport_h, bool show_buttons);
+glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, bool show_buttons);
 
 void glrenderer_quit(glrenderer_t *renderer);
 

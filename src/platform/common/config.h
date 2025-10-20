@@ -5,30 +5,23 @@
 
 #include "../../core/core.h"
 
-typedef int (*keycode_filter_t)(unsigned int keycode);
-typedef const char *(*keycode_parser_t)(unsigned int keycode);
-typedef unsigned int (*keyname_parser_t)(const char *keyname);
+typedef bool (*keycode_filter_t)(unsigned int keycode);
 
 typedef struct {
-    gbmulator_mode_t mode;
+    gbmulator_mode_t   mode;
     gb_color_palette_t color_palette;
-    uint8_t scale;
-    float speed;
-    float sound;
-    float joypad_opacity;
-    uint8_t sound_drc;
-    uint8_t enable_joypad;
-    char link_host[INET6_ADDRSTRLEN];
-    char link_port[6];
+    float              speed;
+    float              sound;
+    float              joypad_opacity;
+    uint8_t            sound_drc;
+    uint8_t            enable_joypad;
+    char               link_host[INET6_ADDRSTRLEN];
+    char               link_port[6];
 
     unsigned int gamepad_bindings[10];
-    keycode_parser_t gamepad_button_parser;
-    keyname_parser_t gamepad_button_name_parser;
 
-    unsigned int keybindings[10];
+    unsigned int     keybindings[10];
     keycode_filter_t keycode_filter;
-    keycode_parser_t keycode_parser;
-    keyname_parser_t keyname_parser;
 } config_t;
 
 void config_load_from_string(config_t *config, const char *buf);

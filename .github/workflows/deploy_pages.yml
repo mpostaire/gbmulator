@@ -46,4 +46,4 @@ jobs:
       - name: Deploy to github pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          folder: web_build
+          folder: build/web

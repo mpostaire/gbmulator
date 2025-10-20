@@ -31,7 +31,7 @@
         <button id="open-menu" class="paused" disabled onclick="togglePause(this)"></button>
         <div id="menu">
             <div id="menu-container">
-                <input type="file" onchange="openROM(event)" accept=".gb,.sgb,.gbc,.cgb" id="rom-picker" style="display: none;"></input>
+                <input type="file" onchange="openROM(event)" accept=".gb,.sgb,.gbc,.cgb,.gba" id="rom-picker" style="display: none;"></input>
                 <button onclick="openROMPicker()" id="open-rom">Open ROM...</button>
                 <button disabled onclick="resetROM()" id="reset-rom">Restart emulator</button>
     
@@ -66,47 +66,56 @@
                     <div>
                         <span id="mode-setter-label">Mode:</span>
                         <select onchange="setMode(this)" id="mode-setter">
-                            <option value="0">DMG</option>
-                            <option value="1">CGB</option>
+                            <option value="0">GB</option>
+                            <option value="1">GBC</option>
+                            <option value="2">GBA</option>
                         </select>
                     </div>
                 </div>
     
                 <div class="separator">Keybindings</div>
-    
+
                 <div class="options-container">
                     <div>
-                        <span>LEFT:</span>
-                        <button id="keybind-setter-1"></button>
-                    </div>
-                    <div>
-                        <span>RIGHT:</span>
-                        <button id="keybind-setter-0"></button>
-                    </div>
-                    <div>
-                        <span>UP:</span>
-                        <button id="keybind-setter-2"></button>
-                    </div>
-                    <div>
-                        <span>DOWN:</span>
-                        <button id="keybind-setter-3"></button>
-                    </div>
-                    <div>
                         <span>A:</span>
-                        <button id="keybind-setter-4"></button>
+                        <span id="keybind-info-0"></span>
                     </div>
                     <div>
                         <span>B:</span>
-                        <button id="keybind-setter-5"></button>
-                    </div>
-                    <div>
-                        <span>START:</span>
-                        <button id="keybind-setter-7"></button>
+                        <span id="keybind-info-1"></span>
                     </div>
                     <div>
                         <span>SELECT:</span>
-                        <button id="keybind-setter-6"></button>
+                        <span id="keybind-info-2"></span>
                     </div>
+                    <div>
+                        <span>START:</span>
+                        <span id="keybind-info-3"></span>
+                    </div>
+                    <div>
+                        <span>RIGHT:</span>
+                        <span id="keybind-info-4"></span>
+                    </div>
+                    <div>
+                        <span>LEFT:</span>
+                        <span id="keybind-info-5"></span>
+                    </div>
+                    <div>
+                        <span>UP:</span>
+                        <span id="keybind-info-6"></span>
+                    </div>
+                    <div>
+                        <span>DOWN:</span>
+                        <span id="keybind-info-7"></span>
+                    </div>
+                    <!-- <div>
+                        <span>R:</span>
+                        <span id="keybind-info-8"></span>
+                    </div>
+                    <div>
+                        <span>L:</span>
+                        <span id="keybind-info-9"></span>
+                    </div> -->
                 </div>
             </div>
         </div>
@@ -150,50 +159,30 @@
     <script type='text/javascript'>
         let gb = document.getElementById("gb");
 
-        const buttons = [ "gb-right", "gb-left", "gb-up", "gb-down", "gb-a", "gb-b", "gb-select", "gb-start" ];
+        const buttons = [ "gb-a", "gb-b", "gb-select", "gb-start", "gb-right", "gb-left", "gb-up", "gb-down", /*"gb-r", "gb-l"*/ ];
         let currentButton = null;
 
-        let on_gui_button_down = function(event, elem, index) {
-            Module.ccall('on_gui_button_down', 'void', ['number'], [index]);
+        let on_gui_button_down = function(elem, index) {
+            Module.ccall('app_joypad_press', 'void', ['number'], [index]);
             currentButton = elem;
         }
 
-        let on_gui_button_up = function(event, elem, index) {
+        let on_gui_button_up = function(elem, index) {
             if (elem === currentButton) {
-                Module.ccall('on_gui_button_up', 'void', ['number'], [index]);
+                Module.ccall('app_joypad_release', 'void', ['number'], [index]);
                 currentButton = null;
             }
         }
 
         buttons.forEach(function (item, index) {
             let elem = document.getElementById(item);
-            elem.addEventListener("touchstart", (e) => on_gui_button_down(e, elem, index));
-            elem.addEventListener("touchend", (e) => on_gui_button_up(e, elem, index));
-            elem.addEventListener("touchcancel", (e) => on_gui_button_up(e, elem, index));
-            elem.addEventListener("mousedown", (e) => on_gui_button_down(e, elem, index));
-            elem.addEventListener("mouseup", (e) => on_gui_button_up(e, elem, index));
-            elem.addEventListener("mouseleave", (e) => on_gui_button_up(e, elem, index));
+            elem.addEventListener("touchstart", (e) => on_gui_button_down(elem, index));
+            elem.addEventListener("touchend", (e) => on_gui_button_up(elem, index));
+            elem.addEventListener("touchcancel", (e) => on_gui_button_up(elem, index));
+            elem.addEventListener("mousedown", (e) => on_gui_button_down(elem, index));
+            elem.addEventListener("mouseup", (e) => on_gui_button_up(elem, index));
+            elem.addEventListener("mouseleave", (e) => on_gui_button_up(elem, index));
         });
-
-        var editingKeybind = -1;
-        const keybindSetters = [ "keybind-setter-0", "keybind-setter-1", "keybind-setter-2", "keybind-setter-3", "keybind-setter-4", "keybind-setter-5", "keybind-setter-6", "keybind-setter-7" ];
-        keybindSetters.forEach(function (item, index) {
-            let elem = document.getElementById(item);
-            elem.onclick = function() {
-                if (editingKeybind !== -1) return;
-                editingKeybind = index;
-                Module.ccall('edit_keybind', 'void', ['number'], [index]);
-                toggleEditingKeybind(index);
-            };
-        });
-
-        var toggleEditingKeybind = function(i) {
-            var x = document.getElementById(keybindSetters[i]);
-            if (x.style.color === "red")
-                x.style.color = "black";
-            else
-                x.style.color = "red";
-        }
 
         var statusElement = document.getElementById('status');
         var progressElement = document.getElementById('progress');
@@ -272,6 +261,9 @@
                 case 1:
                     document.documentElement.className = 'theme-cgb';
                     break;
+                case 2:
+                    document.documentElement.className = 'theme-gba';
+                    break;
                 default:
                     break;
             }
@@ -303,7 +295,7 @@
         };
 
         window.onbeforeunload = function (event) {
-            Module.ccall('on_before_unload');
+            Module.ccall('app_quit');
             gb.style = "visibility: hidden;";
         };
 
@@ -315,17 +307,21 @@
                 const data_ptr = Module._malloc(num_bytes);
                 const data_on_heap = new Uint8Array(Module.HEAPU8.buffer, data_ptr, num_bytes);
                 data_on_heap.set(uint8Arr);
-                Module.ccall('receive_rom', 'void', ['number', 'number'], [data_on_heap.byteOffset, uint8Arr.length]);
+                Module.ccall('app_load_cartridge', 'void', ['number', 'number'], [data_on_heap.byteOffset, uint8Arr.length]);
+                Module._free(data_ptr)
 
                 document.getElementById('reset-rom').disabled = 0;
                 document.getElementById('mode-setter-label').innerHTML = "Mode: (applied on restart)";
                 let elem = document.getElementById('open-menu');
                 elem.disabled = 0;
                 elem.classList.remove("paused");
+
+                Module.ccall('set_pause', 'void', ['boolean'], [false]);
+                setMenuVisibility(true);
             };
             if (e.target.files.length === 0)
                 return;
-            if (e.target.files[0].name.match("^.*\.(gb|sgb|gbc|cgb)$"))
+            if (e.target.files[0].name.match("^.*\.(gb|sgb|gbc|cgb|gba)$"))
                 file_reader.readAsArrayBuffer(e.target.files[0]);
             else
                 Module.printErr("Invalid file extension");
@@ -345,7 +341,9 @@
 
         var togglePause = function(elem) {
             var x = document.getElementById("menu");
-            Module.ccall('set_pause', 'void', ['boolean'], [x.style.display === "none"]);
+            var is_paused = x.style.display === "none";
+            Module.ccall('set_pause', 'void', ['boolean'], [is_paused]);
+            setMenuVisibility(!is_paused);
         };
 
         var ROMPicker = document.getElementById('rom-picker');
@@ -354,7 +352,8 @@
         };
 
         var resetROM = function() {
-            Module.ccall('reset_rom', 'void');
+            Module.ccall('app_reset', 'void');
+            togglePause();
         };
 
         var scaleLabel = document.getElementById('scale-label');
@@ -366,22 +365,23 @@
         var setSpeed = function(elem) {
             var value = (Number(elem.value) + 1) / 2;
             speedLabel.innerHTML = "x" + value.toFixed(1);
-            Module.ccall('set_speed', 'void', ['number'], [value]);
+            Module.ccall('app_set_speed', 'void', ['number'], [value]);
         };
 
         var soundLabel = document.getElementById('sound-label');
         var setSound = function(elem) {
             var value = Number(elem.value) / 100;
             soundLabel.innerHTML = elem.value + "%";
-            Module.ccall('set_sound', 'void', ['number'], [value]);
+            Module.ccall('app_set_sound', 'void', ['number'], [value]);
         };
 
         var setColor = function(elem) {
-            Module.ccall('set_color', 'void', ['number'], [Number(elem.value)]);
+            Module.ccall('app_set_palette', 'void', ['number'], [Number(elem.value)]);
         };
 
         var setMode = function(elem) {
-            Module.ccall('set_mode', 'void', ['number'], [Number(elem.value)]);
+            Module.ccall('app_set_mode', 'void', ['number'], [Number(elem.value)]);
+            setTheme(elem.value);
         };
     </script>
     {{{ SCRIPT }}}

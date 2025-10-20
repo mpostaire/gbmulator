@@ -216,10 +216,10 @@ static void create_buffers(glrenderer_t *renderer) {
 }
 
 // TODO try printer renderer to check it doesn't break it
-glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, GLsizei viewport_w, GLsizei viewport_h, bool show_buttons) {
+glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, bool show_buttons) {
     static bool is_first_init = true;
     if (is_first_init) {
-        printf("Using renderer: %s\n", glGetString(GL_VERSION));
+        printf("Renderer: %s\n", glGetString(GL_VERSION));
         is_first_init = false;
     }
 
@@ -270,7 +270,7 @@ glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, GLsizei viewpo
 
     renderer->u_proj = glGetUniformLocation(shader_program, "proj");
 
-    glrenderer_resize_viewport(renderer, viewport_w, viewport_h);
+    glrenderer_resize_viewport(renderer, screen_w, screen_h);
 
     for (glrenderer_obj_id_t obj_id = 0; obj_id < GLRENDERER_OBJ_ID_SCREEN; obj_id++) {
         renderer->tints[obj_id] = 1.0f;
