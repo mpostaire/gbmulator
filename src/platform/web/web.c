@@ -202,6 +202,7 @@ int main(int argc, char **argv) {
 
     char *config_dir = get_config_dir();
     char *save_dir = get_save_dir();
+    char *savestate_dir = get_savestate_dir();
 
     EM_ASM({
         let dir = UTF8ToString($0);
@@ -212,10 +213,14 @@ int main(int argc, char **argv) {
         FS.mkdirTree(dir);
         FS.mount(IDBFS, {}, dir);
 
+        dir = UTF8ToString($2);
+        FS.mkdirTree(dir);
+        FS.mount(IDBFS, {}, dir);
+
         FS.syncfs(true, function (err) {
             console.log("IDBFS syncfs: " + err ? err : "OK")
         });
-    }, config_dir, save_dir);
+    }, config_dir, save_dir, savestate_dir);
 
     return EXIT_SUCCESS;
 }

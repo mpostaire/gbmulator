@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
@@ -120,95 +121,101 @@ void make_parent_dirs(const char *filepath) {
     }
 }
 
-void save_battery_to_file(gbmulator_t *emu, const char *path) {
-    size_t   save_length;
-    uint8_t *save_data = gbmulator_get_save(emu, &save_length);
-    if (!save_data)
-        return;
+uint8_t *read_file(const char *path, size_t *len) {
+    if (!path || !len)
+        return NULL;
 
-    make_parent_dirs(path);
-
-    FILE *f = fopen(path, "w");
+    FILE *f = fopen(path, "rb");
     if (!f) {
-        errnoprintf("error opening save file");
-        return;
+        errnoprintf("fopen(%s)", path);
+        return NULL;
     }
 
-    fwrite(save_data, save_length, 1, f);
-    fflush(f);
-    fsync(fileno(f));
-    fclose(f);
-
-    free(save_data);
-}
-
-void load_battery_from_file(gbmulator_t *emu, const char *path) {
-    FILE *f = fopen(path, "r");
-    if (!f)
-        return;
-
-    long save_length = fsize(f);
-    if (save_length < 0) {
+    *len = fsize(f);
+    if (*len < 0) {
         fclose(f);
-        return;
+        return NULL;
     }
 
-    uint8_t *save_data = xmalloc(save_length);
-    fread(save_data, save_length, 1, f);
-    gbmulator_load_save(emu, save_data, save_length);
+    uint8_t *buf = xmalloc(*len);
+
+    if (!fread(buf, *len, 1, f)) {
+        errnoprintf("fread(%s)", path);
+        fclose(f);
+        free(buf);
+        return NULL;
+    }
+
     fclose(f);
-    free(save_data);
+
+    return buf;
 }
 
-int save_state_to_file(gbmulator_t *emu, const char *path, int compressed) {
-    size_t   len;
-    uint8_t *buf = gbmulator_get_savestate(emu, &len, compressed);
-    if (!buf)
-        return 0;
+bool write_file(const char *path, const uint8_t *data, size_t len) {
+    if (!path || !data)
+        return false;
 
     make_parent_dirs(path);
 
     FILE *f = fopen(path, "wb");
     if (!f) {
-        errnoprintf("opening %s", path);
-        return 0;
+        errnoprintf("open(%s)", path);
+        return false;
     }
 
-    if (!fwrite(buf, len, 1, f)) {
-        errnoprintf("writing savestate to %s", path);
+    if (!fwrite(data, len, 1, f)) {
+        errnoprintf("fwrite(%s)", path);
         fclose(f);
-        free(buf);
-        return 0;
+        return false;
     }
 
+    fflush(f);
+    fsync(fileno(f));
     fclose(f);
-    free(buf);
-    return 1;
+
+    return true;
 }
 
-int load_state_from_file(gbmulator_t *emu, const char *path) {
-    FILE *f = fopen(path, "rb");
-    if (!f) {
-        errnoprintf("opening %s", path);
-        return 0;
-    }
+bool save_battery_to_file(gbmulator_t *emu, const char *path) {
+    size_t   save_length;
+    uint8_t *save_data = gbmulator_get_save(emu, &save_length);
+    if (!save_data)
+        return false;
 
-    long len = fsize(f);
-    if (len < 0) {
-        fclose(f);
-        return 0;
-    }
+    bool ret = write_file(path, save_data, save_length);
+    free(save_data);
+    return ret;
+}
 
-    uint8_t *buf = xmalloc(len);
-    if (!fread(buf, len, 1, f)) {
-        errnoprintf("reading savestate from %s", path);
-        fclose(f);
-        free(buf);
-        return 0;
-    }
+bool load_battery_from_file(gbmulator_t *emu, const char *path) {
+    size_t   len;
+    uint8_t *buf = read_file(path, &len);
+    if (!buf)
+        return false;
 
-    int ret = gbmulator_load_savestate(emu, buf, len);
-    fclose(f);
+    bool ret = gbmulator_load_save(emu, buf, len);
+    free(buf);
+    return ret;
+}
+
+bool save_state_to_file(gbmulator_t *emu, const char *path, int compressed) {
+    size_t   savestate_length;
+    uint8_t *savestate_data = gbmulator_get_savestate(emu, &savestate_length, compressed);
+    if (!savestate_data)
+        return false;
+
+    bool ret = write_file(path, savestate_data, savestate_length);
+    free(savestate_data);
+    return ret;
+}
+
+bool load_state_from_file(gbmulator_t *emu, const char *path) {
+    size_t   len;
+    uint8_t *buf = read_file(path, &len);
+    if (!buf)
+        return false;
+
+    bool ret = gbmulator_load_savestate(emu, buf, len);
     free(buf);
     return ret;
 }
@@ -253,43 +260,48 @@ uint8_t *get_rom(const char *path, size_t *rom_size) {
     return rom;
 }
 
-char *get_xdg_path(const char *xdg_variable, const char *fallback) {
+static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
     char *xdg = getenv(xdg_variable);
     if (xdg)
         return xdg;
 
-    char  *home         = getenv("HOME");
-    size_t home_len     = strlen(home);
-    size_t fallback_len = strlen(fallback);
-    char  *buf          = xmalloc(home_len + fallback_len + 3);
-    snprintf(buf, home_len + fallback_len + 2, "%s/%s", home, fallback);
-    return buf;
+    char *home = getenv("HOME");
+
+    static char path[256];
+    snprintf(path, sizeof(path), "%s/%s", home, fallback);
+
+    return path;
 }
 
-// TODO use static storage instead of xmalloc/free everywhere
 char *get_config_dir(void) {
-    char *xdg_config = get_xdg_path("XDG_DATA_HOME", ".config");
-    char *path       = xmalloc(strlen(xdg_config) + 12);
-    snprintf(path, strlen(xdg_config) + 11, "%s%s", xdg_config, "/gbmulator");
-    free(xdg_config);
+    static char path[256];
+    char       *xdg_config = get_xdg_path("XDG_DATA_HOME", ".config");
+
+    snprintf(path, sizeof(path), "%s%s", xdg_config, "/gbmulator");
     return path;
 }
 
 char *get_save_dir(void) {
-    char *xdg_config = get_xdg_path("XDG_DATA_HOME", ".local/share");
-    char *path       = xmalloc(strlen(xdg_config) + 12);
-    snprintf(path, strlen(xdg_config) + 11, "%s%s", xdg_config, "/gbmulator");
-    free(xdg_config);
+    static char path[256];
+    char       *xdg_config = get_xdg_path("XDG_DATA_HOME", ".local/share");
+
+    snprintf(path, sizeof(path), "%s%s", xdg_config, "/gbmulator");
+    return path;
+}
+
+char *get_savestate_dir(void) {
+    static char path[256];
+    char       *xdg_config = get_xdg_path("XDG_DATA_HOME", ".local/share");
+
+    snprintf(path, sizeof(path), "%s%s", xdg_config, "/gbmulator/savestates");
     return path;
 }
 
 char *get_config_path(void) {
     char *config_dir = get_config_dir();
 
-    char *path = xmalloc(strlen(config_dir) + 17);
-    snprintf(path, strlen(config_dir) + 16, "%s%s", config_dir, "/gbmulator.conf");
-
-    free(config_dir);
+    static char path[256];
+    snprintf(path, sizeof(path), "%s%s", config_dir, "/gbmulator.conf");
     return path;
 }
 
@@ -302,27 +314,23 @@ char *get_save_path(char *rom_filepath) {
     char *last_period       = strrchr(last_slash, '.');
     int   last_period_index = last_period ? (int) (last_period - rom_filepath) : (int) strlen(rom_filepath);
 
-    size_t len       = strlen(save_dir) + strlen(last_slash);
-    char  *save_path = malloc(len + 7);
-    snprintf(save_path, len + 6, "%s%s%.*s.sav", save_dir, last_slash[0] == '/' ? "" : "/", last_period_index, last_slash);
-
-    free(save_dir);
-    return save_path;
+    static char path[256];
+    snprintf(path, sizeof(path), "%s%s%.*s.sav", save_dir, last_slash[0] == '/' ? "" : "/", last_period_index, last_slash);
+    return path;
 }
 
 char *get_savestate_path(char *rom_filepath, int slot) {
-    char *xdg_data = get_xdg_path("XDG_DATA_HOME", ".local/share");
+    char *savestate_dir = get_savestate_dir();
 
-    char *last_slash        = strrchr(rom_filepath, '/');
-    char *last_period       = strrchr(last_slash ? last_slash : rom_filepath, '.');
-    int   last_period_index = last_period ? (int) (last_period - last_slash) : (int) strlen(rom_filepath);
+    char *last_slash = strrchr(rom_filepath, '/');
+    last_slash       = last_slash ? last_slash : rom_filepath;
 
-    size_t len       = strlen(xdg_data) + strlen(last_slash);
-    char  *save_path = xmalloc(len + 33);
-    snprintf(save_path, len + 32, "%s/savestates%.*s-%d.gbstate", xdg_data, last_period_index, last_slash, slot);
+    char *last_period       = strrchr(last_slash, '.');
+    int   last_period_index = last_period ? (int) (last_period - rom_filepath) : (int) strlen(rom_filepath);
 
-    free(xdg_data);
-    return save_path;
+    static char path[256];
+    snprintf(path, sizeof(path), "%s/savestates%.*s-%d.gbstate", savestate_dir, last_period_index, last_slash, slot);
+    return path;
 }
 
 void fit_image(uint8_t *dst, const uint8_t *src, int src_width, int src_height, int row_stride, int rotation) {

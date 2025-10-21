@@ -28,6 +28,6 @@ void config_load_from_string(config_t *config, const char *buf);
 
 char *config_save_to_string(config_t *config);
 
-void config_load_from_file(config_t *config, const char *path);
+bool config_load_from_file(config_t *config, const char *path);
 
-void config_save_to_file(config_t *config, const char *path);
+bool config_save_to_file(config_t *config, const char *path);

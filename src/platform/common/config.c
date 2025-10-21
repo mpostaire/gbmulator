@@ -1,4 +1,3 @@
-#include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
@@ -167,9 +166,9 @@ void config_load_from_string(config_t *config, const char *buf) {
 }
 
 char *config_save_to_string(config_t *config) {
-    char *buf = xmalloc(512);
+    static char config_str[512];
 
-    snprintf(buf, 512,
+    snprintf(config_str, 512,
              "mode=%d\nspeed=%.1f\nsound=%.2f\njoypad_opacity=%.2f\nsound_drc=%d\nenable_joypad=%d\ncolor_palette=%d\nlink_host=%s\nlink_port=%s\n",
              config->mode,
              config->speed,
@@ -182,74 +181,69 @@ char *config_save_to_string(config_t *config) {
              config->link_port);
 
     // separate snprintfs because key_parser() can return a pointer which contents get overwritten at each call
-    size_t len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "keyboard_right=%u\n", config->keybindings[JOYPAD_RIGHT]);
-    len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "keyboard_left=%u\n", config->keybindings[JOYPAD_LEFT]);
-    len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "keyboard_up=%u\n", config->keybindings[JOYPAD_UP]);
-    len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "keyboard_down=%u\n", config->keybindings[JOYPAD_DOWN]);
-    len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "keyboard_a=%u\n", config->keybindings[JOYPAD_A]);
-    len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "keyboard_b=%u\n", config->keybindings[JOYPAD_B]);
-    len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "keyboard_select=%u\n", config->keybindings[JOYPAD_SELECT]);
-    len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "keyboard_start=%u\n", config->keybindings[JOYPAD_START]);
-    len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "keyboard_l=%u\n", config->keybindings[JOYPAD_L]);
-    len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "keyboard_r=%u\n", config->keybindings[JOYPAD_R]);
-    len = strlen(buf);
+    size_t len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "keyboard_right=%u\n", config->keybindings[JOYPAD_RIGHT]);
+    len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "keyboard_left=%u\n", config->keybindings[JOYPAD_LEFT]);
+    len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "keyboard_up=%u\n", config->keybindings[JOYPAD_UP]);
+    len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "keyboard_down=%u\n", config->keybindings[JOYPAD_DOWN]);
+    len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "keyboard_a=%u\n", config->keybindings[JOYPAD_A]);
+    len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "keyboard_b=%u\n", config->keybindings[JOYPAD_B]);
+    len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "keyboard_select=%u\n", config->keybindings[JOYPAD_SELECT]);
+    len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "keyboard_start=%u\n", config->keybindings[JOYPAD_START]);
+    len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "keyboard_l=%u\n", config->keybindings[JOYPAD_L]);
+    len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "keyboard_r=%u\n", config->keybindings[JOYPAD_R]);
+    len = strlen(config_str);
 
-    snprintf(&buf[len], 512 - len, "gamepad_right=%u\n", config->gamepad_bindings[JOYPAD_RIGHT]);
-    len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "gamepad_left=%u\n", config->gamepad_bindings[JOYPAD_LEFT]);
-    len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "gamepad_up=%u\n", config->gamepad_bindings[JOYPAD_UP]);
-    len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "gamepad_down=%u\n", config->gamepad_bindings[JOYPAD_DOWN]);
-    len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "gamepad_a=%u\n", config->gamepad_bindings[JOYPAD_A]);
-    len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "gamepad_b=%u\n", config->gamepad_bindings[JOYPAD_B]);
-    len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "gamepad_select=%u\n", config->gamepad_bindings[JOYPAD_SELECT]);
-    len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "gamepad_start=%u\n", config->gamepad_bindings[JOYPAD_START]);
-    len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "gamepad_l=%u\n", config->gamepad_bindings[JOYPAD_L]);
-    len = strlen(buf);
-    snprintf(&buf[len], 512 - len, "gamepad_r=%u\n", config->gamepad_bindings[JOYPAD_R]);
+    snprintf(&config_str[len], 512 - len, "gamepad_right=%u\n", config->gamepad_bindings[JOYPAD_RIGHT]);
+    len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "gamepad_left=%u\n", config->gamepad_bindings[JOYPAD_LEFT]);
+    len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "gamepad_up=%u\n", config->gamepad_bindings[JOYPAD_UP]);
+    len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "gamepad_down=%u\n", config->gamepad_bindings[JOYPAD_DOWN]);
+    len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "gamepad_a=%u\n", config->gamepad_bindings[JOYPAD_A]);
+    len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "gamepad_b=%u\n", config->gamepad_bindings[JOYPAD_B]);
+    len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "gamepad_select=%u\n", config->gamepad_bindings[JOYPAD_SELECT]);
+    len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "gamepad_start=%u\n", config->gamepad_bindings[JOYPAD_START]);
+    len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "gamepad_l=%u\n", config->gamepad_bindings[JOYPAD_L]);
+    len = strlen(config_str);
+    snprintf(&config_str[len], 512 - len, "gamepad_r=%u\n", config->gamepad_bindings[JOYPAD_R]);
 
-    return buf;
+    return config_str;
 }
 
-void config_load_from_file(config_t *config, const char *path) {
-    FILE *f = fopen(path, "r");
-    if (f) {
-        char buf[512];
-        fread(buf, sizeof(buf), 1, f);
-        config_load_from_string(config, buf);
-        fclose(f);
-    }
-}
+bool config_load_from_file(config_t *config, const char *path) {
+    if (!config || !path)
+        return false;
 
-void config_save_to_file(config_t *config, const char *path) {
-    char *config_str = config_save_to_string(config);
-    make_parent_dirs(path);
-    FILE *f = fopen(path, "w");
-    if (!f) {
-        errnoprintf("error opening config file");
-        free(config_str);
-        return;
-    }
-    fwrite(config_str, strlen(config_str), 1, f);
-    fflush(f);
-    fsync(fileno(f));
-    fclose(f);
+    size_t   len;
+    uint8_t *config_str = read_file(path, &len);
+    if (!config_str)
+        return false;
 
+    config_load_from_string(config, config_str);
     free(config_str);
+
+    return true;
+}
+
+bool config_save_to_file(config_t *config, const char *path) {
+    char *config_str = config_save_to_string(config);
+    bool  ret        = write_file(path, config_str, strlen(config_str));
+    free(config_str);
+    return ret;
 }

@@ -21,15 +21,13 @@ struct {
 } app;
 
 static void load_config(void) {
-    char *path       = get_config_path();
+    char *path = get_config_path();
     config_load_from_file(&app.config, path);
-    free(path);
 }
 
 static void save_config(void) {
-    char *path       = get_config_path();
+    char *path = get_config_path();
     config_save_to_file(&app.config, path);
-    free(path);
 }
 
 static void load() {
@@ -40,8 +38,6 @@ static void load() {
     char *path      = get_save_path(rom_title);
 
     load_battery_from_file(app.emu, path);
-
-    free(path);
 }
 
 static void save(void) {
@@ -52,8 +48,6 @@ static void save(void) {
     char *path      = get_save_path(rom_title);
 
     save_battery_to_file(app.emu, path);
-
-    free(path);
 }
 
 __attribute_used__ void app_init(config_t *default_config) {
@@ -147,8 +141,7 @@ __attribute_used__ void app_load_cartridge(uint8_t *rom, size_t rom_size) {
         save();
         gbmulator_quit(app.emu);
     }
-    app.emu         = new_emu;
-    char *rom_title = gbmulator_get_rom_title(app.emu);
+    app.emu = new_emu;
     alrenderer_clear_queue();
 
     load();
