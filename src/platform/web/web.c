@@ -1,12 +1,10 @@
 #include <stdlib.h>
-#include <stdio.h>
 #include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
 #include <emscripten/key_codes.h>
 
 #include "../common/app.h"
 #include "../common/utils.h"
-#include "base64.h"
 
 static bool keycode_filter(unsigned int key);
 
@@ -56,38 +54,6 @@ EMSCRIPTEN_KEEPALIVE void set_pause(uint8_t value) {
         emscripten_cancel_main_loop();
     else
         emscripten_set_main_loop(app_loop, GB_FRAMES_PER_SECOND, 0);
-}
-
-static uint8_t *local_storage_get_item(const char *key, size_t *data_length) {
-    unsigned char *data = (unsigned char *) EM_ASM_INT({
-        var item = localStorage.getItem(UTF8ToString($0).replaceAll(' ', '_'));
-        if (item === null)
-            return null;
-        var itemLength = lengthBytesUTF8(item) + 1;
-
-        var ret = _malloc(itemLength);
-        stringToUTF8(item, ret, itemLength);
-        return ret;
-    }, key);
-
-    if (!data) {
-        if (data_length) *data_length = 0;
-        return NULL;
-    }
-
-    size_t out_len;
-    unsigned char *decoded_data = base64_decode(data, strlen((char *) data), &out_len);
-    if (data_length) *data_length = out_len;
-    free(data);
-    return decoded_data;
-}
-
-static void local_storage_set_item(const char *key, const uint8_t *data, size_t len) {
-    uint8_t *encoded_data = base64_encode(data, len, NULL);
-    EM_ASM({
-        localStorage.setItem(UTF8ToString($0).replaceAll(' ', '_'), UTF8ToString($1));
-    }, key, encoded_data);
-    free(encoded_data);
 }
 
 EMSCRIPTEN_KEEPALIVE void set_scale(uint8_t value) {
@@ -206,7 +172,7 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    app_init(&default_config, local_storage_get_item, local_storage_set_item);
+    app_init(&default_config);
 
     config_t config;
     app_get_config(&config);
@@ -233,6 +199,23 @@ int main(int argc, char **argv) {
     emscripten_set_keyup_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, 0, 1, handle_keyboard_input);
 
     set_scale(viewport_scale);
+
+    char *config_dir = get_config_dir();
+    char *save_dir = get_save_dir();
+
+    EM_ASM({
+        let dir = UTF8ToString($0);
+        FS.mkdirTree(dir);
+        FS.mount(IDBFS, {}, dir);
+
+        dir = UTF8ToString($1);
+        FS.mkdirTree(dir);
+        FS.mount(IDBFS, {}, dir);
+
+        FS.syncfs(true, function (err) {
+            console.log("IDBFS syncfs: " + err ? err : "OK")
+        });
+    }, config_dir, save_dir);
 
     return EXIT_SUCCESS;
 }

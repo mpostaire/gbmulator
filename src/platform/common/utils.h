@@ -38,6 +38,10 @@ uint8_t *get_rom(const char *path, size_t *rom_size);
 
 char *get_xdg_path(const char *xdg_variable, const char *fallback);
 
+char *get_config_dir(void);
+
+char *get_save_dir(void);
+
 char *get_config_path(void);
 
 char *get_save_path(const char *rom_filepath);

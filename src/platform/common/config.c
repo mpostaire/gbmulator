@@ -1,4 +1,6 @@
 #include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
 #include <string.h>
 
 #include "config.h"
@@ -245,6 +247,9 @@ void config_save_to_file(config_t *config, const char *path) {
         return;
     }
     fwrite(config_str, strlen(config_str), 1, f);
+    fflush(f);
+    fsync(fileno(f));
     fclose(f);
+
     free(config_str);
 }

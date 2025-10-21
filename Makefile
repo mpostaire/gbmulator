@@ -82,7 +82,7 @@ debug_web: web
 	emrun $(ODIR)/web/index.html
 
 $(ODIR)/web/index.html: $(SDIR)/platform/web/template.html $(OBJ)
-	$(CC) -o $@ $(OBJ) $(CFLAGS) -lopenal -sINITIAL_MEMORY=128MB -sUSE_WEBGL2=1 -sWASM=1 -sEXPORTED_FUNCTIONS="['_main', '_malloc', '_free']" -sEXPORTED_RUNTIME_METHODS="['ccall', 'HEAPU8']" -sASYNCIFY --shell-file $<
+	$(CC) -o $@ $(OBJ) $(CFLAGS) -lopenal -lidbfs.js -sINITIAL_MEMORY=128MB -sUSE_WEBGL2=1 -sWASM=1 -sEXPORTED_FUNCTIONS="['_main', '_malloc', '_free']" -sEXPORTED_RUNTIME_METHODS="['ccall', 'HEAPU8']" -sASYNCIFY --shell-file $<
 
 test:
 	$(MAKE) -C test

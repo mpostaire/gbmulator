@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 #include "app.h"
 #include "utils.h"
 #include "glrenderer.h"
@@ -16,76 +18,45 @@ struct {
     uint8_t       joypad_state;
     gbmulator_t  *emu;
     config_t      config;
-
-    read_func_t  read;
-    write_func_t write;
 } app;
 
 static void load_config(void) {
-    if (!app.read)
-        return;
-
-    char    *path = get_config_path();
-    uint8_t *data = app.read(path, NULL);
+    char *path       = get_config_path();
+    config_load_from_file(&app.config, path);
     free(path);
-    if (data) {
-        config_load_from_string(&app.config, (const char *) data);
-        free(data);
-    }
 }
 
 static void save_config(void) {
-    if (!app.write)
-        return;
-
-    char *config_buf = config_save_to_string(&app.config);
     char *path       = get_config_path();
-
-    app.write(path, (uint8_t *) config_buf, strlen(config_buf));
-
+    config_save_to_file(&app.config, path);
     free(path);
-    free(config_buf);
 }
 
 static void load() {
-    if (!app.read || !app.emu)
+    if (!app.emu)
         return;
 
     char *rom_title = gbmulator_get_rom_title(app.emu);
     char *path      = get_save_path(rom_title);
 
-    size_t   save_length;
-    uint8_t *save_data = app.read(path, &save_length);
+    load_battery_from_file(app.emu, path);
 
     free(path);
-
-    if (!save_data)
-        return;
-
-    gbmulator_load_save(app.emu, save_data, save_length);
-
-    free(save_data);
 }
 
 static void save(void) {
-    if (!app.write || !app.emu)
-        return;
-
-    size_t   save_length;
-    uint8_t *save_data = gbmulator_get_save(app.emu, &save_length);
-    if (!save_data)
+    if (!app.emu)
         return;
 
     char *rom_title = gbmulator_get_rom_title(app.emu);
     char *path      = get_save_path(rom_title);
 
-    app.write(path, save_data, save_length);
+    save_battery_to_file(app.emu, path);
 
     free(path);
-    free(save_data);
 }
 
-__attribute_used__ void app_init(config_t *default_config, read_func_t read_func, write_func_t write_func) {
+__attribute_used__ void app_init(config_t *default_config) {
     memset(&app, 0, sizeof(app));
 
     app.config = *default_config;
@@ -93,9 +64,6 @@ __attribute_used__ void app_init(config_t *default_config, read_func_t read_func
 
     app.is_paused    = true;
     app.joypad_state = 0xFF;
-
-    app.read  = read_func;
-    app.write = write_func;
 
     size_t screen_w;
     size_t screen_h;
@@ -116,18 +84,10 @@ __attribute_used__ void app_init(config_t *default_config, read_func_t read_func
 
 __attribute_used__ void app_quit(void) {
     if (app.emu) {
-        if (app.write) {
-            const char *rom_title   = gbmulator_get_rom_title(app.emu);
-            size_t      save_length = 0;
-            uint8_t    *save_data   = gbmulator_get_save(app.emu, &save_length);
-            app.write(rom_title, save_data, save_length);
-            free(save_data);
-        }
-
+        save();
         gbmulator_quit(app.emu);
     }
 
-    save();
     save_config();
 
     alrenderer_quit();
@@ -150,6 +110,7 @@ __attribute_used__ void app_loop(void) {
     // run the emulator for the approximate number of steps it takes for the ppu to render a frame
     gbmulator_run_steps(app.emu, GB_CPU_STEPS_PER_FRAME * app.config.speed); // TODO if gba steps per frame
 
+    // TODO should not be in this loop because desktop platform can only do this during a gl area render
     glrenderer_render(app.renderer);
 }
 

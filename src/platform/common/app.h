@@ -2,10 +2,7 @@
 
 #include "config.h"
 
-typedef void (*write_func_t)(const char *path, const uint8_t *data, size_t length);
-typedef uint8_t *(*read_func_t)(const char *path, size_t *length);
-
-void app_init(config_t *default_config, read_func_t read_func, write_func_t write_func);
+void app_init(config_t *default_config);
 
 void app_quit(void);
 
