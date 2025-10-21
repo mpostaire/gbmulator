@@ -298,7 +298,7 @@ uint16_t gbmulator_get_rom_checksum(gbmulator_t *emu) {
 }
 
 bool gbmulator_has_peripheral(gbmulator_t *emu, gbmulator_peripheral_t peripheral) {
-    if (emu->opts.mode != GBMULATOR_MODE_GB || emu->opts.mode != GBMULATOR_MODE_GBC)
+    if (emu->opts.mode != GBMULATOR_MODE_GB && emu->opts.mode != GBMULATOR_MODE_GBC)
         return false;
 
     switch (peripheral) {
