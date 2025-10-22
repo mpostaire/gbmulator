@@ -235,7 +235,7 @@ bool config_load_from_file(config_t *config, const char *path) {
     if (!config_str)
         return false;
 
-    config_load_from_string(config, config_str);
+    config_load_from_string(config, (char *) config_str);
     free(config_str);
 
     return true;
@@ -243,7 +243,5 @@ bool config_load_from_file(config_t *config, const char *path) {
 
 bool config_save_to_file(config_t *config, const char *path) {
     char *config_str = config_save_to_string(config);
-    bool  ret        = write_file(path, config_str, strlen(config_str));
-    free(config_str);
-    return ret;
+    return write_file(path, (uint8_t *) config_str, strlen(config_str));
 }

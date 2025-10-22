@@ -60,8 +60,8 @@ struct glrenderer_t {
 
     glrenderer_rect_t btn_coords[GLRENDERER_OBJ_ID_SCREEN];
     bool show_buttons;
-    GLfloat tints[GLRENDERER_OBJ_ID_SCREEN];
-    GLfloat alphas[GLRENDERER_OBJ_ID_SCREEN];
+    GLfloat tints[GLRENDERER_OBJ_ID_SCREEN + 1];
+    GLfloat alphas[GLRENDERER_OBJ_ID_SCREEN + 1];
 
     GLfloat clear_r;
     GLfloat clear_g;
@@ -245,7 +245,6 @@ glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, bool show_butt
     renderer->screen_tex_h = screen_h;
 
     if (renderer->show_buttons) {
-        // TODO maybe find better way do to this
         static uint8_t atlas_data[] = {
             #embed "atlas.bmp"
         };
@@ -272,7 +271,7 @@ glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, bool show_butt
 
     glrenderer_resize_viewport(renderer, screen_w, screen_h);
 
-    for (glrenderer_obj_id_t obj_id = 0; obj_id < GLRENDERER_OBJ_ID_SCREEN; obj_id++) {
+    for (glrenderer_obj_id_t obj_id = 0; obj_id <= GLRENDERER_OBJ_ID_SCREEN; obj_id++) {
         renderer->tints[obj_id] = 1.0f;
         renderer->alphas[obj_id] = 1.0f;
     }
@@ -345,7 +344,7 @@ void glrenderer_update_screen(glrenderer_t *renderer, const GLvoid *pixels) {
 }
 
 void glrenderer_resize_screen(glrenderer_t *renderer, GLsizei width, GLsizei height) {
-    if (!renderer)
+    if (!renderer || (width == renderer->screen_tex_w && height == renderer->screen_tex_h))
         return;
 
     glBindTexture(GL_TEXTURE_2D, renderer->screen_tex);

@@ -79,3 +79,7 @@ void gbmulator_link_disconnect(gbmulator_t *emu, gbmulator_link_t type);
 uint16_t gbmulator_get_rom_checksum(gbmulator_t *emu);
 
 bool gbmulator_has_peripheral(gbmulator_t *emu, gbmulator_peripheral_t peripheral);
+
+void gbmulator_set_apu_speed(gbmulator_t *emu, float speed);
+
+void gbmulator_set_palette(gbmulator_t *emu, gb_color_palette_t palette);

@@ -23,54 +23,6 @@ static long fsize(FILE *f) {
     return len;
 }
 
-gbmulator_joypad_button_t keycode_to_joypad(config_t *config, unsigned int keycode) {
-    if (keycode == config->keybindings[JOYPAD_A])
-        return JOYPAD_A;
-    if (keycode == config->keybindings[JOYPAD_B])
-        return JOYPAD_B;
-    if (keycode == config->keybindings[JOYPAD_SELECT])
-        return JOYPAD_SELECT;
-    if (keycode == config->keybindings[JOYPAD_START])
-        return JOYPAD_START;
-    if (keycode == config->keybindings[JOYPAD_RIGHT])
-        return JOYPAD_RIGHT;
-    if (keycode == config->keybindings[JOYPAD_LEFT])
-        return JOYPAD_LEFT;
-    if (keycode == config->keybindings[JOYPAD_UP])
-        return JOYPAD_UP;
-    if (keycode == config->keybindings[JOYPAD_DOWN])
-        return JOYPAD_DOWN;
-    if (keycode == config->keybindings[JOYPAD_R])
-        return JOYPAD_R;
-    if (keycode == config->keybindings[JOYPAD_L])
-        return JOYPAD_L;
-    return -1;
-}
-
-gbmulator_joypad_button_t button_to_joypad(config_t *config, unsigned int button) {
-    if (button == config->gamepad_bindings[JOYPAD_A])
-        return JOYPAD_A;
-    if (button == config->gamepad_bindings[JOYPAD_B])
-        return JOYPAD_B;
-    if (button == config->gamepad_bindings[JOYPAD_SELECT])
-        return JOYPAD_SELECT;
-    if (button == config->gamepad_bindings[JOYPAD_START])
-        return JOYPAD_START;
-    if (button == config->gamepad_bindings[JOYPAD_RIGHT])
-        return JOYPAD_RIGHT;
-    if (button == config->gamepad_bindings[JOYPAD_LEFT])
-        return JOYPAD_LEFT;
-    if (button == config->gamepad_bindings[JOYPAD_UP])
-        return JOYPAD_UP;
-    if (button == config->gamepad_bindings[JOYPAD_DOWN])
-        return JOYPAD_DOWN;
-    if (button == config->gamepad_bindings[JOYPAD_R])
-        return JOYPAD_R;
-    if (button == config->gamepad_bindings[JOYPAD_L])
-        return JOYPAD_L;
-    return -1;
-}
-
 int dir_exists(const char *directory_path) {
     DIR *dir = opendir(directory_path);
     if (dir == NULL) {
@@ -305,28 +257,28 @@ char *get_config_path(void) {
     return path;
 }
 
-char *get_save_path(char *rom_filepath) {
+char *get_save_path(char *rom_title) {
     char *save_dir = get_save_dir();
 
-    char *last_slash = strrchr(rom_filepath, '/');
-    last_slash       = last_slash ? last_slash : rom_filepath;
+    char *last_slash = strrchr(rom_title, '/');
+    last_slash       = last_slash ? last_slash : rom_title;
 
     char *last_period       = strrchr(last_slash, '.');
-    int   last_period_index = last_period ? (int) (last_period - rom_filepath) : (int) strlen(rom_filepath);
+    int   last_period_index = last_period ? (int) (last_period - rom_title) : (int) strlen(rom_title);
 
     static char path[256];
     snprintf(path, sizeof(path), "%s%s%.*s.sav", save_dir, last_slash[0] == '/' ? "" : "/", last_period_index, last_slash);
     return path;
 }
 
-char *get_savestate_path(char *rom_filepath, int slot) {
+char *get_savestate_path(char *rom_title, int slot) {
     char *savestate_dir = get_savestate_dir();
 
-    char *last_slash = strrchr(rom_filepath, '/');
-    last_slash       = last_slash ? last_slash : rom_filepath;
+    char *last_slash = strrchr(rom_title, '/');
+    last_slash       = last_slash ? last_slash : rom_title;
 
     char *last_period       = strrchr(last_slash, '.');
-    int   last_period_index = last_period ? (int) (last_period - rom_filepath) : (int) strlen(rom_filepath);
+    int   last_period_index = last_period ? (int) (last_period - rom_title) : (int) strlen(rom_title);
 
     static char path[256];
     snprintf(path, sizeof(path), "%s/savestates%.*s-%d.gbstate", savestate_dir, last_period_index, last_slash, slot);

@@ -63,6 +63,9 @@ static bool set_funcs(gbmulator_t *emu, gbmulator_mode_t mode) {
 }
 
 gbmulator_t *gbmulator_init(const gbmulator_options_t *opts) {
+    if (!opts)
+        return NULL;
+
     gbmulator_t *emu = xcalloc(1, sizeof(*emu));
     gbmulator_set_options(emu, opts);
 
@@ -85,6 +88,9 @@ gbmulator_t *gbmulator_init(const gbmulator_options_t *opts) {
 }
 
 void gbmulator_quit(gbmulator_t *emu) {
+    if (!emu)
+        return;
+
     if (emu->rewind_stack.states)
         free(emu->rewind_stack.states);
 
@@ -97,6 +103,9 @@ void gbmulator_quit(gbmulator_t *emu) {
 }
 
 bool gbmulator_reset(gbmulator_t *emu, gbmulator_mode_t new_mode) {
+    if (!emu)
+        return false;
+
     size_t rom_size;
     uint8_t *rom = emu->get_rom(emu->impl, &rom_size);
 
@@ -139,6 +148,9 @@ bool gbmulator_reset(gbmulator_t *emu, gbmulator_mode_t new_mode) {
 }
 
 static void rewind_push(gbmulator_t *emu) {
+    if (!emu)
+        return;
+
     emu->rewind_stack.head = (emu->rewind_stack.head + 1) % N_REWIND_STATES;
     if (emu->rewind_stack.len < N_REWIND_STATES)
         emu->rewind_stack.len++;
@@ -149,6 +161,9 @@ static void rewind_push(gbmulator_t *emu) {
 }
 
 static void rewind_pop(gbmulator_t *emu) {
+    if (!emu)
+        return;
+
     eprintf("rewind pop");
     if (emu->rewind_stack.len == 0)
         return;
@@ -163,10 +178,14 @@ static void rewind_pop(gbmulator_t *emu) {
 
 void gbmulator_rewind(gbmulator_t *emu, uint64_t frame) {
     // TODO while rewind button is pressed, pause the emulation (do not step)
-    rewind_pop(emu);
+    if (emu)
+        rewind_pop(emu);
 }
 
 static inline void gbmulator_step_linked(gbmulator_t *emu) {
+    if (!emu)
+        return;
+
     if (emu->rewind_stack.states) {
         static size_t step_counter = 0;
         step_counter++;
@@ -187,6 +206,9 @@ void gbmulator_step(gbmulator_t *emu) {
 }
 
 void gbmulator_run_steps(gbmulator_t *emu, uint64_t steps_limit) {
+    if (!emu)
+        return;
+
     for (uint64_t steps_count = 0; steps_count < steps_limit; steps_count++)
         gbmulator_step_linked(emu);
 }
@@ -196,26 +218,42 @@ void gbmulator_run_frames(gbmulator_t *emu, uint64_t frames_limit) {
 }
 
 uint8_t *gbmulator_get_save(gbmulator_t *emu, size_t *save_length) {
+    if (!emu)
+        return NULL;
+
     return emu->get_save(emu->impl, save_length);
 }
 
 bool gbmulator_load_save(gbmulator_t *emu, uint8_t *save_data, size_t save_length) {
+    if (!emu)
+        return false;
+
     return emu->load_save(emu->impl, save_data, save_length);
 }
 
 uint8_t *gbmulator_get_savestate(gbmulator_t *emu, size_t *length, bool is_compressed) {
+    if (!emu)
+        return NULL;
+
     return emu->get_savestate(emu->impl, length, is_compressed);
 }
 
 bool gbmulator_load_savestate(gbmulator_t *emu, uint8_t *data, size_t length) {
+    if (!emu)
+        return false;
+
     return emu->load_savestate(emu->impl, data, length);
 }
 
 void gbmulator_get_options(gbmulator_t *emu, gbmulator_options_t *opts) {
-    *opts = emu->opts;
+    if (emu)
+        *opts = emu->opts;
 }
 
 void gbmulator_set_options(gbmulator_t *emu, const gbmulator_options_t *opts) {
+    if (!emu)
+        return;
+
     // allow changes of mode, rom, rom_size and apu_sampling_rate only once (inside gbmulator_init())
     if (!emu->impl) {
         emu->opts.mode = opts->mode;
@@ -234,26 +272,40 @@ void gbmulator_set_options(gbmulator_t *emu, const gbmulator_options_t *opts) {
 }
 
 char *gbmulator_get_rom_title(gbmulator_t *emu) {
+    if (!emu)
+        return NULL;
+
     return emu->get_rom_title(emu->impl);
 }
 
 void gbmulator_print_status(gbmulator_t *emu) {
-    emu->print_status(emu->impl);
+    if (emu)
+        emu->print_status(emu->impl);
 }
 
 uint16_t gbmulator_get_joypad_state(gbmulator_t *emu) {
+    if (!emu)
+        return 0;
+
     return emu->get_joypad_state(emu->impl);
 }
 
 void gbmulator_set_joypad_state(gbmulator_t *emu, uint16_t state) {
-    emu->set_joypad_state(emu->impl, state);
+    if (emu)
+        emu->set_joypad_state(emu->impl, state);
 }
 
 uint8_t *gbmulator_get_rom(gbmulator_t *emu, size_t *rom_size) {
+    if (!emu)
+        return NULL;
+
     return emu->get_rom(emu->impl, rom_size);
 }
 
 void gbmulator_link_connect(gbmulator_t *emu, gbmulator_t *other, gbmulator_link_t type) {
+    if (!emu)
+        return;
+
     gbmulator_link_disconnect(emu, type);
 
     switch (type) {
@@ -271,7 +323,7 @@ void gbmulator_link_connect(gbmulator_t *emu, gbmulator_t *other, gbmulator_link
 }
 
 void gbmulator_link_disconnect(gbmulator_t *emu, gbmulator_link_t type) {
-    if (!emu->cable.other_device)
+    if (!emu || !emu->cable.other_device)
         return;
 
     switch (type) {
@@ -289,6 +341,9 @@ void gbmulator_link_disconnect(gbmulator_t *emu, gbmulator_link_t type) {
 }
 
 uint16_t gbmulator_get_rom_checksum(gbmulator_t *emu) {
+    if (!emu)
+        return 0;
+
     uint16_t checksum = 0;
     size_t rom_size;
     uint8_t *rom = gbmulator_get_rom(emu, &rom_size);
@@ -298,6 +353,9 @@ uint16_t gbmulator_get_rom_checksum(gbmulator_t *emu) {
 }
 
 bool gbmulator_has_peripheral(gbmulator_t *emu, gbmulator_peripheral_t peripheral) {
+    if (!emu)
+        return false;
+
     if (emu->opts.mode != GBMULATOR_MODE_GB && emu->opts.mode != GBMULATOR_MODE_GBC)
         return false;
 
@@ -309,4 +367,18 @@ bool gbmulator_has_peripheral(gbmulator_t *emu, gbmulator_peripheral_t periphera
     default:
         return false;
     }
+}
+
+void gbmulator_set_apu_speed(gbmulator_t *emu, float speed) {
+    if (emu)
+        emu->opts.apu_speed = speed;
+}
+
+// TODO maybe change this
+void gbmulator_set_palette(gbmulator_t *emu, gb_color_palette_t palette) {
+    if (!emu || !emu->impl || (emu->opts.mode != GBMULATOR_MODE_GB && emu->opts.mode != GBMULATOR_MODE_GBC))
+        return;
+
+    emu->opts.palette = palette;
+    gb_set_palette(emu->impl, palette);
 }

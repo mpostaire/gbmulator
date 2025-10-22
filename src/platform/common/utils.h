@@ -3,10 +3,6 @@
 #include "../../core/core.h"
 #include "../common/config.h"
 
-gbmulator_joypad_button_t keycode_to_joypad(config_t *config, unsigned int keycode);
-
-gbmulator_joypad_button_t button_to_joypad(config_t *config, unsigned int button);
-
 /**
  * @returns 1 if directory_path is a directory, 0 otherwise.
  */
@@ -48,9 +44,9 @@ char *get_savestate_dir(void);
 
 char *get_config_path(void);
 
-char *get_save_path(const char *rom_filepath);
+char *get_save_path(const char *rom_title);
 
-char *get_savestate_path(const char *rom_filepath, int slot);
+char *get_savestate_path(const char *rom_title, int slot);
 
 /**
  * resize, crop (keep center) and rotate `src` to fit into `dst` where `dst` is the gb camera sensor buffer

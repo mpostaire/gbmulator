@@ -188,6 +188,8 @@
         var progressElement = document.getElementById('progress');
         var spinnerElement = document.getElementById('spinner');
 
+        let scale = 2
+
         var Module = {
             preRun: [],
             postRun: [],
@@ -268,22 +270,7 @@
                     break;
             }
         }
-
-        let config = localStorage.getItem('config');
-        let done = false;
-        if (config) {
-            config.split('\n').every(element => {
-                let option = element.split("=");
-                if (option[0] === "mode") {
-                    setTheme(parseInt(option[1], 10));
-                    done = true;
-                    return false;
-                }
-                return true;
-            });
-        }
-        if (!done)
-            setTheme(1);
+        setTheme(1);
 
         Module.setStatus('Downloading...');
         window.onerror = function () {
@@ -295,7 +282,7 @@
         };
 
         window.onbeforeunload = function (event) {
-            Module.ccall('app_quit');
+            Module.ccall('app_quit', 'void');
             gb.style = "visibility: hidden;";
         };
 
@@ -314,10 +301,8 @@
                 document.getElementById('mode-setter-label').innerHTML = "Mode: (applied on restart)";
                 let elem = document.getElementById('open-menu');
                 elem.disabled = 0;
-                elem.classList.remove("paused");
 
                 Module.ccall('set_pause', 'void', ['boolean'], [false]);
-                setMenuVisibility(true);
             };
             if (e.target.files.length === 0)
                 return;
@@ -331,19 +316,17 @@
             var menu = document.getElementById("menu");
             var openMenu = document.getElementById("open-menu");
             if (visible) {
-                openMenu.classList.remove("paused");
-                menu.style.display = "none";
-            } else {
                 openMenu.classList.add("paused");
                 menu.style.display = "flex";
+            } else {
+                openMenu.classList.remove("paused");
+                menu.style.display = "none";
             }
         };
 
         var togglePause = function(elem) {
-            var x = document.getElementById("menu");
-            var is_paused = x.style.display === "none";
-            Module.ccall('set_pause', 'void', ['boolean'], [is_paused]);
-            setMenuVisibility(!is_paused);
+            let is_paused = Module.ccall('app_is_paused', 'boolean');
+            Module.ccall('set_pause', 'void', ['boolean'], [!is_paused]);
         };
 
         var ROMPicker = document.getElementById('rom-picker');
@@ -358,7 +341,9 @@
 
         var scaleLabel = document.getElementById('scale-label');
         var setScale = function(elem) {
-            Module.ccall('set_scale', 'void', ['number'], [Number(elem.value)]);
+            if (elem)
+                scale = Number(elem.value)
+            Module.ccall('set_scale', 'void', ['number'], [scale]);
         };
 
         var speedLabel = document.getElementById('speed-label');
@@ -380,8 +365,11 @@
         };
 
         var setMode = function(elem) {
-            Module.ccall('app_set_mode', 'void', ['number'], [Number(elem.value)]);
-            setTheme(elem.value);
+            let mode = Number(elem.value);
+            // TODO return bool to check if mode change was accepted
+            Module.ccall('app_set_mode', 'void', ['number'], [mode]);
+            Module.ccall('set_scale', 'void', ['number'], [scale]);
+            setTheme(mode);
         };
     </script>
     {{{ SCRIPT }}}

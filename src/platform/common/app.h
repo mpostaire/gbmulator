@@ -10,9 +10,9 @@ void app_reset(void);
 
 void app_loop(void);
 
-void app_joypad_press(gbmulator_joypad_button_t button);
+void app_joypad_press(unsigned int key, bool is_gamepad);
 
-void app_joypad_release(gbmulator_joypad_button_t button);
+void app_joypad_release(unsigned int key, bool is_gamepad);
 
 void app_load_cartridge(uint8_t *rom, size_t rom_size);
 
@@ -26,10 +26,16 @@ void app_set_speed(float value);
 
 void app_set_palette(gb_color_palette_t value);
 
-void app_set_size(uint32_t screen_w, uint32_t screen_h, uint32_t viewport_w, uint32_t viewport_h);
+void app_get_screen_size(uint32_t *screen_w, uint32_t *screen_h);
+
+void app_set_size(uint32_t viewport_w, uint32_t viewport_h);
 
 void app_get_config(config_t *config);
 
-gbmulator_joypad_button_t app_keycode_to_joypad(unsigned int keycode);
+bool app_is_paused(void);
 
-gbmulator_joypad_button_t app_button_to_joypad(unsigned int button);
+void app_save_state(int slot);
+
+void app_load_state(int slot);
+
+uint32_t app_get_fps(void);

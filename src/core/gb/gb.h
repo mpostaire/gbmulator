@@ -80,3 +80,5 @@ uint8_t *gb_get_rom(gb_t *gb, size_t *rom_size);
 uint8_t gb_has_accelerometer(gb_t *gb);
 
 uint8_t gb_has_camera(gb_t *gb);
+
+void gb_set_palette(gb_t *gb, gb_color_palette_t palette);
