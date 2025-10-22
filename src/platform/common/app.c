@@ -239,6 +239,7 @@ __attribute_used__ void app_set_mode(gbmulator_mode_t mode) {
 
 __attribute_used__ void app_set_speed(float value) {
     app.config.speed = value;
+    set_steps_per_frame();
     gbmulator_set_apu_speed(app.emu, app.config.speed);
 }
 
@@ -271,8 +272,6 @@ __attribute_used__ void app_set_size(uint32_t viewport_w, uint32_t viewport_h) {
     uint32_t screen_w;
     uint32_t screen_h;
     app_get_screen_size(&screen_w, &screen_h);
-
-    printf("screen_w=%d, screen_h=%d, viewport_w=%d, viewport_h=%d", screen_w, screen_h, viewport_w, viewport_h);
 
     glrenderer_resize_screen(app.renderer, screen_w, screen_h);
     glrenderer_resize_viewport(app.renderer, viewport_w, viewport_h);

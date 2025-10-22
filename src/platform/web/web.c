@@ -8,7 +8,7 @@
 
 static bool keycode_filter(unsigned int key);
 
-// TODO mobile mode/joypad buttons/opacity/etc
+// TODO mobile mode on screen buttons when fullscreen/opacity/gamepad support
 
 // config struct initialized to defaults
 static config_t default_config = {
@@ -37,6 +37,9 @@ static bool keycode_filter(unsigned int key) {
 }
 
 EMSCRIPTEN_KEEPALIVE void set_pause(uint8_t value) {
+    if (app_is_paused() == value)
+        return;
+
     app_set_pause(value);
 
     if (value)
@@ -86,9 +89,14 @@ bool handle_keyboard_input(int eventType, const EmscriptenKeyboardEvent *e, void
                 // gb_get_options(emu, &opts);
                 // config.mode = opts.mode;
                 // EM_ASM({
-                //     document.getElementById("mode-setter").value = $4;
+                //     document.getElementById("mode-setter").value = $0;
                 // }, config.mode);
             }
+            return true;
+        case DOM_VK_F11:
+            EM_ASM(
+                canvas.requestFullscreen();
+            );
             return true;
         default:
             app_joypad_press(e->keyCode, false);
@@ -123,7 +131,7 @@ EMSCRIPTEN_KEEPALIVE void finish_init(void) {
         EM_ASM({
             elem = document.getElementById("keybind-info-" + $0);
             if (elem)
-                elem.innerHTML = UTF8ToString($1);
+                elem.innerHTML = UTF8ToString($1).replace("DOM_VK_", "");
         }, i, emscripten_dom_vk_to_string(config.keybindings[i]));
     }
 }

@@ -34,7 +34,8 @@
                 <input type="file" onchange="openROM(event)" accept=".gb,.sgb,.gbc,.cgb,.gba" id="rom-picker" style="display: none;"></input>
                 <button onclick="openROMPicker()" id="open-rom">Open ROM...</button>
                 <button disabled onclick="resetROM()" id="reset-rom">Restart emulator</button>
-    
+                <button disabled onclick="canvas.requestFullscreen()" id="go-fullscreen">Go fullscreen</button>
+
                 <div class="separator">Options</div>
     
                 <div class="options-container">
@@ -299,8 +300,8 @@
 
                 document.getElementById('reset-rom').disabled = 0;
                 document.getElementById('mode-setter-label').innerHTML = "Mode: (applied on restart)";
-                let elem = document.getElementById('open-menu');
-                elem.disabled = 0;
+                document.getElementById('open-menu').disabled = 0;;
+                document.getElementById('go-fullscreen').disabled = 0;
 
                 Module.ccall('set_pause', 'void', ['boolean'], [false]);
             };
@@ -339,11 +340,26 @@
             togglePause();
         };
 
+        addEventListener("fullscreenchange", (event) => {
+            if (document.fullscreenElement)
+                Module.ccall('set_pause', 'void', ['boolean'], [false]);
+            else
+                Module.ccall('set_pause', 'void', ['boolean'], [true]);
+
+            setScale();
+        })
+
         var scaleLabel = document.getElementById('scale-label');
         var setScale = function(elem) {
-            if (elem)
-                scale = Number(elem.value)
-            Module.ccall('set_scale', 'void', ['number'], [scale]);
+            if (document.fullscreenElement) {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                Module.ccall('app_set_size', 'void', ['number', 'number'], [canvas.width, canvas.height]);
+            } else {
+                if (elem)
+                    scale = Number(elem.value)
+                Module.ccall('set_scale', 'void', ['number'], [scale]);
+            }
         };
 
         var speedLabel = document.getElementById('speed-label');

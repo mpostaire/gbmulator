@@ -228,8 +228,8 @@ canvas.emscripten {
     cursor: auto;
 }
 
-#open-rom {
-    margin: 0.4em;
+button {
+    margin: 0.2em 0.4em;
 }
 
 #menu {
