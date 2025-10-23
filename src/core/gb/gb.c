@@ -5,14 +5,6 @@
 
 #include "gb_priv.h"
 
-#define SAVESTATE_STRING EMULATOR_NAME"-sav"
-
-typedef struct __attribute__((packed)) {
-    char identifier[sizeof(SAVESTATE_STRING)];
-    char rom_title[16];
-    uint8_t is_cgb; // bit 7 set --> savestate data is compressed
-} savestate_header_t;
-
 const char *mbc_names[] = {
     STRINGIFY(ROM_ONLY),
     STRINGIFY(MBC1),
@@ -62,6 +54,8 @@ gb_t *gb_init(gbmulator_t *base) {
     gb->base = base;
 
     gb->cgb_mode_enabled = gb->base->opts.mode == GBMULATOR_MODE_GBC;
+
+    gb_set_palette(gb, gb->base->opts.palette);
 
     if (!mmu_init(gb, base->opts.rom, base->opts.rom_size)) {
         free(gb);
@@ -332,14 +326,7 @@ bool gb_load_save(gb_t *gb, uint8_t *save_data, size_t save_length) {
     return 1;
 }
 
-uint8_t *gb_get_savestate(gb_t *gb, size_t *length, bool is_compressed) {
-    // make savestate header
-    savestate_header_t *savestate_header = xmalloc(sizeof(*savestate_header));
-    savestate_header->is_cgb = gb->base->opts.mode == GBMULATOR_MODE_GBC;
-    memcpy(savestate_header->identifier, SAVESTATE_STRING, sizeof(savestate_header->identifier));
-    memcpy(savestate_header->rom_title, gb->rom_title, sizeof(savestate_header->rom_title));
-
-    // make savestate data
+gbmulator_savestate_t *gb_get_savestate(gb_t *gb, size_t *savestate_length, bool is_compressed) {
     size_t cpu_len;
     uint8_t *cpu = cpu_serialize(gb, &cpu_len);
     size_t timer_len;
@@ -352,15 +339,20 @@ uint8_t *gb_get_savestate(gb_t *gb, size_t *length, bool is_compressed) {
     // don't write each component length into the savestate as the only variable length is the mmu which is written
     // last and it's length can be computed using the eram_banks number and the mode (both in the header)
     size_t savestate_data_len = cpu_len + timer_len + ppu_len + mmu_len;
-    uint8_t *savestate_data = xmalloc(savestate_data_len);
+    gbmulator_savestate_t *savestate = xmalloc(sizeof(*savestate) + savestate_data_len);
+
+    memcpy(savestate->identifier, SAVESTATE_STRING, sizeof(savestate->identifier));
+    memcpy(savestate->rom_title, gb->rom_title, sizeof(savestate->rom_title));
+    savestate->mode = gb->base->opts.mode;
+
     size_t offset = 0;
-    memcpy(savestate_data, cpu, cpu_len);
+    memcpy(savestate->data, cpu, cpu_len);
     offset += cpu_len;
-    memcpy(&savestate_data[offset], timer, timer_len);
+    memcpy(&savestate->data[offset], timer, timer_len);
     offset += timer_len;
-    memcpy(&savestate_data[offset], ppu, ppu_len);
+    memcpy(&savestate->data[offset], ppu, ppu_len);
     offset += ppu_len;
-    memcpy(&savestate_data[offset], mmu, mmu_len);
+    memcpy(&savestate->data[offset], mmu, mmu_len);
 
     free(cpu);
     free(timer);
@@ -371,82 +363,49 @@ uint8_t *gb_get_savestate(gb_t *gb, size_t *length, bool is_compressed) {
     if (is_compressed) {
         uLongf dest_len = compressBound(savestate_data_len);
         uint8_t *dest = xmalloc(dest_len);
-        if (compress(dest, &dest_len, savestate_data, savestate_data_len) == Z_OK) {
-            SET_BIT(savestate_header->is_cgb, 7);
-            free(savestate_data);
+        if (compress(dest, &dest_len, savestate->data, savestate_data_len) == Z_OK) {
+            savestate->is_compressed = true;
+            savestate = xrealloc(savestate, dest_len + sizeof(*savestate));
+            memcpy(savestate->data, dest, dest_len);
             savestate_data_len = dest_len;
-            savestate_data = dest;
         } else {
             eprintf("Couldn't compress savestate, using an uncompressed savestate instead\n");
-            free(dest);
         }
+        free(dest);
     }
 
-    // assemble savestate header and savestate data
-    *length = sizeof(savestate_header_t) + savestate_data_len;
-    uint8_t *savestate = xmalloc(*length);
-    memcpy(savestate, savestate_header, sizeof(savestate_header_t));
-    memcpy(savestate + sizeof(savestate_header_t), savestate_data, savestate_data_len);
-
-    free(savestate_header);
-    free(savestate_data);
+    *savestate_length = sizeof(*savestate) + savestate_data_len;
 
     return savestate;
 }
 
-bool gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length) {
-    if (length <= sizeof(savestate_header_t)) {
-        eprintf("invalid savestate length (%zu)\n", length);
-        return false;
-    }
-
-    savestate_header_t *savestate_header = xmalloc(sizeof(*savestate_header));
-    memcpy(savestate_header, data, sizeof(savestate_header_t));
-
-    if (strncmp(savestate_header->identifier, SAVESTATE_STRING, sizeof(SAVESTATE_STRING))) {
-        eprintf("invalid format %s\n", savestate_header->identifier);
-        free(savestate_header);
-        return false;
-    }
-    if (strncmp(savestate_header->rom_title, gb->rom_title, sizeof(savestate_header->rom_title))) {
-        eprintf("rom title mismatch (expected: '%.16s'; got: '%.16s')\n", gb->rom_title, savestate_header->rom_title);
-        free(savestate_header);
-        return false;
-    }
-
-    if ((savestate_header->is_cgb & 0x03) != (gb->base->opts.mode == GBMULATOR_MODE_GBC))
-        return false;
-
-    size_t savestate_data_len = length - sizeof(savestate_header_t);
-    uint8_t *savestate_data = xmalloc(savestate_data_len);
-    memcpy(savestate_data, data + sizeof(savestate_header_t), savestate_data_len);
-
+bool gb_load_savestate(gb_t *gb, gbmulator_savestate_t *savestate, size_t savestate_length) {
     size_t expected_data_len = 0;
     expected_data_len += cpu_serialized_length(gb);
     expected_data_len += timer_serialized_length(gb);
     expected_data_len += ppu_serialized_length(gb);
     expected_data_len += mmu_serialized_length(gb);
 
-    if (CHECK_BIT(savestate_header->is_cgb, 7)) {
+    size_t savestate_data_length = savestate_length - sizeof(*savestate);
+    uint8_t *savestate_data = savestate->data;
+
+    if (savestate->is_compressed) {
         uint8_t *dest = xmalloc(expected_data_len);
         uLongf dest_len = expected_data_len;
-        if (uncompress(dest, &dest_len, savestate_data, savestate_data_len) == Z_OK) {
-            free(savestate_data);
-            savestate_data_len = dest_len;
+        if (uncompress(dest, &dest_len, savestate_data, savestate_data_length) == Z_OK) {
+            savestate_data_length = dest_len;
             savestate_data = dest;
         } else {
             eprintf("uncompress failure\n");
             free(dest);
-            free(savestate_header);
-            free(savestate_data);
             return false;
         }
     }
 
-    if (savestate_data_len != expected_data_len) {
-        eprintf("invalid savestate data length (expected: %zu; got: %zu)\n", expected_data_len, savestate_data_len);
-        free(savestate_header);
-        free(savestate_data);
+    if (savestate_data_length != expected_data_len) {
+        eprintf("invalid savestate data length (expected: %zu; got: %zu)\n", expected_data_len, savestate_data_length);
+        if (savestate->is_compressed)
+            free(savestate_data);
         return false;
     }
 
@@ -456,8 +415,8 @@ bool gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length) {
     offset += ppu_unserialize(gb, &savestate_data[offset]);
     offset += mmu_unserialize(gb, &savestate_data[offset]);
 
-    free(savestate_header);
-    free(savestate_data);
+    if (savestate->is_compressed)
+        free(savestate_data);
 
     // resets apu's internal state to prevent glitchy audio if resuming from state without sound playing from state with sound playing
     apu_quit(gb);

@@ -63,9 +63,9 @@ uint8_t *gb_get_save(gb_t *gb, size_t *save_length);
 
 bool gb_load_save(gb_t *gb, uint8_t *save_data, size_t save_length);
 
-uint8_t *gb_get_savestate(gb_t *gb, size_t *length, bool is_compressed);
+gbmulator_savestate_t *gb_get_savestate(gb_t *gb, size_t *savestate_data_length, bool is_compressed);
 
-bool gb_load_savestate(gb_t *gb, const uint8_t *data, size_t length);
+bool gb_load_savestate(gb_t *gb, gbmulator_savestate_t *savestate, size_t savestate_data_length);
 
 /**
  * @returns the ROM title (you must not free the returned pointer).

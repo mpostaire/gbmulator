@@ -139,7 +139,6 @@ bool gbmulator_reset(gbmulator_t *emu, gbmulator_mode_t new_mode) {
     if (save_data) {
         emu->load_save(emu->impl, save_data, save_len);
         free(save_data);
-        return false;
     }
 
     free(rom_bak);
@@ -155,9 +154,10 @@ static void rewind_push(gbmulator_t *emu) {
     if (emu->rewind_stack.len < N_REWIND_STATES)
         emu->rewind_stack.len++;
 
-    uint8_t *savestate_data = emu->get_savestate(emu->impl, &emu->rewind_stack.state_size, false); // TODO specify the dest buffer to avoid redundant memcpy
-    memcpy(&emu->rewind_stack.states[emu->rewind_stack.head * emu->rewind_stack.state_size], savestate_data, emu->rewind_stack.state_size);
-    free(savestate_data);
+    // TODO
+    // gbmulator_savestate_t *savestate = emu->get_savestate(emu->impl, &emu->rewind_stack.state_size, false); // TODO specify the dest buffer to avoid redundant memcpy
+    // memcpy(&emu->rewind_stack.states[emu->rewind_stack.head * emu->rewind_stack.state_size], savestate, emu->rewind_stack.state_size);
+    // free(savestate);
 }
 
 static void rewind_pop(gbmulator_t *emu) {
@@ -235,14 +235,52 @@ uint8_t *gbmulator_get_savestate(gbmulator_t *emu, size_t *length, bool is_compr
     if (!emu)
         return NULL;
 
-    return emu->get_savestate(emu->impl, length, is_compressed);
+    gbmulator_savestate_t *savestate = emu->get_savestate(emu->impl, length, is_compressed);
+    if (!savestate)
+        return NULL;
+
+    return (uint8_t *) savestate;
 }
 
 bool gbmulator_load_savestate(gbmulator_t *emu, uint8_t *data, size_t length) {
     if (!emu)
         return false;
 
-    return emu->load_savestate(emu->impl, data, length);
+    gbmulator_savestate_t *savestate = (gbmulator_savestate_t *) data;
+
+    if (length <= sizeof(gbmulator_savestate_t)) {
+        eprintf("invalid savestate length (%zu)\n", length);
+        return false;
+    }
+
+    if (strncmp(savestate->identifier, SAVESTATE_STRING, sizeof(SAVESTATE_STRING))) {
+        eprintf("invalid format %s\n", savestate->identifier);
+        free(savestate);
+        return false;
+    }
+    const char *rom_title = gbmulator_get_rom_title(emu);
+    if (strncmp(savestate->rom_title, rom_title, sizeof(savestate->rom_title))) {
+        eprintf("rom title mismatch (expected: '%.16s'; got: '%.16s')\n", rom_title, savestate->rom_title);
+        free(savestate);
+        return false;
+    }
+
+    switch (savestate->mode) {
+    case GBMULATOR_MODE_GB:
+    case GBMULATOR_MODE_GBC:
+        if (emu->opts.mode != savestate->mode) {
+            if (!gbmulator_reset(emu, savestate->mode))
+                return false;
+        }
+        break;
+    case GBMULATOR_MODE_GBA:
+        break;
+    case GBMULATOR_MODE_GBPRINTER:
+    default:
+        return false;
+    }
+
+    return emu->load_savestate(emu->impl, savestate, length);
 }
 
 void gbmulator_get_options(gbmulator_t *emu, gbmulator_options_t *opts) {

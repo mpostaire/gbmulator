@@ -83,11 +83,13 @@ uint8_t *read_file(const char *path, size_t *len) {
         return NULL;
     }
 
-    *len = fsize(f);
-    if (*len < 0) {
+    long size = fsize(f);
+    if (size < 0) {
         fclose(f);
         return NULL;
     }
+
+    *len = size;
 
     uint8_t *buf = xmalloc(*len);
 
@@ -260,28 +262,16 @@ char *get_config_path(void) {
 char *get_save_path(char *rom_title) {
     char *save_dir = get_save_dir();
 
-    char *last_slash = strrchr(rom_title, '/');
-    last_slash       = last_slash ? last_slash : rom_title;
-
-    char *last_period       = strrchr(last_slash, '.');
-    int   last_period_index = last_period ? (int) (last_period - rom_title) : (int) strlen(rom_title);
-
     static char path[256];
-    snprintf(path, sizeof(path), "%s%s%.*s.sav", save_dir, last_slash[0] == '/' ? "" : "/", last_period_index, last_slash);
+    snprintf(path, sizeof(path), "%s/%s.sav", save_dir, rom_title);
     return path;
 }
 
 char *get_savestate_path(char *rom_title, int slot) {
     char *savestate_dir = get_savestate_dir();
 
-    char *last_slash = strrchr(rom_title, '/');
-    last_slash       = last_slash ? last_slash : rom_title;
-
-    char *last_period       = strrchr(last_slash, '.');
-    int   last_period_index = last_period ? (int) (last_period - rom_title) : (int) strlen(rom_title);
-
     static char path[256];
-    snprintf(path, sizeof(path), "%s/savestates%.*s-%d.gbstate", savestate_dir, last_period_index, last_slash, slot);
+    snprintf(path, sizeof(path), "%s/%s-%d.gbstate", savestate_dir, rom_title, slot);
     return path;
 }
 

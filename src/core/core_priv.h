@@ -7,8 +7,8 @@ typedef void (*quit_func_t)(void *impl);
 typedef void (*step_func_t)(void *impl);
 typedef uint8_t *(*get_save_func_t)(void *impl, size_t *save_length);
 typedef bool (*load_save_func_t)(void *impl, uint8_t *save_data, size_t save_length);
-typedef uint8_t *(*get_savestate_func_t)(void *impl, size_t *length, bool is_compressed);
-typedef bool (*load_savestate_func_t)(void *impl, uint8_t *data, size_t length);
+typedef gbmulator_savestate_t *(*get_savestate_func_t)(void *impl, size_t *savestate_length, bool is_compressed);
+typedef bool (*load_savestate_func_t)(void *impl, gbmulator_savestate_t *data, size_t savestate_length);
 typedef char *(*get_rom_title_func_t)(void *impl);
 typedef void (*print_status_func_t)(void *impl);
 typedef uint16_t (*get_joypad_state_func_t)(void *impl);
@@ -53,7 +53,7 @@ struct gbmulator_t {
     // - TO do this, add rewind gameplay feature when R key held, rewind until 16 seconds ??? (fine tune this value: maybe less is preferable)
     //     for rollback netplay, disallow rewind gameplay BUT use the same code / mechanism to rollback (once we have more than max buffer of previous states, sleep the emulation to wait for the other one to finally respond)
     struct {
-        uint8_t *states;
+        gbmulator_savestate_t *states;
         ssize_t head;
         size_t len;
         size_t state_size; // all states for a same ROM are the same size

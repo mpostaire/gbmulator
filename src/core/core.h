@@ -10,8 +10,6 @@
 #include "gba/gba_defs.h"
 #include "gbprinter/gbprinter_defs.h"
 
-#define EMULATOR_NAME "GBmulator"
-
 #ifndef true
 #   define true 1
 #endif

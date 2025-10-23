@@ -3,6 +3,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "core_defs.h"
+
+typedef struct __attribute__((packed)) {
+    char identifier[sizeof(SAVESTATE_STRING)];
+    char rom_title[16];
+    bool is_compressed;
+    uint8_t mode;
+    uint8_t data[];
+} gbmulator_savestate_t;
+
 typedef struct {
     int16_t l;
     int16_t r;

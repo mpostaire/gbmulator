@@ -94,6 +94,8 @@ bool on_keyboard_input(int eventType, const EmscriptenKeyboardEvent *e, void *us
                 // clang-format off
                 EM_ASM({
                     document.getElementById("mode-setter").value = $0;
+                    setTheme($0);
+                    Module.mode = $0;
                 }, app_get_mode());
                 // clang-format on
             }
@@ -179,6 +181,8 @@ bool on_touch_input(int eventType, const EmscriptenTouchEvent *e, void *userData
 }
 
 int main(int argc, char **argv) {
+    emscripten_set_window_title(EMULATOR_NAME);
+
     EmscriptenWebGLContextAttributes attr;
     emscripten_webgl_init_context_attributes(&attr);
 
