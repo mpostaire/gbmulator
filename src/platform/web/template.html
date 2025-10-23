@@ -367,6 +367,10 @@
             setScale();
         })
 
+        window.addEventListener("resize", () => {
+            setScale();
+        });
+
         var scaleLabel = document.getElementById('scale-label');
         var setScale = function(elem) {
             if (!Module.done)
