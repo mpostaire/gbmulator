@@ -20,7 +20,9 @@ void app_set_pause(bool is_paused);
 
 void app_set_sound(float value);
 
-void app_set_mode(gbmulator_mode_t mode);
+gbmulator_mode_t app_get_mode(void);
+
+bool app_set_mode(gbmulator_mode_t mode);
 
 void app_set_speed(float value);
 
@@ -39,3 +41,13 @@ void app_save_state(int slot);
 void app_load_state(int slot);
 
 uint32_t app_get_fps(void);
+
+const char *app_get_rom_title(void);
+
+void app_set_touchscreen_mode(bool enable);
+
+void app_touch_press(uint32_t x, uint32_t y);
+
+void app_touch_release(uint32_t x, uint32_t y);
+
+void app_touch_move(uint32_t x, uint32_t y);

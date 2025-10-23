@@ -233,8 +233,19 @@ __attribute_used__ void app_set_sound(float value) {
     alrenderer_set_level(app.config.sound);
 }
 
-__attribute_used__ void app_set_mode(gbmulator_mode_t mode) {
+__attribute_used__ gbmulator_mode_t app_get_mode(void) {
+    if (!app.emu)
+        return app.config.mode;
+
+    gbmulator_options_t opts;
+    gbmulator_get_options(app.emu, &opts);
+
+    return opts.mode;
+}
+
+__attribute_used__ bool app_set_mode(gbmulator_mode_t mode) {
     app.config.mode = mode;
+    return app.emu == NULL;
 }
 
 __attribute_used__ void app_set_speed(float value) {
@@ -306,5 +317,66 @@ __attribute_used__ uint32_t app_get_fps(void) {
     case GBMULATOR_MODE_GBPRINTER:
     default:
         return 0;
+    }
+}
+
+__attribute_used__ const char *app_get_rom_title(void) {
+    return gbmulator_get_rom_title(app.emu);
+}
+
+__attribute_used__ void app_set_touchscreen_mode(bool enable) {
+    glrenderer_set_show_buttons(app.renderer, enable);
+}
+
+// TODO touch input is still a bit buggy
+static gbmulator_joypad_button_t mouse_hover_joypad = 0xFF; // TODO better value to mean no joypad hovered
+static bool                      is_mouse_pressed   = false;
+__attribute_used__ void          app_touch_press(uint32_t x, uint32_t y) {
+    if (app.is_paused || !app.emu)
+        return;
+
+    glrenderer_obj_id_t obj_id = glrenderer_get_obj_at_coord(app.renderer, x, y);
+    is_mouse_pressed           = true;
+
+    if (obj_id < 0 || obj_id >= GLRENDERER_OBJ_ID_SCREEN)
+        return;
+
+    mouse_hover_joypad = (gbmulator_joypad_button_t) obj_id;
+    RESET_BIT(app.joypad_state, mouse_hover_joypad);
+    glrenderer_set_obj_tint(app.renderer, obj_id, 0.5f);
+}
+
+__attribute_used__ void app_touch_release(uint32_t x, uint32_t y) {
+    if (app.is_paused || !app.emu)
+        return;
+
+    is_mouse_pressed = false;
+    SET_BIT(app.joypad_state, mouse_hover_joypad);
+    glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) mouse_hover_joypad, 1.0f);
+    mouse_hover_joypad = 0xFF;
+}
+
+__attribute_used__ void app_touch_move(uint32_t x, uint32_t y) {
+    if (!is_mouse_pressed)
+        return;
+
+    glrenderer_obj_id_t obj_id = glrenderer_get_obj_at_coord(app.renderer, x, y);
+
+    if (obj_id == GLRENDERER_OBJ_ID_SCREEN) {
+        SET_BIT(app.joypad_state, mouse_hover_joypad);
+        if (mouse_hover_joypad != 0xFF)
+            glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) mouse_hover_joypad, 1.0f);
+        mouse_hover_joypad = 0xFF;
+    } else if (mouse_hover_joypad != 0xFF) {
+        SET_BIT(app.joypad_state, mouse_hover_joypad);
+        glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) mouse_hover_joypad, 1.0f);
+
+        mouse_hover_joypad = (gbmulator_joypad_button_t) obj_id;
+        RESET_BIT(app.joypad_state, mouse_hover_joypad);
+        glrenderer_set_obj_tint(app.renderer, obj_id, 0.5f);
+    } else {
+        mouse_hover_joypad = (gbmulator_joypad_button_t) obj_id;
+        RESET_BIT(app.joypad_state, mouse_hover_joypad);
+        glrenderer_set_obj_tint(app.renderer, obj_id, 0.5f);
     }
 }

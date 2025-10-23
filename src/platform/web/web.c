@@ -8,15 +8,15 @@
 
 static bool keycode_filter(unsigned int key);
 
-// TODO mobile mode on screen buttons when fullscreen/opacity/gamepad support
-
 // config struct initialized to defaults
 static config_t default_config = {
     .mode          = GBMULATOR_MODE_GBC,
     .color_palette = PPU_COLOR_PALETTE_ORIG,
     .sound         = 0.25f,
     .speed         = 1.0f,
+    .sound_drc     = true,
 
+    // clang-format off
     .keybindings = {
         DOM_VK_NUMPAD0,
         DOM_VK_PERIOD,
@@ -29,6 +29,7 @@ static config_t default_config = {
         DOM_VK_NUMPAD5,
         DOM_VK_NUMPAD4
     },
+    // clang-format on
     .keycode_filter = keycode_filter,
 };
 
@@ -47,9 +48,11 @@ EMSCRIPTEN_KEEPALIVE void set_pause(uint8_t value) {
     else
         emscripten_set_main_loop(app_loop, app_get_fps(), 0);
 
+    // clang-format off
     EM_ASM({
         setMenuVisibility($0);
     }, value);
+    // clang-format on
 }
 
 EMSCRIPTEN_KEEPALIVE void set_scale(uint8_t value) {
@@ -64,7 +67,7 @@ EMSCRIPTEN_KEEPALIVE void set_scale(uint8_t value) {
     app_set_size(viewport_w, viewport_h);
 }
 
-bool handle_keyboard_input(int eventType, const EmscriptenKeyboardEvent *e, void *userData) {
+bool on_keyboard_input(int eventType, const EmscriptenKeyboardEvent *e, void *userData) {
     switch (eventType) {
     case EMSCRIPTEN_EVENT_KEYUP:
         app_joypad_release(e->keyCode, false);
@@ -75,28 +78,34 @@ bool handle_keyboard_input(int eventType, const EmscriptenKeyboardEvent *e, void
         case DOM_VK_ESCAPE:
             set_pause(!app_is_paused());
             return true;
-        case DOM_VK_F1: case DOM_VK_F2:
-        case DOM_VK_F3: case DOM_VK_F4:
-        case DOM_VK_F5: case DOM_VK_F6:
-        case DOM_VK_F7: case DOM_VK_F8:
+        case DOM_VK_F1:
+        case DOM_VK_F2:
+        case DOM_VK_F3:
+        case DOM_VK_F4:
+        case DOM_VK_F5:
+        case DOM_VK_F6:
+        case DOM_VK_F7:
+        case DOM_VK_F8:
             if (e->shiftKey) {
                 app_save_state(e->keyCode - DOM_VK_F1);
             } else {
                 app_load_state(e->keyCode - DOM_VK_F1);
 
-                // TODO
-                // gbmulator_options_t opts;
-                // gb_get_options(emu, &opts);
-                // config.mode = opts.mode;
-                // EM_ASM({
-                //     document.getElementById("mode-setter").value = $0;
-                // }, config.mode);
+                // clang-format off
+                EM_ASM({
+                    document.getElementById("mode-setter").value = $0;
+                }, app_get_mode());
+                // clang-format on
             }
             return true;
         case DOM_VK_F11:
-            EM_ASM(
-                canvas.requestFullscreen();
-            );
+            if (app_get_rom_title()) {
+                // clang-format off
+                EM_ASM(
+                    canvas.requestFullscreen();
+                );
+                // clang-format on
+            }
             return true;
         default:
             app_joypad_press(e->keyCode, false);
@@ -115,6 +124,7 @@ EMSCRIPTEN_KEEPALIVE void finish_init(void) {
     config_t config;
     app_get_config(&config);
 
+    // clang-format off
     EM_ASM({
         setScale();
         setTheme($3);
@@ -126,14 +136,46 @@ EMSCRIPTEN_KEEPALIVE void finish_init(void) {
         document.getElementById("color-setter").value = $2;
         document.getElementById("mode-setter").value = $3;
     }, config.speed, config.sound * 100, config.color_palette, config.mode);
+    // clang-format on
 
     for (int i = 0; i <= JOYPAD_L; i++) {
+        // clang-format off
         EM_ASM({
             elem = document.getElementById("keybind-info-" + $0);
             if (elem)
                 elem.innerHTML = UTF8ToString($1).replace("DOM_VK_", "");
         }, i, emscripten_dom_vk_to_string(config.keybindings[i]));
+        // clang-format on
     }
+}
+
+bool on_touch_input(int eventType, const EmscriptenTouchEvent *e, void *userData) {
+    bool ret = false;
+
+    for (int i = 0; i < e->numTouches; i++) {
+        if (!e->touches[i].isChanged)
+            continue;
+
+        switch (eventType) {
+        case EMSCRIPTEN_EVENT_TOUCHSTART:
+            app_touch_press(e->touches[i].targetX, e->touches[i].targetY);
+            ret = true;
+            break;
+        case EMSCRIPTEN_EVENT_TOUCHMOVE:
+            app_touch_move(e->touches[i].targetX, e->touches[i].targetY);
+            ret = true;
+            break;
+        case EMSCRIPTEN_EVENT_TOUCHEND:
+        case EMSCRIPTEN_EVENT_TOUCHCANCEL:
+            app_touch_release(e->touches[i].targetX, e->touches[i].targetY);
+            ret = true;
+            break;
+        default:
+            break;
+        }
+    }
+
+    return ret;
 }
 
 int main(int argc, char **argv) {
@@ -154,13 +196,19 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    emscripten_set_keydown_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, 0, 1, handle_keyboard_input);
-    emscripten_set_keyup_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, 0, 1, handle_keyboard_input);
+    emscripten_set_keydown_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, 0, 1, on_keyboard_input);
+    emscripten_set_keyup_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, 0, 1, on_keyboard_input);
 
-    char *config_dir = get_config_dir();
-    char *save_dir = get_save_dir();
+    emscripten_set_touchstart_callback("canvas", NULL, true, on_touch_input);
+    emscripten_set_touchend_callback("canvas", NULL, true, on_touch_input);
+    emscripten_set_touchcancel_callback("canvas", NULL, true, on_touch_input);
+    emscripten_set_touchmove_callback("canvas", NULL, true, on_touch_input);
+
+    char *config_dir    = get_config_dir();
+    char *save_dir      = get_save_dir();
     char *savestate_dir = get_savestate_dir();
 
+    // clang-format off
     EM_ASM({
         let dir = UTF8ToString($0);
         FS.mkdirTree(dir);
@@ -180,6 +228,7 @@ int main(int argc, char **argv) {
             Module.ccall('finish_init');
         });
     }, config_dir, save_dir, savestate_dir);
+    // clang-format on
 
     return EXIT_SUCCESS;
 }

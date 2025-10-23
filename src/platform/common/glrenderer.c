@@ -39,6 +39,13 @@ static const char *fragment_shader_source =
     "    color = vec4(color.rgb * v_tint, color.a * v_alpha);\n"
     "}\n";
 
+typedef struct {
+    uint32_t x;
+    uint32_t y;
+    uint32_t w;
+    uint32_t h;
+} rect_t;
+
 struct glrenderer_t {
     GLuint  screen_tex;
     GLsizei screen_tex_w;
@@ -67,13 +74,6 @@ struct glrenderer_t {
     GLfloat clear_g;
     GLfloat clear_b;
 };
-
-typedef struct {
-    uint32_t x;
-    uint32_t y;
-    uint32_t w;
-    uint32_t h;
-} rect_t;
 
 static GLuint shader_program             = 0;
 static size_t shader_program_ref_counter = 0;
