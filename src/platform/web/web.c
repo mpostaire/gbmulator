@@ -38,7 +38,7 @@ static bool keycode_filter(unsigned int key) {
 }
 
 EMSCRIPTEN_KEEPALIVE void set_pause(uint8_t value) {
-    if (app_is_paused() == value)
+    if (!app_get_rom_title() || app_is_paused() == value)
         return;
 
     app_set_pause(value);
