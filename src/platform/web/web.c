@@ -160,16 +160,16 @@ bool on_touch_input(int eventType, const EmscriptenTouchEvent *e, void *userData
 
         switch (eventType) {
         case EMSCRIPTEN_EVENT_TOUCHSTART:
-            app_touch_press(e->touches[i].targetX, e->touches[i].targetY);
+            app_touch_press(e->touches[i].pageX, e->touches[i].pageY);
             ret = true;
             break;
         case EMSCRIPTEN_EVENT_TOUCHMOVE:
-            app_touch_move(e->touches[i].targetX, e->touches[i].targetY);
+            app_touch_move(e->touches[i].pageX, e->touches[i].pageY);
             ret = true;
             break;
         case EMSCRIPTEN_EVENT_TOUCHEND:
         case EMSCRIPTEN_EVENT_TOUCHCANCEL:
-            app_touch_release(e->touches[i].targetX, e->touches[i].targetY);
+            app_touch_release(e->touches[i].pageX, e->touches[i].pageY);
             ret = true;
             break;
         default:
