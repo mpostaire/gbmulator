@@ -4,13 +4,6 @@
 
 typedef struct glrenderer_t glrenderer_t;
 
-typedef struct {
-    uint32_t x;
-    uint32_t y;
-    uint32_t w;
-    uint32_t h;
-} glrenderer_rect_t;
-
 typedef enum {
     GLRENDERER_OBJ_ID_A,
     GLRENDERER_OBJ_ID_B,
