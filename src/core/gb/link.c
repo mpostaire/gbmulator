@@ -4,24 +4,20 @@
 
 void link_set_clock(gb_t *gb) {
     // double speed is handled by the gb_step() function
-    if (gb->base->opts.mode == GBMULATOR_MODE_GBC && CHECK_BIT(gb->mmu->io_registers[IO_SC], 1))
-        gb->link->max_clock_cycles = GB_CPU_FREQ / 262144;
+    if (gb->base->opts.mode == GBMULATOR_MODE_GBC && CHECK_BIT(gb->mmu.io_registers[IO_SC], 1))
+        gb->link.max_clock_cycles = GB_CPU_FREQ / 262144;
     else
-        gb->link->max_clock_cycles = GB_CPU_FREQ / 8192;
+        gb->link.max_clock_cycles = GB_CPU_FREQ / 8192;
 }
 
-void link_init(gb_t *gb) {
-    gb->link = xcalloc(1, sizeof(*gb->link));
+void link_reset(gb_t *gb) {
+    memset(&gb->link, 0, sizeof(gb->link));
     link_set_clock(gb);
 }
 
-void link_quit(gb_t *gb) {
-    free(gb->link);
-}
-
 void link_step(gb_t *gb) {
-    gb_link_t *link = gb->link;
-    gb_mmu_t *mmu = gb->mmu;
+    gb_link_t *link = &gb->link;
+    gb_mmu_t  *mmu  = &gb->mmu;
 
     link->cycles += 4; // 4 cycles per step
     if (link->cycles < link->max_clock_cycles)

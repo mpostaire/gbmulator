@@ -2,7 +2,7 @@
 
 #include "gba.h"
 
-#define PPU_GET_MODE(gba) ((gba)->bus->io[IO_DISPCNT] & 0x07)
+#define PPU_GET_MODE(gba) ((gba)->bus.io[IO_DISPCNT] & 0x07)
 
 typedef enum {
     GBA_PPU_PERIOD_HDRAW,
@@ -11,7 +11,7 @@ typedef enum {
 } gba_ppu_period_t;
 
 typedef struct {
-    uint32_t scanline_cycles;
+    uint32_t         scanline_cycles;
     gba_ppu_period_t period;
 
     uint8_t obj_id;
@@ -22,8 +22,6 @@ typedef struct {
     uint8_t pixels[GBA_SCREEN_WIDTH * GBA_SCREEN_HEIGHT * 4];
 } gba_ppu_t;
 
-void gba_ppu_init(gba_t *gba);
-
-void gba_ppu_quit(gba_t *gba);
+void gba_ppu_reset(gba_t *gba);
 
 void gba_ppu_step(gba_t *gba);

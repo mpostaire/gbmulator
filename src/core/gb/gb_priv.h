@@ -24,11 +24,11 @@ struct gb_t {
 
     char rom_title[17];
 
-    gb_cpu_t *cpu;
-    gb_mmu_t *mmu;
-    gb_ppu_t *ppu;
-    apu_t *apu;
-    gb_timer_t *timer;
-    gb_joypad_t *joypad;
-    gb_link_t *link;
+    gb_cpu_t    cpu;
+    gb_mmu_t    mmu;
+    gb_ppu_t    ppu;
+    apu_t       apu;
+    gb_timer_t  timer;
+    gb_joypad_t joypad;
+    gb_link_t   link;
 };

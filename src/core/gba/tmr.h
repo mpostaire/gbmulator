@@ -16,6 +16,4 @@ void gba_tmr_set(gba_t *gba, uint16_t data, uint8_t channel);
 
 void gba_tmr_step(gba_t *gba);
 
-void gba_tmr_init(gba_t *gba);
-
-void gba_tmr_quit(gba_t *gba);
+void gba_tmr_reset(gba_t *gba);

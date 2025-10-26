@@ -17,40 +17,35 @@ void gba_step(gba_t *gba) {
 
 gba_t *gba_init(gbmulator_t *base) {
     gba_t *gba = xcalloc(1, sizeof(*gba));
-    gba->base = base;
+    gba->base  = base;
 
-    if (!gba_bus_init(gba, base->opts.rom, base->opts.rom_size)) {
+    if (!gba_bus_reset(gba, base->opts.rom, base->opts.rom_size)) {
         free(gba);
         return NULL;
     }
 
-    gba_cpu_init(gba);
-    gba_ppu_init(gba);
-    gba_tmr_init(gba);
-    gba_dma_init(gba);
+    gba_cpu_reset(gba);
+    gba_ppu_reset(gba);
+    gba_tmr_reset(gba);
+    gba_dma_reset(gba);
 
     return gba;
 }
 
 void gba_quit(gba_t *gba) {
-    gba_cpu_quit(gba);
-    gba_bus_quit(gba);
-    gba_ppu_quit(gba);
-    gba_tmr_quit(gba);
-    gba_dma_quit(gba);
     free(gba);
 }
 
 void gba_print_status(gba_t *gba) {
-    uint8_t language = gba->bus->rom[0xAF];
-    uint16_t maker_code = ((gba->bus->rom[0xB0] - 0x30) * 10) + (gba->bus->rom[0xB1] - 0x30); // maker_code is 2 chars
-    uint8_t version = gba->bus->rom[0xBC];
+    uint8_t  language   = gba->bus.rom[0xAF];
+    uint16_t maker_code = ((gba->bus.rom[0xB0] - 0x30) * 10) + (gba->bus.rom[0xB1] - 0x30); // maker_code is 2 chars
+    uint8_t  version    = gba->bus.rom[0xBC];
 
     char maker_buf[32];
     if (maker_code < sizeof(makers))
         snprintf(maker_buf, sizeof(maker_buf), "%s", makers[maker_code]);
     else
-        snprintf(maker_buf, sizeof(maker_buf), "%c%c", gba->bus->rom[0xB0], gba->bus->rom[0xB1]);
+        snprintf(maker_buf, sizeof(maker_buf), "%c%c", gba->bus.rom[0xB0], gba->bus.rom[0xB1]);
 
     char *language_str;
     switch (language) {
@@ -87,11 +82,11 @@ char *gba_get_rom_title(gba_t *gba) {
 }
 
 uint16_t gba_get_joypad_state(gba_t *gba) {
-    return gba->bus->io[IO_KEYINPUT] & 0x03FF;
+    return gba->bus.io[IO_KEYINPUT] & 0x03FF;
 }
 
 void gba_set_joypad_state(gba_t *gba, uint16_t state) {
-    gba->bus->io[IO_KEYINPUT] = state & 0x03FF;
+    gba->bus.io[IO_KEYINPUT] = state & 0x03FF;
     // TODO interrupts
 }
 
@@ -116,6 +111,6 @@ bool gba_load_savestate(gba_t *gba, uint8_t *data, size_t length) {
 }
 
 uint8_t *gba_get_rom(gba_t *gba, size_t *rom_size) {
-    *rom_size = gba->bus->rom_size;
-    return gba->bus->rom;
+    *rom_size = gba->bus.rom_size;
+    return gba->bus.rom;
 }

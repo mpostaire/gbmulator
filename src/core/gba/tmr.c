@@ -1,7 +1,7 @@
 #include "gba_priv.h"
 
-#define IO_TMxCNT_L(gba, channel) (gba)->bus->io[tmrcnts_l[channel]]
-#define IO_TMxCNT_H(gba, channel) (gba)->bus->io[tmrcnts_h[channel]]
+#define IO_TMxCNT_L(gba, channel) (gba)->bus.io[tmrcnts_l[channel]]
+#define IO_TMxCNT_H(gba, channel) (gba)->bus.io[tmrcnts_h[channel]]
 
 #define TMxCNT_L_E (0x0080) // Timer Enable
 #define TMxCNT_L_I (0x0040) // Timer Interrupt on overflow
@@ -25,14 +25,14 @@ static inline void tmr_step(gba_t *gba, uint8_t channel, bool *overflow) {
 
     bool must_increment = *overflow;
     if (!IS_TM_COUNTUP(gba, channel))
-        must_increment = gba->tmr->instance[channel].cycle++ >= gba->tmr->instance[channel].divider;
+        must_increment = gba->tmr.instance[channel].cycle++ >= gba->tmr.instance[channel].divider;
 
     *overflow = false;
     if (must_increment) {
-        gba->tmr->instance[channel].cycle = 0;
-        *overflow                         = IO_TMxCNT_L(gba, channel) == 0xFFFF;
+        gba->tmr.instance[channel].cycle = 0;
+        *overflow                        = IO_TMxCNT_L(gba, channel) == 0xFFFF;
         if (*overflow) {
-            IO_TMxCNT_L(gba, channel) = gba->tmr->instance[channel].reload;
+            IO_TMxCNT_L(gba, channel) = gba->tmr.instance[channel].reload;
             if (IS_TM_IRQ(gba, channel))
                 CPU_REQUEST_INTERRUPT(gba, IRQ_TIMER0 + channel);
         } else {
@@ -49,16 +49,16 @@ void gba_tmr_set(gba_t *gba, uint16_t data, uint8_t channel) {
     bool is_enable_rising  = !(IO_TMxCNT_H(gba, channel) & TMxCNT_L_E) && (data & TMxCNT_L_E);
     bool is_enable_falling = (IO_TMxCNT_H(gba, channel) & TMxCNT_L_E) && !(data & TMxCNT_L_E);
     if (is_enable_rising) {
-        gba->tmr->instance[channel].cycle = 0;
-        IO_TMxCNT_L(gba, channel)         = gba->tmr->instance[channel].reload;
+        gba->tmr.instance[channel].cycle = 0;
+        IO_TMxCNT_L(gba, channel)        = gba->tmr.instance[channel].reload;
 
         for (uint8_t i = channel + 1; IS_TM_COUNTUP(gba, i) && i < GBA_TMR_COUNT; i++)
-            IO_TMxCNT_L(gba, i) = gba->tmr->instance[i].reload;
+            IO_TMxCNT_L(gba, i) = gba->tmr.instance[i].reload;
     } else if (is_enable_falling) {
-        gba->tmr->instance[channel].cycle = 0;
+        gba->tmr.instance[channel].cycle = 0;
     }
 
-    gba->tmr->instance[channel].divider = freq_divider_values[data & TMxCNT_L_F];
+    gba->tmr.instance[channel].divider = freq_divider_values[data & TMxCNT_L_F];
 }
 
 void gba_tmr_step(gba_t *gba) {
@@ -67,13 +67,9 @@ void gba_tmr_step(gba_t *gba) {
         tmr_step(gba, i, &overflow);
 }
 
-void gba_tmr_init(gba_t *gba) {
-    gba->tmr = xcalloc(1, sizeof(*gba->tmr));
+void gba_tmr_reset(gba_t *gba) {
+    memset(&gba->tmr, 0, sizeof(gba->tmr));
 
     for (uint8_t i = 0; i < GBA_TMR_COUNT; i++)
-        gba->tmr->instance[i].divider = freq_divider_values[0];
-}
-
-void gba_tmr_quit(gba_t *gba) {
-    free(gba->tmr);
+        gba->tmr.instance[i].divider = freq_divider_values[0];
 }

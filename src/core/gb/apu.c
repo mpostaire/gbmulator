@@ -17,11 +17,11 @@ static void channel_step(gb_channel_t *c) {
     if (c->freq_timer <= 0) {
         if (c->id == APU_CHANNEL_4) {
             uint8_t divisor = *c->NRx3 & 0x07;
-            c->freq_timer = divisor ? divisor << 4 : 8;
+            c->freq_timer   = divisor ? divisor << 4 : 8;
             c->freq_timer <<= (*c->NRx3 >> 4);
 
             uint8_t xor_ret = (c->LFSR & 0x01) ^ ((c->LFSR & 0x02) >> 1);
-            c->LFSR = (c->LFSR >> 1) | (xor_ret << 14);
+            c->LFSR         = (c->LFSR >> 1) | (xor_ret << 14);
 
             if ((*c->NRx3 >> 3) & 0x01) {
                 RESET_BIT(c->LFSR, 6);
@@ -32,16 +32,16 @@ static void channel_step(gb_channel_t *c) {
 
         uint16_t freq = ((*c->NRx4 & 0x07) << 8) | *c->NRx3;
         if (c->id == APU_CHANNEL_3) {
-            c->freq_timer = (2048 - freq) * 2;
+            c->freq_timer    = (2048 - freq) * 2;
             c->wave_position = (c->wave_position + 1) % 32;
             return;
         }
-        c->freq_timer = (2048 - freq) * 4;
+        c->freq_timer    = (2048 - freq) * 4;
         c->duty_position = (c->duty_position + 1) % 8;
     }
 
     uint8_t wave_pattern_duty = (*c->NRx1 & 0xC0) >> 6;
-    c->duty = duty_cycles[wave_pattern_duty][c->duty_position];
+    c->duty                   = duty_cycles[wave_pattern_duty][c->duty_position];
 }
 
 static void channel_length(gb_t *gb, gb_channel_t *c) {
@@ -59,10 +59,10 @@ static int calc_sweep_freq(gb_t *gb, gb_channel_t *c) {
         freq = c->sweep_freq - freq;
     else
         freq = c->sweep_freq + freq;
-    
+
     if (freq > 2047)
         APU_DISABLE_CHANNEL(gb, c->id);
-    
+
     return freq;
 }
 
@@ -70,15 +70,15 @@ static void channel_sweep(gb_t *gb, gb_channel_t *c) {
     c->sweep_timer--;
     if (c->sweep_timer <= 0) {
         uint8_t sweep_period = (*c->NRx0 & 0x70) >> 4;
-        c->sweep_timer = sweep_period > 0 ? sweep_period : 8;
-    
+        c->sweep_timer       = sweep_period > 0 ? sweep_period : 8;
+
         if (c->sweep_enabled && sweep_period > 0) {
             uint8_t sweep_shift = *c->NRx0 & 0x07;
-            int new_freq = calc_sweep_freq(gb, c);
-            
+            int     new_freq    = calc_sweep_freq(gb, c);
+
             if (new_freq < 2048 && sweep_shift > 0) {
                 c->sweep_freq = new_freq;
-                
+
                 *c->NRx3 = new_freq & 0xFF;
                 *c->NRx4 = (new_freq >> 8) & 0x07;
 
@@ -95,7 +95,7 @@ static void channel_envelope(gb_channel_t *c) {
     c->envelope_period--;
     if (c->envelope_period <= 0) {
         c->envelope_period = *c->NRx2 & 0x07;
-        uint8_t direction = (*c->NRx2 & 0x08) >> 3;
+        uint8_t direction  = (*c->NRx2 & 0x08) >> 3;
         if (c->envelope_volume < 0x0F && direction)
             c->envelope_volume++;
         else if (c->envelope_volume > 0x00 && !direction)
@@ -124,11 +124,11 @@ void apu_channel_trigger(gb_t *gb, gb_channel_t *c) {
     }
 
     if (c->id == APU_CHANNEL_1) {
-        c->sweep_freq = ((*c->NRx4 & 0x07) << 8) | *c->NRx3;
+        c->sweep_freq        = ((*c->NRx4 & 0x07) << 8) | *c->NRx3;
         uint8_t sweep_period = (*c->NRx0 & 0x70) >> 4;
-        c->sweep_timer = sweep_period > 0 ? sweep_period : 8;
-        uint8_t sweep_shift = *c->NRx0 & 0x07;
-        c->sweep_enabled = (sweep_period > 0) || (sweep_shift > 0);
+        c->sweep_timer       = sweep_period > 0 ? sweep_period : 8;
+        uint8_t sweep_shift  = *c->NRx0 & 0x07;
+        c->sweep_enabled     = (sweep_period > 0) || (sweep_shift > 0);
 
         if (sweep_shift > 0)
             calc_sweep_freq(gb, c);
@@ -151,11 +151,11 @@ static float channel_dac(gb_t *gb, gb_channel_t *c) {
         break;
     case APU_CHANNEL_3:
         if ((*c->NRx0 >> 7) /*&& APU_IS_CHANNEL_ENABLED(c->id)*/) { // if dac enabled and channel enabled -- TODO check why channel 3 enabled flag is not working properly
-            uint8_t sample = gb->mmu->io_registers[IO_WAVE_RAM + (c->wave_position / 2)];
+            uint8_t sample = gb->mmu.io_registers[IO_WAVE_RAM + (c->wave_position / 2)];
             if (c->wave_position % 2 == 0) // TODO check if this works properly (I think it always reads the 2 nibbles as the same values)
                 sample >>= 4;
             sample &= 0x0F;
-            switch ((gb->mmu->io_registers[IO_NR32] >> 5) & 0x03) {
+            switch ((gb->mmu.io_registers[IO_NR32] >> 5) & 0x03) {
             case 0:
                 sample >>= 4; // mute
                 break;
@@ -169,7 +169,7 @@ static float channel_dac(gb_t *gb, gb_channel_t *c) {
             return -((sample / 7.5f) - 1.0f); // divide by 7.5 then substract 1.0 to make it between -1.0 and 1.0
         }
         break;
-    case APU_CHANNEL_4: // TODO works but it seems (in Tetris) this channel volume is a bit too loud
+    case APU_CHANNEL_4:                                           // TODO works but it seems (in Tetris) this channel volume is a bit too loud
         if ((*c->NRx2 >> 3) && APU_IS_CHANNEL_ENABLED(gb, c->id)) // if dac enabled and channel enabled
             return -(((!(c->LFSR & 0x01) * c->envelope_volume) / 7.5f) - 1.0f);
         break;
@@ -183,8 +183,8 @@ void apu_step(gb_t *gb) {
     if (!IS_APU_ENABLED(gb))
         return;
 
-    apu_t *apu = gb->apu;
-    gb_mmu_t *mmu = gb->mmu;
+    apu_t    *apu = &gb->apu;
+    gb_mmu_t *mmu = &gb->mmu;
 
     for (uint8_t cycles = 0; cycles < 4; cycles++) { // 4 cycles per step
         apu->frame_sequencer_cycles_count++;
@@ -231,72 +231,60 @@ void apu_step(gb_t *gb) {
         channel_step(&apu->channels[2]);
         channel_step(&apu->channels[3]);
 
-        if (gb->base->opts.apu_speed > 2.0f || !gb->base->opts.on_new_sample)  // don't collect samples when emulation speed increases too much
+        if (gb->base->opts.apu_speed > 2.0f || !gb->base->opts.on_new_sample) // don't collect samples when emulation speed increases too much
             continue;
 
         apu->take_sample_cycles_count++;
         if (apu->take_sample_cycles_count >= (GB_CPU_FREQ / apu->dynamic_sampling_rate) * gb->base->opts.apu_speed) {
             apu->take_sample_cycles_count = 0;
 
-            float S01_volume = ((mmu->io_registers[IO_NR50] & 0x07) + 1) / 8.0f; // keep it between 0.0f and 1.0f
+            float S01_volume = ((mmu->io_registers[IO_NR50] & 0x07) + 1) / 8.0f;        // keep it between 0.0f and 1.0f
             float S02_volume = (((mmu->io_registers[IO_NR50] & 0x70) >> 4) + 1) / 8.0f; // keep it between 0.0f and 1.0f
-            float S01_output = ((CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_1) ? channel_dac(gb, &apu->channels[0]) : 0.0f)
-                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_2) ? channel_dac(gb, &apu->channels[1]) : 0.0f)
-                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_3) ? channel_dac(gb, &apu->channels[2]) : 0.0f)
-                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_4) ? channel_dac(gb, &apu->channels[3]) : 0.0f)) / 4.0f;
-            float S02_output = ((CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_1 + 4) ? channel_dac(gb, &apu->channels[0]) : 0.0f)
-                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_2 + 4) ? channel_dac(gb, &apu->channels[1]) : 0.0f)
-                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_3 + 4) ? channel_dac(gb, &apu->channels[2]) : 0.0f)
-                                + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_4 + 4) ? channel_dac(gb, &apu->channels[3]) : 0.0f)) / 4.0f;
+            float S01_output = ((CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_1) ? channel_dac(gb, &apu->channels[0]) : 0.0f) + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_2) ? channel_dac(gb, &apu->channels[1]) : 0.0f) + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_3) ? channel_dac(gb, &apu->channels[2]) : 0.0f) + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_4) ? channel_dac(gb, &apu->channels[3]) : 0.0f)) / 4.0f;
+            float S02_output = ((CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_1 + 4) ? channel_dac(gb, &apu->channels[0]) : 0.0f) + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_2 + 4) ? channel_dac(gb, &apu->channels[1]) : 0.0f) + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_3 + 4) ? channel_dac(gb, &apu->channels[2]) : 0.0f) + (CHECK_BIT(mmu->io_registers[IO_NR51], APU_CHANNEL_4 + 4) ? channel_dac(gb, &apu->channels[3]) : 0.0f)) / 4.0f;
 
             // apply channel volume to its output
             S01_output *= S01_volume;
             S02_output *= S02_volume;
 
-            gb->base->opts.on_new_sample((gbmulator_apu_sample_t) {.l = S02_output * 32767, .r = S01_output * 32767}, &apu->dynamic_sampling_rate);
+            gb->base->opts.on_new_sample((gbmulator_apu_sample_t) { .l = S02_output * 32767, .r = S01_output * 32767 }, &apu->dynamic_sampling_rate);
         }
     }
 }
 
-void apu_init(gb_t *gb) {
-    apu_t *apu = xcalloc(1, sizeof(*apu));
-    apu->dynamic_sampling_rate = gb->base->opts.apu_sampling_rate;
+void apu_reset(gb_t *gb) {
+    memset(&gb->apu, 0, sizeof(gb->apu));
+    gb->apu.dynamic_sampling_rate = gb->base->opts.apu_sampling_rate;
 
-    apu->channels[0] = (gb_channel_t) {
-        .NRx0 = &gb->mmu->io_registers[IO_NR10],
-        .NRx1 = &gb->mmu->io_registers[IO_NR11],
-        .NRx2 = &gb->mmu->io_registers[IO_NR12],
-        .NRx3 = &gb->mmu->io_registers[IO_NR13],
-        .NRx4 = &gb->mmu->io_registers[IO_NR14],
-        .id = APU_CHANNEL_1
+    gb->apu.channels[0] = (gb_channel_t) {
+        .NRx0 = &gb->mmu.io_registers[IO_NR10],
+        .NRx1 = &gb->mmu.io_registers[IO_NR11],
+        .NRx2 = &gb->mmu.io_registers[IO_NR12],
+        .NRx3 = &gb->mmu.io_registers[IO_NR13],
+        .NRx4 = &gb->mmu.io_registers[IO_NR14],
+        .id   = APU_CHANNEL_1
     };
-    apu->channels[1] = (gb_channel_t) { 
-        .NRx1 = &gb->mmu->io_registers[IO_NR21],
-        .NRx2 = &gb->mmu->io_registers[IO_NR22],
-        .NRx3 = &gb->mmu->io_registers[IO_NR23],
-        .NRx4 = &gb->mmu->io_registers[IO_NR24],
-        .id = APU_CHANNEL_2
+    gb->apu.channels[1] = (gb_channel_t) {
+        .NRx1 = &gb->mmu.io_registers[IO_NR21],
+        .NRx2 = &gb->mmu.io_registers[IO_NR22],
+        .NRx3 = &gb->mmu.io_registers[IO_NR23],
+        .NRx4 = &gb->mmu.io_registers[IO_NR24],
+        .id   = APU_CHANNEL_2
     };
-    apu->channels[2] = (gb_channel_t) {
-        .NRx0 = &gb->mmu->io_registers[IO_NR30],
-        .NRx1 = &gb->mmu->io_registers[IO_NR31],
-        .NRx2 = &gb->mmu->io_registers[IO_NR32],
-        .NRx3 = &gb->mmu->io_registers[IO_NR33],
-        .NRx4 = &gb->mmu->io_registers[IO_NR34],
-        .id = APU_CHANNEL_3
+    gb->apu.channels[2] = (gb_channel_t) {
+        .NRx0 = &gb->mmu.io_registers[IO_NR30],
+        .NRx1 = &gb->mmu.io_registers[IO_NR31],
+        .NRx2 = &gb->mmu.io_registers[IO_NR32],
+        .NRx3 = &gb->mmu.io_registers[IO_NR33],
+        .NRx4 = &gb->mmu.io_registers[IO_NR34],
+        .id   = APU_CHANNEL_3
     };
-    apu->channels[3] = (gb_channel_t) { 
-        .NRx1 = &gb->mmu->io_registers[IO_NR41],
-        .NRx2 = &gb->mmu->io_registers[IO_NR42],
-        .NRx3 = &gb->mmu->io_registers[IO_NR43],
-        .NRx4 = &gb->mmu->io_registers[IO_NR44],
+    gb->apu.channels[3] = (gb_channel_t) {
+        .NRx1 = &gb->mmu.io_registers[IO_NR41],
+        .NRx2 = &gb->mmu.io_registers[IO_NR42],
+        .NRx3 = &gb->mmu.io_registers[IO_NR43],
+        .NRx4 = &gb->mmu.io_registers[IO_NR44],
         .LFSR = 0,
-        .id = APU_CHANNEL_4
+        .id   = APU_CHANNEL_4
     };
-
-    gb->apu = apu;
-}
-
-void apu_quit(gb_t *gb) {
-    free(gb->apu);
 }

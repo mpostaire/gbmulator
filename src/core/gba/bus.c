@@ -2,13 +2,13 @@
 
 #include "gba_priv.h"
 
-#define BUS_ACCESS_READ (0 << 1)
-#define BUS_ACCESS_WRITE (1 << 1)
+#define BUS_ACCESS_READ    (0 << 1)
+#define BUS_ACCESS_WRITE   (1 << 1)
 #define BUS_ACCESS_SIZE(x) (((x - 1) & 0x03) << 2)
 
 // mGBA debug registers
 #define MGBA_REG_DEBUG_ENABLE 0x4FFF780
-#define MGBA_REG_DEBUG_FLAGS 0x4FFF700
+#define MGBA_REG_DEBUG_FLAGS  0x4FFF700
 #define MGBA_REG_DEBUG_STRING 0x4FFF600
 
 #define MGBA_LOG_ENABLE_REQ_MAGIC 0xC0DE
@@ -16,8 +16,8 @@
 
 #define MGBA_LOG_FATAL 0
 #define MGBA_LOG_ERROR 1
-#define MGBA_LOG_WARN 2
-#define MGBA_LOG_INFO 3
+#define MGBA_LOG_WARN  2
+#define MGBA_LOG_INFO  3
 #define MGBA_LOG_DEBUG 4
 
 typedef struct {
@@ -26,12 +26,12 @@ typedef struct {
 } bus_accessors_t;
 
 static bool gba_parse_cartridge(gba_t *gba) {
-    // uint8_t entrypoint = gba->bus->rom[0x00];
+    // uint8_t entrypoint = gba->bus.rom[0x00];
 
-    memcpy(gba->rom_title, &gba->bus->rom[0xA0], sizeof(gba->rom_title));
+    memcpy(gba->rom_title, &gba->bus.rom[0xA0], sizeof(gba->rom_title));
     gba->rom_title[12] = '\0';
 
-    // uint8_t game_type = gba->bus->rom[0xAC];
+    // uint8_t game_type = gba->bus.rom[0xAC];
     // switch (game_type) {
     //     case 'A':
     //     case 'B':
@@ -51,27 +51,27 @@ static bool gba_parse_cartridge(gba_t *gba) {
     // }
 
     // char short_title[3]; // short_title is 2 chars
-    // memcpy(short_title, &gba->bus->rom[0xAD], sizeof(short_title));
+    // memcpy(short_title, &gba->bus.rom[0xAD], sizeof(short_title));
     // short_title[2] = '\0';
 
-    if (gba->bus->rom[0xB2] != 0x96 || gba->bus->rom[0xB3] != 0x00)
+    if (gba->bus.rom[0xB2] != 0x96 || gba->bus.rom[0xB3] != 0x00)
         return false;
 
     for (int i = 0xB5; i < 0xBC; i++)
-        if (gba->bus->rom[i] != 0x00)
+        if (gba->bus.rom[i] != 0x00)
             return false;
 
     uint8_t checksum = 0;
     for (int i = 0xA0; i < 0xBC; i++)
-        checksum -= gba->bus->rom[i];
+        checksum -= gba->bus.rom[i];
     checksum -= 0x19;
 
-    // if (gba->bus->rom[0xBD] != checksum) {
+    // if (gba->bus.rom[0xBD] != checksum) {
     //     eprintf("Invalid cartridge header checksum");
     //     return false;
     // }
 
-    if (gba->bus->rom[0xBE] != 0x00 && gba->bus->rom[0xBF] != 0x00)
+    if (gba->bus.rom[0xBE] != 0x00 && gba->bus.rom[0xBF] != 0x00)
         return false;
 
     // TODO multiboot entries
@@ -111,76 +111,76 @@ static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
         break;
     case IO_BG0HOFS:
         LOG_DEBUG("IO_BG0HOFS\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG0VOFS:
         LOG_DEBUG("IO_BG0VOFS\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG1HOFS:
         LOG_DEBUG("IO_BG1HOFS\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG1VOFS:
         LOG_DEBUG("IO_BG1VOFS\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG2HOFS:
         LOG_DEBUG("IO_BG2HOFS\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG2VOFS:
         LOG_DEBUG("IO_BG2VOFS\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG3HOFS:
         LOG_DEBUG("IO_BG3HOFS\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG3VOFS:
         LOG_DEBUG("IO_BG3VOFS\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG2PA:
         LOG_DEBUG("IO_BG2PA\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG2PB:
         LOG_DEBUG("IO_BG2PB\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG2PC:
         LOG_DEBUG("IO_BG2PC\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG2PD:
         LOG_DEBUG("IO_BG2PD\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG2X ... IO_BG2X + 1:
         LOG_DEBUG("IO_BG2X\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG2Y ... IO_BG2Y + 1:
         LOG_DEBUG("IO_BG2Y\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG3PA:
         LOG_DEBUG("IO_BG3PA\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG3PB:
         LOG_DEBUG("IO_BG3PB\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG3PC:
         LOG_DEBUG("IO_BG3PC\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG3PD:
         LOG_DEBUG("IO_BG3PD\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG3X ... IO_BG3X + 1:
         LOG_DEBUG("IO_BG3X\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BG3Y ... IO_BG3Y + 1:
         LOG_DEBUG("IO_BG3Y\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_WIN0H:
         LOG_DEBUG("IO_WIN0H\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_WIN1H:
         LOG_DEBUG("IO_WIN1H\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_WIN0V:
         LOG_DEBUG("IO_WIN0V\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_WIN1V:
         LOG_DEBUG("IO_WIN1V\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_WININ:
         LOG_DEBUG("IO_WININ\n");
         break;
@@ -189,7 +189,7 @@ static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
         break;
     case IO_MOSAIC:
         LOG_DEBUG("IO_MOSAIC\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_BLDCNT:
         LOG_DEBUG("IO_BLDCNT\n");
         break;
@@ -198,7 +198,7 @@ static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
         break;
     case IO_BLDY:
         LOG_DEBUG("IO_BLDY\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
 
     // Sound Registers
     case IO_SOUND1CNT_L:
@@ -264,18 +264,18 @@ static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
         break;
     case IO_FIFO_A ... IO_FIFO_A + 1:
         LOG_DEBUG("IO_FIFO_A\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_FIFO_B ... IO_FIFO_B + 1:
         LOG_DEBUG("IO_FIFO_B\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
 
     // DMA Transfer Channels
     case IO_DMA0SAD ... IO_DMA0SAD + 1:
         LOG_DEBUG("IO_DMA0SAD\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_DMA0DAD ... IO_DMA0DAD + 1:
         LOG_DEBUG("IO_DMA0DAD\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_DMA0CNT_L:
         LOG_DEBUG("IO_DMA0CNT_L\n");
         return 0;
@@ -285,10 +285,10 @@ static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
         break;
     case IO_DMA1SAD ... IO_DMA1SAD + 1:
         LOG_DEBUG("IO_DMA1SAD\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_DMA1DAD ... IO_DMA1DAD + 1:
         LOG_DEBUG("IO_DMA1DAD\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_DMA1CNT_L:
         LOG_DEBUG("IO_DMA1CNT_L\n");
         return 0;
@@ -298,10 +298,10 @@ static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
         break;
     case IO_DMA2SAD ... IO_DMA2SAD + 1:
         LOG_DEBUG("IO_DMA2SAD\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_DMA2DAD ... IO_DMA2DAD + 1:
         LOG_DEBUG("IO_DMA2DAD\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_DMA2CNT_L:
         LOG_DEBUG("IO_DMA2CNT_L\n");
         return 0;
@@ -311,10 +311,10 @@ static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
         break;
     case IO_DMA3SAD ... IO_DMA3SAD + 1:
         LOG_DEBUG("IO_DMA3SAD\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_DMA3DAD ... IO_DMA3DAD + 1:
         LOG_DEBUG("IO_DMA3DAD\n");
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     case IO_DMA3CNT_L:
         LOG_DEBUG("IO_DMA3CNT_L\n");
         return 0;
@@ -433,10 +433,10 @@ static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
         return 0;
 
     default:
-        return gba->bus->read_data_latch;
+        return gba->bus.read_data_latch;
     }
 
-    return gba->bus->io[address] & mask;
+    return gba->bus.io[address] & mask;
 }
 
 static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
@@ -695,7 +695,7 @@ static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
     // Timer Registers
     case IO_TM0CNT_L:
         LOG_DEBUG("IO_TM0CNT_L 0x%04X\n", data);
-        gba->tmr->instance[0].reload = data;
+        gba->tmr.instance[0].reload = data;
         break;
     case IO_TM0CNT_H:
         LOG_DEBUG("IO_TM0CNT_H 0x%04X\n", data);
@@ -703,7 +703,7 @@ static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
         break;
     case IO_TM1CNT_L:
         LOG_DEBUG("IO_TM1CNT_L 0x%04X\n", data);
-        gba->tmr->instance[1].reload = data;
+        gba->tmr.instance[1].reload = data;
         break;
     case IO_TM1CNT_H:
         LOG_DEBUG("IO_TM1CNT_H 0x%04X\n", data);
@@ -711,7 +711,7 @@ static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
         break;
     case IO_TM2CNT_L:
         LOG_DEBUG("IO_TM2CNT_L 0x%04X\n", data);
-        gba->tmr->instance[2].reload = data;
+        gba->tmr.instance[2].reload = data;
         break;
     case IO_TM2CNT_H:
         LOG_DEBUG("IO_TM2CNT_H 0x%04X\n", data);
@@ -719,7 +719,7 @@ static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
         break;
     case IO_TM3CNT_L:
         LOG_DEBUG("IO_TM3CNT_L 0x%04X\n", data);
-        gba->tmr->instance[3].reload = data;
+        gba->tmr.instance[3].reload = data;
         break;
     case IO_TM3CNT_H:
         LOG_DEBUG("IO_TM3CNT_H 0x%04X\n", data);
@@ -786,7 +786,7 @@ static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
         break;
     case IO_IF:
         LOG_DEBUG("IO_IF 0x%04X\n", data);
-        data = gba->bus->io[address] & ~data;
+        data = gba->bus.io[address] & ~data;
         break;
     case IO_WAITCNT:
         LOG_DEBUG("IO_WAITCNT 0x%04X\n", data);
@@ -803,29 +803,28 @@ static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
         break;
     }
 
-    CHANGE_BITS(gba->bus->io[address], mask, data);
+    CHANGE_BITS(gba->bus.io[address], mask, data);
 }
 
 static uint32_t unused_read(gba_t *gba, uint8_t mode, uint32_t address) {
-    return gba->bus->read_data_latch; // TODO
+    return gba->bus.read_data_latch; // TODO
 }
 
 static uint32_t bios_read(gba_t *gba, uint8_t mode, uint32_t address) {
-    if (gba->cpu->regs[REG_PC] >= BUS_BIOS_UNUSED)
-        return gba->bus->last_fetched_bios_instr;
-    return *((uint32_t *) &gba->bus->bios[address - BUS_BIOS]);
+    if (gba->cpu.regs[REG_PC] >= BUS_BIOS_UNUSED)
+        return gba->bus.last_fetched_bios_instr;
+    return *((uint32_t *) &gba->bus.bios[address - BUS_BIOS]);
 }
 
 static uint32_t ewram_read(gba_t *gba, uint8_t mode, uint32_t address) {
-    return *((uint32_t *) &gba->bus->ewram[(address - BUS_EWRAM) % (BUS_EWRAM_UNUSED - BUS_EWRAM)]);
+    return *((uint32_t *) &gba->bus.ewram[(address - BUS_EWRAM) % (BUS_EWRAM_UNUSED - BUS_EWRAM)]);
 }
 
 static uint32_t iwram_read(gba_t *gba, uint8_t mode, uint32_t address) {
-    return *((uint32_t *) &gba->bus->iwram[(address - BUS_IWRAM) % (BUS_IWRAM_UNUSED - BUS_IWRAM)]);
+    return *((uint32_t *) &gba->bus.iwram[(address - BUS_IWRAM) % (BUS_IWRAM_UNUSED - BUS_IWRAM)]);
 }
 
 static uint32_t io_read(gba_t *gba, uint8_t mode, uint32_t address) {
-    gba_bus_t *bus = gba->bus;
     uint8_t size = ((mode >> 2) & 0x03) + 1;
 
     address -= BUS_IO;
@@ -835,8 +834,7 @@ static uint32_t io_read(gba_t *gba, uint8_t mode, uint32_t address) {
     if (size == 4)
         data |= io_regs_read(gba, address + 2) << 16;
 
-    switch (address + BUS_IO)
-    {
+    switch (address + BUS_IO) {
     case MGBA_REG_DEBUG_ENABLE:
         data = MGBA_LOG_ENABLE_RES_MAGIC;
         break;
@@ -848,14 +846,14 @@ static uint32_t io_read(gba_t *gba, uint8_t mode, uint32_t address) {
 }
 
 static uint32_t pram_read(gba_t *gba, uint8_t mode, uint32_t address) {
-    return *((uint32_t *) &gba->bus->pram[(address - BUS_PRAM) % (BUS_PRAM_UNUSED - BUS_PRAM)]);
+    return *((uint32_t *) &gba->bus.pram[(address - BUS_PRAM) % (BUS_PRAM_UNUSED - BUS_PRAM)]);
 }
 
 static uint32_t vram_read(gba_t *gba, uint8_t mode, uint32_t address) {
-    gba_bus_t *bus = gba->bus;
+    gba_bus_t *bus = &gba->bus;
 
     uint32_t vram_upper_bound = PPU_GET_MODE(gba) < 3 ? 0x10000 : 0x14000;
-    address = (address - (BUS_VRAM_UNUSED + 0x8000)) % 0x20000;
+    address                   = (address - (BUS_VRAM_UNUSED + 0x8000)) % 0x20000;
 
     uint32_t data;
     if (address >= vram_upper_bound && address >= 0x18000)
@@ -867,12 +865,12 @@ static uint32_t vram_read(gba_t *gba, uint8_t mode, uint32_t address) {
 }
 
 static uint32_t oam_read(gba_t *gba, uint8_t mode, uint32_t address) {
-    return *((uint32_t *) &gba->bus->oam[(address - BUS_OAM_UNUSED) % (BUS_OAM_UNUSED - BUS_OAM)]);
+    return *((uint32_t *) &gba->bus.oam[(address - BUS_OAM_UNUSED) % (BUS_OAM_UNUSED - BUS_OAM)]);
 }
 
 static uint32_t rom_read(gba_t *gba, uint8_t mode, uint32_t address) {
-    gba_bus_t *bus = gba->bus;
-    uint8_t size = ((mode >> 2) & 0x03) + 1;
+    gba_bus_t   *bus    = &gba->bus;
+    uint8_t      size   = ((mode >> 2) & 0x03) + 1;
     bus_access_t access = mode & 0x01;
 
     if (access == BUS_ACCESS_N)
@@ -897,8 +895,8 @@ static uint32_t rom_read(gba_t *gba, uint8_t mode, uint32_t address) {
 }
 
 static uint32_t sram_read(gba_t *gba, uint8_t mode, uint32_t address) {
-    gba_bus_t *bus = gba->bus;
-    uint8_t size = ((mode >> 2) & 0x03) + 1;
+    gba_bus_t *bus  = &gba->bus;
+    uint8_t    size = ((mode >> 2) & 0x03) + 1;
 
     uint32_t data = bus->sram[(address - BUS_SRAM) % (BUS_SRAM_UNUSED - BUS_SRAM)];
     if (size == 2)
@@ -918,8 +916,8 @@ static void bios_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data
 }
 
 static void ewram_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
-    gba_bus_t *bus = gba->bus;
-    uint8_t size = ((mode >> 2) & 0x03) + 1;
+    gba_bus_t *bus  = &gba->bus;
+    uint8_t    size = ((mode >> 2) & 0x03) + 1;
 
     switch (size) {
     case 1:
@@ -935,8 +933,8 @@ static void ewram_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t dat
 }
 
 static void iwram_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
-    gba_bus_t *bus = gba->bus;
-    uint8_t size = ((mode >> 2) & 0x03) + 1;
+    gba_bus_t *bus  = &gba->bus;
+    uint8_t    size = ((mode >> 2) & 0x03) + 1;
 
     switch (size) {
     case 1:
@@ -959,17 +957,16 @@ static void io_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) 
     if (size == 4)
         io_regs_write(gba, address + 2, data >> 16);
 
-    switch (address + BUS_IO)
-    {
-    case MGBA_REG_DEBUG_STRING ... (MGBA_REG_DEBUG_STRING + 0x100) - 1:
-        memcpy(&gba->bus->mgba_logstr[address + BUS_IO - MGBA_REG_DEBUG_STRING], &data, size);
+    switch (address + BUS_IO) {
+    case MGBA_REG_DEBUG_STRING ...(MGBA_REG_DEBUG_STRING + 0x100) - 1:
+        memcpy(&gba->bus.mgba_logstr[address + BUS_IO - MGBA_REG_DEBUG_STRING], &data, size);
         break;
     case MGBA_REG_DEBUG_FLAGS:
-        if (gba->bus->mgba_logs_enabled)
-            printf("[mGBA LOG] %.256s\n", gba->bus->mgba_logstr);
+        if (gba->bus.mgba_logs_enabled)
+            printf("[mGBA LOG] %.256s\n", gba->bus.mgba_logstr);
         break;
     case MGBA_REG_DEBUG_ENABLE:
-        gba->bus->mgba_logs_enabled = (data & 0xFFFF) == MGBA_LOG_ENABLE_REQ_MAGIC;
+        gba->bus.mgba_logs_enabled = (data & 0xFFFF) == MGBA_LOG_ENABLE_REQ_MAGIC;
         break;
     default:
         break;
@@ -977,8 +974,8 @@ static void io_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) 
 }
 
 static void pram_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
-    gba_bus_t *bus = gba->bus;
-    uint8_t size = ((mode >> 2) & 0x03) + 1;
+    gba_bus_t *bus  = &gba->bus;
+    uint8_t    size = ((mode >> 2) & 0x03) + 1;
 
     switch (size) {
     case 1:
@@ -994,11 +991,11 @@ static void pram_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data
 }
 
 static void vram_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
-    gba_bus_t *bus = gba->bus;
-    uint8_t size = ((mode >> 2) & 0x03) + 1;
+    gba_bus_t *bus  = &gba->bus;
+    uint8_t    size = ((mode >> 2) & 0x03) + 1;
 
     uint32_t vram_upper_bound = PPU_GET_MODE(gba) < 3 ? 0x10000 : 0x14000;
-    address = (address - (BUS_VRAM_UNUSED + 0x8000)) % 0x20000;
+    address                   = (address - (BUS_VRAM_UNUSED + 0x8000)) % 0x20000;
 
     if (address >= vram_upper_bound && address >= 0x18000)
         return;
@@ -1017,8 +1014,8 @@ static void vram_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data
 }
 
 static void oam_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
-    gba_bus_t *bus = gba->bus;
-    uint8_t size = ((mode >> 2) & 0x03) + 1;
+    gba_bus_t *bus  = &gba->bus;
+    uint8_t    size = ((mode >> 2) & 0x03) + 1;
 
     switch (size) {
     case 1:
@@ -1038,26 +1035,26 @@ static void rom_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data)
 }
 
 static void sram_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
-    gba->bus->sram[(address - BUS_SRAM) % (BUS_SRAM_UNUSED - BUS_SRAM)] = data;
+    gba->bus.sram[(address - BUS_SRAM) % (BUS_SRAM_UNUSED - BUS_SRAM)] = data;
 }
 
 static bus_accessors_t accessors[16] = {
-    [0x00] = {.read = bios_read,   .write = bios_write  },
-    [0x01] = {.read = unused_read, .write = unused_write},
-    [0x02] = {.read = ewram_read,  .write = ewram_write },
-    [0x03] = {.read = iwram_read,  .write = iwram_write },
-    [0x04] = {.read = io_read,     .write = io_write    },
-    [0x05] = {.read = pram_read,   .write = pram_write  },
-    [0x06] = {.read = vram_read,   .write = vram_write  },
-    [0x07] = {.read = oam_read,    .write = oam_write   },
-    [0x08] = {.read = rom_read,    .write = rom_write   },
-    [0x09] = {.read = rom_read,    .write = rom_write   },
-    [0x0A] = {.read = rom_read,    .write = rom_write   },
-    [0x0B] = {.read = rom_read,    .write = rom_write   },
-    [0x0C] = {.read = rom_read,    .write = rom_write   },
-    [0x0D] = {.read = rom_read,    .write = rom_write   },
-    [0x0E] = {.read = sram_read,   .write = sram_write  },
-    [0x0F] = {.read = unused_read, .write = unused_write},
+    [0x00] = { .read = bios_read,   .write = bios_write   },
+    [0x01] = { .read = unused_read, .write = unused_write },
+    [0x02] = { .read = ewram_read,  .write = ewram_write  },
+    [0x03] = { .read = iwram_read,  .write = iwram_write  },
+    [0x04] = { .read = io_read,     .write = io_write     },
+    [0x05] = { .read = pram_read,   .write = pram_write   },
+    [0x06] = { .read = vram_read,   .write = vram_write   },
+    [0x07] = { .read = oam_read,    .write = oam_write    },
+    [0x08] = { .read = rom_read,    .write = rom_write    },
+    [0x09] = { .read = rom_read,    .write = rom_write    },
+    [0x0A] = { .read = rom_read,    .write = rom_write    },
+    [0x0B] = { .read = rom_read,    .write = rom_write    },
+    [0x0C] = { .read = rom_read,    .write = rom_write    },
+    [0x0D] = { .read = rom_read,    .write = rom_write    },
+    [0x0E] = { .read = sram_read,   .write = sram_write   },
+    [0x0F] = { .read = unused_read, .write = unused_write },
 };
 
 static inline uint32_t bus_read(gba_t *gba, uint8_t mode, uint32_t address) {
@@ -1075,71 +1072,67 @@ static inline void bus_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_
 }
 
 uint8_t _gba_bus_read_byte(gba_t *gba, bus_access_t access, uint32_t address) {
-    uint32_t data = bus_read(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_READ | access, ALIGN(address, 1));
-    gba->bus->read_data_latch = (data << 24) | (data << 16) | (data << 8) | data;
+    uint32_t data            = bus_read(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_READ | access, ALIGN(address, 1));
+    gba->bus.read_data_latch = (data << 24) | (data << 16) | (data << 8) | data;
 
-    return gba->bus->read_data_latch;
+    return gba->bus.read_data_latch;
 }
 
 uint16_t _gba_bus_read_half(gba_t *gba, bus_access_t access, uint32_t address) {
-    uint32_t data = bus_read(gba, BUS_ACCESS_SIZE(2) | BUS_ACCESS_READ | access, ALIGN(address, 2));
-    gba->bus->read_data_latch = (data << 16) | data;
+    uint32_t data            = bus_read(gba, BUS_ACCESS_SIZE(2) | BUS_ACCESS_READ | access, ALIGN(address, 2));
+    gba->bus.read_data_latch = (data << 16) | data;
 
-    return gba->bus->read_data_latch;
+    return gba->bus.read_data_latch;
 }
 
 uint32_t _gba_bus_read_word(gba_t *gba, bus_access_t access, uint32_t address) {
-    uint32_t data = bus_read(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_READ | access, ALIGN(address, 4));
-    gba->bus->read_data_latch = data;
+    uint32_t data            = bus_read(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_READ | access, ALIGN(address, 4));
+    gba->bus.read_data_latch = data;
 
-    return gba->bus->read_data_latch;
+    return gba->bus.read_data_latch;
 }
 
 void _gba_bus_write_byte(gba_t *gba, bus_access_t access, uint32_t address, uint8_t data) {
-    gba->bus->write_data_latch = ((uint32_t) data << 24) | ((uint32_t) data << 16) | ((uint32_t) data << 8) | (uint32_t) data;
+    gba->bus.write_data_latch = ((uint32_t) data << 24) | ((uint32_t) data << 16) | ((uint32_t) data << 8) | (uint32_t) data;
 
-    bus_write(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_WRITE | access, ALIGN(address, 1), gba->bus->write_data_latch);
+    bus_write(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_WRITE | access, ALIGN(address, 1), gba->bus.write_data_latch);
 }
 
 void _gba_bus_write_half(gba_t *gba, bus_access_t access, uint32_t address, uint16_t data) {
-    gba->bus->write_data_latch = ((uint32_t) data << 16) | (uint32_t) data;
+    gba->bus.write_data_latch = ((uint32_t) data << 16) | (uint32_t) data;
 
-    bus_write(gba, BUS_ACCESS_SIZE(2) | BUS_ACCESS_WRITE | access, ALIGN(address, 2), gba->bus->write_data_latch);
+    bus_write(gba, BUS_ACCESS_SIZE(2) | BUS_ACCESS_WRITE | access, ALIGN(address, 2), gba->bus.write_data_latch);
 }
 
 void _gba_bus_write_word(gba_t *gba, bus_access_t access, uint32_t address, uint32_t data) {
-    gba->bus->write_data_latch = data;
+    gba->bus.write_data_latch = data;
 
-    bus_write(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_WRITE | access, ALIGN(address, 4), gba->bus->write_data_latch);
+    bus_write(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_WRITE | access, ALIGN(address, 4), gba->bus.write_data_latch);
 }
 
 // TODO this shouldn't be responsible for cartridge loading and parsing (same for gb_mmu_t)
-bool gba_bus_init(gba_t *gba, const uint8_t *rom, size_t rom_size) {
+bool gba_bus_reset(gba_t *gba, const uint8_t *rom, size_t rom_size) {
     if (!rom || rom_size < 0xBF)
         return false;
 
-    gba->bus = xcalloc(1, sizeof(*gba->bus));
-    memcpy(gba->bus->rom, rom, rom_size);
+    memset(&gba->bus, 0, sizeof(gba->bus));
+    memcpy(gba->bus.rom, rom, rom_size);
 
-    if (!gba_parse_cartridge(gba)) {
-        gba_bus_quit(gba);
+    if (!gba_parse_cartridge(gba))
         return false;
-    }
 
-    gba->bus->rom_size = rom_size;
+    gba->bus.rom_size = rom_size;
 
-    gba->bus->io[IO_KEYINPUT] = 0x03FF;
+    gba->bus.io[IO_KEYINPUT] = 0x03FF;
 
     // TODO maybe find better way do to this
+    // clang-format off
     static const uint8_t gba_bios[] = {
         #embed "../../bootroms/gba/gba_bios.bin"
     };
+    // clang-format on
 
-    memcpy(gba->bus->bios, gba_bios, sizeof(gba_bios));
+    memcpy(gba->bus.bios, gba_bios, sizeof(gba_bios));
 
     return true;
-}
-
-void gba_bus_quit(gba_t *gba) {
-    free(gba->bus);
 }

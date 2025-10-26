@@ -1,6 +1,6 @@
 #include "gb_priv.h"
 
-#define GB_CAMERA_WIDTH 128
+#define GB_CAMERA_WIDTH  128
 #define GB_CAMERA_HEIGHT 112
 
 // TODO every even picture is corrupted on the upper right corner
@@ -64,18 +64,18 @@ static inline int64_t get_processed_color(gb_mbc_t *mbc, uint8_t x, uint8_t y) {
 }
 
 uint8_t gb_camera_read_image(gb_t *gb, uint16_t address) {
-    gb_mbc_t *mbc = &gb->mmu->mbc;
+    gb_mbc_t *mbc = &gb->mmu.mbc;
 
     uint8_t tile_x = address / 0x10 % 0x10;
     uint8_t tile_y = address / 0x10 / 0x10;
 
-    uint8_t y = ((address >> 1) & 0x7) + tile_y * 8;
+    uint8_t y   = ((address >> 1) & 0x7) + tile_y * 8;
     uint8_t bit = address & 1;
 
     uint8_t ret = 0;
     for (uint8_t x = tile_x * 8; x < tile_x * 8 + 8; x++) {
-        static const float edge_enhancement_ratios[] = {0.5f, 0.75f, 1.0f, 1.25f, 2.0f, 3.0f, 4.0f, 5.0f};
-        float edge_enhancement_ratio = edge_enhancement_ratios[(mbc->camera.work_regs[4] >> 4) & 0x7];
+        static const float edge_enhancement_ratios[] = { 0.5f, 0.75f, 1.0f, 1.25f, 2.0f, 3.0f, 4.0f, 5.0f };
+        float              edge_enhancement_ratio    = edge_enhancement_ratios[(mbc->camera.work_regs[4] >> 4) & 0x7];
 
         int64_t color = get_processed_color(mbc, x, y);
         if ((mbc->camera.work_regs[1] & 0xE0) == 0xE0) {
@@ -110,7 +110,7 @@ uint8_t gb_camera_read_image(gb_t *gb, uint16_t address) {
  * fast random number generator: https://stackoverflow.com/a/3747462
  * we only want to show some good enough noise so we don't care about rand_seed conficts due to mutiple instance of gb_t
  */
-static unsigned int rand_seed = 1;
+static unsigned int        rand_seed = 1;
 static inline unsigned int fastrand(void) {
     rand_seed = (214013 * rand_seed + 2531011);
     return (rand_seed >> 16) & 0xFF;
@@ -118,20 +118,20 @@ static inline unsigned int fastrand(void) {
 
 uint8_t camera_read_reg(gb_t *gb, uint16_t address) {
     if ((address & 0x003F) == 0)
-        return gb->mmu->mbc.camera.regs[0] & 0x07;
+        return gb->mmu.mbc.camera.regs[0] & 0x07;
     return 0x00;
 }
 
 void camera_write_reg(gb_t *gb, uint16_t address, uint8_t data) {
-    gb_mmu_t *mmu = gb->mmu;
+    gb_mmu_t *mmu = &gb->mmu;
 
     uint8_t reg = MIN(address & 0x003F, GB_CAMERA_N_REGS - 1);
     if (reg == 0) {
-        uint8_t request_capture = !CHECK_BIT(mmu->mbc.camera.regs[reg], 0) && CHECK_BIT(data, 0);
+        uint8_t request_capture     = !CHECK_BIT(mmu->mbc.camera.regs[reg], 0) && CHECK_BIT(data, 0);
         uint8_t capture_in_progress = mmu->mbc.camera.capture_cycles_remaining > 0;
 
         if (request_capture && !capture_in_progress) {
-            uint16_t exposure = (mmu->mbc.camera.regs[2] << 8) | mmu->mbc.camera.regs[3];
+            uint16_t exposure                        = (mmu->mbc.camera.regs[2] << 8) | mmu->mbc.camera.regs[3];
             mmu->mbc.camera.capture_cycles_remaining = 4 * (32448 + (CHECK_BIT(mmu->mbc.camera.regs[1], 7) ? 0 : 512) + (exposure * 16));
             memcpy(mmu->mbc.camera.work_regs, mmu->mbc.camera.regs, GB_CAMERA_N_REGS);
 
@@ -150,10 +150,10 @@ void camera_write_reg(gb_t *gb, uint16_t address, uint8_t data) {
 }
 
 void camera_step(gb_t *gb) {
-    if (!CHECK_BIT(gb->mmu->mbc.camera.regs[0], 0))
+    if (!CHECK_BIT(gb->mmu.mbc.camera.regs[0], 0))
         return;
 
-    gb->mmu->mbc.camera.capture_cycles_remaining -= 4;
-    if (gb->mmu->mbc.camera.capture_cycles_remaining == 0)
-        RESET_BIT(gb->mmu->mbc.camera.regs[0], 0);
+    gb->mmu.mbc.camera.capture_cycles_remaining -= 4;
+    if (gb->mmu.mbc.camera.capture_cycles_remaining == 0)
+        RESET_BIT(gb->mmu.mbc.camera.regs[0], 0);
 }

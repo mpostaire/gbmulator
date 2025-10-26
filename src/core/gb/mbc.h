@@ -53,9 +53,9 @@ typedef struct {
             uint8_t dl;
             uint8_t dh;
 
-            uint8_t enabled;
-            uint8_t reg; // rtc register
-            uint8_t latch;
+            uint8_t  enabled;
+            uint8_t  reg; // rtc register
+            uint8_t  latch;
             uint32_t rtc_cycles;
         } rtc;
     } mbc3;
@@ -73,16 +73,16 @@ typedef struct {
         struct {
             uint16_t latched_x;
             uint16_t latched_y;
-            uint8_t latch_ready; // 1 if latch was just erased and not yet relatched, else 0
+            uint8_t  latch_ready; // 1 if latch was just erased and not yet relatched, else 0
         } accelerometer;
 
         struct {
-            uint8_t data[256]; // 2048 bits addressed 16 bits at a time (addresses are 7 bits wide)
-            uint8_t pins;
+            uint8_t  data[256]; // 2048 bits addressed 16 bits at a time (addresses are 7 bits wide)
+            uint8_t  pins;
             uint16_t command;
             uint16_t command_arg_remaining_bits; // how many bits of the WRITE or WRAL command argument remains to be shifted in
             uint16_t output_bits;
-            uint8_t write_enabled;
+            uint8_t  write_enabled;
         } eeprom;
     } mbc7;
 
@@ -94,13 +94,13 @@ typedef struct {
     } huc1;
 
     struct {
-        uint8_t rom_bank;
-        uint8_t eram_bank;
-        uint8_t cam_regs_enabled;
+        uint8_t  rom_bank;
+        uint8_t  eram_bank;
+        uint8_t  cam_regs_enabled;
         uint32_t capture_cycles_remaining;
-        uint8_t *sensor_image;
-        uint8_t regs[GB_CAMERA_N_REGS];
-        uint8_t work_regs[GB_CAMERA_N_REGS]; // registers saved for the image capture process
+        uint8_t  sensor_image[GB_CAMERA_SENSOR_HEIGHT * GB_CAMERA_SENSOR_WIDTH];
+        uint8_t  regs[GB_CAMERA_N_REGS];
+        uint8_t  work_regs[GB_CAMERA_N_REGS]; // registers saved for the image capture process
     } camera;
 } gb_mbc_t;
 

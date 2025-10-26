@@ -14,10 +14,9 @@ struct gba_t {
 
     char rom_title[13]; // title is max 12 chars
 
-    // TODO these don't have to be pointers (same for gb_t)
-    gba_cpu_t *cpu;
-    gba_bus_t *bus;
-    gba_ppu_t *ppu;
-    gba_dma_t *dma;
-    gba_tmr_t *tmr;
+    gba_cpu_t cpu;
+    gba_bus_t bus;
+    gba_ppu_t ppu;
+    gba_dma_t dma;
+    gba_tmr_t tmr;
 };

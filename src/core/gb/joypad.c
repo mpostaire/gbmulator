@@ -2,19 +2,15 @@
 
 #include "gb_priv.h"
 
-void joypad_init(gb_t *gb) {
-    gb->joypad = xcalloc(1, sizeof(*gb->joypad));
-    gb->joypad->action = 0x0F;
-    gb->joypad->direction = 0x0F;
-}
-
-void joypad_quit(gb_t *gb) {
-    free(gb->joypad);
+void joypad_reset(gb_t *gb) {
+    memset(&gb->joypad, 0, sizeof(gb->joypad));
+    gb->joypad.action    = 0x0F;
+    gb->joypad.direction = 0x0F;
 }
 
 uint8_t joypad_get_input(gb_t *gb) {
-    gb_joypad_t *joypad = gb->joypad;
-    gb_mmu_t *mmu = gb->mmu;
+    gb_joypad_t *joypad = &gb->joypad;
+    gb_mmu_t    *mmu    = &gb->mmu;
 
     if (!CHECK_BIT(mmu->io_registers[IO_P1], 4))
         return 0xC0 | (mmu->io_registers[IO_P1] & 0xF0) | joypad->direction;
@@ -27,8 +23,8 @@ uint8_t joypad_get_input(gb_t *gb) {
 }
 
 void joypad_press(gb_t *gb, gbmulator_joypad_t key) {
-    gb_joypad_t *joypad = gb->joypad;
-    gb_mmu_t *mmu = gb->mmu;
+    gb_joypad_t *joypad = &gb->joypad;
+    gb_mmu_t    *mmu    = &gb->mmu;
 
     switch (key) {
     case GBMULATOR_JOYPAD_RIGHT:
@@ -53,7 +49,7 @@ void joypad_press(gb_t *gb, gbmulator_joypad_t key) {
 }
 
 void joypad_release(gb_t *gb, gbmulator_joypad_t key) {
-    gb_joypad_t *joypad = gb->joypad;
+    gb_joypad_t *joypad = &gb->joypad;
 
     switch (key) {
     case GBMULATOR_JOYPAD_RIGHT:
