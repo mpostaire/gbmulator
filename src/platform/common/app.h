@@ -8,11 +8,23 @@ void app_quit(void);
 
 void app_reset(void);
 
-void app_loop(void);
+void app_run_frame(void);
 
-void app_joypad_press(unsigned int key, bool is_gamepad);
+void app_render(void);
 
-void app_joypad_release(unsigned int key, bool is_gamepad);
+void app_keyboard_press(unsigned int key);
+
+void app_keyboard_release(unsigned int key);
+
+void app_gamepad_press(unsigned int button);
+
+void app_gamepad_release(unsigned int button);
+
+void app_touch_press(uint8_t touch_id, uint32_t x, uint32_t y);
+
+void app_touch_release(uint8_t touch_id, uint32_t x, uint32_t y);
+
+void app_touch_move(uint8_t touch_id, uint32_t x, uint32_t y);
 
 void app_load_cartridge(uint8_t *rom, size_t rom_size);
 
@@ -45,9 +57,3 @@ uint32_t app_get_fps(void);
 const char *app_get_rom_title(void);
 
 void app_set_touchscreen_mode(bool enable);
-
-void app_touch_press(uint32_t x, uint32_t y);
-
-void app_touch_release(uint32_t x, uint32_t y);
-
-void app_touch_move(uint32_t x, uint32_t y);

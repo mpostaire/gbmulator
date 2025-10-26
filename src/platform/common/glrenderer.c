@@ -65,10 +65,10 @@ struct glrenderer_t {
     GLsizei viewport_w;
     GLsizei viewport_h;
 
-    rect_t  btn_coords[GLRENDERER_OBJ_ID_SCREEN];
-    bool    show_buttons;
-    GLfloat tints[GLRENDERER_OBJ_ID_SCREEN + 1];
-    GLfloat alphas[GLRENDERER_OBJ_ID_SCREEN + 1];
+    rect_t   btn_coords[GLRENDERER_OBJ_ID_SCREEN];
+    uint32_t visible_btns_mask;
+    GLfloat  tints[GLRENDERER_OBJ_ID_SCREEN + 1];
+    GLfloat  alphas[GLRENDERER_OBJ_ID_SCREEN + 1];
 
     GLfloat clear_r;
     GLfloat clear_g;
@@ -240,13 +240,13 @@ void create_buttons(glrenderer_t *renderer) {
 
         free(atlas_bmp);
     } else {
-        renderer->show_buttons = false;
+        renderer->visible_btns_mask = false;
         printf("[ERROR] Couldn't load btn texture atlas\n");
     }
 }
 
 // TODO try printer renderer to check it doesn't break it
-glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, bool show_buttons) {
+glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, uint32_t visible_btns_mask) {
     static bool is_first_init = true;
     if (is_first_init) {
         printf("Renderer: %s\n", glGetString(GL_VERSION));
@@ -266,7 +266,7 @@ glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, bool show_butt
     if (!renderer)
         return NULL;
 
-    renderer->show_buttons = show_buttons;
+    renderer->visible_btns_mask = visible_btns_mask;
 
     create_buffers(renderer);
 
@@ -274,7 +274,7 @@ glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, bool show_butt
     renderer->screen_tex_w = screen_w;
     renderer->screen_tex_h = screen_h;
 
-    if (renderer->show_buttons)
+    if (renderer->visible_btns_mask)
         create_buttons(renderer);
 
     glUseProgram(shader_program);
@@ -291,7 +291,7 @@ glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, bool show_butt
 
     glrenderer_resize_viewport(renderer, screen_w, screen_h);
 
-    if (renderer->show_buttons) {
+    if (renderer->visible_btns_mask) {
         renderer->clear_r = 0.0f;
         renderer->clear_g = 0.0f;
         renderer->clear_b = 0.0f;
@@ -309,7 +309,7 @@ void glrenderer_quit(glrenderer_t *renderer) {
         return;
 
     glDeleteTextures(1, &renderer->screen_tex);
-    if (renderer->show_buttons)
+    if (glIsTexture(renderer->btn_atlas_tex))
         glDeleteTextures(1, &renderer->btn_atlas_tex);
     glDeleteVertexArrays(1, &renderer->vao);
     glDeleteBuffers(1, &renderer->vbo);
@@ -337,7 +337,7 @@ void glrenderer_render(glrenderer_t *renderer) {
     glBindTexture(GL_TEXTURE_2D, renderer->screen_tex);
     glDrawElements(GL_TRIANGLE_STRIP, VERTEX_INDICES_OBJ_STRIDE, GL_UNSIGNED_SHORT, (GLvoid *) (GLRENDERER_OBJ_ID_SCREEN * VERTEX_INDICES_OBJ_STRIDE * sizeof(*vertex_indices)));
 
-    if (renderer->show_buttons) {
+    if (renderer->visible_btns_mask) {
         glBindTexture(GL_TEXTURE_2D, renderer->btn_atlas_tex);
         glDrawElements(GL_TRIANGLE_STRIP, (sizeof(vertex_indices) / sizeof(*vertex_indices)) - VERTEX_INDICES_OBJ_STRIDE, GL_UNSIGNED_SHORT, 0);
     }
@@ -389,18 +389,21 @@ static inline void update_vertices(glrenderer_t *renderer, GLint obj_id, rect_t 
     GLfloat u1, v1;
 
     GLfloat tint  = renderer->tints[obj_id];
-    GLfloat alpha = renderer->alphas[obj_id];
+    GLfloat alpha = 0.0f;
 
     if (obj_id == GLRENDERER_OBJ_ID_SCREEN) {
-        u0 = 0.0f;
-        u1 = 1.0f;
-        v0 = 0.0f;
-        v1 = 1.0f;
+        u0    = 0.0f;
+        u1    = 1.0f;
+        v0    = 0.0f;
+        v1    = 1.0f;
+        alpha = 1.0f;
     } else {
         u0 = btn_atlas_regions[obj_id].x / (GLfloat) renderer->btn_atlas_tex_w;
         v0 = btn_atlas_regions[obj_id].y / (GLfloat) renderer->btn_atlas_tex_h;
         u1 = (btn_atlas_regions[obj_id].x + btn_atlas_regions[obj_id].w) / (GLfloat) renderer->btn_atlas_tex_w;
         v1 = (btn_atlas_regions[obj_id].y + btn_atlas_regions[obj_id].h) / (GLfloat) renderer->btn_atlas_tex_h;
+        if (renderer->visible_btns_mask & (1 << obj_id))
+            alpha = renderer->alphas[obj_id];
     }
 
     // clang-format off
@@ -422,6 +425,8 @@ static inline void update_vertices(glrenderer_t *renderer, GLint obj_id, rect_t 
 
 glrenderer_obj_id_t glrenderer_get_obj_at_coord(glrenderer_t *renderer, uint32_t x, uint32_t y) {
     for (glrenderer_obj_id_t obj_id = 0; obj_id < GLRENDERER_OBJ_ID_SCREEN; obj_id++) {
+        if (!(renderer->visible_btns_mask & (1 << obj_id)))
+            continue;
         if (x < renderer->btn_coords[obj_id].x || x > renderer->btn_coords[obj_id].x + renderer->btn_coords[obj_id].w || y < renderer->btn_coords[obj_id].y || y > renderer->btn_coords[obj_id].y + renderer->btn_coords[obj_id].h)
             continue;
         return obj_id;
@@ -456,24 +461,24 @@ void glrenderer_resize_viewport(glrenderer_t *renderer, GLsizei width, GLsizei h
     }
 
     screen_coords.x = (renderer->viewport_w - screen_coords.w) / 2.0;
-    if (renderer->show_buttons)
+    if (renderer->visible_btns_mask)
         screen_coords.y = 0;
     else
         screen_coords.y = (renderer->viewport_h - screen_coords.h) / 2.0;
 
     update_vertices(renderer, GLRENDERER_OBJ_ID_SCREEN, &screen_coords);
 
-    if (renderer->show_buttons) {
+    if (renderer->visible_btns_mask) {
         GLfloat btn_scale = screen_coords.w / (GLfloat) renderer->screen_tex_w;
 
         renderer->btn_coords[GLRENDERER_OBJ_ID_SELECT] = (rect_t) {
-            .x = 2.0f * (btn_atlas_regions[GLRENDERER_OBJ_ID_SELECT].w * btn_scale),
+            .x = 1.25f * (btn_atlas_regions[GLRENDERER_OBJ_ID_SELECT].w * btn_scale),
             .y = renderer->viewport_h - 2.0f * (btn_atlas_regions[GLRENDERER_OBJ_ID_SELECT].h * btn_scale),
             .w = btn_atlas_regions[GLRENDERER_OBJ_ID_SELECT].w * btn_scale,
             .h = btn_atlas_regions[GLRENDERER_OBJ_ID_SELECT].h * btn_scale
         };
         renderer->btn_coords[GLRENDERER_OBJ_ID_START] = (rect_t) {
-            .x = renderer->viewport_w - 3.0f * (btn_atlas_regions[GLRENDERER_OBJ_ID_START].w * btn_scale),
+            .x = renderer->viewport_w - 2.25f * (btn_atlas_regions[GLRENDERER_OBJ_ID_START].w * btn_scale),
             .y = renderer->viewport_h - 2.0f * (btn_atlas_regions[GLRENDERER_OBJ_ID_START].h * btn_scale),
             .w = btn_atlas_regions[GLRENDERER_OBJ_ID_START].w * btn_scale,
             .h = btn_atlas_regions[GLRENDERER_OBJ_ID_START].h * btn_scale
@@ -493,8 +498,8 @@ void glrenderer_resize_viewport(glrenderer_t *renderer, GLsizei width, GLsizei h
         };
 
         rect_t dpad_rect = {
-            .x = 1.0f * (btn_atlas_regions[GLRENDERER_OBJ_ID_DPAD_CENTER].w * btn_scale),
-            .y = renderer->viewport_h - 4.0f * (btn_atlas_regions[GLRENDERER_OBJ_ID_DPAD_CENTER].h * btn_scale),
+            .x = btn_atlas_regions[GLRENDERER_OBJ_ID_DPAD_CENTER].w * btn_scale,
+            .y = renderer->btn_coords[GLRENDERER_OBJ_ID_SELECT].y - 4.0f * (btn_atlas_regions[GLRENDERER_OBJ_ID_DPAD_CENTER].h * btn_scale),
             .w = btn_atlas_regions[GLRENDERER_OBJ_ID_DPAD_CENTER].w * btn_scale,
             .h = btn_atlas_regions[GLRENDERER_OBJ_ID_DPAD_CENTER].h * btn_scale
         };
@@ -582,7 +587,7 @@ void glrenderer_resize_viewport(glrenderer_t *renderer, GLsizei width, GLsizei h
 }
 
 void glrenderer_set_obj_tint(glrenderer_t *renderer, glrenderer_obj_id_t obj_id, GLfloat tint) {
-    if (!renderer || obj_id < 0 || obj_id > GLRENDERER_OBJ_ID_SCREEN || tint < 0.0f || tint > 1.0f)
+    if (!renderer || obj_id < 0 || obj_id > GLRENDERER_OBJ_ID_SCREEN || !(renderer->visible_btns_mask & (1 << obj_id)) || tint < 0.0f || tint > 1.0f)
         return;
 
     renderer->tints[obj_id] = tint;
@@ -590,23 +595,23 @@ void glrenderer_set_obj_tint(glrenderer_t *renderer, glrenderer_obj_id_t obj_id,
 }
 
 void glrenderer_set_obj_alpha(glrenderer_t *renderer, glrenderer_obj_id_t obj_id, GLfloat alpha) {
-    if (!renderer || obj_id < 0 || obj_id > GLRENDERER_OBJ_ID_SCREEN || alpha < 0.0f || alpha > 1.0f)
+    if (!renderer || obj_id < 0 || obj_id > GLRENDERER_OBJ_ID_SCREEN || !(renderer->visible_btns_mask & (1 << obj_id)) || alpha < 0.0f || alpha > 1.0f)
         return;
 
     renderer->alphas[obj_id] = alpha;
     update_vertices(renderer, obj_id, &renderer->btn_coords[obj_id]);
 }
 
-void glrenderer_set_show_buttons(glrenderer_t *renderer, bool show_buttons) {
+void glrenderer_set_show_buttons(glrenderer_t *renderer, uint32_t visible_btns_mask) {
     if (!renderer)
         return;
 
-    renderer->show_buttons = show_buttons;
+    renderer->visible_btns_mask = visible_btns_mask;
 
-    if (renderer->show_buttons)
+    if (renderer->visible_btns_mask)
         create_buttons(renderer);
 
-    if (renderer->show_buttons) {
+    if (renderer->visible_btns_mask) {
         renderer->clear_r = 0.0f;
         renderer->clear_g = 0.0f;
         renderer->clear_b = 0.0f;

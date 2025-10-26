@@ -173,11 +173,11 @@ void gb_link_data_received(gb_t *gb) {
     CPU_REQUEST_INTERRUPT(gb, IRQ_SERIAL);
 }
 
-void gb_joypad_press(gb_t *gb, gbmulator_joypad_button_t key) {
+void gb_joypad_press(gb_t *gb, gbmulator_joypad_t key) {
     joypad_press(gb, key);
 }
 
-void gb_joypad_release(gb_t *gb, gbmulator_joypad_button_t key) {
+void gb_joypad_release(gb_t *gb, gbmulator_joypad_t key) {
     joypad_release(gb, key);
 }
 

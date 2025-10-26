@@ -4,7 +4,7 @@
 
 typedef struct {
     SDL_Rect shape;
-    gb_joypad_button_t button;
+    gbmulator_joypad_t button;
     SDL_Texture *texture;
 } button_t;
 

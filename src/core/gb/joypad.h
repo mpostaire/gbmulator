@@ -13,6 +13,6 @@ void joypad_quit(gb_t *gb);
 
 uint8_t joypad_get_input(gb_t *gb);
 
-void joypad_press(gb_t *gb, gbmulator_joypad_button_t key);
+void joypad_press(gb_t *gb, gbmulator_joypad_t key);
 
-void joypad_release(gb_t *gb, gbmulator_joypad_button_t key);
+void joypad_release(gb_t *gb, gbmulator_joypad_t key);

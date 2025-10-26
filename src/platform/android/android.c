@@ -74,35 +74,35 @@ static button_t buttons[] = {
             .h = 20,
             .w = 20
         },
-        .button = JOYPAD_A
+        .button = GBMULATOR_JOYPAD_A
     },
     {
         .shape = {
             .h = 20,
             .w = 20
         },
-        .button = JOYPAD_B
+        .button = GBMULATOR_JOYPAD_B
     },
     {
         .shape = {
             .h = 10,
             .w = 30
         },
-        .button = JOYPAD_SELECT
+        .button = GBMULATOR_JOYPAD_SELECT
     },
     {
         .shape = {
             .h = 10,
             .w = 30
         },
-        .button = JOYPAD_START
+        .button = GBMULATOR_JOYPAD_START
     },
     {
         .shape = {
             .h = 16,
             .w = 16
         },
-        .button = JOYPAD_START + 5
+        .button = GBMULATOR_JOYPAD_START + 5
     }
 };
 
@@ -174,23 +174,23 @@ static inline int8_t is_finger_over_button(float x, float y) {
         y -= hitbox->y;
         if (x < hitbox->w / 3) {
             if (y < hitbox->h / 3) // up left
-                return JOYPAD_START + 1;
+                return GBMULATOR_JOYPAD_START + 1;
             else if (y > 2 * (hitbox->h / 3)) // down left
-                return JOYPAD_START + 3;
+                return GBMULATOR_JOYPAD_START + 3;
             else
-                return JOYPAD_LEFT;
+                return GBMULATOR_JOYPAD_LEFT;
         } else if (x > 2 * (hitbox->w / 3)) {
             if (y < hitbox->h / 3) // up right
-                return JOYPAD_START + 2;
+                return GBMULATOR_JOYPAD_START + 2;
             else if (y > 2 * (hitbox->h / 3)) // down right
-                return JOYPAD_START + 4;
+                return GBMULATOR_JOYPAD_START + 4;
             else
-                return JOYPAD_RIGHT;
+                return GBMULATOR_JOYPAD_RIGHT;
         } else {
             if (y < hitbox->h / 3)
-                return JOYPAD_UP;
+                return GBMULATOR_JOYPAD_UP;
             else if (y > 2 * (hitbox->h / 3))
-                return JOYPAD_DOWN;
+                return GBMULATOR_JOYPAD_DOWN;
             else
                 return -1;
         }
@@ -205,25 +205,25 @@ static inline int8_t is_finger_over_button(float x, float y) {
     return -1;
 }
 
-static void button_press(gb_t *gb, gb_joypad_button_t button) {
+static void button_press(gb_t *gb, gbmulator_joypad_t button) {
     switch ((int) button) { // cast to int to shut compiler warnings
-    case JOYPAD_START + 1:
-        gb_joypad_press(gb, JOYPAD_UP);
-        gb_joypad_press(gb, JOYPAD_LEFT);
+    case GBMULATOR_JOYPAD_START + 1:
+        gb_joypad_press(gb, GBMULATOR_JOYPAD_UP);
+        gb_joypad_press(gb, GBMULATOR_JOYPAD_LEFT);
         break;
-    case JOYPAD_START + 2:
-        gb_joypad_press(gb, JOYPAD_UP);
-        gb_joypad_press(gb, JOYPAD_RIGHT);
+    case GBMULATOR_JOYPAD_START + 2:
+        gb_joypad_press(gb, GBMULATOR_JOYPAD_UP);
+        gb_joypad_press(gb, GBMULATOR_JOYPAD_RIGHT);
         break;
-    case JOYPAD_START + 3:
-        gb_joypad_press(gb, JOYPAD_DOWN);
-        gb_joypad_press(gb, JOYPAD_LEFT);
+    case GBMULATOR_JOYPAD_START + 3:
+        gb_joypad_press(gb, GBMULATOR_JOYPAD_DOWN);
+        gb_joypad_press(gb, GBMULATOR_JOYPAD_LEFT);
         break;
-    case JOYPAD_START + 4:
-        gb_joypad_press(gb, JOYPAD_DOWN);
-        gb_joypad_press(gb, JOYPAD_RIGHT);
+    case GBMULATOR_JOYPAD_START + 4:
+        gb_joypad_press(gb, GBMULATOR_JOYPAD_DOWN);
+        gb_joypad_press(gb, GBMULATOR_JOYPAD_RIGHT);
         break;
-    case JOYPAD_START + 5:
+    case GBMULATOR_JOYPAD_START + 5:
         show_link_dialog = SDL_TRUE;
         break;
     default:
@@ -232,41 +232,41 @@ static void button_press(gb_t *gb, gb_joypad_button_t button) {
     }
 
     switch ((int) button) { // cast to int to shut compiler warnings
-    case JOYPAD_RIGHT:
-    case JOYPAD_LEFT:
-    case JOYPAD_UP:
-    case JOYPAD_DOWN:
+    case GBMULATOR_JOYPAD_RIGHT:
+    case GBMULATOR_JOYPAD_LEFT:
+    case GBMULATOR_JOYPAD_UP:
+    case GBMULATOR_JOYPAD_DOWN:
         SET_BIT(dpad_status, button);
         break;
-    case JOYPAD_A:
+    case GBMULATOR_JOYPAD_A:
         buttons[1].texture = a_pressed_texture;
         return;
-    case JOYPAD_B:
+    case GBMULATOR_JOYPAD_B:
         buttons[2].texture = b_pressed_texture;
         return;
-    case JOYPAD_SELECT:
+    case GBMULATOR_JOYPAD_SELECT:
         buttons[3].texture = select_pressed_texture;
         return;
-    case JOYPAD_START:
+    case GBMULATOR_JOYPAD_START:
         buttons[4].texture = start_pressed_texture;
         return;
-    case JOYPAD_START + 1:
-        SET_BIT(dpad_status, JOYPAD_UP);
-        SET_BIT(dpad_status, JOYPAD_LEFT);
+    case GBMULATOR_JOYPAD_START + 1:
+        SET_BIT(dpad_status, GBMULATOR_JOYPAD_UP);
+        SET_BIT(dpad_status, GBMULATOR_JOYPAD_LEFT);
         break;
-    case JOYPAD_START + 2:
-        SET_BIT(dpad_status, JOYPAD_UP);
-        SET_BIT(dpad_status, JOYPAD_RIGHT);
+    case GBMULATOR_JOYPAD_START + 2:
+        SET_BIT(dpad_status, GBMULATOR_JOYPAD_UP);
+        SET_BIT(dpad_status, GBMULATOR_JOYPAD_RIGHT);
         break;
-    case JOYPAD_START + 3:
-        SET_BIT(dpad_status, JOYPAD_DOWN);
-        SET_BIT(dpad_status, JOYPAD_LEFT);
+    case GBMULATOR_JOYPAD_START + 3:
+        SET_BIT(dpad_status, GBMULATOR_JOYPAD_DOWN);
+        SET_BIT(dpad_status, GBMULATOR_JOYPAD_LEFT);
         break;
-    case JOYPAD_START + 4:
-        SET_BIT(dpad_status, JOYPAD_DOWN);
-        SET_BIT(dpad_status, JOYPAD_RIGHT);
+    case GBMULATOR_JOYPAD_START + 4:
+        SET_BIT(dpad_status, GBMULATOR_JOYPAD_DOWN);
+        SET_BIT(dpad_status, GBMULATOR_JOYPAD_RIGHT);
         break;
-    case JOYPAD_START + 5:
+    case GBMULATOR_JOYPAD_START + 5:
         buttons[5].texture = link_pressed_texture;
         break;
     }
@@ -275,7 +275,7 @@ static void button_press(gb_t *gb, gb_joypad_button_t button) {
 }
 
 static void button_release(SDL_TouchID touch_id) {
-    for (int i = JOYPAD_RIGHT; i <= JOYPAD_START; i++)
+    for (int i = GBMULATOR_JOYPAD_RIGHT; i <= GBMULATOR_JOYPAD_START; i++)
         gb_joypad_release(gb, i);
     dpad_status = 0;
     buttons[0].texture = dpad_textures[dpad_status];
@@ -329,7 +329,7 @@ static inline void touch_motion(SDL_TouchFingerEvent *event) {
 
     if (previous != hovered) {
         if (previous >= 0) {
-            if (previous == JOYPAD_START + 5)
+            if (previous == GBMULATOR_JOYPAD_START + 5)
                 show_link_dialog = SDL_FALSE;
             button_release(event->touchId);
         }

@@ -51,7 +51,7 @@ static void parse_config_line(config_t *config, const char *line) {
         return;
     }
     if (sscanf(line, "color_palette=%hhu", &color_palette)) {
-        if (color_palette < PPU_COLOR_PALETTE_MAX)
+        if (color_palette < PPU_COLOR_PALETTE_END)
             config->color_palette = color_palette;
         return;
     }
@@ -66,93 +66,93 @@ static void parse_config_line(config_t *config, const char *line) {
 
     if (sscanf(line, "keyboard_right=%u", &keycode)) {
         if (config->keycode_filter(keycode))
-            config->keybindings[JOYPAD_RIGHT] = keycode;
+            config->keybindings[GBMULATOR_JOYPAD_RIGHT] = keycode;
         return;
     }
     if (sscanf(line, "keyboard_left=%u", &keycode)) {
         if (config->keycode_filter(keycode))
-            config->keybindings[JOYPAD_LEFT] = keycode;
+            config->keybindings[GBMULATOR_JOYPAD_LEFT] = keycode;
         return;
     }
     if (sscanf(line, "keyboard_up=%u", &keycode)) {
         if (config->keycode_filter(keycode))
-            config->keybindings[JOYPAD_UP] = keycode;
+            config->keybindings[GBMULATOR_JOYPAD_UP] = keycode;
         return;
     }
     if (sscanf(line, "keyboard_down=%u", &keycode)) {
         if (config->keycode_filter(keycode))
-            config->keybindings[JOYPAD_DOWN] = keycode;
+            config->keybindings[GBMULATOR_JOYPAD_DOWN] = keycode;
         return;
     }
     if (sscanf(line, "keyboard_a=%u", &keycode)) {
         if (config->keycode_filter(keycode))
-            config->keybindings[JOYPAD_A] = keycode;
+            config->keybindings[GBMULATOR_JOYPAD_A] = keycode;
         return;
     }
     if (sscanf(line, "keyboard_b=%u", &keycode)) {
         if (config->keycode_filter(keycode))
-            config->keybindings[JOYPAD_B] = keycode;
+            config->keybindings[GBMULATOR_JOYPAD_B] = keycode;
         return;
     }
     if (sscanf(line, "keyboard_select=%u", &keycode)) {
         if (config->keycode_filter(keycode))
-            config->keybindings[JOYPAD_SELECT] = keycode;
+            config->keybindings[GBMULATOR_JOYPAD_SELECT] = keycode;
         return;
     }
     if (sscanf(line, "keyboard_start=%u", &keycode)) {
         if (config->keycode_filter(keycode))
-            config->keybindings[JOYPAD_START] = keycode;
+            config->keybindings[GBMULATOR_JOYPAD_START] = keycode;
         return;
     }
     if (sscanf(line, "keyboard_l=%u", &keycode)) {
         if (config->keycode_filter(keycode))
-            config->keybindings[JOYPAD_L] = keycode;
+            config->keybindings[GBMULATOR_JOYPAD_L] = keycode;
         return;
     }
     if (sscanf(line, "keyboard_r=%u", &keycode)) {
         if (config->keycode_filter(keycode))
-            config->keybindings[JOYPAD_R] = keycode;
+            config->keybindings[GBMULATOR_JOYPAD_R] = keycode;
         return;
     }
 
     if (sscanf(line, "gamepad_right=%u", &keycode)) {
-        config->gamepad_bindings[JOYPAD_RIGHT] = keycode;
+        config->gamepad_bindings[GBMULATOR_JOYPAD_RIGHT] = keycode;
         return;
     }
     if (sscanf(line, "gamepad_left=%u", &keycode)) {
-        config->gamepad_bindings[JOYPAD_LEFT] = keycode;
+        config->gamepad_bindings[GBMULATOR_JOYPAD_LEFT] = keycode;
         return;
     }
     if (sscanf(line, "gamepad_up=%u", &keycode)) {
-        config->gamepad_bindings[JOYPAD_UP] = keycode;
+        config->gamepad_bindings[GBMULATOR_JOYPAD_UP] = keycode;
         return;
     }
     if (sscanf(line, "gamepad_down=%u", &keycode)) {
-        config->gamepad_bindings[JOYPAD_DOWN] = keycode;
+        config->gamepad_bindings[GBMULATOR_JOYPAD_DOWN] = keycode;
         return;
     }
     if (sscanf(line, "gamepad_a=%u", &keycode)) {
-        config->gamepad_bindings[JOYPAD_A] = keycode;
+        config->gamepad_bindings[GBMULATOR_JOYPAD_A] = keycode;
         return;
     }
     if (sscanf(line, "gamepad_b=%u", &keycode)) {
-        config->gamepad_bindings[JOYPAD_B] = keycode;
+        config->gamepad_bindings[GBMULATOR_JOYPAD_B] = keycode;
         return;
     }
     if (sscanf(line, "gamepad_select=%u", &keycode)) {
-        config->gamepad_bindings[JOYPAD_SELECT] = keycode;
+        config->gamepad_bindings[GBMULATOR_JOYPAD_SELECT] = keycode;
         return;
     }
     if (sscanf(line, "gamepad_start=%u", &keycode)) {
-        config->gamepad_bindings[JOYPAD_START] = keycode;
+        config->gamepad_bindings[GBMULATOR_JOYPAD_START] = keycode;
         return;
     }
     if (sscanf(line, "gamepad_l=%u", &keycode)) {
-        config->gamepad_bindings[JOYPAD_L] = keycode;
+        config->gamepad_bindings[GBMULATOR_JOYPAD_L] = keycode;
         return;
     }
     if (sscanf(line, "gamepad_r=%u", &keycode)) {
-        config->gamepad_bindings[JOYPAD_R] = keycode;
+        config->gamepad_bindings[GBMULATOR_JOYPAD_R] = keycode;
         return;
     }
 }
@@ -182,46 +182,46 @@ char *config_save_to_string(config_t *config) {
 
     // separate snprintfs because key_parser() can return a pointer which contents get overwritten at each call
     size_t len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "keyboard_right=%u\n", config->keybindings[JOYPAD_RIGHT]);
+    snprintf(&config_str[len], 512 - len, "keyboard_right=%u\n", config->keybindings[GBMULATOR_JOYPAD_RIGHT]);
     len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "keyboard_left=%u\n", config->keybindings[JOYPAD_LEFT]);
+    snprintf(&config_str[len], 512 - len, "keyboard_left=%u\n", config->keybindings[GBMULATOR_JOYPAD_LEFT]);
     len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "keyboard_up=%u\n", config->keybindings[JOYPAD_UP]);
+    snprintf(&config_str[len], 512 - len, "keyboard_up=%u\n", config->keybindings[GBMULATOR_JOYPAD_UP]);
     len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "keyboard_down=%u\n", config->keybindings[JOYPAD_DOWN]);
+    snprintf(&config_str[len], 512 - len, "keyboard_down=%u\n", config->keybindings[GBMULATOR_JOYPAD_DOWN]);
     len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "keyboard_a=%u\n", config->keybindings[JOYPAD_A]);
+    snprintf(&config_str[len], 512 - len, "keyboard_a=%u\n", config->keybindings[GBMULATOR_JOYPAD_A]);
     len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "keyboard_b=%u\n", config->keybindings[JOYPAD_B]);
+    snprintf(&config_str[len], 512 - len, "keyboard_b=%u\n", config->keybindings[GBMULATOR_JOYPAD_B]);
     len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "keyboard_select=%u\n", config->keybindings[JOYPAD_SELECT]);
+    snprintf(&config_str[len], 512 - len, "keyboard_select=%u\n", config->keybindings[GBMULATOR_JOYPAD_SELECT]);
     len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "keyboard_start=%u\n", config->keybindings[JOYPAD_START]);
+    snprintf(&config_str[len], 512 - len, "keyboard_start=%u\n", config->keybindings[GBMULATOR_JOYPAD_START]);
     len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "keyboard_l=%u\n", config->keybindings[JOYPAD_L]);
+    snprintf(&config_str[len], 512 - len, "keyboard_l=%u\n", config->keybindings[GBMULATOR_JOYPAD_L]);
     len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "keyboard_r=%u\n", config->keybindings[JOYPAD_R]);
+    snprintf(&config_str[len], 512 - len, "keyboard_r=%u\n", config->keybindings[GBMULATOR_JOYPAD_R]);
     len = strlen(config_str);
 
-    snprintf(&config_str[len], 512 - len, "gamepad_right=%u\n", config->gamepad_bindings[JOYPAD_RIGHT]);
+    snprintf(&config_str[len], 512 - len, "gamepad_right=%u\n", config->gamepad_bindings[GBMULATOR_JOYPAD_RIGHT]);
     len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "gamepad_left=%u\n", config->gamepad_bindings[JOYPAD_LEFT]);
+    snprintf(&config_str[len], 512 - len, "gamepad_left=%u\n", config->gamepad_bindings[GBMULATOR_JOYPAD_LEFT]);
     len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "gamepad_up=%u\n", config->gamepad_bindings[JOYPAD_UP]);
+    snprintf(&config_str[len], 512 - len, "gamepad_up=%u\n", config->gamepad_bindings[GBMULATOR_JOYPAD_UP]);
     len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "gamepad_down=%u\n", config->gamepad_bindings[JOYPAD_DOWN]);
+    snprintf(&config_str[len], 512 - len, "gamepad_down=%u\n", config->gamepad_bindings[GBMULATOR_JOYPAD_DOWN]);
     len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "gamepad_a=%u\n", config->gamepad_bindings[JOYPAD_A]);
+    snprintf(&config_str[len], 512 - len, "gamepad_a=%u\n", config->gamepad_bindings[GBMULATOR_JOYPAD_A]);
     len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "gamepad_b=%u\n", config->gamepad_bindings[JOYPAD_B]);
+    snprintf(&config_str[len], 512 - len, "gamepad_b=%u\n", config->gamepad_bindings[GBMULATOR_JOYPAD_B]);
     len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "gamepad_select=%u\n", config->gamepad_bindings[JOYPAD_SELECT]);
+    snprintf(&config_str[len], 512 - len, "gamepad_select=%u\n", config->gamepad_bindings[GBMULATOR_JOYPAD_SELECT]);
     len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "gamepad_start=%u\n", config->gamepad_bindings[JOYPAD_START]);
+    snprintf(&config_str[len], 512 - len, "gamepad_start=%u\n", config->gamepad_bindings[GBMULATOR_JOYPAD_START]);
     len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "gamepad_l=%u\n", config->gamepad_bindings[JOYPAD_L]);
+    snprintf(&config_str[len], 512 - len, "gamepad_l=%u\n", config->gamepad_bindings[GBMULATOR_JOYPAD_L]);
     len = strlen(config_str);
-    snprintf(&config_str[len], 512 - len, "gamepad_r=%u\n", config->gamepad_bindings[JOYPAD_R]);
+    snprintf(&config_str[len], 512 - len, "gamepad_r=%u\n", config->gamepad_bindings[GBMULATOR_JOYPAD_R]);
 
     return config_str;
 }

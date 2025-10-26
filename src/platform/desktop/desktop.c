@@ -62,16 +62,16 @@ static config_t config = {
     .gamepad_button_name_parser = (keyname_parser_t) gamepad_button_name_parser,
 
     .keybindings = {
-        [JOYPAD_A] = GDK_KEY_KP_0,
-        [JOYPAD_B] = GDK_KEY_period,
-        [JOYPAD_SELECT] = GDK_KEY_KP_2,
-        [JOYPAD_START] = GDK_KEY_KP_1,
-        [JOYPAD_RIGHT] = GDK_KEY_Right,
-        [JOYPAD_LEFT] = GDK_KEY_Left,
-        [JOYPAD_UP] = GDK_KEY_Up,
-        [JOYPAD_DOWN] = GDK_KEY_Down,
-        [JOYPAD_R] = GDK_KEY_KP_5,
-        [JOYPAD_L] = GDK_KEY_KP_4,
+        [GBMULATOR_JOYPAD_A] = GDK_KEY_KP_0,
+        [GBMULATOR_JOYPAD_B] = GDK_KEY_period,
+        [GBMULATOR_JOYPAD_SELECT] = GDK_KEY_KP_2,
+        [GBMULATOR_JOYPAD_START] = GDK_KEY_KP_1,
+        [GBMULATOR_JOYPAD_RIGHT] = GDK_KEY_Right,
+        [GBMULATOR_JOYPAD_LEFT] = GDK_KEY_Left,
+        [GBMULATOR_JOYPAD_UP] = GDK_KEY_Up,
+        [GBMULATOR_JOYPAD_DOWN] = GDK_KEY_Down,
+        [GBMULATOR_JOYPAD_R] = GDK_KEY_KP_5,
+        [GBMULATOR_JOYPAD_L] = GDK_KEY_KP_4,
     },
     .keycode_filter = keycode_filter,
     .keycode_parser = gdk_keyval_name,
@@ -603,7 +603,7 @@ static void show_printer_window(GSimpleAction *action, GVariant *parameter, gpoi
     gtk_window_present(GTK_WINDOW(printer_window));
 }
 
-static gbmulator_joypad_button_t mouse_hover_joypad = 0xFF; // TODO better value to mean no joypad hovered
+static gbmulator_joypad_t mouse_hover_joypad = 0xFF; // TODO better value to mean no joypad hovered
 static bool is_mouse_pressed = false;
 void on_mouse_pressed(GtkGestureClick* self, gint n_press, gdouble x, gdouble y, gpointer user_data) {
     // TODO get_obj_at_coord is good but it doesn't work for dpad multpile directions at once in corners
@@ -613,7 +613,7 @@ void on_mouse_pressed(GtkGestureClick* self, gint n_press, gdouble x, gdouble y,
     if (obj_id == GLRENDERER_OBJ_ID_SCREEN)
         return;
 
-    mouse_hover_joypad = (gbmulator_joypad_button_t) obj_id;
+    mouse_hover_joypad = (gbmulator_joypad_t) obj_id;
     RESET_BIT(joypad_state, mouse_hover_joypad);
     glrenderer_set_obj_tint(emu_renderer, obj_id, 0.5f);
 }
@@ -644,11 +644,11 @@ static gboolean on_mouse_motion(GtkEventControllerMotion *self, gdouble x, gdoub
             SET_BIT(joypad_state, mouse_hover_joypad);
             glrenderer_set_obj_tint(emu_renderer, mouse_hover_joypad, 1.0f);
 
-            mouse_hover_joypad = (gbmulator_joypad_button_t) obj_id;
+            mouse_hover_joypad = (gbmulator_joypad_t) obj_id;
             RESET_BIT(joypad_state, mouse_hover_joypad);
             glrenderer_set_obj_tint(emu_renderer, obj_id, 0.5f);
         } else {
-            mouse_hover_joypad = (gbmulator_joypad_button_t) obj_id;
+            mouse_hover_joypad = (gbmulator_joypad_t) obj_id;
             RESET_BIT(joypad_state, mouse_hover_joypad);
             glrenderer_set_obj_tint(emu_renderer, obj_id, 0.5f);
         }

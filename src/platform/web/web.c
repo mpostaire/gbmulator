@@ -37,6 +37,11 @@ static bool keycode_filter(unsigned int key) {
     return false;
 }
 
+static void loop_func(void) {
+    app_run_frame();
+    app_render();
+}
+
 EMSCRIPTEN_KEEPALIVE void set_pause(uint8_t value) {
     if (!app_get_rom_title() || app_is_paused() == value)
         return;
@@ -46,7 +51,7 @@ EMSCRIPTEN_KEEPALIVE void set_pause(uint8_t value) {
     if (value)
         emscripten_cancel_main_loop();
     else
-        emscripten_set_main_loop(app_loop, app_get_fps(), 0);
+        emscripten_set_main_loop(loop_func, app_get_fps(), 0);
 
     // clang-format off
     EM_ASM({
@@ -70,7 +75,7 @@ EMSCRIPTEN_KEEPALIVE void set_scale(uint8_t value) {
 bool on_keyboard_input(int eventType, const EmscriptenKeyboardEvent *e, void *userData) {
     switch (eventType) {
     case EMSCRIPTEN_EVENT_KEYUP:
-        app_joypad_release(e->keyCode, false);
+        app_keyboard_release(e->keyCode);
         return true;
     case EMSCRIPTEN_EVENT_KEYDOWN:
         switch (e->keyCode) {
@@ -110,7 +115,7 @@ bool on_keyboard_input(int eventType, const EmscriptenKeyboardEvent *e, void *us
             }
             return true;
         default:
-            app_joypad_press(e->keyCode, false);
+            app_keyboard_press(e->keyCode);
             return true;
         }
     default:
@@ -140,7 +145,7 @@ EMSCRIPTEN_KEEPALIVE void finish_init(void) {
     }, config.speed, config.sound * 100, config.color_palette, config.mode);
     // clang-format on
 
-    for (int i = 0; i <= JOYPAD_L; i++) {
+    for (int i = 0; i < GBMULATOR_JOYPAD_END; i++) {
         // clang-format off
         EM_ASM({
             elem = document.getElementById("keybind-info-" + $0);
@@ -160,16 +165,16 @@ bool on_touch_input(int eventType, const EmscriptenTouchEvent *e, void *userData
 
         switch (eventType) {
         case EMSCRIPTEN_EVENT_TOUCHSTART:
-            app_touch_press(e->touches[i].pageX, e->touches[i].pageY);
+            app_touch_press(e->touches[i].identifier, e->touches[i].pageX, e->touches[i].pageY);
             ret = true;
             break;
         case EMSCRIPTEN_EVENT_TOUCHMOVE:
-            app_touch_move(e->touches[i].pageX, e->touches[i].pageY);
+            app_touch_move(e->touches[i].identifier, e->touches[i].pageX, e->touches[i].pageY);
             ret = true;
             break;
         case EMSCRIPTEN_EVENT_TOUCHEND:
         case EMSCRIPTEN_EVENT_TOUCHCANCEL:
-            app_touch_release(e->touches[i].pageX, e->touches[i].pageY);
+            app_touch_release(e->touches[i].identifier, e->touches[i].pageX, e->touches[i].pageY);
             ret = true;
             break;
         default:

@@ -12,16 +12,21 @@
 #define __attribute_used__ __attribute__((__used__))
 #endif
 
-struct {
-    bool          is_paused;
-    bool          is_rewinding;
-    uint32_t      steps_per_frame;
-    glrenderer_t *renderer;
-    uint8_t       joypad_state;
-    gbmulator_t  *emu;
-    gbmulator_t  *linked_emu;
-    int           sfd;
-    config_t      config;
+#define MAX_TOUCHES 32
+
+static struct {
+    bool                is_paused;
+    bool                is_rewinding;
+    uint32_t            steps_per_frame;
+    glrenderer_t       *renderer;
+    uint16_t            joypad_state;
+    gbmulator_t        *emu;
+    gbmulator_t        *linked_emu;
+    int                 sfd;
+    config_t            config;
+    uint8_t             joypad_touch_counter[GBMULATOR_JOYPAD_END];
+    bool                joypad_key_press_counter[GBMULATOR_JOYPAD_END];
+    glrenderer_obj_id_t touches_current_obj[32];
 } app;
 
 static void set_steps_per_frame(void) {
@@ -40,52 +45,85 @@ static void set_steps_per_frame(void) {
     }
 }
 
-static gbmulator_joypad_button_t app_keycode_to_joypad(unsigned int keycode) {
-    if (keycode == app.config.keybindings[JOYPAD_A])
-        return JOYPAD_A;
-    if (keycode == app.config.keybindings[JOYPAD_B])
-        return JOYPAD_B;
-    if (keycode == app.config.keybindings[JOYPAD_SELECT])
-        return JOYPAD_SELECT;
-    if (keycode == app.config.keybindings[JOYPAD_START])
-        return JOYPAD_START;
-    if (keycode == app.config.keybindings[JOYPAD_RIGHT])
-        return JOYPAD_RIGHT;
-    if (keycode == app.config.keybindings[JOYPAD_LEFT])
-        return JOYPAD_LEFT;
-    if (keycode == app.config.keybindings[JOYPAD_UP])
-        return JOYPAD_UP;
-    if (keycode == app.config.keybindings[JOYPAD_DOWN])
-        return JOYPAD_DOWN;
-    if (keycode == app.config.keybindings[JOYPAD_R])
-        return JOYPAD_R;
-    if (keycode == app.config.keybindings[JOYPAD_L])
-        return JOYPAD_L;
+static gbmulator_joypad_t app_keycode_to_joypad(unsigned int keycode) {
+    if (keycode == app.config.keybindings[GBMULATOR_JOYPAD_A])
+        return GBMULATOR_JOYPAD_A;
+    if (keycode == app.config.keybindings[GBMULATOR_JOYPAD_B])
+        return GBMULATOR_JOYPAD_B;
+    if (keycode == app.config.keybindings[GBMULATOR_JOYPAD_SELECT])
+        return GBMULATOR_JOYPAD_SELECT;
+    if (keycode == app.config.keybindings[GBMULATOR_JOYPAD_START])
+        return GBMULATOR_JOYPAD_START;
+    if (keycode == app.config.keybindings[GBMULATOR_JOYPAD_RIGHT])
+        return GBMULATOR_JOYPAD_RIGHT;
+    if (keycode == app.config.keybindings[GBMULATOR_JOYPAD_LEFT])
+        return GBMULATOR_JOYPAD_LEFT;
+    if (keycode == app.config.keybindings[GBMULATOR_JOYPAD_UP])
+        return GBMULATOR_JOYPAD_UP;
+    if (keycode == app.config.keybindings[GBMULATOR_JOYPAD_DOWN])
+        return GBMULATOR_JOYPAD_DOWN;
+    if (keycode == app.config.keybindings[GBMULATOR_JOYPAD_R])
+        return GBMULATOR_JOYPAD_R;
+    if (keycode == app.config.keybindings[GBMULATOR_JOYPAD_L])
+        return GBMULATOR_JOYPAD_L;
     return -1;
 }
 
-static gbmulator_joypad_button_t app_button_to_joypad(unsigned int button) {
-    if (button == app.config.gamepad_bindings[JOYPAD_A])
-        return JOYPAD_A;
-    if (button == app.config.gamepad_bindings[JOYPAD_B])
-        return JOYPAD_B;
-    if (button == app.config.gamepad_bindings[JOYPAD_SELECT])
-        return JOYPAD_SELECT;
-    if (button == app.config.gamepad_bindings[JOYPAD_START])
-        return JOYPAD_START;
-    if (button == app.config.gamepad_bindings[JOYPAD_RIGHT])
-        return JOYPAD_RIGHT;
-    if (button == app.config.gamepad_bindings[JOYPAD_LEFT])
-        return JOYPAD_LEFT;
-    if (button == app.config.gamepad_bindings[JOYPAD_UP])
-        return JOYPAD_UP;
-    if (button == app.config.gamepad_bindings[JOYPAD_DOWN])
-        return JOYPAD_DOWN;
-    if (button == app.config.gamepad_bindings[JOYPAD_R])
-        return JOYPAD_R;
-    if (button == app.config.gamepad_bindings[JOYPAD_L])
-        return JOYPAD_L;
+static gbmulator_joypad_t app_button_to_joypad(unsigned int button) {
+    if (button == app.config.gamepad_bindings[GBMULATOR_JOYPAD_A])
+        return GBMULATOR_JOYPAD_A;
+    if (button == app.config.gamepad_bindings[GBMULATOR_JOYPAD_B])
+        return GBMULATOR_JOYPAD_B;
+    if (button == app.config.gamepad_bindings[GBMULATOR_JOYPAD_SELECT])
+        return GBMULATOR_JOYPAD_SELECT;
+    if (button == app.config.gamepad_bindings[GBMULATOR_JOYPAD_START])
+        return GBMULATOR_JOYPAD_START;
+    if (button == app.config.gamepad_bindings[GBMULATOR_JOYPAD_RIGHT])
+        return GBMULATOR_JOYPAD_RIGHT;
+    if (button == app.config.gamepad_bindings[GBMULATOR_JOYPAD_LEFT])
+        return GBMULATOR_JOYPAD_LEFT;
+    if (button == app.config.gamepad_bindings[GBMULATOR_JOYPAD_UP])
+        return GBMULATOR_JOYPAD_UP;
+    if (button == app.config.gamepad_bindings[GBMULATOR_JOYPAD_DOWN])
+        return GBMULATOR_JOYPAD_DOWN;
+    if (button == app.config.gamepad_bindings[GBMULATOR_JOYPAD_R])
+        return GBMULATOR_JOYPAD_R;
+    if (button == app.config.gamepad_bindings[GBMULATOR_JOYPAD_L])
+        return GBMULATOR_JOYPAD_L;
     return -1;
+}
+
+static inline void btn_press(gbmulator_joypad_t button, bool is_touch) {
+    if (button < 0 || button >= GBMULATOR_JOYPAD_END)
+        return;
+
+    if (is_touch)
+        app.joypad_touch_counter[button]++;
+    else
+        app.joypad_key_press_counter[button] = true;
+
+    if (app.joypad_touch_counter[button] + app.joypad_key_press_counter[button] == 1) {
+        RESET_BIT(app.joypad_state, button);
+        glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) button, 0.5f);
+    }
+}
+
+static inline void btn_release(gbmulator_joypad_t button, bool is_touch) {
+    if (button < 0 || button >= GBMULATOR_JOYPAD_END)
+        return;
+
+    if (is_touch)
+        app.joypad_touch_counter[button]--;
+    else
+        app.joypad_key_press_counter[button] = false;
+
+    if (app.joypad_touch_counter[button] > 0)
+        app.joypad_touch_counter[button]--;
+
+    if (app.joypad_touch_counter[button] + app.joypad_key_press_counter[button] == 0) {
+        SET_BIT(app.joypad_state, button);
+        glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) button, 1.0f);
+    }
 }
 
 __attribute_used__ void app_init(config_t *default_config) {
@@ -106,6 +144,9 @@ __attribute_used__ void app_init(config_t *default_config) {
         screen_w = GB_SCREEN_WIDTH;
         screen_h = GB_SCREEN_HEIGHT;
     }
+
+    for (int i = 0; i < MAX_TOUCHES; i++)
+        app.touches_current_obj[i] = GLRENDERER_OBJ_ID_SCREEN;
 
     set_steps_per_frame();
 
@@ -140,7 +181,7 @@ __attribute_used__ void app_reset(void) {
     alrenderer_clear_queue();
 }
 
-__attribute_used__ void app_loop(void) {
+__attribute_used__ void app_run_frame(void) {
     if (app.is_paused)
         return;
 
@@ -165,31 +206,128 @@ __attribute_used__ void app_loop(void) {
         }
         gbmulator_run_steps(app.emu, app.steps_per_frame);
     }
+}
 
-    // TODO should not be in this loop because desktop platform can only do this during a gl area render
+__attribute_used__ void app_render(void) {
     glrenderer_render(app.renderer);
 }
 
-__attribute_used__ void app_joypad_press(unsigned int key, bool is_gamepad) {
-    gbmulator_joypad_button_t button;
-    if (is_gamepad)
-        button = app_button_to_joypad(key);
-    else
-        button = app_keycode_to_joypad(key);
+__attribute_used__ void app_keyboard_press(unsigned int key) {
+    if (app.is_paused || !app.emu)
+        return;
 
-    if (!app.is_paused && app.emu && button >= 0)
-        RESET_BIT(app.joypad_state, button);
+    btn_press(app_keycode_to_joypad(key), false);
 }
 
-__attribute_used__ void app_joypad_release(unsigned int key, bool is_gamepad) {
-    gbmulator_joypad_button_t button;
-    if (is_gamepad)
-        button = app_button_to_joypad(key);
-    else
-        button = app_keycode_to_joypad(key);
+__attribute_used__ void app_keyboard_release(unsigned int key) {
+    if (app.is_paused || !app.emu)
+        return;
 
-    if (!app.is_paused && app.emu && button >= 0)
-        SET_BIT(app.joypad_state, button);
+    btn_release(app_keycode_to_joypad(key), false);
+}
+
+__attribute_used__ void app_gamepad_press(unsigned int button) {
+    if (app.is_paused || !app.emu)
+        return;
+
+    btn_press(app_button_to_joypad(button), false);
+}
+
+__attribute_used__ void app_gamepad_release(unsigned int button) {
+    if (app.is_paused || !app.emu)
+        return;
+
+    btn_release(app_button_to_joypad(button), false);
+}
+
+static inline void btn_touch_press(glrenderer_obj_id_t obj_id) {
+    switch (obj_id) {
+    case GLRENDERER_OBJ_ID_DPAD_UP_RIGHT:
+        btn_press(GBMULATOR_JOYPAD_UP, true);
+        btn_press(GBMULATOR_JOYPAD_RIGHT, true);
+        break;
+    case GLRENDERER_OBJ_ID_DPAD_UP_LEFT:
+        btn_press(GBMULATOR_JOYPAD_UP, true);
+        btn_press(GBMULATOR_JOYPAD_LEFT, true);
+        break;
+    case GLRENDERER_OBJ_ID_DPAD_DOWN_RIGHT:
+        btn_press(GBMULATOR_JOYPAD_DOWN, true);
+        btn_press(GBMULATOR_JOYPAD_RIGHT, true);
+        break;
+    case GLRENDERER_OBJ_ID_DPAD_DOWN_LEFT:
+        btn_press(GBMULATOR_JOYPAD_DOWN, true);
+        btn_press(GBMULATOR_JOYPAD_LEFT, true);
+        break;
+    case GLRENDERER_OBJ_ID_LINK:
+    case GLRENDERER_OBJ_ID_DPAD_CENTER:
+    case GLRENDERER_OBJ_ID_SCREEN:
+        break;
+    default:
+        btn_press((gbmulator_joypad_t) obj_id, true);
+        break;
+    }
+}
+
+static inline void btn_touch_release(glrenderer_obj_id_t obj_id) {
+    switch (obj_id) {
+    case GLRENDERER_OBJ_ID_DPAD_UP_RIGHT:
+        btn_release(GBMULATOR_JOYPAD_UP, true);
+        btn_release(GBMULATOR_JOYPAD_RIGHT, true);
+        break;
+    case GLRENDERER_OBJ_ID_DPAD_UP_LEFT:
+        btn_release(GBMULATOR_JOYPAD_UP, true);
+        btn_release(GBMULATOR_JOYPAD_LEFT, true);
+        break;
+    case GLRENDERER_OBJ_ID_DPAD_DOWN_RIGHT:
+        btn_release(GBMULATOR_JOYPAD_DOWN, true);
+        btn_release(GBMULATOR_JOYPAD_RIGHT, true);
+        break;
+    case GLRENDERER_OBJ_ID_DPAD_DOWN_LEFT:
+        btn_release(GBMULATOR_JOYPAD_DOWN, true);
+        btn_release(GBMULATOR_JOYPAD_LEFT, true);
+        break;
+    case GLRENDERER_OBJ_ID_LINK:
+    case GLRENDERER_OBJ_ID_DPAD_CENTER:
+    case GLRENDERER_OBJ_ID_SCREEN:
+        break;
+    default:
+        btn_release((gbmulator_joypad_t) obj_id, true);
+        break;
+    }
+}
+
+__attribute_used__ void app_touch_press(uint8_t touch_id, uint32_t x, uint32_t y) {
+    if (app.is_paused || !app.emu || touch_id >= MAX_TOUCHES)
+        return;
+
+    glrenderer_obj_id_t obj_id = glrenderer_get_obj_at_coord(app.renderer, x, y);
+
+    btn_touch_press(obj_id);
+
+    app.touches_current_obj[touch_id] = obj_id;
+}
+
+__attribute_used__ void app_touch_release(uint8_t touch_id, uint32_t x, uint32_t y) {
+    if (app.is_paused || !app.emu || touch_id >= MAX_TOUCHES)
+        return;
+
+    btn_touch_release(app.touches_current_obj[touch_id]);
+
+    app.touches_current_obj[touch_id] = GLRENDERER_OBJ_ID_SCREEN;
+}
+
+__attribute_used__ void app_touch_move(uint8_t touch_id, uint32_t x, uint32_t y) {
+    if (app.is_paused || !app.emu || touch_id >= MAX_TOUCHES)
+        return;
+
+    glrenderer_obj_id_t obj_id = glrenderer_get_obj_at_coord(app.renderer, x, y);
+
+    if (obj_id != app.touches_current_obj[touch_id]) {
+        btn_touch_release(app.touches_current_obj[touch_id]);
+        btn_touch_press(obj_id);
+    }
+
+    app.touches_current_obj[touch_id] = obj_id;
 }
 
 static void on_new_frame_cb(const uint8_t *pixels) {
@@ -325,58 +463,21 @@ __attribute_used__ const char *app_get_rom_title(void) {
 }
 
 __attribute_used__ void app_set_touchscreen_mode(bool enable) {
-    glrenderer_set_show_buttons(app.renderer, enable);
-}
+    uint32_t visible_btns = 0;
 
-// TODO touch input is still a bit buggy
-static gbmulator_joypad_button_t mouse_hover_joypad = 0xFF; // TODO better value to mean no joypad hovered
-static bool                      is_mouse_pressed   = false;
-__attribute_used__ void          app_touch_press(uint32_t x, uint32_t y) {
-    if (app.is_paused || !app.emu)
-        return;
+    if (enable) {
+        visible_btns |= (1 << GLRENDERER_OBJ_ID_A) | (1 << GLRENDERER_OBJ_ID_B) | (1 << GLRENDERER_OBJ_ID_SELECT) |
+                        (1 << GLRENDERER_OBJ_ID_START) | (1 << GLRENDERER_OBJ_ID_DPAD_RIGHT) |
+                        (1 << GLRENDERER_OBJ_ID_DPAD_LEFT) | (1 << GLRENDERER_OBJ_ID_DPAD_UP) |
+                        (1 << GLRENDERER_OBJ_ID_DPAD_DOWN) | (1 << GLRENDERER_OBJ_ID_DPAD_CENTER) |
+                        (1 << GLRENDERER_OBJ_ID_DPAD_UP_RIGHT) | (1 << GLRENDERER_OBJ_ID_DPAD_UP_LEFT) |
+                        (1 << GLRENDERER_OBJ_ID_DPAD_DOWN_RIGHT) | (1 << GLRENDERER_OBJ_ID_DPAD_DOWN_LEFT);
 
-    glrenderer_obj_id_t obj_id = glrenderer_get_obj_at_coord(app.renderer, x, y);
-    is_mouse_pressed           = true;
+        // TODO (1 << GLRENDERER_OBJ_ID_LINK)
 
-    if (obj_id < 0 || obj_id >= GLRENDERER_OBJ_ID_SCREEN)
-        return;
-
-    mouse_hover_joypad = (gbmulator_joypad_button_t) obj_id;
-    RESET_BIT(app.joypad_state, mouse_hover_joypad);
-    glrenderer_set_obj_tint(app.renderer, obj_id, 0.5f);
-}
-
-__attribute_used__ void app_touch_release(uint32_t x, uint32_t y) {
-    if (app.is_paused || !app.emu)
-        return;
-
-    is_mouse_pressed = false;
-    SET_BIT(app.joypad_state, mouse_hover_joypad);
-    glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) mouse_hover_joypad, 1.0f);
-    mouse_hover_joypad = 0xFF;
-}
-
-__attribute_used__ void app_touch_move(uint32_t x, uint32_t y) {
-    if (!is_mouse_pressed)
-        return;
-
-    glrenderer_obj_id_t obj_id = glrenderer_get_obj_at_coord(app.renderer, x, y);
-
-    if (obj_id == GLRENDERER_OBJ_ID_SCREEN) {
-        SET_BIT(app.joypad_state, mouse_hover_joypad);
-        if (mouse_hover_joypad != 0xFF)
-            glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) mouse_hover_joypad, 1.0f);
-        mouse_hover_joypad = 0xFF;
-    } else if (mouse_hover_joypad != 0xFF) {
-        SET_BIT(app.joypad_state, mouse_hover_joypad);
-        glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) mouse_hover_joypad, 1.0f);
-
-        mouse_hover_joypad = (gbmulator_joypad_button_t) obj_id;
-        RESET_BIT(app.joypad_state, mouse_hover_joypad);
-        glrenderer_set_obj_tint(app.renderer, obj_id, 0.5f);
-    } else {
-        mouse_hover_joypad = (gbmulator_joypad_button_t) obj_id;
-        RESET_BIT(app.joypad_state, mouse_hover_joypad);
-        glrenderer_set_obj_tint(app.renderer, obj_id, 0.5f);
+        if (app_get_mode() == GBMULATOR_MODE_GBA)
+            visible_btns |= (1 << GLRENDERER_OBJ_ID_R) | (1 << GLRENDERER_OBJ_ID_L);
     }
+
+    glrenderer_set_show_buttons(app.renderer, visible_btns);
 }

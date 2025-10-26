@@ -254,23 +254,23 @@
 //     return regs.bc == 0x0305 && regs.de == 0x080D && regs.hl == 0x1522;
 // }
 
-// static gb_joypad_button_t str_to_joypad(char *str) {
+// static gbmulator_joypad_t str_to_joypad(char *str) {
 //     if (!strncmp(str, "right", 7))
-//         return JOYPAD_RIGHT;
+//         return GBMULATOR_JOYPAD_RIGHT;
 //     if (!strncmp(str, "left", 7))
-//         return JOYPAD_LEFT;
+//         return GBMULATOR_JOYPAD_LEFT;
 //     if (!strncmp(str, "up", 7))
-//         return JOYPAD_UP;
+//         return GBMULATOR_JOYPAD_UP;
 //     if (!strncmp(str, "down", 7))
-//         return JOYPAD_DOWN;
+//         return GBMULATOR_JOYPAD_DOWN;
 //     if (!strncmp(str, "a", 7))
-//         return JOYPAD_A;
+//         return GBMULATOR_JOYPAD_A;
 //     if (!strncmp(str, "b", 7))
-//         return JOYPAD_B;
+//         return GBMULATOR_JOYPAD_B;
 //     if (!strncmp(str, "select", 7))
-//         return JOYPAD_SELECT;
+//         return GBMULATOR_JOYPAD_SELECT;
 //     if (!strncmp(str, "start", 7))
-//         return JOYPAD_START;
+//         return GBMULATOR_JOYPAD_START;
 //     exit(EXIT_FAILURE);
 // }
 
@@ -285,7 +285,7 @@
 
 //     while (delay_str && input_str) {
 //         int delay = atoi(delay_str);
-//         gb_joypad_button_t input = str_to_joypad(input_str);
+//         gbmulator_joypad_t input = str_to_joypad(input_str);
 
 //         gb_run_frames(gb, delay * GB_FRAMES_PER_SECOND);
 //         gb_joypad_press(gb, input);

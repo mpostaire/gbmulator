@@ -43,7 +43,7 @@
         (gb)->ppu->pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 3] = 0xFF; \
     } while (0)
 
-static const uint8_t dmg_palettes[PPU_COLOR_PALETTE_MAX][4][3] = {
+static const uint8_t dmg_palettes[PPU_COLOR_PALETTE_END][4][3] = {
     { // grayscale colors
         { 0xFF, 0xFF, 0xFF },
         { 0xAA, 0xAA, 0xAA },

@@ -18,9 +18,9 @@ typedef struct {
     char               link_host[INET6_ADDRSTRLEN];
     char               link_port[6];
 
-    unsigned int gamepad_bindings[10];
+    unsigned int gamepad_bindings[GBMULATOR_JOYPAD_END];
+    unsigned int keybindings[GBMULATOR_JOYPAD_END];
 
-    unsigned int     keybindings[10];
     keycode_filter_t keycode_filter;
 } config_t;
 
