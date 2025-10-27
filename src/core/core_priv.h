@@ -20,24 +20,24 @@ typedef void (*cable_data_received_cb_t)(void *impl);
 
 struct gbmulator_t {
     gbmulator_options_t opts;
-    void *impl;
+    void               *impl;
 
-    init_func_t init;
-    quit_func_t quit;
-    step_func_t step;
-    get_save_func_t get_save;
-    load_save_func_t load_save;
-    get_savestate_func_t get_savestate;
-    load_savestate_func_t load_savestate;
-    get_rom_title_func_t get_rom_title;
-    print_status_func_t print_status;
+    init_func_t             init;
+    quit_func_t             quit;
+    step_func_t             step;
+    get_save_func_t         get_save;
+    load_save_func_t        load_save;
+    get_savestate_func_t    get_savestate;
+    load_savestate_func_t   load_savestate;
+    get_rom_title_func_t    get_rom_title;
+    print_status_func_t     print_status;
     get_joypad_state_func_t get_joypad_state;
     set_joypad_state_func_t set_joypad_state;
-    get_rom_func_t get_rom;
+    get_rom_func_t          get_rom;
 
     struct {
-        gbmulator_t *other_device;
-        cable_shift_bit_cb_t shift_bit;
+        gbmulator_t             *other_device;
+        cable_shift_bit_cb_t     shift_bit;
         cable_data_received_cb_t data_received;
     } cable;
 
@@ -54,8 +54,8 @@ struct gbmulator_t {
     //     for rollback netplay, disallow rewind gameplay BUT use the same code / mechanism to rollback (once we have more than max buffer of previous states, sleep the emulation to wait for the other one to finally respond)
     struct {
         gbmulator_savestate_t *states;
-        ssize_t head;
-        size_t len;
-        size_t state_size; // all states for a same ROM are the same size
+        ssize_t                head;
+        size_t                 len;
+        size_t                 state_size; // all states for a same ROM are the same size
     } rewind_stack;
 };

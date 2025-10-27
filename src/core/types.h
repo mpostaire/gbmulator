@@ -5,6 +5,14 @@
 
 #include "core_defs.h"
 
+#ifndef true
+#define true 1
+#endif
+
+#ifndef false
+#define false 0
+#endif
+
 typedef struct __attribute__((packed)) {
     char    identifier[sizeof(SAVESTATE_STRING)];
     char    rom_title[16];

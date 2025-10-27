@@ -3,7 +3,7 @@
 #include "gba/gba.h"
 #include "gbprinter/gbprinter.h"
 
-#define N_REWIND_STATES (8 * GB_FRAMES_PER_SECOND)
+#define N_REWIND_STATES           (8 * GB_FRAMES_PER_SECOND)
 #define DEFAULT_APU_SAMPLING_RATE 44100
 
 static bool set_funcs(gbmulator_t *emu, gbmulator_mode_t mode) {
@@ -82,7 +82,7 @@ gbmulator_t *gbmulator_init(const gbmulator_options_t *opts) {
     }
 
     emu->rewind_stack.states = xmalloc(N_REWIND_STATES * /*get_savestate_expected_len(emu)*/ 100000);
-    emu->rewind_stack.head = -1;
+    emu->rewind_stack.head   = -1;
 
     return emu;
 }
@@ -106,7 +106,7 @@ bool gbmulator_reset(gbmulator_t *emu, gbmulator_mode_t new_mode) {
     if (!emu)
         return false;
 
-    size_t rom_size;
+    size_t   rom_size;
     uint8_t *rom = emu->get_rom(emu->impl, &rom_size);
 
     if (rom_size == 0 || !rom)
@@ -117,7 +117,7 @@ bool gbmulator_reset(gbmulator_t *emu, gbmulator_mode_t new_mode) {
 
     emu->opts.mode = new_mode;
 
-    size_t save_len;
+    size_t   save_len;
     uint8_t *save_data = emu->get_save(emu->impl, &save_len);
 
     emu->quit(emu->impl);
@@ -127,9 +127,9 @@ bool gbmulator_reset(gbmulator_t *emu, gbmulator_mode_t new_mode) {
         return false;
     }
 
-    emu->opts.rom = rom_bak;
+    emu->opts.rom      = rom_bak;
     emu->opts.rom_size = rom_size;
-    emu->impl = emu->init(emu);
+    emu->impl          = emu->init(emu);
 
     if (!emu->impl) {
         free(emu);
@@ -294,19 +294,19 @@ void gbmulator_set_options(gbmulator_t *emu, const gbmulator_options_t *opts) {
 
     // allow changes of mode, rom, rom_size and apu_sampling_rate only once (inside gbmulator_init())
     if (!emu->impl) {
-        emu->opts.mode = opts->mode;
-        emu->opts.rom = opts->rom;
-        emu->opts.rom_size = opts->rom_size;
+        emu->opts.mode              = opts->mode;
+        emu->opts.rom               = opts->rom;
+        emu->opts.rom_size          = opts->rom_size;
         emu->opts.apu_sampling_rate = opts->apu_sampling_rate == 0 ? DEFAULT_APU_SAMPLING_RATE : opts->apu_sampling_rate;
     }
 
-    emu->opts.palette = opts->palette;
-    emu->opts.apu_speed = MAX(opts->apu_speed, 1.0f);
-    emu->opts.on_new_line = opts->on_new_line;
-    emu->opts.on_new_frame = opts->on_new_frame;
-    emu->opts.on_new_sample = opts->on_new_sample;
+    emu->opts.palette                  = opts->palette;
+    emu->opts.apu_speed                = MAX(opts->apu_speed, 1.0f);
+    emu->opts.on_new_line              = opts->on_new_line;
+    emu->opts.on_new_frame             = opts->on_new_frame;
+    emu->opts.on_new_sample            = opts->on_new_sample;
     emu->opts.on_accelerometer_request = opts->on_accelerometer_request;
-    emu->opts.on_camera_capture_image = opts->on_camera_capture_image;
+    emu->opts.on_camera_capture_image  = opts->on_camera_capture_image;
 }
 
 char *gbmulator_get_rom_title(gbmulator_t *emu) {
@@ -348,11 +348,11 @@ void gbmulator_link_connect(gbmulator_t *emu, gbmulator_t *other, gbmulator_link
 
     switch (type) {
     case GBMULATOR_LINK_CABLE:
-        emu->cable.other_device = other;
+        emu->cable.other_device                     = other;
         emu->cable.other_device->cable.other_device = emu;
         break;
     case GBMULATOR_LINK_IR:
-        emu->ir.other_device = other;
+        emu->ir.other_device                  = other;
         emu->ir.other_device->ir.other_device = emu;
         break;
     default:
@@ -367,11 +367,11 @@ void gbmulator_link_disconnect(gbmulator_t *emu, gbmulator_link_t type) {
     switch (type) {
     case GBMULATOR_LINK_CABLE:
         emu->cable.other_device->cable.other_device = NULL;
-        emu->cable.other_device = NULL;
+        emu->cable.other_device                     = NULL;
         break;
     case GBMULATOR_LINK_IR:
         emu->ir.other_device->ir.other_device = NULL;
-        emu->ir.other_device = NULL;
+        emu->ir.other_device                  = NULL;
         break;
     default:
         break;
@@ -383,7 +383,7 @@ uint16_t gbmulator_get_rom_checksum(gbmulator_t *emu) {
         return 0;
 
     uint16_t checksum = 0;
-    size_t rom_size;
+    size_t   rom_size;
     uint8_t *rom = gbmulator_get_rom(emu, &rom_size);
     for (unsigned int i = 0; i < rom_size; i += 2)
         checksum = checksum - (rom[i] + rom[i + 1]) - 1;

@@ -10,14 +10,6 @@
 #include "gba/gba_defs.h"
 #include "gbprinter/gbprinter_defs.h"
 
-#ifndef true
-#   define true 1
-#endif
-
-#ifndef false
-#   define false 0
-#endif
-
 typedef struct gbmulator_t gbmulator_t;
 
 gbmulator_t *gbmulator_init(const gbmulator_options_t *opts);
@@ -58,12 +50,12 @@ uint8_t *gbmulator_get_rom(gbmulator_t *emu, size_t *rom_size);
 
 /**
  * Connects 2 emulators through the link cable.
- * This automatically disconnects a previous link cable connection. 
+ * This automatically disconnects a previous link cable connection.
  * Freeing the previously linked device is the responsibility of the caller.
  * @param emu the fist emulator.
  * @param other the second emulator.
  * @param type the type of link.
-*/
+ */
 void gbmulator_link_connect(gbmulator_t *emu, gbmulator_t *other, gbmulator_link_t type);
 
 /**
@@ -71,7 +63,7 @@ void gbmulator_link_connect(gbmulator_t *emu, gbmulator_t *other, gbmulator_link
  * Freeing the previously connected device is the responsibility of the caller.
  * @param emu the emulator.
  * @param type the type of link.
-*/
+ */
 void gbmulator_link_disconnect(gbmulator_t *emu, gbmulator_link_t type);
 
 uint16_t gbmulator_get_rom_checksum(gbmulator_t *emu);
