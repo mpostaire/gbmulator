@@ -9,7 +9,7 @@
 static bool keycode_filter(unsigned int key);
 
 // config struct initialized to defaults
-static config_t default_config = {
+static const config_t default_config = {
     .mode          = GBMULATOR_MODE_GBC,
     .color_palette = PPU_COLOR_PALETTE_ORIG,
     .sound         = 0.25f,
@@ -126,7 +126,8 @@ bool on_keyboard_input(int eventType, const EmscriptenKeyboardEvent *e, void *us
 EMSCRIPTEN_KEEPALIVE void finish_init(void) {
     // TODO L/R buttons
 
-    app_init(&default_config);
+    app_init();
+    app_load_config(&default_config);
 
     config_t config;
     app_get_config(&config);

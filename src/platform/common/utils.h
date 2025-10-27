@@ -34,7 +34,7 @@ bool load_state_from_file(gbmulator_t *emu, const char *path);
  * @returns the contents of the file at `path` or `NULL` if the contents are invalid or an unsupported ROM.
  *          gb_init() won't fail if the return value is not `NULL`.
  */
-uint8_t *get_rom(const char *path, size_t *rom_size);
+uint8_t *read_rom(const char *path, size_t *rom_size);
 
 char *get_config_dir(void);
 

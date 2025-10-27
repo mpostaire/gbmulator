@@ -307,8 +307,11 @@
                 const data_ptr = Module._malloc(num_bytes);
                 const data_on_heap = new Uint8Array(Module.HEAPU8.buffer, data_ptr, num_bytes);
                 data_on_heap.set(uint8Arr);
-                Module.ccall('app_load_cartridge', 'void', ['number', 'number'], [data_on_heap.byteOffset, uint8Arr.length]);
+                let success = Module.ccall('app_load_cartridge', 'boolean', ['number', 'number'], [data_on_heap.byteOffset, uint8Arr.length]);
                 Module._free(data_ptr)
+
+                if (!success)
+                    return;
 
                 document.getElementById('reset-rom').disabled = 0;
                 document.getElementById('mode-setter-label').innerHTML = "Mode: (applied on restart)";

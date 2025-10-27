@@ -174,7 +174,10 @@ bool load_state_from_file(gbmulator_t *emu, const char *path) {
     return ret;
 }
 
-uint8_t *get_rom(const char *path, size_t *rom_size) {
+uint8_t *read_rom(const char *path, size_t *rom_size) {
+    if (!path || !rom_size)
+        return NULL;
+
     const char *dot = strrchr(path, '.');
     if (!dot ||
         (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) &&
@@ -184,24 +187,6 @@ uint8_t *get_rom(const char *path, size_t *rom_size) {
         return NULL;
     }
 
-    FILE *f = fopen(path, "rb");
-    if (!f) {
-        errnoprintf("opening file %s", path);
-        return NULL;
-    }
-
-    fseek(f, 0, SEEK_END);
-    size_t len = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    uint8_t *rom = xmalloc(len);
-    if (!fread(rom, len, 1, f)) {
-        errnoprintf("reading %s", path);
-        fclose(f);
-        return NULL;
-    }
-    fclose(f);
-
     // TODO
     // if (!gb_is_rom_valid(rom)) {
     //     eprintf("%s: invalid or unsupported rom\n", path);
@@ -209,9 +194,7 @@ uint8_t *get_rom(const char *path, size_t *rom_size) {
     //     return NULL;
     // }
 
-    if (rom_size)
-        *rom_size = len;
-    return rom;
+    return read_file(path, rom_size);
 }
 
 static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
@@ -221,33 +204,33 @@ static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
 
     char *home = getenv("HOME");
 
-    static char path[256];
+    static char path[128];
     snprintf(path, sizeof(path), "%s/%s", home, fallback);
 
     return path;
 }
 
 char *get_config_dir(void) {
-    static char path[256];
+    static char path[192];
     char       *xdg_config = get_xdg_path("XDG_DATA_HOME", ".config");
 
-    snprintf(path, sizeof(path), "%s%s", xdg_config, "/gbmulator");
+    snprintf(path, sizeof(path), "%s/gbmulator", xdg_config);
     return path;
 }
 
 char *get_save_dir(void) {
-    static char path[256];
+    static char path[192];
     char       *xdg_config = get_xdg_path("XDG_DATA_HOME", ".local/share");
 
-    snprintf(path, sizeof(path), "%s%s", xdg_config, "/gbmulator");
+    snprintf(path, sizeof(path), "%s/gbmulator", xdg_config);
     return path;
 }
 
 char *get_savestate_dir(void) {
-    static char path[256];
+    static char path[192];
     char       *xdg_config = get_xdg_path("XDG_DATA_HOME", ".local/share");
 
-    snprintf(path, sizeof(path), "%s%s", xdg_config, "/gbmulator/savestates");
+    snprintf(path, sizeof(path), "%s/gbmulator/savestates", xdg_config);
     return path;
 }
 
@@ -255,7 +238,7 @@ char *get_config_path(void) {
     char *config_dir = get_config_dir();
 
     static char path[256];
-    snprintf(path, sizeof(path), "%s%s", config_dir, "/gbmulator.conf");
+    snprintf(path, sizeof(path), "%s/gbmulator.conf", config_dir);
     return path;
 }
 

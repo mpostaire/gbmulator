@@ -2,7 +2,10 @@
 
 #include "config.h"
 
-void app_init(config_t *default_config);
+void app_init(void);
+
+// can be called before app_init() --> maybe rename app_init()
+void app_load_config(const config_t *default_config);
 
 void app_quit(void);
 
@@ -26,11 +29,13 @@ void app_touch_release(uint8_t touch_id, uint32_t x, uint32_t y);
 
 void app_touch_move(uint8_t touch_id, uint32_t x, uint32_t y);
 
-void app_load_cartridge(uint8_t *rom, size_t rom_size);
+bool app_load_cartridge(uint8_t *rom, size_t rom_size);
 
 void app_set_pause(bool is_paused);
 
 void app_set_sound(float value);
+
+void app_set_drc(bool is_enabled);
 
 gbmulator_mode_t app_get_mode(void);
 
@@ -57,3 +62,7 @@ uint32_t app_get_fps(void);
 const char *app_get_rom_title(void);
 
 void app_set_touchscreen_mode(bool enable);
+
+void app_set_joypad_opacity(float value);
+
+bool app_set_keybind(gbmulator_joypad_t button, unsigned int key, gbmulator_joypad_t *swapped_button, unsigned int *swapped_key);

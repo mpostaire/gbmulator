@@ -93,6 +93,7 @@ static gbmulator_joypad_t app_button_to_joypad(unsigned int button) {
     return -1;
 }
 
+// TODO a bit buggy when combining clicks (touches) and keyboard input
 static inline void btn_press(gbmulator_joypad_t button, bool is_touch) {
     if (button < 0 || button >= GBMULATOR_JOYPAD_END)
         return;
@@ -126,11 +127,23 @@ static inline void btn_release(gbmulator_joypad_t button, bool is_touch) {
     }
 }
 
-__attribute_used__ void app_init(config_t *default_config) {
+static inline void apply_config(void) {
+    app_set_speed(app.config.speed);
+
+    alrenderer_enable_dynamic_rate_control(app.config.sound_drc);
+    app_set_sound(app.config.sound);
+
+    app_set_touchscreen_mode(app.config.enable_joypad);
+    app_set_joypad_opacity(app.config.joypad_opacity);
+}
+
+__attribute_used__ void app_init(void) {
+    static config_t config_bak;
+    config_bak = app.config;
+
     memset(&app, 0, sizeof(app));
 
-    app.config = *default_config;
-    config_load_from_file(&app.config, get_config_path());
+    app.config = config_bak;
 
     app.is_paused    = true;
     app.joypad_state = 0xFF;
@@ -148,13 +161,21 @@ __attribute_used__ void app_init(config_t *default_config) {
     for (int i = 0; i < MAX_TOUCHES; i++)
         app.touches_current_obj[i] = GLRENDERER_OBJ_ID_SCREEN;
 
-    set_steps_per_frame();
-
-    app.renderer = glrenderer_init(screen_w, screen_h, false);
+    app.renderer = glrenderer_init(screen_w, screen_h, 0);
 
     alrenderer_init(0);
-    alrenderer_enable_dynamic_rate_control(app.config.sound_drc);
-    app_set_sound(app.config.sound);
+
+    apply_config();
+}
+
+__attribute_used__ void app_load_config(const config_t *default_config) {
+    memset(&app.config, 0, sizeof(app.config));
+
+    if (default_config)
+        app.config = *default_config;
+    config_load_from_file(&app.config, get_config_path());
+
+    apply_config();
 }
 
 __attribute_used__ void app_quit(void) {
@@ -334,7 +355,9 @@ static void on_new_frame_cb(const uint8_t *pixels) {
     glrenderer_update_screen(app.renderer, pixels);
 }
 
-__attribute_used__ void app_load_cartridge(uint8_t *rom, size_t rom_size) {
+__attribute_used__ bool app_load_cartridge(uint8_t *rom, size_t rom_size) {
+    // TODO if rom is of another mode, auto switch to it
+
     gbmulator_options_t opts = {
         .rom               = rom,
         .rom_size          = rom_size,
@@ -347,7 +370,7 @@ __attribute_used__ void app_load_cartridge(uint8_t *rom, size_t rom_size) {
     };
     gbmulator_t *new_emu = gbmulator_init(&opts);
     if (!new_emu)
-        return;
+        return false;
 
     if (app.emu) {
         save_battery_to_file(app.emu, get_save_path(gbmulator_get_rom_title(app.emu)));
@@ -358,17 +381,28 @@ __attribute_used__ void app_load_cartridge(uint8_t *rom, size_t rom_size) {
 
     load_battery_from_file(app.emu, get_save_path(gbmulator_get_rom_title(app.emu)));
 
-    set_steps_per_frame();
     gbmulator_print_status(app.emu);
+
+    return true;
 }
 
 __attribute_used__ void app_set_pause(bool is_paused) {
     app.is_paused = is_paused;
+
+    if (app.is_paused)
+        alrenderer_pause();
+    else
+        alrenderer_play();
 }
 
 __attribute_used__ void app_set_sound(float value) {
-    app.config.sound = value;
+    app.config.sound = CLAMP(value, 0.0f, 1.0f);
     alrenderer_set_level(app.config.sound);
+}
+
+__attribute_used__ void app_set_drc(bool is_enabled) {
+    app.config.sound_drc = is_enabled;
+    alrenderer_enable_dynamic_rate_control(app.config.sound_drc);
 }
 
 __attribute_used__ gbmulator_mode_t app_get_mode(void) {
@@ -381,13 +415,14 @@ __attribute_used__ gbmulator_mode_t app_get_mode(void) {
     return opts.mode;
 }
 
+// TODO every config setter should do value bounds check
 __attribute_used__ bool app_set_mode(gbmulator_mode_t mode) {
     app.config.mode = mode;
     return app.emu == NULL;
 }
 
 __attribute_used__ void app_set_speed(float value) {
-    app.config.speed = value;
+    app.config.speed = CLAMP(value, 1.0f, 8.0f); // TODO public define max_speed
     set_steps_per_frame();
     gbmulator_set_apu_speed(app.emu, app.config.speed);
 }
@@ -413,6 +448,7 @@ __attribute_used__ void app_get_screen_size(uint32_t *screen_w, uint32_t *screen
         break;
     default:
         eprintf("%d is not a valid mode\n", app.config.mode);
+        exit(EXIT_FAILURE);
         return;
     }
 }
@@ -436,12 +472,12 @@ __attribute_used__ bool app_is_paused(void) {
 }
 
 __attribute_used__ void app_save_state(int slot) {
-    if (app.emu)
+    if (app.emu && !app.linked_emu)
         save_state_to_file(app.emu, get_savestate_path(gbmulator_get_rom_title(app.emu), slot), true);
 }
 
 __attribute_used__ void app_load_state(int slot) {
-    if (app.emu)
+    if (app.emu && !app.linked_emu)
         load_state_from_file(app.emu, get_savestate_path(gbmulator_get_rom_title(app.emu), slot));
 }
 
@@ -463,6 +499,8 @@ __attribute_used__ const char *app_get_rom_title(void) {
 }
 
 __attribute_used__ void app_set_touchscreen_mode(bool enable) {
+    app.config.enable_joypad = enable;
+
     uint32_t visible_btns = 0;
 
     if (enable) {
@@ -480,4 +518,38 @@ __attribute_used__ void app_set_touchscreen_mode(bool enable) {
     }
 
     glrenderer_set_show_buttons(app.renderer, visible_btns);
+    app_set_joypad_opacity(app.config.joypad_opacity);
+}
+
+__attribute_used__ void app_set_joypad_opacity(float value) {
+    app.config.joypad_opacity = CLAMP(value, 0.0f, 1.0f);
+    for (glrenderer_obj_id_t obj_id = 0; obj_id < GLRENDERER_OBJ_ID_SCREEN; obj_id++)
+        glrenderer_set_obj_alpha(app.renderer, obj_id, app.config.joypad_opacity);
+}
+
+__attribute_used__ bool app_set_keybind(gbmulator_joypad_t button, unsigned int key, gbmulator_joypad_t *swapped_button, unsigned int *swapped_key) {
+    if (button < 0 || button >= GBMULATOR_JOYPAD_END || (app.config.keycode_filter && !app.config.keycode_filter(key)))
+        return false;
+
+    if (swapped_button)
+        *swapped_button = button;
+    if (swapped_key)
+        *swapped_key = key;
+
+    // detect if the key is already attributed, if yes, swap them
+    for (gbmulator_joypad_t i = 0; i < GBMULATOR_JOYPAD_END; i++) {
+        if (app.config.keybindings[i] == key && button != i) {
+            if (swapped_button)
+                *swapped_button = i;
+            if (swapped_key)
+                *swapped_key = app.config.keybindings[i];
+
+            app.config.keybindings[i] = app.config.keybindings[button];
+            break;
+        }
+    }
+
+    app.config.keybindings[button] = key;
+
+    return true;
 }
