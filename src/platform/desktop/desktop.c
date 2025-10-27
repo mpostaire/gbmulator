@@ -137,7 +137,7 @@ static GtkFileDialog *open_rom_dialog, *save_printer_image_dialog;
 static guint loop_source = 0;
 
 static gsize printer_gl_area_height = GB_SCREEN_HEIGHT;
-static gboolean printer_window_allowed_to_close = FALSE;
+static bool printer_window_allowed_to_close = FALSE;
 static gboolean printer_save_dialog_resume_loop = FALSE;
 static gboolean link_is_server = TRUE;
 static double accel_x, accel_y;
@@ -284,7 +284,7 @@ static void disconnect_emu(GSimpleAction *action, GVariant *parameter, gpointer 
         close(sfd);
 }
 
-static void set_link_gui_actions(gboolean enabled, gboolean link_is_gb) {
+static void set_link_gui_actions(bool enabled, bool link_is_gb) {
     gtk_widget_set_sensitive(open_btn, enabled);
     if (link_is_gb)
         gtk_widget_set_sensitive(speed_slider_container, enabled);
@@ -453,10 +453,10 @@ void start_link_thread_cb(GObject *source_object, GAsyncResult *res, gpointer da
     //     close(sfd);
     //     sfd = -1;
 
-    //     set_link_gui_actions(TRUE, TRUE);
+    //     set_link_gui_actions(true, true);
     //     show_toast("Connection cancelled");
     // } else {
-    //     set_link_gui_actions(TRUE, TRUE);
+    //     set_link_gui_actions(true, true);
     //     show_toast("Connection error");
     // }
 
@@ -497,7 +497,7 @@ static void link_dialog_response(GtkDialog *self, gint response_id, gpointer use
 
     // show_toast("Connecting Link Cable...");
 
-    // set_link_gui_actions(FALSE, TRUE);
+    // set_link_gui_actions(false, true);
     // gtk_widget_set_visible(link_spinner_revealer, TRUE);
     // gtk_revealer_set_reveal_child(GTK_REVEALER(link_spinner_revealer), TRUE);
     // gtk_spinner_set_spinning(GTK_SPINNER(link_spinner), TRUE);
@@ -517,20 +517,12 @@ static void show_link_emu_dialog(GSimpleAction *action, GVariant *parameter, gpo
 }
 
 static void show_printer_window(GSimpleAction *action, GVariant *parameter, gpointer app) {
-    if (!app_get_rom_title())
+    if (!app_connect_printer())
         return;
 
-    // gbmulator_options_t opts = {
-    //     .mode = GBMULATOR_MODE_GBPRINTER,
-    //     .on_new_line = printer_new_line_cb
-    // };
-    // printer = gbmulator_init(&opts);
-
-    // gbmulator_link_connect(emu, printer, GBMULATOR_LINK_CABLE);
-
-    // set_link_gui_actions(FALSE, FALSE);
-    // gamepad_state = GAMEPAD_DISABLED;
-    // gtk_window_present(GTK_WINDOW(printer_window));
+    set_link_gui_actions(false, false);
+    gamepad_state = GAMEPAD_DISABLED;
+    gtk_window_present(GTK_WINDOW(printer_window));
 }
 
 void on_mouse_pressed(GtkGestureClick* self, gint n_press, gdouble x, gdouble y, gpointer user_data) {
@@ -624,35 +616,32 @@ static void set_keybinding(GtkDialog *self, gint response_id, gpointer user_data
         if (!strncmp(keyname, "Press a key", 12)) return;
         unsigned int keyval = gdk_keyval_from_name(keyname);
 
-        gbmulator_joypad_t swapped_button;
+        gbmulator_joypad_t swapped_joypad;
         unsigned int swapped_keyval;
-        if (app_set_keybind(current_bind_setter, keyval, &swapped_button, &swapped_keyval)) {
-            if (swapped_button != current_bind_setter)
-                gtk_label_set_label(GTK_LABEL(key_handlers[swapped_button].widget), gdk_keyval_name(swapped_keyval));
+        if (app_set_binding(false, current_bind_setter, keyval, &swapped_joypad, &swapped_keyval)) {
+            if (swapped_joypad != current_bind_setter)
+                gtk_label_set_label(GTK_LABEL(key_handlers[swapped_joypad].widget), gdk_keyval_name(swapped_keyval));
             gtk_label_set_label(GTK_LABEL(key_handlers[current_bind_setter].widget), gdk_keyval_name(keyval));
         }
     }
 }
 
 static void set_gamepad_binding(GtkDialog *self, gint response_id, gpointer user_data) {
-    // gtk_window_close(GTK_WINDOW(self));
-    // if (response_id == GTK_RESPONSE_APPLY) {
-    //     const char *button_name = gtk_label_get_label(GTK_LABEL(bind_value));
-    //     if (!strncmp(button_name, "Press a key", 12)) return;
-    //     unsigned int button = gamepad_button_name_parser(button_name);
+    gtk_window_close(GTK_WINDOW(self));
 
-    //     // detect if the key is already attributed, if yes, swap them
-    //     for (int i = 0; i < 10; i++) {
-    //         if (config.gamepad_bindings[i] == button && current_bind_setter != i) {
-    //             config.gamepad_bindings[i] = config.gamepad_bindings[current_bind_setter];
-    //             gtk_label_set_label(GTK_LABEL(gamepad_handlers[i].widget), gamepad_gamepad_button_parser(config.gamepad_bindings[i]));
-    //             break;
-    //         }
-    //     }
+    if (response_id == GTK_RESPONSE_APPLY) {
+        const char *button_name = gtk_label_get_label(GTK_LABEL(bind_value));
+        if (!strncmp(button_name, "Press a key", 12)) return;
+        unsigned int button = gamepad_button_name_parser(button_name);
 
-    //     config.gamepad_bindings[current_bind_setter] = button;
-    //     gtk_label_set_label(GTK_LABEL(gamepad_handlers[current_bind_setter].widget), gamepad_gamepad_button_parser(config.gamepad_bindings[current_bind_setter]));
-    // }
+        gbmulator_joypad_t swapped_joypad;
+        unsigned int swapped_button;
+        if (app_set_binding(true, current_bind_setter, button, &swapped_joypad, &swapped_button)) {
+            if (swapped_button != current_bind_setter)
+                gtk_label_set_label(GTK_LABEL(gamepad_handlers[swapped_joypad].widget), gamepad_gamepad_button_parser(swapped_button));
+            gtk_label_set_label(GTK_LABEL(gamepad_handlers[current_bind_setter].widget), gamepad_gamepad_button_parser(button));
+        }
+    }
 }
 
 static void host_insert_text_handler(GtkEditable *self, const char *text, int length, int *position, gpointer data) {
@@ -787,42 +776,6 @@ static void open_btn_clicked(AdwActionRow *self, gpointer user_data) {
     gtk_file_dialog_open(open_rom_dialog, GTK_WINDOW(main_window), NULL, open_rom_dialog_cb, NULL);
 }
 
-// TODO save as bmp instead
-static void printer_save_as_xpm(gbmulator_t *printer, const char *file_path) {
-    // FILE *f = fopen(file_path, "w+");
-    // if (!f) {
-    //     errnoprintf("fopen()");
-    //     return;
-    // }
-
-    // size_t height;
-    // uint8_t *image_data = gbmulator_get_save(printer, &height);
-
-    // fprintf(f, "/* XPM */\nstatic char *image = {\n");
-    // fprintf(f, "\"%d %lu 4 1\",\n", GBPRINTER_IMG_WIDTH, height);
-    // fprintf(f, "\""XPM_WHITE" c #FFFFFF\",\n\""XPM_LIGHT_GRAY" c #AAAAAA\",\n\""XPM_DARK_GRAY" c #555555\",\n\""XPM_BLACK" c #000000\",\n");
-
-    // for (size_t i = 0; i < height; i++) {
-    //     fprintf(f, "\"");
-    //     for (int j = 0; j < GBPRINTER_IMG_WIDTH; j++) {
-    //         int image_data_index = (i * GBPRINTER_IMG_WIDTH * 4) + (j * 4);
-    //         char c = *XPM_BLACK;
-    //         switch (image_data[image_data_index]) {
-    //         case 0xFF: c = *XPM_WHITE; break;
-    //         case 0xAA: c = *XPM_LIGHT_GRAY; break;
-    //         case 0x55: c = *XPM_DARK_GRAY; break;
-    //         case 0x00: c = *XPM_BLACK; break;
-    //         default: eprintf("invalid color data\n"); break;
-    //         }
-    //         fprintf(f, "%c", c);
-    //     }
-    //     fprintf(f, "\"%s", i == height - 1 ? "};\n" : ",\n");
-    // }
-
-    // free(image_data);
-    // fclose(f);
-}
-
 static void printer_save_dialog_cb(GObject *dialog, GAsyncResult *res, gpointer user_data) {
     if (printer_save_dialog_resume_loop) {
         start_loop();
@@ -834,7 +787,10 @@ static void printer_save_dialog_cb(GObject *dialog, GAsyncResult *res, gpointer 
         return;
 
     char *file_path = g_file_get_path(file);
-    printer_save_as_xpm(printer, file_path);
+    
+    // TODO
+    // bmp_encode();
+
     free(file_path);
 }
 
@@ -1039,7 +995,7 @@ static void secondary_window_hide_cb(GtkWidget *self, gpointer user_data) {
 
 static gboolean printer_window_close_request_cb(GtkWindow *self, gpointer user_data) {
     if (printer_window_allowed_to_close) {
-        printer_window_allowed_to_close = FALSE;
+        printer_window_allowed_to_close = false;
         return FALSE;
     }
 
@@ -1048,19 +1004,17 @@ static gboolean printer_window_close_request_cb(GtkWindow *self, gpointer user_d
 }
 
 static void printer_quit_dialog_response_cb(AdwMessageDialog *self, gchar *response, gpointer user_data) {
-    // if (!strncmp(response, "disconnect", 11)) {
-    //     gbmulator_link_disconnect(emu, GBMULATOR_LINK_CABLE);
-    //     gbmulator_quit(printer);
-    //     printer = NULL;
-    //     clear_printer_gl_area();
+    if (!strncmp(response, "disconnect", 11)) {
+        app_disconnect_printer();
+        clear_printer_gl_area();
 
-    //     gtk_widget_set_sensitive(GTK_WIDGET(printer_save_btn), FALSE);
-    //     gtk_widget_set_sensitive(GTK_WIDGET(printer_clear_btn), FALSE);
-    //     set_link_gui_actions(TRUE, FALSE);
+        gtk_widget_set_sensitive(GTK_WIDGET(printer_save_btn), FALSE);
+        gtk_widget_set_sensitive(GTK_WIDGET(printer_clear_btn), FALSE);
+        set_link_gui_actions(true, false);
 
-    //     printer_window_allowed_to_close = TRUE;
-    //     gtk_window_close(GTK_WINDOW(printer_window));
-    // }
+        printer_window_allowed_to_close = true;
+        gtk_window_close(GTK_WINDOW(printer_window));
+    }
 }
 
 static void keybind_dialog_hide_cb(GtkWidget *self, gpointer user_data) {

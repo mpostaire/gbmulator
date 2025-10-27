@@ -65,4 +65,8 @@ void app_set_touchscreen_mode(bool enable);
 
 void app_set_joypad_opacity(float value);
 
-bool app_set_keybind(gbmulator_joypad_t button, unsigned int key, gbmulator_joypad_t *swapped_button, unsigned int *swapped_key);
+bool app_set_binding(bool is_gamepad, gbmulator_joypad_t joypad, unsigned int key, gbmulator_joypad_t *swapped_joypad, unsigned int *swapped_key);
+
+bool app_connect_printer(void);
+
+void app_disconnect_printer(void);

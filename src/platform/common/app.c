@@ -22,6 +22,7 @@ static struct {
     uint16_t            joypad_state;
     gbmulator_t        *emu;
     gbmulator_t        *linked_emu;
+    gbmulator_t        *printer;
     int                 sfd;
     config_t            config;
     uint8_t             joypad_touch_counter[GBMULATOR_JOYPAD_END];
@@ -94,36 +95,36 @@ static gbmulator_joypad_t app_button_to_joypad(unsigned int button) {
 }
 
 // TODO a bit buggy when combining clicks (touches) and keyboard input
-static inline void btn_press(gbmulator_joypad_t button, bool is_touch) {
-    if (button < 0 || button >= GBMULATOR_JOYPAD_END)
+static inline void btn_press(gbmulator_joypad_t joypad, bool is_touch) {
+    if (joypad < 0 || joypad >= GBMULATOR_JOYPAD_END)
         return;
 
     if (is_touch)
-        app.joypad_touch_counter[button]++;
+        app.joypad_touch_counter[joypad]++;
     else
-        app.joypad_key_press_counter[button] = true;
+        app.joypad_key_press_counter[joypad] = true;
 
-    if (app.joypad_touch_counter[button] + app.joypad_key_press_counter[button] == 1) {
-        RESET_BIT(app.joypad_state, button);
-        glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) button, 0.5f);
+    if (app.joypad_touch_counter[joypad] + app.joypad_key_press_counter[joypad] == 1) {
+        RESET_BIT(app.joypad_state, joypad);
+        glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) joypad, 0.5f);
     }
 }
 
-static inline void btn_release(gbmulator_joypad_t button, bool is_touch) {
-    if (button < 0 || button >= GBMULATOR_JOYPAD_END)
+static inline void btn_release(gbmulator_joypad_t joypad, bool is_touch) {
+    if (joypad < 0 || joypad >= GBMULATOR_JOYPAD_END)
         return;
 
     if (is_touch)
-        app.joypad_touch_counter[button]--;
+        app.joypad_touch_counter[joypad]--;
     else
-        app.joypad_key_press_counter[button] = false;
+        app.joypad_key_press_counter[joypad] = false;
 
-    if (app.joypad_touch_counter[button] > 0)
-        app.joypad_touch_counter[button]--;
+    if (app.joypad_touch_counter[joypad] > 0)
+        app.joypad_touch_counter[joypad]--;
 
-    if (app.joypad_touch_counter[button] + app.joypad_key_press_counter[button] == 0) {
-        SET_BIT(app.joypad_state, button);
-        glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) button, 1.0f);
+    if (app.joypad_touch_counter[joypad] + app.joypad_key_press_counter[joypad] == 0) {
+        SET_BIT(app.joypad_state, joypad);
+        glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) joypad, 1.0f);
     }
 }
 
@@ -184,6 +185,11 @@ __attribute_used__ void app_quit(void) {
 
         gbmulator_quit(app.emu);
     }
+
+    if (app.linked_emu)
+        gbmulator_quit(app.linked_emu);
+    if (app.printer)
+        gbmulator_quit(app.printer);
 
     config_save_to_file(&app.config, get_config_path());
 
@@ -527,29 +533,60 @@ __attribute_used__ void app_set_joypad_opacity(float value) {
         glrenderer_set_obj_alpha(app.renderer, obj_id, app.config.joypad_opacity);
 }
 
-__attribute_used__ bool app_set_keybind(gbmulator_joypad_t button, unsigned int key, gbmulator_joypad_t *swapped_button, unsigned int *swapped_key) {
-    if (button < 0 || button >= GBMULATOR_JOYPAD_END || (app.config.keycode_filter && !app.config.keycode_filter(key)))
+__attribute_used__ bool app_set_binding(bool is_gamepad, gbmulator_joypad_t joypad, unsigned int key, gbmulator_joypad_t *swapped_joypad, unsigned int *swapped_key) {
+    if (joypad < 0 || joypad >= GBMULATOR_JOYPAD_END || (!is_gamepad && app.config.keycode_filter && !app.config.keycode_filter(key)))
         return false;
 
-    if (swapped_button)
-        *swapped_button = button;
+    if (swapped_joypad)
+        *swapped_joypad = joypad;
     if (swapped_key)
         *swapped_key = key;
 
+    unsigned int *bindings = is_gamepad ? app.config.gamepad_bindings : app.config.keybindings;
+
     // detect if the key is already attributed, if yes, swap them
     for (gbmulator_joypad_t i = 0; i < GBMULATOR_JOYPAD_END; i++) {
-        if (app.config.keybindings[i] == key && button != i) {
-            if (swapped_button)
-                *swapped_button = i;
+        if (bindings[i] == key && joypad != i) {
+            if (swapped_joypad)
+                *swapped_joypad = i;
             if (swapped_key)
-                *swapped_key = app.config.keybindings[i];
+                *swapped_key = bindings[i];
 
-            app.config.keybindings[i] = app.config.keybindings[button];
+            bindings[i] = bindings[joypad];
             break;
         }
     }
 
-    app.config.keybindings[button] = key;
+    bindings[joypad] = key;
 
     return true;
+}
+
+__attribute_used__ bool app_connect_printer(void) {
+    if (!app.emu || app.printer)
+        return false;
+
+    if (app.linked_emu)
+        todo("disconnect linked emu");
+
+    gbmulator_options_t opts = {
+        .mode        = GBMULATOR_MODE_GBPRINTER,
+        // .on_new_line = printer_new_line_cb
+    };
+    app.printer = gbmulator_init(&opts);
+
+    gbmulator_link_connect(app.emu, app.printer, GBMULATOR_LINK_CABLE);
+
+    // TODO if printer renderer not init, init here
+
+    return true;
+}
+
+__attribute_used__ void app_disconnect_printer(void) {
+    if (!app.emu)
+        return;
+
+    gbmulator_link_disconnect(app.emu, GBMULATOR_LINK_CABLE);
+    gbmulator_quit(app.printer);
+    app.printer = NULL;
 }
