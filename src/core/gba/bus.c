@@ -1112,7 +1112,7 @@ void _gba_bus_write_word(gba_t *gba, bus_access_t access, uint32_t address, uint
 
 // TODO this shouldn't be responsible for cartridge loading and parsing (same for gb_mmu_t)
 bool gba_bus_reset(gba_t *gba, const uint8_t *rom, size_t rom_size) {
-    if (!rom || rom_size < 0xBF)
+    if (!rom || rom_size < 0xBF || rom_size > sizeof(gba->bus.rom))
         return false;
 
     memset(&gba->bus, 0, sizeof(gba->bus));

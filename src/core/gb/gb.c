@@ -45,10 +45,6 @@ void gb_step(gb_t *gb) {
     apu_step(gb);
 }
 
-int gb_is_rom_valid(const uint8_t *rom) {
-    return parse_header_mbc_byte(rom[0x0147], NULL, NULL, NULL, NULL, NULL) && validate_header_checksum(rom);
-}
-
 gb_t *gb_init(gbmulator_t *base) {
     gb_t *gb = xcalloc(1, sizeof(*gb));
     gb->base = base;

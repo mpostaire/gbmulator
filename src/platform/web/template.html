@@ -318,6 +318,10 @@
                 document.getElementById('open-menu').disabled = 0;
                 document.getElementById('go-fullscreen').disabled = 0;
 
+                Module.mode = Module.ccall('app_get_mode', 'number');
+                setTheme(Module.mode);
+
+                Module.ccall('set_scale', 'void', ['number'], [scale]);
                 Module.ccall('set_pause', 'void', ['boolean'], [false]);
             };
             if (e.target.files.length === 0)

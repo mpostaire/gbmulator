@@ -32,8 +32,6 @@ typedef enum {
  */
 void gb_step(gb_t *gb);
 
-int gb_is_rom_valid(const uint8_t *rom);
-
 /**
  * Inits the emulator.
  * @param base pointer to a base gbmulator instance.

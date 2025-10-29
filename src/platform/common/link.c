@@ -8,9 +8,9 @@
 
 #include "../../core/core.h"
 
-#define PKT_CONFIG_MODE_MASK 0x03
-#define PKT_CONFIG_IR_MASK 0x04
-#define PKT_CONFIG_CABLE_MASK 0x08
+#define PKT_CONFIG_MODE_MASK     0x03
+#define PKT_CONFIG_IR_MASK       0x04
+#define PKT_CONFIG_CABLE_MASK    0x08
 #define PKT_CONFIG_COMPRESS_MASK 0x80
 
 typedef enum {
@@ -24,7 +24,7 @@ static int server_sfd = -1;
 
 static void print_connected_to(struct sockaddr *addr) {
     char buf[INET6_ADDRSTRLEN];
-    int port;
+    int  port;
     if (addr->sa_family == AF_INET) {
         inet_ntop(addr->sa_family, &((struct sockaddr_in *) addr)->sin_addr, buf, sizeof(buf));
         port = ((struct sockaddr_in *) addr)->sin_port;
@@ -36,16 +36,17 @@ static void print_connected_to(struct sockaddr *addr) {
 }
 
 void link_cancel(void) {
-    shutdown(server_sfd, SHUT_RD);
+    if (server_sfd >= 0)
+        shutdown(server_sfd, SHUT_RD);
 }
 
 int link_start_server(const char *port) {
     struct addrinfo hints = { 0 };
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags = AI_PASSIVE;
+    hints.ai_family       = AF_UNSPEC;
+    hints.ai_socktype     = SOCK_STREAM;
+    hints.ai_flags        = AI_PASSIVE;
     struct addrinfo *res;
-    int ret;
+    int              ret;
     if ((ret = getaddrinfo(NULL, port, &hints, &res)) != 0) {
         eprintf("getaddrinfo: %s\n", gai_strerror(ret));
         return -1;
@@ -94,9 +95,9 @@ int link_start_server(const char *port) {
     printf("Link server waiting for client on port %s...\n", port);
 
     // wait for a client connection
-    socklen_t client_addr_len = sizeof(struct sockaddr_in6); // take the largest possible size regardless of IP version
-    struct sockaddr *client_addr = xmalloc(client_addr_len);
-    int client_sfd = accept(server_sfd, client_addr, &client_addr_len);
+    socklen_t        client_addr_len = sizeof(struct sockaddr_in6); // take the largest possible size regardless of IP version
+    struct sockaddr *client_addr     = xmalloc(client_addr_len);
+    int              client_sfd      = accept(server_sfd, client_addr, &client_addr_len);
     if (client_sfd == -1)
         return -1;
 
@@ -110,12 +111,12 @@ int link_start_server(const char *port) {
 
 int link_connect_to_server(const char *address, const char *port) {
     struct addrinfo hints = {
-        .ai_family = AF_UNSPEC,
+        .ai_family   = AF_UNSPEC,
         .ai_socktype = SOCK_STREAM,
         .ai_protocol = IPPROTO_TCP
     };
     struct addrinfo *res;
-    int ret;
+    int              ret;
     if ((ret = getaddrinfo(address, port, &hints, &res)) != 0) {
         eprintf("getaddrinfo: %s\n", gai_strerror(ret));
         return -1;
@@ -163,8 +164,8 @@ static int exchange_info(int sfd, gbmulator_t *emu, gbmulator_mode_t *mode, bool
     gbmulator_get_options(emu, &opts);
 
     uint8_t pkt[4] = { 0 };
-    pkt[0] = PKT_INFO;
-    pkt[1] = opts.mode;
+    pkt[0]         = PKT_INFO;
+    pkt[1]         = opts.mode;
     pkt[1] |= opts.mode & PKT_CONFIG_CABLE_MASK;
     pkt[1] |= opts.mode & PKT_CONFIG_IR_MASK;
     pkt[1] |= opts.mode & PKT_CONFIG_COMPRESS_MASK;
@@ -181,10 +182,10 @@ static int exchange_info(int sfd, gbmulator_t *emu, gbmulator_mode_t *mode, bool
         return -1;
     }
 
-    *mode = pkt[1] & PKT_CONFIG_MODE_MASK;
-    *is_cable_link = (pkt[1] & PKT_CONFIG_CABLE_MASK) == PKT_CONFIG_CABLE_MASK; // cable-link
-    *is_ir_link = (pkt[1] & PKT_CONFIG_IR_MASK) == PKT_CONFIG_IR_MASK; // ir-link
-    *can_compress = (pkt[1] & PKT_CONFIG_COMPRESS_MASK) == PKT_CONFIG_COMPRESS_MASK; // compress
+    *mode          = pkt[1] & PKT_CONFIG_MODE_MASK;
+    *is_cable_link = (pkt[1] & PKT_CONFIG_CABLE_MASK) == PKT_CONFIG_CABLE_MASK;       // cable-link
+    *is_ir_link    = (pkt[1] & PKT_CONFIG_IR_MASK) == PKT_CONFIG_IR_MASK;             // ir-link
+    *can_compress  = (pkt[1] & PKT_CONFIG_COMPRESS_MASK) == PKT_CONFIG_COMPRESS_MASK; // compress
 
     uint16_t received_checksum = 0;
     memcpy(&received_checksum, &pkt[2], 2);
@@ -203,7 +204,7 @@ static int exchange_rom(int sfd, gbmulator_t *emu, uint8_t **other_rom, size_t *
     uint8_t *this_rom = gbmulator_get_rom(emu, rom_len);
 
     uint8_t *pkt = xcalloc(1, *rom_len + 9);
-    pkt[0] = PKT_ROM;
+    pkt[0]       = PKT_ROM;
     memcpy(&pkt[1], rom_len, sizeof(size_t));
     memcpy(&pkt[9], this_rom, *rom_len); // causes segfault
 
@@ -235,7 +236,7 @@ static bool exchange_savestate(int sfd, gbmulator_t *emu, int can_compress, uint
     uint8_t *local_savestate_data = gbmulator_get_savestate(emu, savestate_len, can_compress);
 
     uint8_t *pkt = xcalloc(1, *savestate_len + 9);
-    pkt[0] = PKT_STATE;
+    pkt[0]       = PKT_STATE;
     memcpy(&pkt[1], savestate_len, sizeof(size_t));
     memcpy(&pkt[9], local_savestate_data, *savestate_len);
 
@@ -264,15 +265,15 @@ static bool exchange_savestate(int sfd, gbmulator_t *emu, int can_compress, uint
 
 bool link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
     // TODO connection lost detection (return -1)
-    *linked_emu = NULL;
-    gbmulator_mode_t mode = GBMULATOR_MODE_GB;
-    bool can_compress = 0;
-    bool is_cable_link = 0;
-    bool is_ir_link = 0;
-    size_t rom_size = 0;
-    uint8_t *rom = NULL;
-    size_t savestate_len;
-    uint8_t *savestate_data = NULL;
+    *linked_emu                    = NULL;
+    gbmulator_mode_t mode          = GBMULATOR_MODE_GB;
+    bool             can_compress  = 0;
+    bool             is_cable_link = 0;
+    bool             is_ir_link    = 0;
+    size_t           rom_size      = 0;
+    uint8_t         *rom           = NULL;
+    size_t           savestate_len;
+    uint8_t         *savestate_data = NULL;
 
     // TODO handle wrong packet type received
     int ret = exchange_info(sfd, emu, &mode, &can_compress, &is_cable_link, &is_ir_link);
@@ -284,8 +285,8 @@ bool link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
 
     gbmulator_options_t opts;
     gbmulator_get_options(emu, &opts);
-    opts.mode = mode;
-    opts.rom = rom;
+    opts.mode     = mode;
+    opts.rom      = rom;
     opts.rom_size = rom_size;
 
     if (rom) {
@@ -298,9 +299,9 @@ bool link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
         }
         free(rom);
     } else {
-        opts.rom = gbmulator_get_rom(emu, &rom_size);
+        opts.rom      = gbmulator_get_rom(emu, &rom_size);
         opts.rom_size = rom_size;
-        *linked_emu = gbmulator_init(&opts);
+        *linked_emu   = gbmulator_init(&opts);
     }
 
     if (!gbmulator_load_savestate(*linked_emu, savestate_data, savestate_len)) {

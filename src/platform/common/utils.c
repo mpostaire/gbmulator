@@ -187,13 +187,6 @@ uint8_t *read_rom(const char *path, size_t *rom_size) {
         return NULL;
     }
 
-    // TODO
-    // if (!gb_is_rom_valid(rom)) {
-    //     eprintf("%s: invalid or unsupported rom\n", path);
-    //     free(rom);
-    //     return NULL;
-    // }
-
     return read_file(path, rom_size);
 }
 

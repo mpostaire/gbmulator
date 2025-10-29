@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <unistd.h>
 
 #include "app.h"
 #include "utils.h"
@@ -15,29 +16,34 @@
 #define MAX_TOUCHES 32
 
 static struct {
-    bool                is_paused;
-    bool                is_rewinding;
-    uint32_t            steps_per_frame;
-    glrenderer_t       *renderer;
-    uint16_t            joypad_state;
-    gbmulator_t        *emu;
-    gbmulator_t        *linked_emu;
-    gbmulator_t        *printer;
-    int                 sfd;
-    config_t            config;
-    uint8_t             joypad_touch_counter[GBMULATOR_JOYPAD_END];
-    bool                joypad_key_press_counter[GBMULATOR_JOYPAD_END];
-    glrenderer_obj_id_t touches_current_obj[32];
+    bool                  is_paused;
+    bool                  is_rewinding;
+    uint32_t              steps_per_frame;
+    glrenderer_t         *renderer;
+    glrenderer_t         *printer_renderer;
+    uint16_t              joypad_state;
+    gbmulator_t          *emu;
+    gbmulator_t          *linked_emu;
+    gbmulator_t          *printer;
+    int                   sfd;
+    uint32_t              printer_height;
+    printer_new_line_cb_t on_printer_new_line;
+    config_t              config;
+    uint8_t               joypad_touch_counter[GBMULATOR_JOYPAD_END];
+    bool                  joypad_key_press_counter[GBMULATOR_JOYPAD_END];
+    glrenderer_obj_id_t   touches_current_obj[32];
 } app;
 
 static void set_steps_per_frame(void) {
+    float speed = app.linked_emu ? 1.0f : app.config.speed;
+
     switch (app.config.mode) {
     case GBMULATOR_MODE_GB:
     case GBMULATOR_MODE_GBC:
-        app.steps_per_frame = GB_CPU_STEPS_PER_FRAME * app.config.speed;
+        app.steps_per_frame = GB_CPU_STEPS_PER_FRAME * speed;
         break;
     case GBMULATOR_MODE_GBA:
-        app.steps_per_frame = GBA_CPU_STEPS_PER_FRAME * app.config.speed;
+        app.steps_per_frame = GBA_CPU_STEPS_PER_FRAME * speed;
         break;
     case GBMULATOR_MODE_GBPRINTER:
     default:
@@ -129,6 +135,8 @@ static inline void btn_release(gbmulator_joypad_t joypad, bool is_touch) {
 }
 
 static inline void apply_config(void) {
+    app_set_mode(app.config.mode);
+
     app_set_speed(app.config.speed);
 
     alrenderer_enable_dynamic_rate_control(app.config.sound_drc);
@@ -167,6 +175,8 @@ __attribute_used__ void app_init(void) {
     alrenderer_init(0);
 
     apply_config();
+
+    app.sfd = -1;
 }
 
 __attribute_used__ void app_load_config(const config_t *default_config) {
@@ -176,6 +186,8 @@ __attribute_used__ void app_load_config(const config_t *default_config) {
         app.config = *default_config;
     config_load_from_file(&app.config, get_config_path());
 
+    // TODO only allow gb/gbc/gba modes
+
     apply_config();
 }
 
@@ -184,12 +196,18 @@ __attribute_used__ void app_quit(void) {
         save_battery_to_file(app.emu, get_save_path(gbmulator_get_rom_title(app.emu)));
 
         gbmulator_quit(app.emu);
+        app.emu = NULL;
     }
 
-    if (app.linked_emu)
+    if (app.linked_emu) {
         gbmulator_quit(app.linked_emu);
-    if (app.printer)
+        app.linked_emu = NULL;
+    }
+
+    if (app.printer) {
         gbmulator_quit(app.printer);
+        app.printer = NULL;
+    }
 
     config_save_to_file(&app.config, get_config_path());
 
@@ -375,8 +393,19 @@ __attribute_used__ bool app_load_cartridge(uint8_t *rom, size_t rom_size) {
         .palette           = app.config.color_palette
     };
     gbmulator_t *new_emu = gbmulator_init(&opts);
-    if (!new_emu)
-        return false;
+    if (!new_emu) {
+        if (opts.mode == GBMULATOR_MODE_GBA)
+            opts.mode = GBMULATOR_MODE_GBC;
+        else
+            opts.mode = GBMULATOR_MODE_GBA;
+
+        new_emu = gbmulator_init(&opts);
+        if (!new_emu)
+            return false;
+    }
+
+    app.config.mode = opts.mode;
+    apply_config();
 
     if (app.emu) {
         save_battery_to_file(app.emu, get_save_path(gbmulator_get_rom_title(app.emu)));
@@ -423,8 +452,21 @@ __attribute_used__ gbmulator_mode_t app_get_mode(void) {
 
 // TODO every config setter should do value bounds check
 __attribute_used__ bool app_set_mode(gbmulator_mode_t mode) {
+    if (mode < 0 || mode >= GBMULATOR_MODE_GBPRINTER)
+        return false;
+
     app.config.mode = mode;
-    return app.emu == NULL;
+
+    if (!app.emu) {
+        uint32_t screen_w;
+        uint32_t screen_h;
+        app_get_screen_size(&screen_w, &screen_h);
+        glrenderer_resize_screen(app.renderer, screen_w, screen_h);
+
+        return true;
+    }
+
+    return false;
 }
 
 __attribute_used__ void app_set_speed(float value) {
@@ -562,7 +604,24 @@ __attribute_used__ bool app_set_binding(bool is_gamepad, gbmulator_joypad_t joyp
     return true;
 }
 
-__attribute_used__ bool app_connect_printer(void) {
+// TODO printer not working anymore --> git bisect
+static void on_printer_new_line_cb(const uint8_t *pixels, size_t current_height, size_t total_height) {
+    if (!app.printer || !app.printer_renderer)
+        return;
+
+    if (current_height != app.printer_height) {
+        app.printer_height = current_height;
+
+        glrenderer_resize_screen(app.printer_renderer, GBPRINTER_IMG_WIDTH, app.printer_height);
+    }
+
+    glrenderer_update_screen(app.printer_renderer, pixels);
+
+    if (app.on_printer_new_line)
+        app.on_printer_new_line(current_height, total_height);
+}
+
+__attribute_used__ bool app_connect_printer(printer_new_line_cb_t on_new_line) {
     if (!app.emu || app.printer)
         return false;
 
@@ -571,22 +630,102 @@ __attribute_used__ bool app_connect_printer(void) {
 
     gbmulator_options_t opts = {
         .mode        = GBMULATOR_MODE_GBPRINTER,
-        // .on_new_line = printer_new_line_cb
+        .on_new_line = on_printer_new_line_cb
     };
     app.printer = gbmulator_init(&opts);
 
     gbmulator_link_connect(app.emu, app.printer, GBMULATOR_LINK_CABLE);
 
-    // TODO if printer renderer not init, init here
+    app.printer_height = 1;
+    if (!app.printer_renderer)
+        app.printer_renderer = glrenderer_init(GBPRINTER_IMG_WIDTH, app.printer_height, 0);
+
+    app.on_printer_new_line = on_new_line;
 
     return true;
 }
 
-__attribute_used__ void app_disconnect_printer(void) {
+__attribute_used__ void app_printer_disconnect(void) {
     if (!app.emu)
         return;
 
     gbmulator_link_disconnect(app.emu, GBMULATOR_LINK_CABLE);
     gbmulator_quit(app.printer);
     app.printer = NULL;
+}
+
+__attribute_used__ void app_printer_render(void) {
+    if (app.printer_renderer)
+        glrenderer_render(app.printer_renderer);
+}
+
+__attribute_used__ bool app_printer_reset(void) {
+    if (!app.printer_renderer)
+        return false;
+
+    glrenderer_resize_screen(app.printer_renderer, GBPRINTER_IMG_WIDTH, 1);
+    app.printer_height = 1;
+
+    void *pixels = xcalloc(1, GBPRINTER_IMG_WIDTH * app.printer_height * 4);
+    glrenderer_update_screen(app.printer_renderer, pixels);
+    free(pixels);
+
+    if (app.printer)
+        todo("gbprinter_clear_image(app.printer)");
+
+    return true;
+}
+
+__attribute_used__ bool app_has_camera(void) {
+    if (!app.emu)
+        return false;
+
+    return gbmulator_has_peripheral(app.emu, GBMULATOR_PERIPHERAL_CAMERA);
+}
+
+__attribute_used__ void app_link_set_host(const char *host) {
+    if (!host)
+        return;
+
+    snprintf(app.config.link_host, sizeof(app.config.link_host), "%s", host);
+}
+
+__attribute_used__ void app_link_set_port(uint16_t port) {
+    snprintf(app.config.link_port, sizeof(app.config.link_port), "%u", port);
+}
+
+__attribute_used__ bool app_link_start(bool is_server) {
+    if (app.sfd >= 0 || !app.emu || app.linked_emu)
+        return false;
+
+    if (is_server)
+        app.sfd = link_start_server(app.config.link_port);
+    else
+        app.sfd = link_connect_to_server(app.config.link_host, app.config.link_port);
+
+    gbmulator_t *new_linked_emu;
+    if (app.sfd > 0 && link_init_transfer(app.sfd, app.emu, &new_linked_emu)) {
+        app.linked_emu = new_linked_emu;
+        set_steps_per_frame();
+
+        gbmulator_set_apu_speed(app.emu, 1.0f);
+    } else {
+        app.sfd = -1; // closed by link_init_transfer in case of error
+    }
+
+    return true;
+}
+
+__attribute_used__ void app_link_disconnect(void) {
+    if (app.sfd < 0)
+        return;
+
+    link_cancel();
+    close(app.sfd);
+    app.sfd = -1;
+
+    if (app.linked_emu) {
+        gbmulator_quit(app.linked_emu);
+        app.linked_emu = NULL;
+    }
 }

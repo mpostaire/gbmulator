@@ -2,6 +2,8 @@
 
 #include "config.h"
 
+typedef void (*printer_new_line_cb_t)(size_t current_height, size_t total_height);
+
 void app_init(void);
 
 // can be called before app_init() --> maybe rename app_init()
@@ -67,6 +69,20 @@ void app_set_joypad_opacity(float value);
 
 bool app_set_binding(bool is_gamepad, gbmulator_joypad_t joypad, unsigned int key, gbmulator_joypad_t *swapped_joypad, unsigned int *swapped_key);
 
-bool app_connect_printer(void);
+bool app_connect_printer(printer_new_line_cb_t on_new_line);
 
-void app_disconnect_printer(void);
+void app_printer_disconnect(void);
+
+void app_printer_render(void);
+
+bool app_printer_reset(void);
+
+bool app_has_camera(void);
+
+void app_link_set_host(const char *host);
+
+void app_link_set_port(uint16_t port);
+
+bool app_link_start(bool is_server);
+
+void app_link_disconnect(void);
