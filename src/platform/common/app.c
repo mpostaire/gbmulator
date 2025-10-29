@@ -143,7 +143,6 @@ static inline void apply_config(void) {
     app_set_sound(app.config.sound);
 
     app_set_touchscreen_mode(app.config.enable_joypad);
-    app_set_joypad_opacity(app.config.joypad_opacity);
 }
 
 __attribute_used__ void app_init(void) {

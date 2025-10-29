@@ -10,11 +10,12 @@ static bool keycode_filter(unsigned int key);
 
 // config struct initialized to defaults
 static const config_t default_config = {
-    .mode          = GBMULATOR_MODE_GBC,
-    .color_palette = PPU_COLOR_PALETTE_ORIG,
-    .sound         = 0.25f,
-    .speed         = 1.0f,
-    .sound_drc     = true,
+    .mode           = GBMULATOR_MODE_GBC,
+    .color_palette  = PPU_COLOR_PALETTE_ORIG,
+    .sound          = 0.25f,
+    .speed          = 1.0f,
+    .sound_drc      = true,
+    .joypad_opacity = 1.0f,
 
     // clang-format off
     .keybindings = {
