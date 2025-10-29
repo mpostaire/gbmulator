@@ -128,7 +128,7 @@ static guint           loop_source = 0;
 static bool     printer_window_allowed_to_close = FALSE;
 static gboolean printer_save_dialog_resume_loop = FALSE;
 static gboolean link_is_server                  = TRUE;
-static double   accel_x, accel_y;
+// static double   accel_x, accel_y;
 
 static GCancellable *link_task_cancellable;
 static GTask        *link_task;
@@ -1089,18 +1089,19 @@ static void activate_cb(GtkApplication *app) {
         gtk_label_set_label(GTK_LABEL(gamepad_handlers[i].widget), gamepad_gamepad_button_parser(config.gamepad_bindings[i]));
     }
 
+    AdwComboRow *pref_camera_device = ADW_COMBO_ROW(gtk_builder_get_object(builder, "pref_camera_device"));
+    gsize        n_cameras          = 0;
     if (camera_find_devices()) {
-        AdwComboRow *pref_camera_device = ADW_COMBO_ROW(gtk_builder_get_object(builder, "pref_camera_device"));
-        gsize        len;
-
-        adw_combo_row_set_model(pref_camera_device, G_LIST_MODEL(camera_get_devices_names(&len)));
+        adw_combo_row_set_model(pref_camera_device, G_LIST_MODEL(camera_get_devices_names(&n_cameras)));
         guint    selected_camera = adw_combo_row_get_selected(pref_camera_device);
-        gchar ***camera_paths    = camera_get_devices_paths(&len);
-        if (selected_camera < len) {
+        gchar ***camera_paths    = camera_get_devices_paths(&n_cameras);
+        if (selected_camera < n_cameras) {
             g_signal_connect(pref_camera_device, "notify::selected", G_CALLBACK(set_camera), NULL);
             camera_init((*camera_paths)[selected_camera]);
         }
     }
+
+    gtk_widget_set_sensitive(GTK_WIDGET(pref_camera_device), n_cameras > 0);
 
     widget = GTK_WIDGET(gtk_builder_get_object(builder, "pref_enable_jyp"));
     g_signal_connect(widget, "notify::enable-expansion", G_CALLBACK(set_enable_joypad), NULL);

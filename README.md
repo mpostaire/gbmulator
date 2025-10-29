@@ -85,8 +85,9 @@ There is also support for gamepad controllers.
 
 ### TODO
 
-- Implement other GB/GBC MBCs
-- Find out what are the accurate timings for the ppu pixel FIFO/fetcher (especially for corner cases)
+- Find out what are the accurate timings for the GB/GBC ppu pixel FIFO/fetcher (especially for corner cases)
+- Early WIP GBA
+- rewrite android port without SDL, also current android project doesn't build anymore
 
 ## Resources used
 

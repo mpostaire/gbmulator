@@ -604,7 +604,7 @@ __attribute_used__ bool app_set_binding(bool is_gamepad, gbmulator_joypad_t joyp
     return true;
 }
 
-// TODO printer not working anymore --> git bisect
+// TODO link cable (therefore also printer) not working anymore --> git bisect: maybe gb bit shifter is wrong
 static void on_printer_new_line_cb(const uint8_t *pixels, size_t current_height, size_t total_height) {
     if (!app.printer || !app.printer_renderer)
         return;
