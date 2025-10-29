@@ -37,6 +37,17 @@ select {
     --color-direction-button-circle: #3c4446;
 }
 
+.theme-gba {
+    --color-gb: #4b3e75;
+    --color-gb-screen-border: #383c3f;
+    --color-round-buttons: #2a2e30;
+    --color-round-buttons-label: #919da3;
+    --color-rectangle-buttons: #2a2e30;
+    --color-rectangle-button-label: #636661;
+    --color-direction-buttons: #2a2e30;
+    --color-direction-button-circle: #3c4446;
+}
+
 .emscripten {
     padding-right: 0;
     margin-left: auto;
@@ -217,8 +228,8 @@ canvas.emscripten {
     cursor: auto;
 }
 
-#open-rom {
-    margin: 0.4em;
+button {
+    margin: 0.2em 0.4em;
 }
 
 #menu {
