@@ -1061,7 +1061,7 @@ static void activate_cb(GtkApplication *app) {
 
     speed_slider_container          = GTK_WIDGET(gtk_builder_get_object(builder, "pref_speed_container"));
     widget                          = GTK_WIDGET(gtk_builder_get_object(builder, "pref_speed"));
-    GtkAdjustment *speed_adjustment = gtk_adjustment_new(config.speed, 1.0, 8.0, 0.5, 1, 0.0);
+    GtkAdjustment *speed_adjustment = gtk_adjustment_new(config.speed, 1.0, APP_MAX_SPEED, 0.5, 1, 0.0);
     gtk_scale_set_format_value_func(GTK_SCALE(widget), slider_format_scale, NULL, NULL);
     gtk_range_set_adjustment(GTK_RANGE(widget), speed_adjustment);
     g_signal_connect(widget, "value-changed", G_CALLBACK(set_speed), NULL);

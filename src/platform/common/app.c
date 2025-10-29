@@ -238,14 +238,10 @@ __attribute_used__ void app_run_frame(void) {
         // TODO async or timeout link_exchange_joypad to avoid blocking the gui
         if (app.linked_emu) {
             if (!link_exchange_joypad(app.sfd, app.emu, app.linked_emu)) {
-                app.linked_emu = NULL;
-                app.sfd        = -1;
-                // set_link_gui_actions(TRUE, TRUE);
+                app_link_disconnect();
                 set_steps_per_frame();
-                // gbmulator_options_t opts;
-                // gbmulator_get_options(app.emu, &opts);
-                // opts.apu_speed = app.config.speed;
-                // gbmulator_set_options(app.emu, &opts);
+                // TODO callback to notify gui
+                // set_link_gui_actions(TRUE, TRUE);
                 // show_toast("Link Cable disconnected");
             }
         }
@@ -380,8 +376,6 @@ static void on_new_frame_cb(const uint8_t *pixels) {
 }
 
 __attribute_used__ bool app_load_cartridge(uint8_t *rom, size_t rom_size) {
-    // TODO if rom is of another mode, auto switch to it
-
     gbmulator_options_t opts = {
         .rom               = rom,
         .rom_size          = rom_size,
@@ -470,7 +464,7 @@ __attribute_used__ bool app_set_mode(gbmulator_mode_t mode) {
 }
 
 __attribute_used__ void app_set_speed(float value) {
-    app.config.speed = CLAMP(value, 1.0f, 8.0f); // TODO public define max_speed
+    app.config.speed = CLAMP(value, 1.0f, APP_MAX_SPEED);
     set_steps_per_frame();
     gbmulator_set_apu_speed(app.emu, app.config.speed);
 }
