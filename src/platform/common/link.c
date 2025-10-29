@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -6,6 +7,11 @@
 #include <arpa/inet.h>
 
 #include "../../core/core.h"
+
+#define PKT_CONFIG_MODE_MASK     0x03
+#define PKT_CONFIG_IR_MASK       0x04
+#define PKT_CONFIG_CABLE_MASK    0x08
+#define PKT_CONFIG_COMPRESS_MASK 0x80
 
 typedef enum {
     PKT_INFO,
@@ -18,7 +24,7 @@ static int server_sfd = -1;
 
 static void print_connected_to(struct sockaddr *addr) {
     char buf[INET6_ADDRSTRLEN];
-    int port;
+    int  port;
     if (addr->sa_family == AF_INET) {
         inet_ntop(addr->sa_family, &((struct sockaddr_in *) addr)->sin_addr, buf, sizeof(buf));
         port = ((struct sockaddr_in *) addr)->sin_port;
@@ -30,16 +36,17 @@ static void print_connected_to(struct sockaddr *addr) {
 }
 
 void link_cancel(void) {
-    shutdown(server_sfd, SHUT_RD);
+    if (server_sfd >= 0)
+        shutdown(server_sfd, SHUT_RD);
 }
 
 int link_start_server(const char *port) {
     struct addrinfo hints = { 0 };
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags = AI_PASSIVE;
+    hints.ai_family       = AF_UNSPEC;
+    hints.ai_socktype     = SOCK_STREAM;
+    hints.ai_flags        = AI_PASSIVE;
     struct addrinfo *res;
-    int ret;
+    int              ret;
     if ((ret = getaddrinfo(NULL, port, &hints, &res)) != 0) {
         eprintf("getaddrinfo: %s\n", gai_strerror(ret));
         return -1;
@@ -88,9 +95,9 @@ int link_start_server(const char *port) {
     printf("Link server waiting for client on port %s...\n", port);
 
     // wait for a client connection
-    socklen_t client_addr_len = sizeof(struct sockaddr_in6); // take the largest possible size regardless of IP version
-    struct sockaddr *client_addr = xmalloc(client_addr_len);
-    int client_sfd = accept(server_sfd, client_addr, &client_addr_len);
+    socklen_t        client_addr_len = sizeof(struct sockaddr_in6); // take the largest possible size regardless of IP version
+    struct sockaddr *client_addr     = xmalloc(client_addr_len);
+    int              client_sfd      = accept(server_sfd, client_addr, &client_addr_len);
     if (client_sfd == -1)
         return -1;
 
@@ -104,12 +111,12 @@ int link_start_server(const char *port) {
 
 int link_connect_to_server(const char *address, const char *port) {
     struct addrinfo hints = {
-        .ai_family = AF_UNSPEC,
+        .ai_family   = AF_UNSPEC,
         .ai_socktype = SOCK_STREAM,
         .ai_protocol = IPPROTO_TCP
     };
     struct addrinfo *res;
-    int ret;
+    int              ret;
     if ((ret = getaddrinfo(address, port, &hints, &res)) != 0) {
         eprintf("getaddrinfo: %s\n", gai_strerror(ret));
         return -1;
@@ -148,17 +155,20 @@ static inline int receive(int fd, void *buf, size_t n, int flags) {
     return 1;
 }
 
-static int exchange_info(int sfd, gb_t *gb, gb_mode_t *mode, int *can_compress, int *is_cable_link, int *is_ir_link) {
+static int exchange_info(int sfd, gbmulator_t *emu, gbmulator_mode_t *mode, bool *can_compress, bool *is_cable_link, bool *is_ir_link) {
     // --- SEND PKT_INFO ---
 
-    uint16_t checksum = gb_get_cartridge_checksum(gb);
+    uint16_t checksum = gbmulator_get_rom_checksum(emu);
+
+    gbmulator_options_t opts;
+    gbmulator_get_options(emu, &opts);
 
     uint8_t pkt[4] = { 0 };
-    pkt[0] = PKT_INFO;
-    pkt[1] = gb_is_cgb(gb);
-    SET_BIT(pkt[1], 1); // cable-link
-    SET_BIT(pkt[1], 2); // ir-link
-    SET_BIT(pkt[1], 7); // compress
+    pkt[0]         = PKT_INFO;
+    pkt[1]         = opts.mode;
+    pkt[1] |= opts.mode & PKT_CONFIG_CABLE_MASK;
+    pkt[1] |= opts.mode & PKT_CONFIG_IR_MASK;
+    pkt[1] |= opts.mode & PKT_CONFIG_COMPRESS_MASK;
     memcpy(&pkt[2], &checksum, 2);
 
     send(sfd, pkt, 4, 0);
@@ -172,10 +182,10 @@ static int exchange_info(int sfd, gb_t *gb, gb_mode_t *mode, int *can_compress, 
         return -1;
     }
 
-    *mode = CHECK_BIT(pkt[1], 0) ? GB_MODE_CGB : GB_MODE_DMG;
-    *is_cable_link = CHECK_BIT(pkt[1], 1); // cable-link
-    *is_ir_link = CHECK_BIT(pkt[1], 2); // ir-link
-    *can_compress = GET_BIT(pkt[1], 7); // compress
+    *mode          = pkt[1] & PKT_CONFIG_MODE_MASK;
+    *is_cable_link = (pkt[1] & PKT_CONFIG_CABLE_MASK) == PKT_CONFIG_CABLE_MASK;       // cable-link
+    *is_ir_link    = (pkt[1] & PKT_CONFIG_IR_MASK) == PKT_CONFIG_IR_MASK;             // ir-link
+    *can_compress  = (pkt[1] & PKT_CONFIG_COMPRESS_MASK) == PKT_CONFIG_COMPRESS_MASK; // compress
 
     uint16_t received_checksum = 0;
     memcpy(&received_checksum, &pkt[2], 2);
@@ -187,14 +197,14 @@ static int exchange_info(int sfd, gb_t *gb, gb_mode_t *mode, int *can_compress, 
     }
 }
 
-static int exchange_rom(int sfd, gb_t *gb, uint8_t **other_rom, size_t *rom_len) {
+static int exchange_rom(int sfd, gbmulator_t *emu, uint8_t **other_rom, size_t *rom_len) {
     // --- SEND PKT_ROM ---
 
     // TODO compression
-    uint8_t *this_rom = gb_get_rom(gb, rom_len);
+    uint8_t *this_rom = gbmulator_get_rom(emu, rom_len);
 
     uint8_t *pkt = xcalloc(1, *rom_len + 9);
-    pkt[0] = PKT_ROM;
+    pkt[0]       = PKT_ROM;
     memcpy(&pkt[1], rom_len, sizeof(size_t));
     memcpy(&pkt[9], this_rom, *rom_len); // causes segfault
 
@@ -220,13 +230,13 @@ static int exchange_rom(int sfd, gb_t *gb, uint8_t **other_rom, size_t *rom_len)
     return 1;
 }
 
-static int exchange_savestate(int sfd, gb_t *gb, int can_compress, uint8_t **savestate_data, size_t *savestate_len) {
+static bool exchange_savestate(int sfd, gbmulator_t *emu, int can_compress, uint8_t **savestate_data, size_t *savestate_len) {
     // --- SEND PKT_STATE ---
 
-    uint8_t *local_savestate_data = gb_get_savestate(gb, savestate_len, can_compress);
+    uint8_t *local_savestate_data = gbmulator_get_savestate(emu, savestate_len, can_compress);
 
     uint8_t *pkt = xcalloc(1, *savestate_len + 9);
-    pkt[0] = PKT_STATE;
+    pkt[0]       = PKT_STATE;
     memcpy(&pkt[1], savestate_len, sizeof(size_t));
     memcpy(&pkt[9], local_savestate_data, *savestate_len);
 
@@ -241,7 +251,7 @@ static int exchange_savestate(int sfd, gb_t *gb, int can_compress, uint8_t **sav
 
     if (pkt_header[0] != PKT_STATE) {
         eprintf("received packet type %d but expected %d (ignored)\n", pkt_header[0], PKT_STATE);
-        return 0;
+        return false;
     }
 
     memcpy(savestate_len, &pkt_header[1], sizeof(size_t));
@@ -250,77 +260,85 @@ static int exchange_savestate(int sfd, gb_t *gb, int can_compress, uint8_t **sav
 
     receive(sfd, *savestate_data, *savestate_len, 0);
 
-    return 1;
+    return true;
 }
 
-int link_init_transfer(int sfd, gb_t *gb, gb_t **linked_gb) {
+bool link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
     // TODO connection lost detection (return -1)
-    *linked_gb = NULL;
-    gb_mode_t mode = 0;
-    int can_compress = 0;
-    int is_cable_link = 0;
-    int is_ir_link = 0;
-    size_t rom_len;
-    uint8_t *rom = NULL;
-    size_t savestate_len;
-    uint8_t *savestate_data = NULL;
+    *linked_emu                    = NULL;
+    gbmulator_mode_t mode          = GBMULATOR_MODE_GB;
+    bool             can_compress  = 0;
+    bool             is_cable_link = 0;
+    bool             is_ir_link    = 0;
+    size_t           rom_size      = 0;
+    uint8_t         *rom           = NULL;
+    size_t           savestate_len;
+    uint8_t         *savestate_data = NULL;
 
     // TODO handle wrong packet type received
-    int ret = exchange_info(sfd, gb, &mode, &can_compress, &is_cable_link, &is_ir_link);
+    int ret = exchange_info(sfd, emu, &mode, &can_compress, &is_cable_link, &is_ir_link);
     if (ret == 0)
-        exchange_rom(sfd, gb, &rom, &rom_len);
-    exchange_savestate(sfd, gb, can_compress, &savestate_data, &savestate_len);
+        exchange_rom(sfd, emu, &rom, &rom_size);
+    exchange_savestate(sfd, emu, can_compress, &savestate_data, &savestate_len);
 
     // --- LINK BACKGROUND EMULATOR ---
 
-    gb_options_t opts = { .mode = mode };
+    gbmulator_options_t opts;
+    gbmulator_get_options(emu, &opts);
+    opts.mode     = mode;
+    opts.rom      = rom;
+    opts.rom_size = rom_size;
+
     if (rom) {
-        *linked_gb = gb_init(rom, rom_len, &opts);
-        if (!*linked_gb) {
+        *linked_emu = gbmulator_init(&opts);
+        if (!*linked_emu) {
             eprintf("received invalid or corrupted PKT_ROM\n");
             free(rom);
             close(sfd);
-            return 0;
+            return false;
         }
         free(rom);
     } else {
-        rom = gb_get_rom(gb, &rom_len);
-        *linked_gb = gb_init(rom, rom_len, &opts);
+        opts.rom      = gbmulator_get_rom(emu, &rom_size);
+        opts.rom_size = rom_size;
+        *linked_emu   = gbmulator_init(&opts);
     }
 
-    if (!gb_load_savestate(*linked_gb, savestate_data, savestate_len)) {
+    if (!gbmulator_load_savestate(*linked_emu, savestate_data, savestate_len)) {
         eprintf("received invalid or corrupted savestate\n");
         close(sfd);
-        return 0;
+        return false;
     }
 
     if (is_cable_link)
-        gb_link_connect_gb(gb, *linked_gb);
+        gbmulator_link_connect(emu, *linked_emu, GBMULATOR_LINK_CABLE);
     if (is_ir_link)
-        gb_ir_connect(gb, *linked_gb);
+        gbmulator_link_connect(emu, *linked_emu, GBMULATOR_LINK_IR);
 
     free(savestate_data);
-    return 1;
+    return true;
 }
 
-int link_exchange_joypad(int sfd, gb_t *gb, gb_t *linked_gb) {
+bool link_exchange_joypad(int sfd, gbmulator_t *emu, gbmulator_t *linked_emu) {
     char buf[2];
     buf[0] = PKT_JOYPAD;
-    buf[1] = gb_get_joypad_state(gb);
+    buf[1] = gbmulator_get_joypad_state(emu);
     send(sfd, buf, 2, 0);
 
     do {
         if (!receive(sfd, buf, 2, 0)) {
             printf("Link cable disconnected\n");
-            gb_link_disconnect(gb);
-            gb_quit(linked_gb);
+            gbmulator_link_disconnect(emu, GBMULATOR_LINK_CABLE);
+            gbmulator_link_disconnect(emu, GBMULATOR_LINK_IR);
+            gbmulator_quit(linked_emu);
             close(sfd);
-            return 0;
+            return false;
         }
         if (buf[0] != PKT_JOYPAD)
             eprintf("received packet type %d but expected %d (ignored)\n", buf[0], PKT_JOYPAD);
     } while (buf[0] != PKT_JOYPAD);
 
-    gb_set_joypad_state(linked_gb, buf[1]);
-    return 1;
+    gbmulator_set_joypad_state(linked_emu, buf[1]);
+
+    return true;
 }

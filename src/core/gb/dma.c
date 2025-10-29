@@ -1,7 +1,7 @@
 #include "gb_priv.h"
 
 static inline uint8_t gdma_hdma_copy_step(gb_t *gb) {
-    gb_mmu_t *mmu = gb->mmu;
+    gb_mmu_t *mmu = &gb->mmu;
 
     // normal speed: one step is 4 cycles -> 2 cycles to copy 1 byte -> copy 2 bytes from src to dest
     // double speed: one step is 8 cycles -> 4 cycles to copy 1 byte -> copy 1 byte from src to dest
@@ -34,7 +34,7 @@ static inline uint8_t gdma_hdma_copy_step(gb_t *gb) {
 }
 
 static inline void gdma_hdma_step(gb_t *gb) {
-    gb_mmu_t *mmu = gb->mmu;
+    gb_mmu_t *mmu = &gb->mmu;
 
     if (mmu->hdma.progress == 0)
         return;
@@ -50,12 +50,12 @@ static inline void gdma_hdma_step(gb_t *gb) {
         gdma_hdma_copy_step(gb);
 
         if (mmu->hdma.progress == 0) { // finished copying?
-            mmu->hdma.lock_cpu = 0;
+            mmu->hdma.lock_cpu          = 0;
             mmu->io_registers[IO_HDMA5] = 0xFF;
         }
         break;
     case HDMA:
-        if (!mmu->hdma.allow_hdma_block || gb->cpu->halt) // HDMA can't work while cpu is halted
+        if (!mmu->hdma.allow_hdma_block || gb->cpu.halt) // HDMA can't work while cpu is halted
             return;
 
         // locks cpu while transfer of 0x10 byte block in progress
@@ -63,7 +63,7 @@ static inline void gdma_hdma_step(gb_t *gb) {
 
         if (gdma_hdma_copy_step(gb)) {
             // one block of 0x10 bytes has been copied
-            mmu->hdma.lock_cpu = 0;
+            mmu->hdma.lock_cpu         = 0;
             mmu->hdma.allow_hdma_block = 0;
 
             if (mmu->hdma.progress == 0) // finished copying?
@@ -74,7 +74,7 @@ static inline void gdma_hdma_step(gb_t *gb) {
 }
 
 static inline void oam_dma_step(gb_t *gb) {
-    gb_mmu_t *mmu = gb->mmu;
+    gb_mmu_t *mmu = &gb->mmu;
 
     // run oam dma initializations procedure if there are any starting oam dma
     for (unsigned int i = 0; mmu->oam_dma.starting_count > 0 && i < sizeof(mmu->oam_dma.starting_statuses); i++) {
@@ -89,8 +89,8 @@ static inline void oam_dma_step(gb_t *gb) {
             break;
         case OAM_DMA_STARTING:
             mmu->oam_dma.starting_statuses[i] = OAM_DMA_NO_INIT;
-            mmu->oam_dma.progress = 0;
-            mmu->oam_dma.src_address = mmu->io_registers[IO_DMA] << 8;
+            mmu->oam_dma.progress             = 0;
+            mmu->oam_dma.src_address          = mmu->io_registers[IO_DMA] << 8;
             mmu->oam_dma.starting_count--;
             break;
         }
@@ -105,6 +105,6 @@ static inline void oam_dma_step(gb_t *gb) {
 
 void dma_step(gb_t *gb) {
     oam_dma_step(gb);
-    if (gb->mode == GB_MODE_CGB)
+    if (gb->base->opts.mode == GBMULATOR_MODE_GBC)
         gdma_hdma_step(gb);
 }

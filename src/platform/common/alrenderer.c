@@ -10,18 +10,19 @@
 #define N_SAMPLES 1024 // higher value reduces pitch variations, especially after init_buffers (best: 1024, min where is still good enough: 512)
 
 #define DRC_TARGET_QUEUE_SIZE ((N_BUFFERS / 4) * N_SAMPLES)
-#define DRC_MAX_FREQ_DIFF 0.02
-#define DRC_ALPHA 0.1
+#define DRC_MAX_FREQ_DIFF     0.02
+#define DRC_ALPHA             0.1
 
-static ALCdevice *device;
-static ALCcontext *context;
-static ALuint source;
-static ALint sampling_rate;
-static ALuint buffers[N_BUFFERS];
-static gb_apu_sample_t samples[N_SAMPLES];
-static ALsizei samples_count;
-static ALboolean drc_enabled;
-static int ewma_queue_size;
+static ALCdevice             *device;
+static ALCcontext            *context;
+static ALuint                 source;
+static ALint                  sampling_rate;
+static ALuint                 buffers[N_BUFFERS];
+static gbmulator_apu_sample_t samples[N_SAMPLES];
+static ALsizei                samples_count;
+static float                  sound_level;
+static ALboolean              drc_enabled;
+static int                    ewma_queue_size;
 
 static inline void init_buffers(void) {
     // fill buffers with empty data to tell the source what format and sampling_rate they are using
@@ -34,7 +35,7 @@ static inline void init_buffers(void) {
     alSourceQueueBuffers(source, N_BUFFERS, buffers);
     alSourcePlay(source);
 
-    samples_count = 0;
+    samples_count   = 0;
     ewma_queue_size = DRC_TARGET_QUEUE_SIZE; // init at DRC_TARGET_QUEUE_SIZE to avoid high pitch variations at the beginning
 }
 
@@ -145,12 +146,12 @@ void alrenderer_enable_dynamic_rate_control(ALboolean enabled) {
 
 static inline uint32_t dynamic_rate_control(void) {
     // https://github.com/kevinbchen/nes-emu/blob/a993b0a5c080bc689de5f41e1e492e9e219e14e6/src/audio.cpp#L39
-    int queue_size = alrenderer_get_queue_size() / sizeof(gb_apu_sample_t);
+    int queue_size  = alrenderer_get_queue_size() / sizeof(gbmulator_apu_sample_t);
     ewma_queue_size = queue_size * DRC_ALPHA + ewma_queue_size * (1.0 - DRC_ALPHA);
 
     // Adjust sample frequency to try and maintain a constant queue size
-    double diff = (ewma_queue_size - DRC_TARGET_QUEUE_SIZE) / (double) DRC_TARGET_QUEUE_SIZE;
-    int sample_rate = sampling_rate * (1.0 - CLAMP(diff, -1.0, 1.0) * (DRC_MAX_FREQ_DIFF));
+    double diff        = (ewma_queue_size - DRC_TARGET_QUEUE_SIZE) / (double) DRC_TARGET_QUEUE_SIZE;
+    int    sample_rate = sampling_rate * (1.0 - CLAMP(diff, -1.0, 1.0) * (DRC_MAX_FREQ_DIFF));
 
     // double fill_level = queue_size / (double) (N_SAMPLES * N_BUFFERS);
     // printf("fill_level=%lf dynamic_frequency=%d (sampling_rate=%d) DRC_TARGET_QUEUE_SIZE=%d queue_size=%d ewma_queue_size=%d\n",
@@ -159,8 +160,9 @@ static inline uint32_t dynamic_rate_control(void) {
     return sample_rate;
 }
 
-void alrenderer_queue_sample(const gb_apu_sample_t sample, uint32_t *dynamic_sampling_rate) {
-    samples[samples_count++] = sample;
+void alrenderer_queue_sample(const gbmulator_apu_sample_t sample, uint32_t *dynamic_sampling_rate) {
+    samples[samples_count++] = (gbmulator_apu_sample_t) { .l = sample.l * sound_level, .r = sample.r * sound_level };
+
     if (samples_count < N_SAMPLES)
         return;
     samples_count = 0;
@@ -217,4 +219,8 @@ void alrenderer_queue_sample(const gb_apu_sample_t sample, uint32_t *dynamic_sam
             return;
         }
     }
+}
+
+void alrenderer_set_level(float level) {
+    sound_level = CLAMP(level, 0.0f, 1.0f);
 }

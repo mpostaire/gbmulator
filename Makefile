@@ -42,18 +42,18 @@ ICONS= \
 	$(ICONDIR)/16x16/$(BIN).png
 
 UI:=$(wildcard $(SDIR)/platform/desktop/ui/*.ui)
-SHADERS:=$(wildcard $(SDIR)/platform/desktop/ui/*.glsl)
 
 all: desktop
 
-debug: CFLAGS+=-g -O0
+debug: CFLAGS+=-ggdb -O0
+# debug: CFLAGS+=-DDEBUG
 debug: all
 
 desktop: CFLAGS+=$(shell pkg-config --cflags gtk4 libadwaita-1 zlib manette-0.2 opengl openal gstreamer-1.0) -fanalyzer
 desktop: LDLIBS+=$(shell pkg-config --libs gtk4 libadwaita-1 zlib manette-0.2 opengl openal gstreamer-1.0)
 desktop: $(PLATFORM_ODIR_STRUCTURE) $(BIN) $(ICONS)
 
-$(SDIR)/platform/desktop/resources.c: $(SDIR)/platform/desktop/ui/gbmulator.gresource.xml $(UI) $(SHADERS)
+$(SDIR)/platform/desktop/resources.c: $(SDIR)/platform/desktop/ui/gbmulator.gresource.xml $(UI)
 	glib-compile-resources $< --target=$@ --generate-source
 
 profile: CFLAGS+=-pg
@@ -68,24 +68,21 @@ debug_android: android
 	cd $(SDIR)/platform/android/android-project && ./gradlew installDebug
 	adb shell am start -n io.github.mpostaire.gbmulator/.MainMenu
 
-web_build:
-	mkdir -p web_build
-
-web_build/favicon.png: $(SDIR)/platform/web/favicon.png
+$(ODIR)/web/favicon.png: $(SDIR)/platform/web/favicon.png
 	cp $^ $@
-web_build/style.css: $(SDIR)/platform/web/style.css
+$(ODIR)/web/style.css: $(SDIR)/platform/web/style.css
 	cp $^ $@
 
 web: CC:=emcc
 web: LDLIBS:=
 web: CFLAGS+=-sUSE_ZLIB=1
-web: $(PLATFORM_ODIR_STRUCTURE) web_build web_build/favicon.png web_build/style.css web_build/index.html
+web: $(PLATFORM_ODIR_STRUCTURE) $(ODIR)/web $(ODIR)/web/favicon.png $(ODIR)/web/style.css $(ODIR)/web/index.html
 
 debug_web: web
-	emrun web_build/index.html
+	emrun $(ODIR)/web/index.html
 
-web_build/index.html: $(SDIR)/platform/web/template.html $(OBJ)
-	$(CC) -o $@ $(OBJ) $(CFLAGS) -lopenal -sINITIAL_MEMORY=96MB -sUSE_WEBGL2=1 -sWASM=1 -sEXPORTED_FUNCTIONS="['_main', '_malloc']" -sEXPORTED_RUNTIME_METHODS="['ccall']" -sASYNCIFY --shell-file $<
+$(ODIR)/web/index.html: $(SDIR)/platform/web/template.html $(OBJ)
+	$(CC) -o $@ $(OBJ) $(CFLAGS) -lopenal -lidbfs.js -sINITIAL_MEMORY=128MB -sUSE_WEBGL2=1 -sWASM=1 -sEXPORTED_FUNCTIONS="['_main', '_malloc', '_free']" -sEXPORTED_RUNTIME_METHODS="['ccall', 'HEAPU8']" -sASYNCIFY --shell-file $<
 
 test:
 	$(MAKE) -C test
@@ -130,7 +127,7 @@ check: $(SDIR)
 	cppcheck --enable=all --suppress=missingIncludeSystem -i $(SDIR)/platform/android/android-project -i $(SDIR)/platform/desktop/resources.c $(SDIR)
 
 clean:
-	rm -rf $(ODIR) web_build
+	rm -rf $(ODIR)
 	$(MAKE) -C test clean
 
 cleaner: clean

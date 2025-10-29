@@ -1,0 +1,209 @@
+#pragma once
+
+#include "gba.h"
+
+#define IO_ADDR(addr) (addr >> 1)
+
+typedef enum {
+    // General Internal Memory
+    BUS_BIOS         = 0x00000000, // BIOS - System ROM (16 KBytes)
+    BUS_BIOS_UNUSED  = 0x00004000, // Not used
+    BUS_EWRAM        = 0x02000000, // WRAM - On-board Work RAM (256 KBytes) 2 Wait
+    BUS_EWRAM_UNUSED = 0x02040000, // Not used
+    BUS_IWRAM        = 0x03000000, // WRAM - On-chip Work RAM (32 KBytes)
+    BUS_IWRAM_UNUSED = 0x03008000, // Not used
+    BUS_IO           = 0x04000000, // I/O Registers
+    BUS_IO_UNUSED    = 0x04000400, // Not used
+
+    // Internal Display Memory
+    BUS_PRAM        = 0x05000000, // BG/OBJ Palette RAM (1 Kbyte)
+    BUS_PRAM_UNUSED = 0x05000400, // Not used
+    BUS_VRAM        = 0x06000000, // VRAM - Video RAM (96 KBytes)
+    BUS_VRAM_UNUSED = 0x06018000, // Not used
+    BUS_OAM         = 0x07000000, // OAM - OBJ Attributes (1 Kbyte)
+    BUS_OAM_UNUSED  = 0x07000400, // Not used
+
+    // External Memory (Game Pak)
+    BUS_ROM0        = 0x08000000, // Game Pak ROM/FlashROM (max 32MB) - Wait State 0
+    BUS_ROM1        = 0x0A000000, // Game Pak ROM/FlashROM (max 32MB) - Wait State 1
+    BUS_ROM2        = 0x0C000000, // Game Pak ROM/FlashROM (max 32MB) - Wait State 2
+    BUS_SRAM        = 0x0E000000, // Game Pak SRAM (max 64 KBytes) - 8bit Bus width
+    BUS_SRAM_UNUSED = 0x0E010000, // Not used
+
+    BUS_UNUSED = 0x10000000 // Not used (upper 4bits of address bus unused)
+} gba_bus_map_t;
+
+typedef enum {
+    // All comments for the following IO registers have this format: SIZE ACCESS NAME DESCRIPTION
+
+    // LCD I/O Registers
+    IO_DISPCNT   = IO_ADDR(0x000), // 2    R/W  DISPCNT   LCD Control
+    IO_GREENSWAP = IO_ADDR(0x002), // 2    R/W  -         Undocumented - Green Swap
+    IO_DISPSTAT  = IO_ADDR(0x004), // 2    R/W  DISPSTAT  General LCD Status (STAT,LYC)
+    IO_VCOUNT    = IO_ADDR(0x006), // 2    R    VCOUNT    Vertical Counter (LY)
+    IO_BG0CNT    = IO_ADDR(0x008), // 2    R/W  BG0CNT    BG0 Control
+    IO_BG1CNT    = IO_ADDR(0x00A), // 2    R/W  BG1CNT    BG1 Control
+    IO_BG2CNT    = IO_ADDR(0x00C), // 2    R/W  BG2CNT    BG2 Control
+    IO_BG3CNT    = IO_ADDR(0x00E), // 2    R/W  BG3CNT    BG3 Control
+    IO_BG0HOFS   = IO_ADDR(0x010), // 2    W    BG0HOFS   BG0 X-Offset
+    IO_BG0VOFS   = IO_ADDR(0x012), // 2    W    BG0VOFS   BG0 Y-Offset
+    IO_BG1HOFS   = IO_ADDR(0x014), // 2    W    BG1HOFS   BG1 X-Offset
+    IO_BG1VOFS   = IO_ADDR(0x016), // 2    W    BG1VOFS   BG1 Y-Offset
+    IO_BG2HOFS   = IO_ADDR(0x018), // 2    W    BG2HOFS   BG2 X-Offset
+    IO_BG2VOFS   = IO_ADDR(0x01A), // 2    W    BG2VOFS   BG2 Y-Offset
+    IO_BG3HOFS   = IO_ADDR(0x01C), // 2    W    BG3HOFS   BG3 X-Offset
+    IO_BG3VOFS   = IO_ADDR(0x01E), // 2    W    BG3VOFS   BG3 Y-Offset
+    IO_BG2PA     = IO_ADDR(0x020), // 2    W    BG2PA     BG2 Rotation/Scaling Parameter A (dx)
+    IO_BG2PB     = IO_ADDR(0x022), // 2    W    BG2PB     BG2 Rotation/Scaling Parameter B (dmx)
+    IO_BG2PC     = IO_ADDR(0x024), // 2    W    BG2PC     BG2 Rotation/Scaling Parameter C (dy)
+    IO_BG2PD     = IO_ADDR(0x026), // 2    W    BG2PD     BG2 Rotation/Scaling Parameter D (dmy)
+    IO_BG2X      = IO_ADDR(0x028), // 4    W    BG2X      BG2 Reference Point X-Coordinate
+    IO_BG2Y      = IO_ADDR(0x02C), // 4    W    BG2Y      BG2 Reference Point Y-Coordinate
+    IO_BG3PA     = IO_ADDR(0x030), // 2    W    BG3PA     BG3 Rotation/Scaling Parameter A (dx)
+    IO_BG3PB     = IO_ADDR(0x032), // 2    W    BG3PB     BG3 Rotation/Scaling Parameter B (dmx)
+    IO_BG3PC     = IO_ADDR(0x034), // 2    W    BG3PC     BG3 Rotation/Scaling Parameter C (dy)
+    IO_BG3PD     = IO_ADDR(0x036), // 2    W    BG3PD     BG3 Rotation/Scaling Parameter D (dmy)
+    IO_BG3X      = IO_ADDR(0x038), // 4    W    BG3X      BG3 Reference Point X-Coordinate
+    IO_BG3Y      = IO_ADDR(0x03C), // 4    W    BG3Y      BG3 Reference Point Y-Coordinate
+    IO_WIN0H     = IO_ADDR(0x040), // 2    W    WIN0H     Window 0 Horizontal Dimensions
+    IO_WIN1H     = IO_ADDR(0x042), // 2    W    WIN1H     Window 1 Horizontal Dimensions
+    IO_WIN0V     = IO_ADDR(0x044), // 2    W    WIN0V     Window 0 Vertical Dimensions
+    IO_WIN1V     = IO_ADDR(0x046), // 2    W    WIN1V     Window 1 Vertical Dimensions
+    IO_WININ     = IO_ADDR(0x048), // 2    R/W  WININ     Inside of Window 0 and 1
+    IO_WINOUT    = IO_ADDR(0x04A), // 2    R/W  WINOUT    Inside of OBJ Window & Outside of Windows
+    IO_MOSAIC    = IO_ADDR(0x04C), // 2    W    MOSAIC    Mosaic Size
+    IO_BLDCNT    = IO_ADDR(0x050), // 2    R/W  BLDCNT    Color Special Effects Selection
+    IO_BLDALPHA  = IO_ADDR(0x052), // 2    R/W  BLDALPHA  Alpha Blending Coefficients
+    IO_BLDY      = IO_ADDR(0x054), // 2    W    BLDY      Brightness (Fade-In/Out) Coefficient
+
+    // Sound Registers
+    IO_SOUND1CNT_L = IO_ADDR(0x060), //  2    R/W  SOUND1CNT_L Channel 1 Sweep register       (NR10)
+    IO_SOUND1CNT_H = IO_ADDR(0x062), //  2    R/W  SOUND1CNT_H Channel 1 Duty/Length/Envelope (NR11, NR12)
+    IO_SOUND1CNT_X = IO_ADDR(0x064), //  2    R/W  SOUND1CNT_X Channel 1 Frequency/Control    (NR13, NR14)
+    IO_SOUND2CNT_L = IO_ADDR(0x068), //  2    R/W  SOUND2CNT_L Channel 2 Duty/Length/Envelope (NR21, NR22)
+    IO_SOUND2CNT_H = IO_ADDR(0x06C), //  2    R/W  SOUND2CNT_H Channel 2 Frequency/Control    (NR23, NR24)
+    IO_SOUND3CNT_L = IO_ADDR(0x070), //  2    R/W  SOUND3CNT_L Channel 3 Stop/Wave RAM select (NR30)
+    IO_SOUND3CNT_H = IO_ADDR(0x072), //  2    R/W  SOUND3CNT_H Channel 3 Length/Volume        (NR31, NR32)
+    IO_SOUND3CNT_X = IO_ADDR(0x074), //  2    R/W  SOUND3CNT_X Channel 3 Frequency/Control    (NR33, NR34)
+    IO_SOUND4CNT_L = IO_ADDR(0x078), //  2    R/W  SOUND4CNT_L Channel 4 Length/Envelope      (NR41, NR42)
+    IO_SOUND4CNT_H = IO_ADDR(0x07C), //  2    R/W  SOUND4CNT_H Channel 4 Frequency/Control    (NR43, NR44)
+    IO_SOUNDCNT_L  = IO_ADDR(0x080), //  2    R/W  SOUNDCNT_L  Control Stereo/Volume/Enable   (NR50, NR51)
+    IO_SOUNDCNT_H  = IO_ADDR(0x082), //  2    R/W  SOUNDCNT_H  Control Mixing/DMA Control
+    IO_SOUNDCNT_X  = IO_ADDR(0x084), //  2    R/W  SOUNDCNT_X  Control Sound on/off           (NR52)
+    IO_SOUNDBIAS   = IO_ADDR(0x088), //  2    BIOS SOUNDBIAS   Sound PWM Control
+    IO_WAVE_RAM    = IO_ADDR(0x090), // 2x10h R/W  WAVE_RAM  Channel 3 Wave Pattern RAM (2 banks!!)
+    IO_FIFO_A      = IO_ADDR(0x0A0), //  4    W    FIFO_A    Channel A FIFO, Data 0-3
+    IO_FIFO_B      = IO_ADDR(0x0A4), //  4    W    FIFO_B    Channel B FIFO, Data 0-3
+
+    // DMA Transfer Channels
+    IO_DMA0SAD   = IO_ADDR(0x0B0), // 4    W    DMA0SAD   DMA 0 Source Address
+    IO_DMA0DAD   = IO_ADDR(0x0B4), // 4    W    DMA0DAD   DMA 0 Destination Address
+    IO_DMA0CNT_L = IO_ADDR(0x0B8), // 2    W    DMA0CNT_L DMA 0 Word Count
+    IO_DMA0CNT_H = IO_ADDR(0x0BA), // 2    R/W  DMA0CNT_H DMA 0 Control
+    IO_DMA1SAD   = IO_ADDR(0x0BC), // 4    W    DMA1SAD   DMA 1 Source Address
+    IO_DMA1DAD   = IO_ADDR(0x0C0), // 4    W    DMA1DAD   DMA 1 Destination Address
+    IO_DMA1CNT_L = IO_ADDR(0x0C4), // 2    W    DMA1CNT_L DMA 1 Word Count
+    IO_DMA1CNT_H = IO_ADDR(0x0C6), // 2    R/W  DMA1CNT_H DMA 1 Control
+    IO_DMA2SAD   = IO_ADDR(0x0C8), // 4    W    DMA2SAD   DMA 2 Source Address
+    IO_DMA2DAD   = IO_ADDR(0x0CC), // 4    W    DMA2DAD   DMA 2 Destination Address
+    IO_DMA2CNT_L = IO_ADDR(0x0D0), // 2    W    DMA2CNT_L DMA 2 Word Count
+    IO_DMA2CNT_H = IO_ADDR(0x0D2), // 2    R/W  DMA2CNT_H DMA 2 Control
+    IO_DMA3SAD   = IO_ADDR(0x0D4), // 4    W    DMA3SAD   DMA 3 Source Address
+    IO_DMA3DAD   = IO_ADDR(0x0D8), // 4    W    DMA3DAD   DMA 3 Destination Address
+    IO_DMA3CNT_L = IO_ADDR(0x0DC), // 2    W    DMA3CNT_L DMA 3 Word Count
+    IO_DMA3CNT_H = IO_ADDR(0x0DE), // 2    R/W  DMA3CNT_H DMA 3 Control
+
+    // Timer Registers
+    IO_TM0CNT_L = IO_ADDR(0x100), // 2    R/W  TM0CNT_L  Timer 0 Counter/Reload
+    IO_TM0CNT_H = IO_ADDR(0x102), // 2    R/W  TM0CNT_H  Timer 0 Control
+    IO_TM1CNT_L = IO_ADDR(0x104), // 2    R/W  TM1CNT_L  Timer 1 Counter/Reload
+    IO_TM1CNT_H = IO_ADDR(0x106), // 2    R/W  TM1CNT_H  Timer 1 Control
+    IO_TM2CNT_L = IO_ADDR(0x108), // 2    R/W  TM2CNT_L  Timer 2 Counter/Reload
+    IO_TM2CNT_H = IO_ADDR(0x10A), // 2    R/W  TM2CNT_H  Timer 2 Control
+    IO_TM3CNT_L = IO_ADDR(0x10C), // 2    R/W  TM3CNT_L  Timer 3 Counter/Reload
+    IO_TM3CNT_H = IO_ADDR(0x10E), // 2    R/W  TM3CNT_H  Timer 3 Control
+
+    // Serial Communication (1)
+    IO_SIODATA32   = IO_ADDR(0x120), // 4    R/W  SIODATA32   SIO Data (Normal-32bit Mode; shared with below)
+    IO_SIOMULTI0   = IO_ADDR(0x120), // 2    R/W  SIOMULTI0   SIO Data 0 (Parent)    (Multi-Player Mode)
+    IO_SIOMULTI1   = IO_ADDR(0x122), // 2    R/W  SIOMULTI1   SIO Data 1 (1st Child) (Multi-Player Mode)
+    IO_SIOMULTI2   = IO_ADDR(0x124), // 2    R/W  SIOMULTI2   SIO Data 2 (2nd Child) (Multi-Player Mode)
+    IO_SIOMULTI3   = IO_ADDR(0x126), // 2    R/W  SIOMULTI3   SIO Data 3 (3rd Child) (Multi-Player Mode)
+    IO_SIOCNT      = IO_ADDR(0x128), // 2    R/W  SIOCNT      SIO Control Register
+    IO_SIOMLT_SEND = IO_ADDR(0x12A), // 2    R/W  SIOMLT_SEND SIO Data (Local of MultiPlayer; shared below)
+    IO_SIODATA8    = IO_ADDR(0x12A), // 2    R/W  SIODATA8    SIO Data (Normal-8bit and UART Mode)
+
+    // Keypad Input
+    IO_KEYINPUT = IO_ADDR(0x130), // 2    R    KEYINPUT  Key Status
+    IO_KEYCNT   = IO_ADDR(0x132), // 2    R/W  KEYCNT    Key Interrupt Control
+
+    // Serial Communication (2)
+    IO_RCNT      = IO_ADDR(0x134), // 2    R/W  RCNT      SIO Mode Select/General Purpose Data
+    IO_IR        = IO_ADDR(0x136), // -    -    IR        Ancient - Infrared Register (Prototypes only)
+    IO_JOYCNT    = IO_ADDR(0x140), // 2    R/W  JOYCNT    SIO JOY Bus Control
+    IO_JOY_RECV  = IO_ADDR(0x150), // 4    R/W  JOY_RECV  SIO JOY Bus Receive Data
+    IO_JOY_TRANS = IO_ADDR(0x154), // 4    R/W  JOY_TRANS SIO JOY Bus Transmit Data
+    IO_JOYSTAT   = IO_ADDR(0x158), // 2    R/?  JOYSTAT   SIO JOY Bus Receive Status
+
+    // Interrupt, Waitstate, and Power-Down Control
+    IO_IE              = IO_ADDR(0x200), // 2    R/W  IE        Interrupt Enable Register
+    IO_IF              = IO_ADDR(0x202), // 2    R/W  IF        Interrupt Request Flags / IRQ Acknowledge
+    IO_WAITCNT         = IO_ADDR(0x204), // 2    R/W  WAITCNT   Game Pak Waitstate Control
+    IO_IME             = IO_ADDR(0x208), // 2    R/W  IME       Interrupt Master Enable Register
+    IO_POSTFLG_HALTCNT = IO_ADDR(0x300), // 1    R/W  POSTFLG   Undocumented - Post Boot Flag
+    // IO_HALTCNT = IO_ADDR(0x301), // 1    W    HALTCNT   Undocumented - Power Down Control
+    // 0x410  ?    ?    ?         Undocumented - Purpose Unknown / Bug ??? 0FFh
+    // 0x800  4    R/W  ?         Undocumented - Internal Memory Control (R/W)
+    // 0x800  4    R/W  ?         Mirrors of 4000800h (repeated each 64K)
+    // 0x000  4    W    (3DS)     Disable ARM7 bootrom overlay (3DS only)
+} gba_io_reg_map_t;
+
+typedef enum {
+    BUS_ACCESS_N, // Non-sequential bus access
+    BUS_ACCESS_S  // Sequential bus access
+} bus_access_t;
+
+typedef struct {
+    uint8_t  bios[BUS_BIOS_UNUSED - BUS_BIOS];
+    uint8_t  ewram[BUS_EWRAM_UNUSED - BUS_EWRAM];
+    uint8_t  iwram[BUS_IWRAM_UNUSED - BUS_IWRAM];
+    uint16_t io[(BUS_IO_UNUSED - BUS_IO) / sizeof(uint16_t)];
+    uint8_t  pram[BUS_PRAM_UNUSED - BUS_PRAM];
+    uint8_t  vram[BUS_VRAM_UNUSED - BUS_VRAM];
+    uint8_t  oam[BUS_OAM_UNUSED - BUS_OAM];
+    uint8_t  rom[BUS_ROM1 - BUS_ROM0];
+    uint8_t  sram[BUS_SRAM_UNUSED - BUS_SRAM];
+
+    uint32_t last_fetched_bios_instr;
+    uint32_t read_data_latch;
+    uint32_t write_data_latch;
+
+    uint32_t rom_address_latch;
+
+    size_t rom_size;
+
+    bool    mgba_logs_enabled;
+    uint8_t mgba_logstr[0x100];
+} gba_bus_t;
+
+uint8_t _gba_bus_read_byte(gba_t *gba, bus_access_t access, uint32_t address);
+
+uint16_t _gba_bus_read_half(gba_t *gba, bus_access_t access, uint32_t address);
+
+uint32_t _gba_bus_read_word(gba_t *gba, bus_access_t access, uint32_t address);
+
+void _gba_bus_write_byte(gba_t *gba, bus_access_t access, uint32_t address, uint8_t data);
+
+void _gba_bus_write_half(gba_t *gba, bus_access_t access, uint32_t address, uint16_t data);
+
+void _gba_bus_write_word(gba_t *gba, bus_access_t access, uint32_t address, uint32_t data);
+
+// TODO remove these macros --> implement accesses in cpu and ppu
+#define gba_bus_read_byte(gba, address)        _gba_bus_read_byte(gba, BUS_ACCESS_N, address)
+#define gba_bus_read_half(gba, address)        _gba_bus_read_half(gba, BUS_ACCESS_N, address)
+#define gba_bus_read_word(gba, address)        _gba_bus_read_word(gba, BUS_ACCESS_N, address)
+#define gba_bus_write_byte(gba, address, data) _gba_bus_write_byte(gba, BUS_ACCESS_N, address, data)
+#define gba_bus_write_half(gba, address, data) _gba_bus_write_half(gba, BUS_ACCESS_N, address, data)
+#define gba_bus_write_word(gba, address, data) _gba_bus_write_word(gba, BUS_ACCESS_N, address, data)
+
+bool gba_bus_reset(gba_t *gba, const uint8_t *rom, size_t rom_size);

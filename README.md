@@ -1,7 +1,9 @@
 # GBmulator
-A Game Boy Color emulator with fast Link Cable and IR sensor support over TCP. 
+A Game Boy Color and emulator with fast Link Cable and IR sensor support over TCP.
 
-You can compile and run it on your linux machine or use it in your browser [here](https://mpostaire.github.io/gbmulator) (Note: the browser version does not have support for the link cable).
+You can compile and run it on your linux machine or use it in your browser [here](https://mpostaire.github.io/gbmulator) (Note: the browser version does not have link cable support).
+
+Game Boy Advance is also in early development: only some test roms can run.
 
 ## Screenshots
 
@@ -13,7 +15,7 @@ You can compile and run it on your linux machine or use it in your browser [here
 ## Features
 
 - GameBoy and GameBoy Color emulator
-- PPU implements fifo rendering
+- PPU implements FIFO rendering
 - Audio with dynamic rate control
 - Fast TCP Link Cable and IR sensor
 - Support for MBC1, MBC1M, MBC2, MBC3, MBC30, MBC5, MBC7 and HuC1 cartridges
@@ -29,7 +31,6 @@ Various dependencies are needed to build the desktop app:
 - libadwaita
 - libmanette
 - opengl
-- glew
 - openal
 - zlib (compressed savestates)
 - gstreamer (camera input for Game Boy Camera)
@@ -84,13 +85,13 @@ There is also support for gamepad controllers.
 
 ### TODO
 
-- implement other MBCs
-- find out what are the accurate timings for the ppu pixel fifo/fetcher (especially for corner cases)
-- android link cable via bluetooth + cross platform link cable
-- Maybe: web link cable using Emscripten WebSockets API (https://emscripten.org/docs/porting/networking.html and https://github.com/emscripten-core/emscripten/blob/main/system/include/emscripten/websocket.h. Example gist: https://gist.github.com/nus/564e9e57e4c107faa1a45b8332c265b9)
-- rewrite Makefile (it's a mess) maybe use CMake instead
+- Find out what are the accurate timings for the GB/GBC ppu pixel FIFO/fetcher (especially for corner cases)
+- Early WIP GBA
+- rewrite android port without SDL, also current android project doesn't build anymore
 
 ## Resources used
+
+GB/GBC:
 
 - https://gbdev.io/pandocs/
 - http://marc.rawer.de/Gameboy/Docs/GBCPUman.pdf
@@ -101,3 +102,12 @@ There is also support for gamepad controllers.
 - https://github.com/AntonioND/giibiiadvance/blob/master/docs/TCAGBD.pdf
 - https://pixelbits.16-b.it/GBEDG/ppu/
 - https://shonumi.github.io/articles/art2.html
+
+GBA:
+
+- https://emudev.org/system_resources
+- https://mgba.io/2015/06/27/cycle-counting-prefetch/
+- https://problemkaputt.de/gbatek.htm#armcpureference
+- https://github.com/nba-emu/NanoBoyAdvance/blob/master/src/nba/src/arm/handlers/arithmetic.inl#L84
+- https://vision.gel.ulaval.ca/~jflalonde/cours/1001/h17/docs/arm-instructionset.pdf
+- https://github.com/Normmatt/gba_bios/blob/master/asm/bios.s

@@ -1,4 +1,7 @@
 #include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
@@ -18,30 +21,6 @@ static long fsize(FILE *f) {
     }
     fseek(f, 0, SEEK_SET);
     return len;
-}
-
-gb_joypad_button_t keycode_to_joypad(config_t *config, unsigned int keycode) {
-    if (keycode == config->keybindings[JOYPAD_RIGHT]) return JOYPAD_RIGHT;
-    if (keycode == config->keybindings[JOYPAD_LEFT]) return JOYPAD_LEFT;
-    if (keycode == config->keybindings[JOYPAD_UP]) return JOYPAD_UP;
-    if (keycode == config->keybindings[JOYPAD_DOWN]) return JOYPAD_DOWN;
-    if (keycode == config->keybindings[JOYPAD_A]) return JOYPAD_A;
-    if (keycode == config->keybindings[JOYPAD_B]) return JOYPAD_B;
-    if (keycode == config->keybindings[JOYPAD_SELECT]) return JOYPAD_SELECT;
-    if (keycode == config->keybindings[JOYPAD_START]) return JOYPAD_START;
-    return -1;
-}
-
-gb_joypad_button_t button_to_joypad(config_t *config, unsigned int button) {
-    if (button == config->gamepad_bindings[JOYPAD_RIGHT]) return JOYPAD_RIGHT;
-    if (button == config->gamepad_bindings[JOYPAD_LEFT]) return JOYPAD_LEFT;
-    if (button == config->gamepad_bindings[JOYPAD_UP]) return JOYPAD_UP;
-    if (button == config->gamepad_bindings[JOYPAD_DOWN]) return JOYPAD_DOWN;
-    if (button == config->gamepad_bindings[JOYPAD_A]) return JOYPAD_A;
-    if (button == config->gamepad_bindings[JOYPAD_B]) return JOYPAD_B;
-    if (button == config->gamepad_bindings[JOYPAD_SELECT]) return JOYPAD_SELECT;
-    if (button == config->gamepad_bindings[JOYPAD_START]) return JOYPAD_START;
-    return -1;
 }
 
 int dir_exists(const char *directory_path) {
@@ -82,8 +61,8 @@ void mkdirp(const char *directory_path) {
 }
 
 void make_parent_dirs(const char *filepath) {
-    char *last_slash = strrchr(filepath, '/');
-    int last_slash_index = last_slash ? (int) (last_slash - filepath) : -1;
+    char *last_slash       = strrchr(filepath, '/');
+    int   last_slash_index = last_slash ? (int) (last_slash - filepath) : -1;
 
     if (last_slash_index != -1) {
         char directory_path[last_slash_index + 1];
@@ -94,178 +73,182 @@ void make_parent_dirs(const char *filepath) {
     }
 }
 
-void save_battery_to_file(gb_t *gb, const char *path) {
-    size_t save_length;
-    uint8_t *save_data = gb_get_save(gb, &save_length);
-    if (!save_data) return;
+uint8_t *read_file(const char *path, size_t *len) {
+    if (!path || !len)
+        return NULL;
 
-    make_parent_dirs(path);
-
-    FILE *f = fopen(path, "w");
+    FILE *f = fopen(path, "rb");
     if (!f) {
-        errnoprintf("error opening save file");
-        return;
+        errnoprintf("fopen(%s)", path);
+        return NULL;
     }
-    fwrite(save_data, save_length, 1, f);
-    fclose(f);
-    free(save_data);
-}
 
-void load_battery_from_file(gb_t *gb, const char *path) {
-    FILE *f = fopen(path, "r");
-    if (!f) return;
-
-    long save_length = fsize(f);
-    if (save_length < 0) {
+    long size = fsize(f);
+    if (size < 0) {
         fclose(f);
-        return;
+        return NULL;
     }
 
-    uint8_t *save_data = xmalloc(save_length);
-    fread(save_data, save_length, 1, f);
-    gb_load_save(gb, save_data, save_length);
+    *len = size;
+
+    uint8_t *buf = xmalloc(*len);
+
+    if (!fread(buf, *len, 1, f)) {
+        errnoprintf("fread(%s)", path);
+        fclose(f);
+        free(buf);
+        return NULL;
+    }
+
     fclose(f);
-    free(save_data);
+
+    return buf;
 }
 
-int save_state_to_file(gb_t *gb, const char *path, int compressed) {
-    make_parent_dirs(path);
+bool write_file(const char *path, const uint8_t *data, size_t len) {
+    if (!path || !data)
+        return false;
 
-    size_t len;
-    uint8_t *buf = gb_get_savestate(gb, &len, compressed);
+    make_parent_dirs(path);
 
     FILE *f = fopen(path, "wb");
     if (!f) {
-        errnoprintf("opening %s", path);
-        return 0;
+        errnoprintf("open(%s)", path);
+        return false;
     }
 
-    if (!fwrite(buf, len, 1, f)) {
-        eprintf("writing savestate to %s\n", path);
+    if (!fwrite(data, len, 1, f)) {
+        errnoprintf("fwrite(%s)", path);
         fclose(f);
-        free(buf);
-        return 0;
+        return false;
     }
 
+    fflush(f);
+    fsync(fileno(f));
     fclose(f);
-    free(buf);
-    return 1;
+
+    return true;
 }
 
-int load_state_from_file(gb_t *gb, const char *path) {
-    FILE *f = fopen(path, "rb");
-    if (!f) {
-        errnoprintf("opening %s", path);
-        return 0;
-    }
+bool save_battery_to_file(gbmulator_t *emu, const char *path) {
+    size_t   save_length;
+    uint8_t *save_data = gbmulator_get_save(emu, &save_length);
+    if (!save_data)
+        return false;
 
-    long len = fsize(f);
-    if (len < 0)
-    {
-        fclose(f);
-        return 0;
-    }
+    bool ret = write_file(path, save_data, save_length);
+    free(save_data);
+    return ret;
+}
 
-    uint8_t *buf = xmalloc(len);
-    if (!fread(buf, len, 1, f)) {
-        errnoprintf("reading savestate from %s", path);
-        fclose(f);
-        free(buf);
-        return 0;
-    }
+bool load_battery_from_file(gbmulator_t *emu, const char *path) {
+    size_t   len;
+    uint8_t *buf = read_file(path, &len);
+    if (!buf)
+        return false;
 
-    int ret = gb_load_savestate(gb, buf, len);
-    fclose(f);
+    bool ret = gbmulator_load_save(emu, buf, len);
     free(buf);
     return ret;
 }
 
-uint8_t *get_rom(const char *path, size_t *rom_size) {
-    const char *dot = strrchr(path, '.');
-    if (!dot || (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) && strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))))) {
-        eprintf("%s: wrong file extension (expected .gb or .gbc)\n", path);
-        return NULL;
-    }
+bool save_state_to_file(gbmulator_t *emu, const char *path, int compressed) {
+    size_t   savestate_length;
+    uint8_t *savestate_data = gbmulator_get_savestate(emu, &savestate_length, compressed);
+    if (!savestate_data)
+        return false;
 
-    FILE *f = fopen(path, "rb");
-    if (!f) {
-        errnoprintf("opening file %s", path);
-        return NULL;
-    }
-
-    fseek(f, 0, SEEK_END);
-    size_t len = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    uint8_t *rom = xmalloc(len);
-    if (!fread(rom, len, 1, f)) {
-        errnoprintf("reading %s", path);
-        fclose(f);
-        return NULL;
-    }
-    fclose(f);
-
-    if (!gb_is_rom_valid(rom)) {
-        eprintf("%s: invalid or unsupported rom\n", path);
-        free(rom);
-        return NULL;
-    }
-
-    if (rom_size)
-        *rom_size = len;
-    return rom;
+    bool ret = write_file(path, savestate_data, savestate_length);
+    free(savestate_data);
+    return ret;
 }
 
-char *get_xdg_path(const char *xdg_variable, const char *fallback) {
+bool load_state_from_file(gbmulator_t *emu, const char *path) {
+    size_t   len;
+    uint8_t *buf = read_file(path, &len);
+    if (!buf)
+        return false;
+
+    bool ret = gbmulator_load_savestate(emu, buf, len);
+    free(buf);
+    return ret;
+}
+
+uint8_t *read_rom(const char *path, size_t *rom_size) {
+    if (!path || !rom_size)
+        return NULL;
+
+    const char *dot = strrchr(path, '.');
+    if (!dot ||
+        (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) &&
+         strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))) &&
+         strncmp(dot, ".gba", MAX(strlen(dot), sizeof(".gba"))))) {
+        eprintf("%s: wrong file extension (expected .gb, .gbc or .gba)\n", path);
+        return NULL;
+    }
+
+    return read_file(path, rom_size);
+}
+
+static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
     char *xdg = getenv(xdg_variable);
-    if (xdg) return xdg;
+    if (xdg)
+        return xdg;
 
     char *home = getenv("HOME");
-    size_t home_len = strlen(home);
-    size_t fallback_len = strlen(fallback);
-    char *buf = xmalloc(home_len + fallback_len + 3);
-    snprintf(buf, home_len + fallback_len + 2, "%s/%s", home, fallback);
-    return buf;
-}
 
-char *get_config_path(void) {
-    char *xdg_config = get_xdg_path("XDG_CONFIG_HOME", ".config");
+    static char path[128];
+    snprintf(path, sizeof(path), "%s/%s", home, fallback);
 
-    char *path = xmalloc(strlen(xdg_config) + 27);
-    snprintf(path, strlen(xdg_config) + 26, "%s%s", xdg_config, "/gbmulator/gbmulator.conf");
-
-    free(xdg_config);
     return path;
 }
 
-char *get_save_path(const char *rom_filepath) {
-    char *xdg_data = get_xdg_path("XDG_DATA_HOME", ".local/share");
+char *get_config_dir(void) {
+    static char path[192];
+    char       *xdg_config = get_xdg_path("XDG_DATA_HOME", ".config");
 
-    char *last_slash = strrchr(rom_filepath, '/');
-    char *last_period = strrchr(last_slash ? last_slash : rom_filepath, '.');
-    int last_period_index = last_period ? (int) (last_period - last_slash) : (int) strlen(rom_filepath);
-
-    size_t len = strlen(xdg_data) + strlen(last_slash ? last_slash : rom_filepath);
-    char *save_path = xmalloc(len + 13);
-    snprintf(save_path, len + 12, "%s/gbmulator%.*s.sav", xdg_data, last_period_index, last_slash);
-
-    free(xdg_data);
-    return save_path;
+    snprintf(path, sizeof(path), "%s/gbmulator", xdg_config);
+    return path;
 }
 
-char *get_savestate_path(const char *rom_filepath, int slot) {
-    char *xdg_data = get_xdg_path("XDG_DATA_HOME", ".local/share");
+char *get_save_dir(void) {
+    static char path[192];
+    char       *xdg_config = get_xdg_path("XDG_DATA_HOME", ".local/share");
 
-    char *last_slash = strrchr(rom_filepath, '/');
-    char *last_period = strrchr(last_slash ? last_slash : rom_filepath, '.');
-    int last_period_index = last_period ? (int) (last_period - last_slash) : (int) strlen(rom_filepath);
+    snprintf(path, sizeof(path), "%s/gbmulator", xdg_config);
+    return path;
+}
 
-    size_t len = strlen(xdg_data) + strlen(last_slash);
-    char *save_path = xmalloc(len + 33);
-    snprintf(save_path, len + 32, "%s/gbmulator/savestates%.*s-%d.gbstate", xdg_data, last_period_index, last_slash, slot);
+char *get_savestate_dir(void) {
+    static char path[192];
+    char       *xdg_config = get_xdg_path("XDG_DATA_HOME", ".local/share");
 
-    free(xdg_data);
-    return save_path;
+    snprintf(path, sizeof(path), "%s/gbmulator/savestates", xdg_config);
+    return path;
+}
+
+char *get_config_path(void) {
+    char *config_dir = get_config_dir();
+
+    static char path[256];
+    snprintf(path, sizeof(path), "%s/gbmulator.conf", config_dir);
+    return path;
+}
+
+char *get_save_path(char *rom_title) {
+    char *save_dir = get_save_dir();
+
+    static char path[256];
+    snprintf(path, sizeof(path), "%s/%s.sav", save_dir, rom_title);
+    return path;
+}
+
+char *get_savestate_path(char *rom_title, int slot) {
+    char *savestate_dir = get_savestate_dir();
+
+    static char path[256];
+    snprintf(path, sizeof(path), "%s/%s-%d.gbstate", savestate_dir, rom_title, slot);
+    return path;
 }
 
 void fit_image(uint8_t *dst, const uint8_t *src, int src_width, int src_height, int row_stride, int rotation) {
@@ -273,15 +256,15 @@ void fit_image(uint8_t *dst, const uint8_t *src, int src_width, int src_height, 
     int src_start_x = 0, src_start_y = 0;
     int src_dim_diff = src_width - src_height;
     if (src_dim_diff < 0) {
-        src_height = src_width - (src_dim_diff / 2);
+        src_height  = src_width - (src_dim_diff / 2);
         src_start_y = src_dim_diff / 2;
     } else if (src_dim_diff > 0) {
-        src_width = src_height - (src_dim_diff / 2);
+        src_width   = src_height - (src_dim_diff / 2);
         src_start_x = src_dim_diff / 2;
     }
 
     // scale and rotate
-    int dst_width = GB_CAMERA_SENSOR_WIDTH;
+    int dst_width  = GB_CAMERA_SENSOR_WIDTH;
     int dst_height = GB_CAMERA_SENSOR_HEIGHT;
 
     float scale_x = (float) src_width / (float) dst_width;

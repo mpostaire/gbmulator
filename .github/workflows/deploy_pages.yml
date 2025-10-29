@@ -6,7 +6,7 @@ on:
 permissions:
   contents: write
 env:
-  EM_VERSION: 4.0.4
+  EM_VERSION: 4.0.18
   EM_CACHE_FOLDER: 'emsdk-cache'
 jobs:
   build-and-deploy:
@@ -46,4 +46,4 @@ jobs:
       - name: Deploy to github pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          folder: web_build
+          folder: build/web

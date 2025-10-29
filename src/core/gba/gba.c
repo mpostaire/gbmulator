@@ -1,0 +1,116 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "gba_priv.h"
+#include "../core_priv.h"
+
+static const char *makers[] = {
+    [0x01] = "Nintendo"
+};
+
+void gba_step(gba_t *gba) {
+    gba_cpu_step(gba);
+    gba_ppu_step(gba);
+    gba_tmr_step(gba);
+    gba_dma_step(gba);
+}
+
+gba_t *gba_init(gbmulator_t *base) {
+    gba_t *gba = xcalloc(1, sizeof(*gba));
+    gba->base  = base;
+
+    if (!gba_bus_reset(gba, base->opts.rom, base->opts.rom_size)) {
+        free(gba);
+        return NULL;
+    }
+
+    gba_cpu_reset(gba);
+    gba_ppu_reset(gba);
+    gba_tmr_reset(gba);
+    gba_dma_reset(gba);
+
+    return gba;
+}
+
+void gba_quit(gba_t *gba) {
+    free(gba);
+}
+
+void gba_print_status(gba_t *gba) {
+    uint8_t  language   = gba->bus.rom[0xAF];
+    uint16_t maker_code = ((gba->bus.rom[0xB0] - 0x30) * 10) + (gba->bus.rom[0xB1] - 0x30); // maker_code is 2 chars
+    uint8_t  version    = gba->bus.rom[0xBC];
+
+    char maker_buf[32];
+    if (maker_code < sizeof(makers))
+        snprintf(maker_buf, sizeof(maker_buf), "%s", makers[maker_code]);
+    else
+        snprintf(maker_buf, sizeof(maker_buf), "%c%c", gba->bus.rom[0xB0], gba->bus.rom[0xB1]);
+
+    char *language_str;
+    switch (language) {
+    case 'J':
+        language_str = "Japan";
+        break;
+    case 'P':
+        language_str = "Europe/Elsewhere";
+        break;
+    case 'F':
+        language_str = "French";
+        break;
+    case 'S':
+        language_str = "Spanish";
+        break;
+    case 'E':
+        language_str = "USA/English";
+        break;
+    case 'D':
+        language_str = "German";
+        break;
+    case 'I':
+        language_str = "Italian";
+        break;
+    default:
+        language_str = "Unknown";
+    }
+
+    printf("Playing %s (v%d) by %s (language: %s)\n", *gba->rom_title ? gba->rom_title : "Unknown", version, maker_buf, language_str);
+}
+
+char *gba_get_rom_title(gba_t *gba) {
+    return gba->rom_title;
+}
+
+uint16_t gba_get_joypad_state(gba_t *gba) {
+    return gba->bus.io[IO_KEYINPUT] & 0x03FF;
+}
+
+void gba_set_joypad_state(gba_t *gba, uint16_t state) {
+    gba->bus.io[IO_KEYINPUT] = state & 0x03FF;
+    // TODO interrupts
+}
+
+uint8_t *gba_get_save(gba_t *gba, size_t *save_length) {
+    // TODO
+    return NULL;
+}
+
+bool gba_load_save(gba_t *gba, uint8_t *save_data, size_t save_length) {
+    // TODO
+    return false;
+}
+
+uint8_t *gba_get_savestate(gba_t *gba, size_t *length, bool is_compressed) {
+    // TODO
+    return NULL;
+}
+
+bool gba_load_savestate(gba_t *gba, uint8_t *data, size_t length) {
+    // TODO
+    return false;
+}
+
+uint8_t *gba_get_rom(gba_t *gba, size_t *rom_size) {
+    *rom_size = gba->bus.rom_size;
+    return gba->bus.rom;
+}

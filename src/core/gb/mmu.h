@@ -1,29 +1,29 @@
 #pragma once
 
-#include "types.h"
+#include "gb.h"
 #include "serialize.h"
 #include "mbc.h"
 
-#define ROM_BANK_SIZE 0x4000
+#define ROM_BANK_SIZE  0x4000
 #define VRAM_BANK_SIZE 0x2000
 #define ERAM_BANK_SIZE 0x2000
 #define WRAM_BANK_SIZE 0x1000
-#define CRAM_BG_SIZE 0x0040
-#define CRAM_OBJ_SIZE 0x0040
+#define CRAM_BG_SIZE   0x0040
+#define CRAM_OBJ_SIZE  0x0040
 
 typedef enum {
-    MMU_ROM_BANK0 = 0x0000, // From cartridge, usually a fixed bank.
-    MMU_ROM_BANKN = 0x4000, // From cartridge, switchable bank via MBC (if any).
-    MMU_VRAM = 0x8000,      // Only bank 0 in Non-CGB mode. Switchable bank 0/1 in CGB mode.
-    MMU_ERAM = 0xA000,
+    MMU_ROM_BANK0  = 0x0000, // From cartridge, usually a fixed bank.
+    MMU_ROM_BANKN  = 0x4000, // From cartridge, switchable bank via MBC (if any).
+    MMU_VRAM       = 0x8000, // Only bank 0 in Non-CGB mode. Switchable bank 0/1 in CGB mode.
+    MMU_ERAM       = 0xA000,
     MMU_WRAM_BANK0 = 0xC000,
     MMU_WRAM_BANKN = 0xD000, // Only bank 1 in Non-CGB mode. Switchable bank 1~7 in CGB mode.
-    MMU_ECHO = 0xE000,
-    MMU_OAM = 0xFE00,
-    MMU_UNUSABLE = 0xFEA0,
-    MMU_IO = 0xFF00,
-    MMU_HRAM = 0xFF80,
-    MMU_IE = 0xFFFF // Interrupt Enable
+    MMU_ECHO       = 0xE000,
+    MMU_OAM        = 0xFE00,
+    MMU_UNUSABLE   = 0xFEA0,
+    MMU_IO         = 0xFF00,
+    MMU_HRAM       = 0xFF80,
+    MMU_IE         = 0xFFFF // Interrupt Enable
 } gb_mmu_map_t;
 
 typedef enum {
@@ -34,10 +34,10 @@ typedef enum {
     IO_SC = 0x02, // Serial transfer control
 
     // Timer
-    IO_DIV = 0x04,  // Divider Register
+    IO_DIV  = 0x04, // Divider Register
     IO_TIMA = 0x05, // Timer counter
-    IO_TMA = 0x06,  // Timer Modulo
-    IO_TAC = 0x07,  // Timer Control
+    IO_TMA  = 0x06, // Timer Modulo
+    IO_TAC  = 0x07, // Timer Control
 
     IO_IF = 0x0F, // Interrupt Flag
 
@@ -71,16 +71,16 @@ typedef enum {
     // Pixel Processing Unit (PPU)
     IO_LCDC = 0x40, // LCD Control
     IO_STAT = 0x41, // LCD Status
-    IO_SCY = 0x42,  // Scroll Y
-    IO_SCX = 0x43,  // Scroll X
-    IO_LY = 0x44,   // LCD Y-Coordinate
-    IO_LYC = 0x45,  // LY Compare
-    IO_DMA = 0x46,  // DMA Transfer and Start Address
-    IO_BGP = 0x47,  // BG Palette Data
+    IO_SCY  = 0x42, // Scroll Y
+    IO_SCX  = 0x43, // Scroll X
+    IO_LY   = 0x44, // LCD Y-Coordinate
+    IO_LYC  = 0x45, // LY Compare
+    IO_DMA  = 0x46, // DMA Transfer and Start Address
+    IO_BGP  = 0x47, // BG Palette Data
     IO_OBP0 = 0x48, // Object Palette 0 Data
     IO_OBP1 = 0x49, // Object Palette 1 Data
-    IO_WY = 0x4A,   // Window Y Position
-    IO_WX = 0x4B,   // Window X Position + 7
+    IO_WY   = 0x4A, // Window Y Position
+    IO_WX   = 0x4B, // Window X Position + 7
 
     IO_KEY0 = 0x4C,
     IO_KEY1 = 0x4D, // Prepare Speed Switch (CGB-only)
@@ -107,7 +107,7 @@ typedef enum {
     IO_SVBK = 0x70, // WRAM Bank (CGB-only)
 
     IO_PCM12 = 0x76, // PCM amplitudes 1 & 2 (CGB-only)
-    IO_PCM34 = 0x77 // PCM amplitudes 3 & 4 (CGB-only)
+    IO_PCM34 = 0x77  // PCM amplitudes 3 & 4 (CGB-only)
 } gb_io_reg_map_t;
 
 typedef enum {
@@ -120,27 +120,27 @@ typedef struct {
     uint8_t *dmg_boot_rom;
     uint8_t *cgb_boot_rom;
 
-    size_t rom_size;
+    size_t   rom_size;
     uint8_t *rom; // max size: 8400000
 
-    uint8_t vram[2 * VRAM_BANK_SIZE]; // DMG: 1 bank / CGB: 2 banks of size 0x2000
+    uint8_t vram[2 * VRAM_BANK_SIZE];  // DMG: 1 bank / CGB: 2 banks of size 0x2000
     uint8_t eram[16 * ERAM_BANK_SIZE]; // max 16 banks of size 0x2000
-    uint8_t wram[8 * WRAM_BANK_SIZE]; // DMG: 2 banks / CGB: 8 banks of size 0x1000 (bank 0 non switchable)
+    uint8_t wram[8 * WRAM_BANK_SIZE];  // DMG: 2 banks / CGB: 8 banks of size 0x1000 (bank 0 non switchable)
     uint8_t oam[0xA0];
     uint8_t io_registers[0x80];
     uint8_t hram[0x7F];
     uint8_t ie;
-    uint8_t cram_bg[CRAM_BG_SIZE]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
+    uint8_t cram_bg[CRAM_BG_SIZE];   // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
     uint8_t cram_obj[CRAM_OBJ_SIZE]; // color palette memory: 8 palettes * 4 colors per palette * 2 bytes per color = 64 bytes
 
     uint8_t boot_finished;
 
     struct {
-        uint8_t initializing; // 4 cycles of initialization delay
-        uint8_t allow_hdma_block; // set to 1 while the current 0x10 bytes block of HDMA can be copied, else 0 (gb->mode == CGB is assumed)
-        uint8_t lock_cpu;
-        uint8_t type;
-        uint8_t progress;
+        uint8_t  initializing;     // 4 cycles of initialization delay
+        uint8_t  allow_hdma_block; // set to 1 while the current 0x10 bytes block of HDMA can be copied, else 0 (gb->mode == CGB is assumed)
+        uint8_t  lock_cpu;
+        uint8_t  type;
+        uint8_t  progress;
         uint16_t src_address;
         uint16_t dest_address;
     } hdma;
@@ -148,9 +148,9 @@ typedef struct {
     struct {
         // array of statuses of the initialization of the oam dma (this is an array to allow multiple initializations
         // at the same time; the last will eventually overwrite the previous oam dma)
-        uint8_t starting_statuses[2];
-        uint8_t starting_count; // holds the number of oam dma initializations
-        int16_t progress; // < 0 if oam dma not running, else [0, 159)
+        uint8_t  starting_statuses[2];
+        uint8_t  starting_count; // holds the number of oam dma initializations
+        int16_t  progress;       // < 0 if oam dma not running, else [0, 159)
         uint16_t src_address;
     } oam_dma;
 
@@ -159,8 +159,8 @@ typedef struct {
     // offset to add to address in wram when accessing the 0xD000-0xDFFF range (signed because it can be negative)
     int32_t wram_bankn_addr_offset;
 
-    uint16_t rom_banks; // number of rom banks
-    uint8_t eram_banks; // number of eram banks
+    uint16_t rom_banks;  // number of rom banks
+    uint8_t  eram_banks; // number of eram banks
     // address in rom that is the start of the current ROM bank when accessing the 0x0000-0x3FFF range
     uint32_t rom_bank0_addr;
     // address in rom that is the start of the current ROM bank when accessing the 0x4000-0x7FFF range
@@ -180,7 +180,7 @@ int parse_header_mbc_byte(uint8_t mbc_byte, uint8_t *mbc_type, uint8_t *has_eram
 
 int validate_header_checksum(const uint8_t *rom);
 
-int mmu_init(gb_t *gb, const uint8_t *rom, size_t rom_size);
+int mmu_reset(gb_t *gb, const uint8_t *rom, size_t rom_size);
 
 void mmu_quit(gb_t *gb);
 

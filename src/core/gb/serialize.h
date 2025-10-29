@@ -1,8 +1,8 @@
 #pragma once
 
 #define SERIALIZED_SIZE_FUNCTION_DECL(name) size_t name##_serialized_length(gb_t *gb)
-#define SERIALIZER_FUNCTION_DECL(name) uint8_t *name##_serialize(gb_t *gb, size_t *size)
-#define UNSERIALIZER_FUNCTION_DECL(name) void name##_unserialize(gb_t *gb, uint8_t *buf)
+#define SERIALIZER_FUNCTION_DECL(name)      uint8_t *name##_serialize(gb_t *gb, size_t *size)
+#define UNSERIALIZER_FUNCTION_DECL(name)    size_t name##_unserialize(gb_t *gb, uint8_t *buf)
 
 #define SERIALIZE_FUNCTION_DECLS(name)   \
     SERIALIZED_SIZE_FUNCTION_DECL(name); \
@@ -12,26 +12,27 @@
 #define SERIALIZED_SIZE_FUNCTION(type, name, ...) \
     SERIALIZED_SIZE_FUNCTION_DECL(name) {         \
         size_t length = 0;                        \
-        type *tmp = gb->name;                    \
+        type  *tmp    = &gb->name;                \
         __VA_ARGS__;                              \
         return length;                            \
     }
 
-#define SERIALIZER_FUNCTION(type, name, ...)   \
-    SERIALIZER_FUNCTION_DECL(name) {           \
-        *size = name##_serialized_length(gb); \
-        uint8_t *buf = xmalloc(*size);          \
-        size_t offset = 0;                     \
-        type *tmp = gb->name;                 \
-        __VA_ARGS__;                           \
-        return buf;                            \
+#define SERIALIZER_FUNCTION(type, name, ...)            \
+    SERIALIZER_FUNCTION_DECL(name) {                    \
+        *size           = name##_serialized_length(gb); \
+        uint8_t *buf    = xmalloc(*size);               \
+        size_t   offset = 0;                            \
+        type    *tmp    = &gb->name;                    \
+        __VA_ARGS__;                                    \
+        return buf;                                     \
     }
 
 #define UNSERIALIZER_FUNCTION(type, name, ...) \
     UNSERIALIZER_FUNCTION_DECL(name) {         \
-        type *tmp = gb->name;                 \
+        type  *tmp    = &gb->name;             \
         size_t offset = 0;                     \
         __VA_ARGS__;                           \
+        return offset;                         \
     }
 
 #define SERIALIZED_LENGTH(member) length += sizeof(tmp->member)
@@ -100,16 +101,16 @@
     } while (0)
 
 #define SERIALIZED_LENGTH_IF_CGB(member) \
-    length += gb->mode == GB_MODE_CGB ? sizeof(tmp->member) : 0
+    length += gb->base->opts.mode == GBMULATOR_MODE_GBC ? sizeof(tmp->member) : 0
 
-#define SERIALIZE_IF_CGB(member)     \
-    do {                             \
-        if (gb->mode == GB_MODE_CGB) \
-            SERIALIZE(member);       \
+#define SERIALIZE_IF_CGB(member)                       \
+    do {                                               \
+        if (gb->base->opts.mode == GBMULATOR_MODE_GBC) \
+            SERIALIZE(member);                         \
     } while (0)
 
-#define UNSERIALIZE_IF_CGB(member)   \
-    do {                             \
-        if (gb->mode == GB_MODE_CGB) \
-            UNSERIALIZE(member);     \
+#define UNSERIALIZE_IF_CGB(member)                     \
+    do {                                               \
+        if (gb->base->opts.mode == GBMULATOR_MODE_GBC) \
+            UNSERIALIZE(member);                       \
     } while (0)

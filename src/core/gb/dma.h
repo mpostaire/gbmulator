@@ -1,6 +1,6 @@
 #pragma once
 
-#include "types.h"
+#include "gb.h"
 #include "mmu.h"
 
 typedef enum {
@@ -15,7 +15,7 @@ typedef enum {
     OAM_DMA_STARTING
 } gb_oam_dma_starting_state_t;
 
-#define IS_OAM_DMA_RUNNING(mmu) ((mmu)->oam_dma.progress >= 0 && (mmu)->oam_dma.progress < 0xA0)
+#define IS_OAM_DMA_RUNNING(mmu)   ((mmu)->oam_dma.progress >= 0 && (mmu)->oam_dma.progress < 0xA0)
 #define GBC_GDMA_HDMA_LENGTH(mmu) ((mmu)->io_registers[IO_HDMA5] & 0x7F)
 
 void dma_step(gb_t *gb);
