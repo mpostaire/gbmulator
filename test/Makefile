@@ -1,7 +1,8 @@
 ODIR=../build/test/core
 EMU_SDIR=../src/core
 CC=gcc
-CFLAGS=-std=gnu23 -Wall -Wextra -fanalyzer -O0 -ggdb -DDEBUG -Wl,--wrap=_gba_bus_read_byte -Wl,--wrap=_gba_bus_read_half -Wl,--wrap=_gba_bus_read_word -Wl,--wrap=_gba_bus_write_byte -Wl,--wrap=_gba_bus_write_half -Wl,--wrap=_gba_bus_write_word -I$(EMU_SDIR)
+# CFLAGS=-std=gnu23 -Wall -Wextra -fanalyzer -O0 -ggdb -DDEBUG -Wl,--wrap=_gba_bus_read_byte -Wl,--wrap=_gba_bus_read_half -Wl,--wrap=_gba_bus_read_word -Wl,--wrap=_gba_bus_write_byte -Wl,--wrap=_gba_bus_write_half -Wl,--wrap=_gba_bus_write_word -I$(EMU_SDIR)
+CFLAGS=-std=gnu23 -Wall -Wextra -fanalyzer -O0 -ggdb -DDISABLE_COLOR_CORRECTION -I$(EMU_SDIR)
 EXTRA_CFLAGS=$(shell pkg-config --cflags zlib MagickWand)
 LDLIBS=$(shell pkg-config --libs zlib MagickWand) -lpthread
 BIN=tester
@@ -20,8 +21,8 @@ all: $(ODIR_STRUCTURE)
 	$(MAKE) $(BIN)
 	cp results/summary.txt results/summary_old.txt || true
 	./$(BIN) $(TEST_ROMS)
-# sort -o results/summary.txt results/summary.txt
-# python3 compare_results.py || true
+	sort -o results/summary.txt results/summary.txt
+	python3 compare_results.py || true
 
 tests.txt: tests_generator.py $(TEST_ROMS)
 	python3 $< $(TEST_ROMS)
