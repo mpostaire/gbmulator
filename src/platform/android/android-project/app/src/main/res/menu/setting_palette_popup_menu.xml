@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<menu xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:id="@+id/popup_menu_palette_orig"
-        android:title="@string/setting_palette_orig" />
-    <item
-        android:id="@+id/popup_menu_palette_gray"
-        android:title="@string/setting_palette_gray" />
-</menu>

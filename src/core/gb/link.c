@@ -43,6 +43,8 @@ void link_step(gb_t *gb) {
         // transfer linked_device bit (other bit) to this gb
         gb->base->cable.shift_bit(gb, other_bit);
     } else { // transfer is done (all bits were shifted)
+        // TODO maybe both these callbacks are useless --> this condition donest need cb as we can deduce it?
+        // TODO important debug link
         link->bit_shift_counter = 0;
 
         if (gb->base->cable.other_device)

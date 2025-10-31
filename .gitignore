@@ -23,3 +23,4 @@ src/platform/android/android-project/app/jni/SDL2
 *.out
 src/platform/desktop/resources.c
 !.github/*
+*.idea
