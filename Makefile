@@ -1,33 +1,49 @@
-SDIR=src
-ODIR=build
-IDIR=$(SDIR)
-CFLAGS=-std=gnu23 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wno-cast-function-type -O3 -I$(IDIR) -DVERSION=$(shell git rev-parse --short HEAD)
-LDLIBS=
-CC=gcc
-BIN=gbmulator
+SDIR:=src
+ODIR:=build
+IDIR:=$(SDIR)
+CFLAGS:=-std=gnu23 -O3 -I$(IDIR) -DVERSION=$(shell git rev-parse --short HEAD) \
+		-Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wno-cast-function-type
+LDLIBS:=
+CC:=gcc
+BIN:=gbmulator
 
-# recursive wildcard that goes into all subdirectories
-rwildcard=$(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
+# Important for android studio to add its extra flags
+EXTRA_CFLAGS:=
+CFLAGS+=$(EXTRA_CFLAGS)
 
-# exclude $(SDIR)/platform/{desktop,android}/* if 'make web' or 'make debug_web' is called, else exclude $(SDIR)/platform/{web,android}/*, etc.
-ifneq (,$(findstring web,$(MAKECMDGOALS)))
-EXCLUDES:=$(call rwildcard,$(SDIR)/platform/desktop,*) $(call rwildcard,$(SDIR)/platform/android,*)
-PLATFORM_ODIR=$(ODIR)/web
-else
-EXCLUDES:=$(wildcard $(SDIR)/platform/web/*) $(call rwildcard,$(SDIR)/platform/android,*)
-PLATFORM_ODIR=$(ODIR)/desktop
-OBJ=$(PLATFORM_ODIR)/platform/desktop/resources.o
-endif
+all: desktop
 
-EXCLUDES+=$(call rwildcard,$(SDIR)/bootroms,*)
+debug: CFLAGS+=-ggdb -O0
+# debug: CFLAGS+=-DDEBUG
+debug: all
 
-SRC=$(filter-out $(EXCLUDES),$(call rwildcard,$(SDIR),*.c))
-OBJ+=$(SRC:$(SDIR)/%.c=$(PLATFORM_ODIR)/%.o)
+desktop: CFLAGS+=$(shell pkg-config --cflags gtk4 libadwaita-1 zlib manette-0.2 opengl openal gstreamer-1.0) -fanalyzer
+desktop: LDLIBS+=$(shell pkg-config --libs gtk4 libadwaita-1 zlib manette-0.2 opengl openal gstreamer-1.0)
+desktop: PLATFORM_ODIR:=$(ODIR)/desktop
+desktop: common $(ICONS)
+	@$(MAKE) -C $(SDIR)/platform/$@ ODIR=$(shell realpath -m $(PLATFORM_ODIR)) "CC=$(CC)" "CFLAGS=$(CFLAGS)" "LDLIBS=$(LDLIBS)"
 
-HEADERS=$(filter-out $(EXCLUDES),$(call rwildcard,$(IDIR),*.h))
-HEADERS:=$(HEADERS:$(IDIR)/%=$(PLATFORM_ODIR)/%)
-# PLATFORM_ODIR and its subdirectories' structure to mkdir if they don't exist
-PLATFORM_ODIR_STRUCTURE:=$(sort $(foreach d,$(OBJ) $(HEADERS),$(subst /$(lastword $(subst /, ,$d)),,$d)))
+web: CC:=emcc
+web: CFLAGS+=-sUSE_ZLIB=1
+web: PLATFORM_ODIR:=$(ODIR)/web
+web: common
+	@$(MAKE) -C $(SDIR)/platform/$@ ODIR=$(shell realpath -m $(PLATFORM_ODIR)) "CC=$(CC)" "CFLAGS=$(CFLAGS)" "LDLIBS=$(LDLIBS)"
+
+debug_web: web
+	emrun $(ODIR)/web/index.html
+
+# test:
+# 	$(MAKE) -C test
+
+bootroms:
+	@$(MAKE) -C $(SDIR)/bootroms/gb "ODIR=$(shell realpath -m $(ODIR))"
+	@$(MAKE) -C $(SDIR)/bootroms/gba "ODIR=$(shell realpath -m $(ODIR))"
+
+core: bootroms
+	@$(MAKE) -C $(SDIR)/$@ ODIR=$(shell realpath -m $(PLATFORM_ODIR)) "CC=$(CC)" "CFLAGS=$(CFLAGS)"
+
+common: core
+	@$(MAKE) -C $(SDIR)/platform/$@ ODIR=$(shell realpath -m $(PLATFORM_ODIR)) "CC=$(CC)" "CFLAGS=$(CFLAGS)"
 
 ICONDIR=images/icons
 ICONS= \
@@ -40,84 +56,6 @@ ICONS= \
 	$(ICONDIR)/48x48/$(BIN).png \
 	$(ICONDIR)/32x32/$(BIN).png \
 	$(ICONDIR)/16x16/$(BIN).png
-
-UI:=$(wildcard $(SDIR)/platform/desktop/ui/*.ui)
-
-all: desktop
-
-debug: CFLAGS+=-ggdb -O0
-# debug: CFLAGS+=-DDEBUG
-debug: all
-
-desktop: CFLAGS+=$(shell pkg-config --cflags gtk4 libadwaita-1 zlib manette-0.2 opengl openal gstreamer-1.0) -fanalyzer
-desktop: LDLIBS+=$(shell pkg-config --libs gtk4 libadwaita-1 zlib manette-0.2 opengl openal gstreamer-1.0)
-desktop: $(PLATFORM_ODIR_STRUCTURE) $(BIN) $(ICONS)
-
-$(SDIR)/platform/desktop/resources.c: $(SDIR)/platform/desktop/ui/gbmulator.gresource.xml $(UI)
-	glib-compile-resources $< --target=$@ --generate-source
-
-profile: CFLAGS+=-pg
-profile: run
-	gprof ./$(BIN) gmon.out > prof_output
-
-# TODO this should also make a gbmulator.apk file in this project root dir (next do the gbmulator desktop binary) 
-android: $(SDIR)/core/gb/boot.c
-	cd $(SDIR)/platform/android/android-project && ./gradlew build
-
-debug_android: android
-	cd $(SDIR)/platform/android/android-project && ./gradlew installDebug
-	adb shell am start -n io.github.mpostaire.gbmulator/.MainMenu
-
-$(ODIR)/web/favicon.png: $(SDIR)/platform/web/favicon.png
-	cp $^ $@
-$(ODIR)/web/style.css: $(SDIR)/platform/web/style.css
-	cp $^ $@
-
-web: CC:=emcc
-web: LDLIBS:=
-web: CFLAGS+=-sUSE_ZLIB=1
-web: $(PLATFORM_ODIR_STRUCTURE) $(ODIR)/web $(ODIR)/web/favicon.png $(ODIR)/web/style.css $(ODIR)/web/index.html
-
-debug_web: web
-	emrun $(ODIR)/web/index.html
-
-$(ODIR)/web/index.html: $(SDIR)/platform/web/template.html $(OBJ)
-	$(CC) -o $@ $(OBJ) $(CFLAGS) -lopenal -lidbfs.js -sINITIAL_MEMORY=128MB -sUSE_WEBGL2=1 -sWASM=1 -sEXPORTED_FUNCTIONS="['_main', '_malloc', '_free']" -sEXPORTED_RUNTIME_METHODS="['ccall', 'HEAPU8']" -sASYNCIFY --shell-file $<
-
-test:
-	$(MAKE) -C test
-
-$(BIN): $(OBJ)
-	$(CC) -o $(BIN) $^ $(CFLAGS) $(LDLIBS)
-
-$(PLATFORM_ODIR)/%.o: $(SDIR)/%.c
-	$(CC) -o $@ -c $< $(CFLAGS) -MMD -MP $(LDLIBS)
-
-$(PLATFORM_ODIR_STRUCTURE):
-	mkdir -p $@
-
-# Build boot roms (taken and modified from SameBoy emulator)
-$(SDIR)/core/gb/boot.c: $(ODIR)/bootroms/gb/dmg_boot $(ODIR)/bootroms/gb/cgb_boot
-	cd $(ODIR)/bootroms/gb && xxd -i dmg_boot > ../../../$(SDIR)/core/gb/boot.c && xxd -i cgb_boot >> ../../../$(SDIR)/core/gb/boot.c
-
-$(ODIR)/bootroms/gb/gbmulator_logo.1bpp: $(SDIR)/bootroms/gb/gbmulator_logo.png
-	-@mkdir -p $(dir $@)
-	rgbgfx -d 1 -Z -o $@ $<
-
-$(ODIR)/bootroms/gb/gbmulator_logo.pb8: $(ODIR)/bootroms/gb/gbmulator_logo.1bpp $(ODIR)/bootroms/gb/pb8
-	$(ODIR)/bootroms/gb/pb8 -l 384 $< $@
-
-# force gcc here to avoid compiling with emcc
-$(ODIR)/bootroms/gb/pb8: $(SDIR)/bootroms/gb/pb8.c
-	gcc $< -o $@
-
-$(ODIR)/bootroms/gb/%: $(SDIR)/bootroms/gb/%.asm $(ODIR)/bootroms/gb/gbmulator_logo.pb8 $(SDIR)/bootroms/gb/hardware.inc
-	-@mkdir -p $(dir $@)
-	rgbasm -I $(ODIR)/bootroms/gb/ -I $(SDIR)/bootroms/gb/ -o $@.tmp $<
-	rgblink -o $@.tmp2 $@.tmp
-	dd if=$@.tmp2 of=$@ count=1 bs=$(if $(findstring dmg,$@),256,2304)
-	@rm $@.tmp $@.tmp2
-#
 
 $(ICONS): $(ICONDIR)/$(BIN).svg
 	mkdir -p $(ICONDIR)/$(patsubst $(ICONDIR)/%/$(BIN).png,%,$@)
@@ -133,7 +71,7 @@ clean:
 cleaner: clean
 	rm -rf $(BIN) $(SDIR)/platform/desktop/resources.c $(patsubst %/$(BIN).png,%,$(ICONS))
 	$(MAKE) -C test cleaner
-	cd $(SDIR)/platform/android/android-project && ./gradlew clean || true
+	cd $(SDIR)/platform/android && ./gradlew clean || true
 
 install:
 	install -m 0755 $(BIN) /usr/bin
@@ -163,4 +101,4 @@ uninstall:
 
 -include $(OBJ:.o=.d)
 
-.PHONY: all clean run install uninstall debug web debug_web android debug_android test
+.PHONY: all clean cleaner install uninstall debug desktop web debug_web android test

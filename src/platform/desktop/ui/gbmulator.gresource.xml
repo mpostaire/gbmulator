@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
     <gresource prefix="/io/github/mpostaire/gbmulator">
-        <file>src/platform/desktop/ui/main.ui</file>
-        <file>src/platform/desktop/ui/preferences.ui</file>
-        <file>src/platform/desktop/ui/link.ui</file>
-        <file>src/platform/desktop/ui/printer.ui</file>
-        <file>src/platform/desktop/ui/printer_dialog.ui</file>
-        <file>src/platform/desktop/ui/restart_dialog.ui</file>
-        <file>src/platform/desktop/ui/bind_setter.ui</file>
+        <file>ui/main.ui</file>
+        <file>ui/preferences.ui</file>
+        <file>ui/link.ui</file>
+        <file>ui/printer.ui</file>
+        <file>ui/printer_dialog.ui</file>
+        <file>ui/restart_dialog.ui</file>
+        <file>ui/bind_setter.ui</file>
     </gresource>
 </gresources>

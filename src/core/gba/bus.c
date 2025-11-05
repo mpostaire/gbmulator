@@ -1125,10 +1125,9 @@ bool gba_bus_reset(gba_t *gba, const uint8_t *rom, size_t rom_size) {
 
     gba->bus.io[IO_KEYINPUT] = 0x03FF;
 
-    // TODO maybe find better way do to this
     // clang-format off
     static const uint8_t gba_bios[] = {
-        #embed "../../bootroms/gba/gba_bios.bin"
+        #embed "../../../build/bootroms/gba/gba_bios.bin"
     };
     // clang-format on
 

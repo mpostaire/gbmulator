@@ -13,6 +13,10 @@
 #define false 0
 #endif
 
+#ifndef bool
+#define bool _Bool
+#endif
+
 typedef struct __attribute__((packed)) {
     char    identifier[sizeof(SAVESTATE_STRING)];
     char    rom_title[16];

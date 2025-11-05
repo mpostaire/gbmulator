@@ -5,11 +5,19 @@
 #include <ctype.h>
 
 #include "gb_priv.h"
-#include "boot.h"
 #include "mbc.h"
 
 #define GBC_CURRENT_VRAM_BANK(mmu) ((mmu)->io_registers[IO_VBK] & 0x01)
 #define GBC_CURRENT_WRAM_BANK(mmu) (((mmu)->io_registers[IO_SVBK] & 0x07) == 0 ? 1 : ((mmu)->io_registers[IO_SVBK] & 0x07))
+
+// clang-format off
+static uint8_t dmg_boot_rom[] = {
+    #embed "../../../build/bootroms/gb/dmg_boot.bin"
+};
+static uint8_t cgb_boot_rom[] = {
+    #embed "../../../build/bootroms/gb/cgb_boot.bin"
+};
+// clang-format on
 
 int parse_header_mbc_byte(uint8_t mbc_byte, uint8_t *mbc_type, uint8_t *has_eram, uint8_t *has_battery, uint8_t *has_rtc, uint8_t *has_rumble) {
     uint8_t tmp_mbc_type = 0, tmp_has_eram = 0, tmp_has_battery = 0, tmp_has_rtc = 0, tmp_has_rumble = 0;
@@ -240,8 +248,8 @@ int mmu_reset(gb_t *gb, const uint8_t *rom, size_t rom_size) {
         gb->mmu.mbc.mbc7.accelerometer.latched_y = 0x81D0;
     }
 
-    gb->mmu.dmg_boot_rom = dmg_boot;
-    gb->mmu.cgb_boot_rom = cgb_boot;
+    gb->mmu.dmg_boot_rom = dmg_boot_rom;
+    gb->mmu.cgb_boot_rom = cgb_boot_rom;
 
     return 1;
 }
@@ -847,7 +855,7 @@ uint8_t mmu_read_io_src(gb_t *gb, uint16_t address, gb_io_source_t io_src) {
         if (!mmu->boot_finished) {
             if (gb->base->opts.mode != GBMULATOR_MODE_GBC && address < 0x100)
                 return mmu->dmg_boot_rom[address];
-            if (gb->base->opts.mode == GBMULATOR_MODE_GBC && (address < 0x100 || (address >= 0x200 && address < sizeof(cgb_boot))))
+            if (gb->base->opts.mode == GBMULATOR_MODE_GBC && (address < 0x100 || (address >= 0x200 && address < sizeof(cgb_boot_rom))))
                 return mmu->cgb_boot_rom[address];
         }
         // fallthrough

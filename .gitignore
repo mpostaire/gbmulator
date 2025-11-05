@@ -19,7 +19,9 @@ test/*.zip
 src/platform/android/android-project/.*
 src/platform/android/android-project/local.properties
 src/platform/android/android-project/app/build
-src/platform/android/android-project/app/jni/SDL2
 *.out
-src/platform/desktop/resources.c
 !.github/*
+*.idea
+*.log
+*.kotlin
+!CMakeLists.txt

@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<menu xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:id="@+id/popup_menu_camera_back"
-        android:title="@string/setting_camera_back" />
-    <item
-        android:id="@+id/popup_menu_camera_front"
-        android:title="@string/setting_camera_front" />
-</menu>

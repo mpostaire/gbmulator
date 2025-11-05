@@ -1003,7 +1003,7 @@ static void activate_cb(GtkApplication *app) {
     app_get_config((config_t *) &config);
 
     // Main window
-    GtkBuilder *builder = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/main.ui");
+    GtkBuilder *builder = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/ui/main.ui");
     main_window         = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
     gtk_widget_set_size_request(main_window, GBA_SCREEN_WIDTH * 2, GBA_SCREEN_HEIGHT * 2);
 
@@ -1044,7 +1044,7 @@ static void activate_cb(GtkApplication *app) {
     gtk_window_set_application(GTK_WINDOW(main_window), GTK_APPLICATION(app));
 
     // Preferences window
-    builder            = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/preferences.ui");
+    builder            = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/ui/preferences.ui");
     preferences_dialog = ADW_DIALOG(gtk_builder_get_object(builder, "dialog"));
     g_object_ref(preferences_dialog);
     g_signal_connect(preferences_dialog, "hide", G_CALLBACK(secondary_window_hide_cb), NULL);
@@ -1118,7 +1118,7 @@ static void activate_cb(GtkApplication *app) {
     g_object_unref(builder);
 
     // Keybind dialog
-    builder        = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/bind_setter.ui");
+    builder        = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/ui/bind_setter.ui");
     keybind_dialog = GTK_WIDGET(gtk_builder_get_object(builder, "dialog"));
     gtk_window_set_transient_for(GTK_WINDOW(keybind_dialog), GTK_WINDOW(main_window));
     g_signal_connect(keybind_dialog, "hide", G_CALLBACK(keybind_dialog_hide_cb), NULL);
@@ -1128,7 +1128,7 @@ static void activate_cb(GtkApplication *app) {
     g_object_unref(builder);
 
     // Restart dialog
-    builder        = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/restart_dialog.ui");
+    builder        = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/ui/restart_dialog.ui");
     restart_dialog = ADW_DIALOG(gtk_builder_get_object(builder, "dialog"));
     g_object_ref(restart_dialog);
     g_signal_connect(restart_dialog, "hide", G_CALLBACK(secondary_window_hide_cb), NULL);
@@ -1137,7 +1137,7 @@ static void activate_cb(GtkApplication *app) {
     g_object_unref(builder);
 
     // Link with another emulator dialog
-    builder         = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/link.ui");
+    builder         = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/ui/link.ui");
     link_emu_dialog = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
     gtk_window_set_transient_for(GTK_WINDOW(link_emu_dialog), GTK_WINDOW(main_window));
     g_signal_connect(link_emu_dialog, "hide", G_CALLBACK(secondary_window_hide_cb), NULL);
@@ -1164,7 +1164,7 @@ static void activate_cb(GtkApplication *app) {
     g_object_unref(builder);
 
     // Printer window
-    builder        = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/printer.ui");
+    builder        = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/ui/printer.ui");
     printer_window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
     g_object_ref(printer_window);
     g_signal_connect(printer_window, "hide", G_CALLBACK(secondary_window_hide_cb), NULL);
@@ -1186,7 +1186,7 @@ static void activate_cb(GtkApplication *app) {
     g_object_unref(builder);
 
     // Printer quit dialog
-    builder        = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/src/platform/desktop/ui/printer_dialog.ui");
+    builder        = gtk_builder_new_from_resource("/io/github/mpostaire/gbmulator/ui/printer_dialog.ui");
     printer_dialog = ADW_DIALOG(gtk_builder_get_object(builder, "dialog"));
     g_object_ref(printer_dialog);
     g_signal_connect(printer_dialog, "hide", G_CALLBACK(secondary_window_hide_cb), NULL);
