@@ -1,6 +1,5 @@
 package io.github.mpostaire.gbmulator
 
-import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -39,122 +38,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.floatPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.mpostaire.gbmulator.ui.theme.GBmulatorTheme
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.Float
-
-private val Context.dataStore by preferencesDataStore("settings")
-
-class UserSettings(
-    private val context: Context
-) {
-    val sound = context.dataStore.data.map { preferences ->
-        preferences[soundKey] ?: 0.25f
-    }
-
-    val speed = context.dataStore.data.map { preferences ->
-        preferences[speedKey] ?: 1f
-    }
-
-    val frameskip = context.dataStore.data.map { preferences ->
-        preferences[frameskipKey] ?: 0f
-    }
-
-    val joypadOpacity = context.dataStore.data.map { preferences ->
-        preferences[joypadOpacityKey] ?: 0.8f
-    }
-
-    val palette = context.dataStore.data.map { preferences ->
-        preferences[paletteKey] ?: 0f
-    }
-
-    val mode = context.dataStore.data.map { preferences ->
-        preferences[modeKey] ?: 0f
-    }
-
-    val camera = context.dataStore.data.map { preferences ->
-        preferences[cameraKey] ?: 0f
-    }
-
-    suspend fun updateSound(value: Float) {
-        if (value < 0f || value > 1f)
-            return
-
-        context.dataStore.edit { settings ->
-            settings[soundKey] = value
-        }
-    }
-
-    suspend fun updateSpeed(value: Float) {
-        if (value < 1 || value > 6)
-            return
-
-        context.dataStore.edit { settings ->
-            settings[speedKey] = value
-        }
-    }
-
-    suspend fun updateFrameskip(value: Float) {
-        if (value < 0 || value > 4)
-            return
-
-        context.dataStore.edit { settings ->
-            settings[frameskipKey] = value
-        }
-    }
-
-    suspend fun updateJoypadOpacity(value: Float) {
-        if (value < 0f || value > 1f)
-            return
-
-        context.dataStore.edit { settings ->
-            settings[joypadOpacityKey] = value
-        }
-    }
-
-    suspend fun updatePalette(value: Float) {
-        if (value < 0f || value > 1f)
-            return
-
-        context.dataStore.edit { settings ->
-            settings[paletteKey] = value
-        }
-    }
-
-    suspend fun updateMode(value: Float) {
-        if (value < 0f || value > 1f)
-            return
-
-        context.dataStore.edit { settings ->
-            settings[modeKey] = value
-        }
-    }
-
-    suspend fun updateCamera(value: Float) {
-        if (value < 0f || value > 1f)
-            return
-
-        context.dataStore.edit { settings ->
-            settings[cameraKey] = value
-        }
-    }
-
-    companion object {
-        val soundKey = floatPreferencesKey("sound")
-        val speedKey = floatPreferencesKey("speed")
-        val frameskipKey = floatPreferencesKey("frameskip")
-        val joypadOpacityKey = floatPreferencesKey("joypad_opacity")
-        val paletteKey = floatPreferencesKey("palette")
-        val modeKey = floatPreferencesKey("mode")
-        val cameraKey = floatPreferencesKey("camera")
-    }
-}
 
 class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -162,13 +50,7 @@ class SettingsActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             GBmulatorTheme {
-                val settings = remember {
-                    UserSettings(this)
-                }
-
-                SettingsActivityContent(
-                    settings = settings
-                )
+                SettingsActivityContent()
             }
         }
     }
@@ -314,12 +196,7 @@ fun TopBar() {
 
 @Preview(showBackground = true)
 @Composable
-fun SettingsActivityContent(
-    settings: UserSettings? = null
-) {
-    if (settings == null)
-        return
-
+fun SettingsActivityContent() {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
@@ -334,15 +211,15 @@ fun SettingsActivityContent(
         ) {
             SettingsSliderEntry(
                 text = "Volume level",
-                valueFlow = settings.sound,
-                onValueChange = { settings.updateSound(it) },
+                valueFlow = UserSettings.sound,
+                onValueChange = { UserSettings.setSound(it) },
                 valueLabelFormatter = { value -> "${(value * 100).toInt()}%"}
             )
             HorizontalDivider()
             SettingsSliderEntry(
                 text = "Emulation speed",
-                valueFlow = settings.speed,
-                onValueChange = { settings.updateSpeed(it) },
+                valueFlow = UserSettings.speed,
+                onValueChange = { UserSettings.setSpeed(it) },
                 steps = 4,
                 valueRange = 1.0f..6.0f,
                 valueLabelFormatter = { value -> "x${(value).toInt()}"}
@@ -350,8 +227,8 @@ fun SettingsActivityContent(
             HorizontalDivider()
             SettingsSliderEntry(
                 text = "Frame skip",
-                valueFlow = settings.frameskip,
-                onValueChange = { settings.updateFrameskip(it) },
+                valueFlow = UserSettings.frameskip,
+                onValueChange = { UserSettings.setFrameskip(it) },
                 steps = 3,
                 valueRange = 0.0f..4.0f,
                 valueLabelFormatter = { value -> if (value == 0f) "OFF" else "${value.toInt()}" }
@@ -359,8 +236,8 @@ fun SettingsActivityContent(
             HorizontalDivider()
             SettingsSliderEntry(
                 text = "Joypad opacity",
-                valueFlow = settings.joypadOpacity,
-                onValueChange = { settings.updateJoypadOpacity(it) },
+                valueFlow = UserSettings.joypadOpacity,
+                onValueChange = { UserSettings.setJoypadOpacity(it) },
                 valueRange = 0.1f..1.0f,
                 valueLabelFormatter = { value -> "${(value * 100).toInt()}%"}
             )
@@ -368,22 +245,22 @@ fun SettingsActivityContent(
             SettingsMenuEntry(
                 text = "Game Boy Palette",
                 items = listOf("Grayscale", "Original"),
-                valueFlow = settings.palette,
-                onValueChange = { settings.updatePalette(it) }
+                valueFlow = UserSettings.palette,
+                onValueChange = { UserSettings.setPalette(it) }
             )
             HorizontalDivider()
             SettingsMenuEntry(
                 text = "Emulation mode",
                 items = listOf("Game Boy", "Game Boy Color", "Game Boy Advance"),
-                valueFlow = settings.mode,
-                onValueChange = { settings.updateMode(it) }
+                valueFlow = UserSettings.mode,
+                onValueChange = { UserSettings.setMode(it) }
             )
             HorizontalDivider()
             SettingsMenuEntry(
                 text = "Select Camera",
                 items = listOf("Front", "Back"),
-                valueFlow = settings.camera,
-                onValueChange = { settings.updateCamera(it) }
+                valueFlow = UserSettings.camera,
+                onValueChange = { UserSettings.setCamera(it) }
             )
         }
     }

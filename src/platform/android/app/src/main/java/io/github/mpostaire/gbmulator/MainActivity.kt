@@ -1,6 +1,7 @@
 package io.github.mpostaire.gbmulator
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -32,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +45,7 @@ import io.github.mpostaire.gbmulator.ui.theme.GBmulatorTheme
 import kotlin.Unit
 
 class MainActivity : ComponentActivity() {
+    private var romUri: Uri? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,6 +59,7 @@ class MainActivity : ComponentActivity() {
 
     fun resume() {
         val intent = Intent(this@MainActivity, EmulatorActivity::class.java)
+        intent.putExtra("rom_uri", romUri)
         startActivity(intent)
     }
 
@@ -167,17 +171,16 @@ class MainActivity : ComponentActivity() {
         var showRestartDialog by remember {
             mutableStateOf(false)
         }
+        var romUriState by rememberSaveable { mutableStateOf(romUri) }
 
-        var romName by remember {
-            mutableStateOf<String?>(null)
-        }
         val launcher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.StartActivityForResult()
         ) { result ->
             if (result.resultCode != RESULT_OK || result.data == null)
                 return@rememberLauncherForActivityResult
 
-            romName = result.data?.data.toString()
+            romUri = result.data?.data
+            romUriState = romUri
         }
 
         if (showRestartDialog) {
@@ -206,7 +209,7 @@ class MainActivity : ComponentActivity() {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = romName ?: "Empty cartridge slot",
+                    text = romUriState?.path ?: "Empty cartridge slot",
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -217,7 +220,7 @@ class MainActivity : ComponentActivity() {
                     MainMenuEntry(
                         text = "RESUME",
                         icon = R.drawable.baseline_play_arrow_24,
-                        enabled = romName != null,
+                        enabled = romUriState != null,
                         onClick = ::resume
                     )
                     HorizontalDivider()
@@ -238,7 +241,7 @@ class MainActivity : ComponentActivity() {
                     MainMenuEntry(
                         text = "RESTART EMULATOR",
                         icon = R.drawable.baseline_refresh_24,
-                        enabled = romName != null,
+                        enabled = romUri != null,
                         onClick = {
                             showRestartDialog = true
                         }
