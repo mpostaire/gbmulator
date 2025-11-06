@@ -153,7 +153,8 @@ __attribute_used__ void app_init(void) {
 
     app.config = config_bak;
 
-    app.is_paused    = true;
+    app_set_pause(true);
+
     app.joypad_state = 0xFF;
 
     size_t screen_w;
@@ -176,6 +177,8 @@ __attribute_used__ void app_init(void) {
     apply_config();
 
     app.sfd = -1;
+
+    eprintf("APP_INIT DONE");
 }
 
 __attribute_used__ void app_load_config(const config_t *default_config) {
@@ -244,6 +247,7 @@ __attribute_used__ void app_run_frame(void) {
                 // show_toast("Link Cable disconnected");
             }
         }
+
         gbmulator_run_steps(app.emu, app.steps_per_frame);
     }
 }
@@ -253,30 +257,18 @@ __attribute_used__ void app_render(void) {
 }
 
 __attribute_used__ void app_keyboard_press(unsigned int key) {
-    if (app.is_paused || !app.emu)
-        return;
-
     btn_press(app_keycode_to_joypad(key), false);
 }
 
 __attribute_used__ void app_keyboard_release(unsigned int key) {
-    if (app.is_paused || !app.emu)
-        return;
-
     btn_release(app_keycode_to_joypad(key), false);
 }
 
 __attribute_used__ void app_gamepad_press(unsigned int button) {
-    if (app.is_paused || !app.emu)
-        return;
-
     btn_press(app_button_to_joypad(button), false);
 }
 
 __attribute_used__ void app_gamepad_release(unsigned int button) {
-    if (app.is_paused || !app.emu)
-        return;
-
     btn_release(app_button_to_joypad(button), false);
 }
 
@@ -337,7 +329,7 @@ static inline void btn_touch_release(glrenderer_obj_id_t obj_id) {
 }
 
 __attribute_used__ void app_touch_press(uint8_t touch_id, uint32_t x, uint32_t y) {
-    if (app.is_paused || !app.emu || touch_id >= MAX_TOUCHES)
+    if (touch_id >= MAX_TOUCHES)
         return;
 
     glrenderer_obj_id_t obj_id = glrenderer_get_obj_at_coord(app.renderer, x, y);
@@ -348,7 +340,7 @@ __attribute_used__ void app_touch_press(uint8_t touch_id, uint32_t x, uint32_t y
 }
 
 __attribute_used__ void app_touch_release(uint8_t touch_id, uint32_t x, uint32_t y) {
-    if (app.is_paused || !app.emu || touch_id >= MAX_TOUCHES)
+    if (touch_id >= MAX_TOUCHES)
         return;
 
     btn_touch_release(app.touches_current_obj[touch_id]);
@@ -357,7 +349,7 @@ __attribute_used__ void app_touch_release(uint8_t touch_id, uint32_t x, uint32_t
 }
 
 __attribute_used__ void app_touch_move(uint8_t touch_id, uint32_t x, uint32_t y) {
-    if (app.is_paused || !app.emu || touch_id >= MAX_TOUCHES)
+    if (touch_id >= MAX_TOUCHES)
         return;
 
     glrenderer_obj_id_t obj_id = glrenderer_get_obj_at_coord(app.renderer, x, y);
@@ -375,6 +367,9 @@ static void on_new_frame_cb(const uint8_t *pixels) {
 }
 
 __attribute_used__ bool app_load_cartridge(uint8_t *rom, size_t rom_size) {
+    if (!app.renderer)
+        return false;
+
     gbmulator_options_t opts = {
         .rom               = rom,
         .rom_size          = rom_size,
@@ -488,7 +483,6 @@ __attribute_used__ void app_get_screen_size(uint32_t *screen_w, uint32_t *screen
         *screen_h = GBA_SCREEN_HEIGHT;
         break;
     default:
-        eprintf("%d is not a valid mode\n", app.config.mode);
         exit(EXIT_FAILURE);
         return;
     }

@@ -5,6 +5,8 @@ cmake_minimum_required(VERSION 3.22.1)
 
 project("gbmulator")
 
+find_package (oboe REQUIRED CONFIG)
+
 include(FetchContent)
 
 # TODO maybe add oboe as an openal backend
@@ -17,6 +19,7 @@ FetchContent_Declare(
 set(ALSOFT_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(ALSOFT_TESTS OFF CACHE BOOL "" FORCE)
 set(ALSOFT_BACKEND_PIPEWIRE OFF CACHE BOOL "" FORCE)
+set(ALSOFT_BACKEND_OBOE ON CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(openal-soft)
 
@@ -25,8 +28,6 @@ FetchContent_MakeAvailable(openal-soft)
 add_library(gbmulator SHARED
     main.cpp
     AndroidOut.cpp
-    Renderer.cpp
-    Shader.cpp
 )
 
 # Searches for a package provided by the game activity dependency
@@ -39,7 +40,6 @@ set(CMAKE_SHARED_LINKER_FLAGS
 
 # NDK sysroot
 set(NDK_SYSROOT ${ANDROID_NDK}/toolchains/llvm/prebuilt/${CMAKE_HOST_SYSTEM_NAME}-x86_64/sysroot)
-# zlib include and library
 set(ZLIB_INCLUDE ${NDK_SYSROOT}/usr/include)
 set(GLES_INCLUDE ${NDK_SYSROOT}/usr/include/GLES3)
 set(EGL_INCLUDE  ${NDK_SYSROOT}/usr/include/EGL)
@@ -57,6 +57,7 @@ add_dependencies(gbmulator common_lib)
 
 # Configure libraries CMake uses to link your target library.
 target_link_libraries(gbmulator
+    oboe::oboe
     OpenAL::OpenAL
     ${GBMULATOR_BUILD_DIR}/core/core.a
     ${GBMULATOR_BUILD_DIR}/common/common.a

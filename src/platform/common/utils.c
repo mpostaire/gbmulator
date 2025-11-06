@@ -73,16 +73,7 @@ void make_parent_dirs(const char *filepath) {
     }
 }
 
-uint8_t *read_file(const char *path, size_t *len) {
-    if (!path || !len)
-        return NULL;
-
-    FILE *f = fopen(path, "rb");
-    if (!f) {
-        errnoprintf("fopen(%s)", path);
-        return NULL;
-    }
-
+uint8_t *read_file_f(FILE *f, size_t *len) {
     long size = fsize(f);
     if (size < 0) {
         fclose(f);
@@ -94,11 +85,26 @@ uint8_t *read_file(const char *path, size_t *len) {
     uint8_t *buf = xmalloc(*len);
 
     if (!fread(buf, *len, 1, f)) {
-        errnoprintf("fread(%s)", path);
+        // errnoprintf("fread(%s)", path);
         fclose(f);
         free(buf);
         return NULL;
     }
+
+    return buf;
+}
+
+uint8_t *read_file(const char *path, size_t *len) {
+    if (!path || !len)
+        return NULL;
+
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        errnoprintf("fopen(%s)", path);
+        return NULL;
+    }
+
+    uint8_t *buf = read_file_f(f, len);
 
     fclose(f);
 

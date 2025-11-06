@@ -13,6 +13,8 @@
 #define DRC_MAX_FREQ_DIFF     0.02
 #define DRC_ALPHA             0.1
 
+// TODO these should be in a struct that is memset to 0 at init
+// typedef struct {
 static ALCdevice             *device;
 static ALCcontext            *context;
 static ALuint                 source;
@@ -23,6 +25,9 @@ static ALsizei                samples_count;
 static float                  sound_level;
 static ALboolean              drc_enabled;
 static int                    ewma_queue_size;
+// } alrenderer_t;
+
+// static alrenderer_t alr;
 
 static inline void init_buffers(void) {
     // fill buffers with empty data to tell the source what format and sampling_rate they are using
