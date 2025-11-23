@@ -1,10 +1,15 @@
 package io.github.mpostaire.gbmulator
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -13,17 +18,23 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults.topAppBarColors
 import androidx.compose.runtime.Composable
@@ -34,15 +45,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.mpostaire.gbmulator.ui.theme.GBmulatorTheme
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
-import kotlin.Float
 
 class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -165,7 +178,6 @@ fun SettingsSliderEntry(
                 style = MaterialTheme.typography.bodyMedium
             )
         }
-        // Spacer(Modifier.padding(8.dp))
         Slider(
             value = value,
             onValueChange = {
@@ -177,6 +189,96 @@ fun SettingsSliderEntry(
             steps = steps,
             valueRange = valueRange
         )
+    }
+}
+
+@Composable
+fun TextInputDialog(
+    label: String,
+    value: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val text = rememberTextFieldState(value)
+
+    AlertDialog(
+        title = {
+            Text(text = label)
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                OutlinedTextField(state = text)
+            }
+        },
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(text.text.toString()) }
+            ) {
+                Text("OK")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss
+            ) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun SettingsTextEntry(
+    label: String,
+    valueFlow: Flow<String>,
+    onValueChange: suspend (String) -> Unit
+) {
+    val value by valueFlow.collectAsStateWithLifecycle(initialValue = "")
+    val coroutineScope = rememberCoroutineScope()
+
+    var showDialog by remember { mutableStateOf(false) }
+
+    if (showDialog) {
+        TextInputDialog(
+            label = label,
+            value = value,
+            onConfirm = {
+                showDialog = false
+                coroutineScope.launch { onValueChange(it) }
+            },
+            onDismiss = { showDialog = false }
+        )
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(78.dp),
+        onClick = {
+            showDialog = true
+        }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
     }
 }
 
@@ -197,6 +299,12 @@ fun TopBar() {
 @Preview(showBackground = true)
 @Composable
 fun SettingsActivityContent() {
+    val context = LocalContext.current
+    val versionText =
+        "Version ${BuildConfig.VERSION_NAME}" + if (BuildConfig.DEBUG) " (debug)" else ""
+
+    var toast by remember { mutableStateOf<Toast>(Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT)) }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
@@ -213,7 +321,7 @@ fun SettingsActivityContent() {
                 text = "Volume level",
                 valueFlow = UserSettings.sound,
                 onValueChange = { UserSettings.setSound(it) },
-                valueLabelFormatter = { value -> "${(value * 100).toInt()}%"}
+                valueLabelFormatter = { "${(it * 100).toInt()}%"}
             )
             HorizontalDivider()
             SettingsSliderEntry(
@@ -222,16 +330,7 @@ fun SettingsActivityContent() {
                 onValueChange = { UserSettings.setSpeed(it) },
                 steps = 4,
                 valueRange = 1.0f..6.0f,
-                valueLabelFormatter = { value -> "x${(value).toInt()}"}
-            )
-            HorizontalDivider()
-            SettingsSliderEntry(
-                text = "Frame skip",
-                valueFlow = UserSettings.frameskip,
-                onValueChange = { UserSettings.setFrameskip(it) },
-                steps = 3,
-                valueRange = 0.0f..4.0f,
-                valueLabelFormatter = { value -> if (value == 0f) "OFF" else "${value.toInt()}" }
+                valueLabelFormatter = { "x${(it).toInt()}"}
             )
             HorizontalDivider()
             SettingsSliderEntry(
@@ -239,7 +338,7 @@ fun SettingsActivityContent() {
                 valueFlow = UserSettings.joypadOpacity,
                 onValueChange = { UserSettings.setJoypadOpacity(it) },
                 valueRange = 0.1f..1.0f,
-                valueLabelFormatter = { value -> "${(value * 100).toInt()}%"}
+                valueLabelFormatter = { "${(it * 100).toInt()}%"}
             )
             HorizontalDivider()
             SettingsMenuEntry(
@@ -258,9 +357,46 @@ fun SettingsActivityContent() {
             HorizontalDivider()
             SettingsMenuEntry(
                 text = "Select Camera",
-                items = listOf("Front", "Back"),
+                items = listOf("Back", "Front"),
                 valueFlow = UserSettings.camera,
                 onValueChange = { UserSettings.setCamera(it) }
+            )
+            HorizontalDivider()
+            SettingsTextEntry(
+                label = "WiFi Link Host",
+                valueFlow = UserSettings.host,
+                onValueChange = { UserSettings.setHost(it) }
+            )
+            HorizontalDivider()
+            SettingsTextEntry(
+                label = "WiFi Link Port",
+                valueFlow = UserSettings.port,
+                onValueChange = { UserSettings.setPort(it) }
+            )
+            HorizontalDivider()
+            MenuEntryContainer(
+                onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val clip = ClipData.newPlainText("version", versionText)
+                    clipboard.setPrimaryClip(clip)
+
+                    toast.show()
+                },
+                content = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = versionText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
             )
         }
     }

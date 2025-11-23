@@ -4,6 +4,17 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+fun String.runCommand(workingDir: File): String =
+    try {
+        Runtime.getRuntime()
+            .exec(this, null, workingDir)
+            .inputStream.bufferedReader().readText().trim()
+    } catch (e: Exception) {
+        "unknown"
+    }
+
+val gitVersion = "git describe --tags --always".runCommand(rootDir)
+
 android {
     namespace = "io.github.mpostaire.gbmulator"
     compileSdk {
@@ -15,7 +26,7 @@ android {
         minSdk = 30
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0"
+        versionName = gitVersion
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -45,6 +56,7 @@ android {
     buildFeatures {
         prefab = true
         compose = true
+        buildConfig = true
     }
     externalNativeBuild {
         cmake {

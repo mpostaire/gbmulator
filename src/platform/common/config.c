@@ -65,52 +65,52 @@ static void parse_config_line(config_t *config, const char *line) {
     }
 
     if (sscanf(line, "keyboard_right=%u", &keycode)) {
-        if (config->keycode_filter(keycode))
+        if (!config->keycode_filter || config->keycode_filter(keycode))
             config->keybindings[GBMULATOR_JOYPAD_RIGHT] = keycode;
         return;
     }
     if (sscanf(line, "keyboard_left=%u", &keycode)) {
-        if (config->keycode_filter(keycode))
+        if (!config->keycode_filter || config->keycode_filter(keycode))
             config->keybindings[GBMULATOR_JOYPAD_LEFT] = keycode;
         return;
     }
     if (sscanf(line, "keyboard_up=%u", &keycode)) {
-        if (config->keycode_filter(keycode))
+        if (!config->keycode_filter || config->keycode_filter(keycode))
             config->keybindings[GBMULATOR_JOYPAD_UP] = keycode;
         return;
     }
     if (sscanf(line, "keyboard_down=%u", &keycode)) {
-        if (config->keycode_filter(keycode))
+        if (!config->keycode_filter || config->keycode_filter(keycode))
             config->keybindings[GBMULATOR_JOYPAD_DOWN] = keycode;
         return;
     }
     if (sscanf(line, "keyboard_a=%u", &keycode)) {
-        if (config->keycode_filter(keycode))
+        if (!config->keycode_filter || config->keycode_filter(keycode))
             config->keybindings[GBMULATOR_JOYPAD_A] = keycode;
         return;
     }
     if (sscanf(line, "keyboard_b=%u", &keycode)) {
-        if (config->keycode_filter(keycode))
+        if (!config->keycode_filter || config->keycode_filter(keycode))
             config->keybindings[GBMULATOR_JOYPAD_B] = keycode;
         return;
     }
     if (sscanf(line, "keyboard_select=%u", &keycode)) {
-        if (config->keycode_filter(keycode))
+        if (!config->keycode_filter || config->keycode_filter(keycode))
             config->keybindings[GBMULATOR_JOYPAD_SELECT] = keycode;
         return;
     }
     if (sscanf(line, "keyboard_start=%u", &keycode)) {
-        if (config->keycode_filter(keycode))
+        if (!config->keycode_filter || config->keycode_filter(keycode))
             config->keybindings[GBMULATOR_JOYPAD_START] = keycode;
         return;
     }
     if (sscanf(line, "keyboard_l=%u", &keycode)) {
-        if (config->keycode_filter(keycode))
+        if (!config->keycode_filter || config->keycode_filter(keycode))
             config->keybindings[GBMULATOR_JOYPAD_L] = keycode;
         return;
     }
     if (sscanf(line, "keyboard_r=%u", &keycode)) {
-        if (config->keycode_filter(keycode))
+        if (!config->keycode_filter || config->keycode_filter(keycode))
             config->keybindings[GBMULATOR_JOYPAD_R] = keycode;
         return;
     }

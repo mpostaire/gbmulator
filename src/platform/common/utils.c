@@ -35,7 +35,7 @@ int dir_exists(const char *directory_path) {
     return 1;
 }
 
-void mkdirp(const char *directory_path) {
+bool mkdirp(const char *directory_path) {
     char buf[256];
     snprintf(buf, sizeof(buf), "%s", directory_path);
     size_t len = strlen(buf);
@@ -48,7 +48,7 @@ void mkdirp(const char *directory_path) {
             *p = 0;
             if (mkdir(buf, S_IRWXU | S_IRGRP | S_IROTH) && errno != EEXIST) {
                 errnoprintf("mkdir");
-                exit(EXIT_FAILURE);
+                return false;
             }
             *p = '/';
         }
@@ -56,11 +56,13 @@ void mkdirp(const char *directory_path) {
 
     if (mkdir(buf, S_IRWXU | S_IRGRP | S_IROTH) && errno != EEXIST) {
         errnoprintf("mkdir");
-        exit(EXIT_FAILURE);
+        return false;
     }
+
+    return true;
 }
 
-void make_parent_dirs(const char *filepath) {
+bool make_parent_dirs(const char *filepath) {
     char *last_slash       = strrchr(filepath, '/');
     int   last_slash_index = last_slash ? (int) (last_slash - filepath) : -1;
 
@@ -69,8 +71,11 @@ void make_parent_dirs(const char *filepath) {
         snprintf(directory_path, last_slash_index + 1, "%s", filepath);
 
         if (!dir_exists(directory_path))
-            mkdirp(directory_path);
+            if (!mkdirp(directory_path))
+                return false;
     }
+
+    return true;
 }
 
 uint8_t *read_file_f(FILE *f, size_t *len) {
@@ -85,11 +90,13 @@ uint8_t *read_file_f(FILE *f, size_t *len) {
     uint8_t *buf = xmalloc(*len);
 
     if (!fread(buf, *len, 1, f)) {
-        // errnoprintf("fread(%s)", path);
+        eprintf("fread()");
         fclose(f);
         free(buf);
         return NULL;
     }
+
+    fclose(f);
 
     return buf;
 }
@@ -104,18 +111,15 @@ uint8_t *read_file(const char *path, size_t *len) {
         return NULL;
     }
 
-    uint8_t *buf = read_file_f(f, len);
-
-    fclose(f);
-
-    return buf;
+    return read_file_f(f, len);
 }
 
 bool write_file(const char *path, const uint8_t *data, size_t len) {
     if (!path || !data)
         return false;
 
-    make_parent_dirs(path);
+    if (!make_parent_dirs(path))
+        return false;
 
     FILE *f = fopen(path, "wb");
     if (!f) {

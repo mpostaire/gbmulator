@@ -6,6 +6,7 @@
 #include "../../core/core.h"
 
 typedef bool (*keycode_filter_t)(unsigned int keycode);
+typedef void (*link_touch_button_cb_t)(void *user_data);
 
 typedef struct {
     gbmulator_mode_t   mode;
@@ -22,6 +23,8 @@ typedef struct {
     unsigned int keybindings[GBMULATOR_JOYPAD_END];
 
     keycode_filter_t keycode_filter;
+    link_touch_button_cb_t on_link_button_touched;
+    void *on_link_button_touched_user_data;
 } config_t;
 
 void config_load_from_string(config_t *config, const char *buf);

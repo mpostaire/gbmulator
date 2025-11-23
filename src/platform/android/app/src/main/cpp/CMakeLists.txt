@@ -49,7 +49,7 @@ add_custom_command(
         OUTPUT ${GBMULATOR_BUILD_DIR}/common/common.a
         OUTPUT ${GBMULATOR_BUILD_DIR}/core/core.a
         WORKING_DIRECTORY ${GBMULATOR_ROOT_DIR}
-        COMMAND make common CC=${CMAKE_C_COMPILER} PLATFORM_ODIR=${GBMULATOR_BUILD_DIR} "EXTRA_CFLAGS=-fPIC --target=${CMAKE_C_COMPILER_TARGET} -I${openal-soft_SOURCE_DIR}/include -I${GLES_INCLUDE} -I${EGL_INCLUDE} -I${ZLIB_INCLUDE}"
+        COMMAND make common CC=${CMAKE_C_COMPILER} PLATFORM_ODIR=${GBMULATOR_BUILD_DIR} "EXTRA_CFLAGS=-fPIC --target=${CMAKE_C_COMPILER_TARGET} -I${openal-soft_SOURCE_DIR}/include -I${GLES_INCLUDE} -I${EGL_INCLUDE} -I${ZLIB_INCLUDE} -O0 -ggdb3"
         COMMENT "Building core and common static libraries via Makefile"
 )
 add_custom_target(common_lib DEPENDS ${GBMULATOR_BUILD_DIR}/core/core.a ${GBMULATOR_BUILD_DIR}/common/common.a)

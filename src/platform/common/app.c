@@ -121,12 +121,12 @@ static inline void btn_release(gbmulator_joypad_t joypad, bool is_touch) {
         return;
 
     if (is_touch)
-        app.joypad_touch_counter[joypad]--;
+        app.joypad_touch_counter[joypad]--; // TODO why here?
     else
         app.joypad_key_press_counter[joypad] = false;
 
     if (app.joypad_touch_counter[joypad] > 0)
-        app.joypad_touch_counter[joypad]--;
+        app.joypad_touch_counter[joypad]--; // TODO and here? --> only one of those needed?
 
     if (app.joypad_touch_counter[joypad] + app.joypad_key_press_counter[joypad] == 0) {
         SET_BIT(app.joypad_state, joypad);
@@ -177,8 +177,6 @@ __attribute_used__ void app_init(void) {
     apply_config();
 
     app.sfd = -1;
-
-    eprintf("APP_INIT DONE");
 }
 
 __attribute_used__ void app_load_config(const config_t *default_config) {
@@ -272,6 +270,8 @@ __attribute_used__ void app_gamepad_release(unsigned int button) {
     btn_release(app_button_to_joypad(button), false);
 }
 
+static uint8_t link_touch_counter = 0;
+
 static inline void btn_touch_press(glrenderer_obj_id_t obj_id) {
     switch (obj_id) {
     case GLRENDERER_OBJ_ID_DPAD_UP_RIGHT:
@@ -291,6 +291,11 @@ static inline void btn_touch_press(glrenderer_obj_id_t obj_id) {
         btn_press(GBMULATOR_JOYPAD_LEFT, true);
         break;
     case GLRENDERER_OBJ_ID_LINK:
+        link_touch_counter++;
+
+        if (link_touch_counter == 1)
+            glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) GLRENDERER_OBJ_ID_LINK, 0.5f);
+        break;
     case GLRENDERER_OBJ_ID_DPAD_CENTER:
     case GLRENDERER_OBJ_ID_SCREEN:
         break;
@@ -319,6 +324,15 @@ static inline void btn_touch_release(glrenderer_obj_id_t obj_id) {
         btn_release(GBMULATOR_JOYPAD_LEFT, true);
         break;
     case GLRENDERER_OBJ_ID_LINK:
+        if (link_touch_counter > 0)
+            link_touch_counter--;
+
+        if (link_touch_counter == 0) {
+            glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) GLRENDERER_OBJ_ID_LINK, 0.5f);
+            if (app.config.on_link_button_touched)
+                app.config.on_link_button_touched(app.config.on_link_button_touched_user_data);
+        }
+        break;
     case GLRENDERER_OBJ_ID_DPAD_CENTER:
     case GLRENDERER_OBJ_ID_SCREEN:
         break;
@@ -546,7 +560,8 @@ __attribute_used__ void app_set_touchscreen_mode(bool enable) {
                         (1 << GLRENDERER_OBJ_ID_DPAD_UP_RIGHT) | (1 << GLRENDERER_OBJ_ID_DPAD_UP_LEFT) |
                         (1 << GLRENDERER_OBJ_ID_DPAD_DOWN_RIGHT) | (1 << GLRENDERER_OBJ_ID_DPAD_DOWN_LEFT);
 
-        // TODO (1 << GLRENDERER_OBJ_ID_LINK)
+        if (app.config.on_link_button_touched)
+            visible_btns |= 1 << GLRENDERER_OBJ_ID_LINK;
 
         if (app_get_mode() == GBMULATOR_MODE_GBA)
             visible_btns |= (1 << GLRENDERER_OBJ_ID_R) | (1 << GLRENDERER_OBJ_ID_L);

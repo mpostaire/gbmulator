@@ -4,6 +4,7 @@
 #include <game-activity/GameActivity.h>
 #include <unistd.h>
 #include <cassert>
+#include <thread>
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
 
@@ -135,7 +136,107 @@ void deinit_gl_context() {
 
 extern "C" {
 
-static int rom_fd = -1;
+static config_t config = {};
+static float gRefreshRate = 60.0f;
+static bool force_no_reset = false;
+
+void showSocketDialogFromNative(android_app *pApp) {
+    JNIEnv* env = nullptr;
+    pApp->activity->vm->AttachCurrentThread(&env, nullptr);
+
+    jclass cls = env->GetObjectClass(pApp->activity->javaGameActivity);
+    jmethodID mid = env->GetMethodID(cls, "showSocketDialog", "()I");
+    jint sfd = env->CallIntMethod(pApp->activity->javaGameActivity, mid);
+
+    pApp->activity->vm->DetachCurrentThread();
+}
+
+void init_activity(android_app *pApp, config_t *config) {
+    JNIEnv* env = nullptr;
+    pApp->activity->vm->AttachCurrentThread(&env, nullptr);
+
+    jclass cls = env->GetObjectClass(pApp->activity->javaGameActivity);
+    jmethodID mid = env->GetMethodID(cls, "getEmuParams", "()Lio/github/mpostaire/gbmulator/EmuParams;");
+    jobject emuParamsObj = env->CallObjectMethod(pApp->activity->javaGameActivity, mid);
+
+    if (!emuParamsObj) {
+        aout << "Failed getting EmuParams" << std::endl;
+        GameActivity_finish(pApp->activity);
+        return;
+    }
+
+    jclass paramsCls = env->GetObjectClass(emuParamsObj);
+
+    jfieldID romFdField = env->GetFieldID(paramsCls, "romFd", "I");
+    jfieldID resetField = env->GetFieldID(paramsCls, "reset", "Z");
+    jfieldID refreshRateField = env->GetFieldID(paramsCls, "refreshRate", "F");
+    jfieldID modeField = env->GetFieldID(paramsCls, "mode", "I");
+    jfieldID soundField = env->GetFieldID(paramsCls, "sound", "F");
+    jfieldID speedField = env->GetFieldID(paramsCls, "speed", "F");
+    jfieldID joypadOpacityField = env->GetFieldID(paramsCls, "joypadOpacity", "F");
+    jfieldID paletteField = env->GetFieldID(paramsCls, "palette", "I");
+    jfieldID cameraField = env->GetFieldID(paramsCls, "camera", "I");
+
+    jint rom_fd = env->GetIntField(emuParamsObj, romFdField);
+    jboolean reset = env->GetBooleanField(emuParamsObj, resetField);
+
+    if (force_no_reset)
+        reset = false;
+
+    gRefreshRate = env->GetFloatField(emuParamsObj, refreshRateField);
+
+    config->mode = (gbmulator_mode_t ) env->GetIntField(emuParamsObj, modeField);
+    config->sound = env->GetFloatField(emuParamsObj, soundField);
+    config->speed = env->GetFloatField(emuParamsObj, speedField);
+    config->joypad_opacity = env->GetFloatField(emuParamsObj, joypadOpacityField);
+    config->color_palette = (gb_color_palette_t) env->GetIntField(emuParamsObj, paletteField);
+
+    config->sound_drc = true;
+    config->enable_joypad = true;
+
+    jint camera = env->GetIntField(emuParamsObj, cameraField);
+
+    // TODO apply camera
+    // TODO add ability to force config and save paths in app_* (and/or utils?)
+
+    aout << "Display refresh rate is " << gRefreshRate << " Hz" << std::endl;
+    aout << "mode=" << config->mode << " sound=" << config->sound << " speed=" << config->speed << " joypad_opacity=" << config->joypad_opacity << " palette=" << config->color_palette << " camera=" << camera << std::endl;
+
+    pApp->activity->vm->DetachCurrentThread();
+
+    if (rom_fd < 0) {
+        aout << "Invalid file descriptor" << std::endl;
+        return;
+    }
+
+    config->on_link_button_touched_user_data = pApp;
+    config->on_link_button_touched = reinterpret_cast<link_touch_button_cb_t>(showSocketDialogFromNative);
+
+    setenv("HOME", pApp->activity->externalDataPath, 1);
+    aout << "savestate_dir: " << get_savestate_dir() << std::endl;
+    aout << "save_dir: " << get_save_dir() << std::endl;
+
+    app_init();
+
+    app_load_config(config);
+
+    FILE* f = fdopen(rom_fd, "r");
+
+    size_t len;
+    uint8_t *rom = read_file_f(f, &len);
+    fclose(f);
+
+    if (!app_load_cartridge(rom, len)) {
+        GameActivity_finish(pApp->activity);
+        return;
+    }
+
+    if (!reset)
+        app_load_state(0);
+
+    app_set_pause(false);
+    force_no_reset = false;
+}
 
 /*!
  * Handles commands sent to this Android application
@@ -143,53 +244,43 @@ static int rom_fd = -1;
  * @param cmd the command to handle
  */
 void handle_cmd(android_app *pApp, int32_t cmd) {
-    EGLint width;
-    EGLint height;
-
     switch (cmd) {
         case APP_CMD_INIT_WINDOW:
-            // A new window is created, associate a renderer with it. You may replace this with a
-            // "game" class if that suits your needs. Remember to change all instances of userData
-            // if you change the class here as a reinterpret_cast is dangerous this in the
-            // android_main function and the APP_CMD_TERM_WINDOW handler case.
-            //pApp->userData = new Renderer(pApp);
+            aout << "APP_CMD_INIT_WINDOW" << std::endl;
+            // A new window is created.
             init_gl_context(pApp);
-            app_init();
-            static config_t default_config = {
-                .mode = GBMULATOR_MODE_GBC,
-                .speed = 1.0f,
-                .sound = 0.25f,
-                .joypad_opacity = 0.8f,
-                .sound_drc = true,
-                .enable_joypad = true,
-            };
-            app_load_config(&default_config);
-
+            init_activity(pApp, &config);
             pApp->userData = (void *) 1;
             break;
         case APP_CMD_TERM_WINDOW:
+            aout << "APP_CMD_TERM_WINDOW" << std::endl;
             // The window is being destroyed. Use this to clean up your userData to avoid leaking
             // resources.
 
-            if (rom_fd >= 0)
-                close(rom_fd);
-
             pApp->userData = nullptr;
-            deinit_gl_context();
-            app_quit();
-            break;
-        case APP_CMD_WINDOW_RESIZED:
-        case APP_CMD_CONFIG_CHANGED:
-        case APP_CMD_CONTENT_RECT_CHANGED:
-            eglQuerySurface(display_, surface_, EGL_WIDTH, &width);
-            eglQuerySurface(display_, surface_, EGL_HEIGHT, &height);
 
-            if (width != width_ || height != height_) {
-                width_ = width;
-                height_ = height;
-                app_set_size(width_, height_);
-                aout << "resize w: " << width_ << " h: " << height_ << std::endl;
-            }
+            app_save_state(0);
+            app_quit();
+            deinit_gl_context(); // TODO after link dialog at least once, this cause a later segfault that crashes whole app
+            break;
+        case APP_CMD_PAUSE:
+            aout << "APP_CMD_PAUSE" << std::endl;
+            break;
+        case APP_CMD_RESUME:
+            aout << "APP_CMD_RESUME" << std::endl;
+            break;
+        case APP_CMD_SAVE_STATE:
+            aout << "APP_CMD_SAVE_STATE" << std::endl;
+            force_no_reset = true;
+            break;
+        case APP_CMD_START:
+            aout << "APP_CMD_START" << std::endl;
+            break;
+        case APP_CMD_STOP:
+            aout << "APP_CMD_STOP" << std::endl;
+            break;
+        case APP_CMD_DESTROY:
+            aout << "APP_CMD_DESTROY" << std::endl;
             break;
         default:
             break;
@@ -211,21 +302,6 @@ bool motion_event_filter_func(const GameActivityMotionEvent *motionEvent) {
             sourceClass == AINPUT_SOURCE_CLASS_JOYSTICK);
 }
 
-JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_EmulatorActivity_loadRom(JNIEnv* env, jobject thiz, jint fd) {
-    if (fd < 0) {
-        aout << "Invalid file descriptor" << std::endl;
-        return;
-    }
-
-    if (rom_fd < 0) {
-        rom_fd = fd;
-    } else {
-        close(rom_fd);
-        aout << "Previous file descriptor set. This should never happen" << std::endl;
-        return;
-    }
-}
-
 void handle_input(android_app *app) {
     // handle all queued inputs
     auto *inputBuffer = android_app_swap_input_buffers(app);
@@ -242,7 +318,6 @@ void handle_input(android_app *app) {
         // Find the pointer index, mask and bitshift to turn it into a readable value.
         auto pointerIndex = (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK)
                 >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
-        aout << "Pointer(s): ";
 
         // get the x and y position of this event if it is not ACTION_MOVE.
         auto &pointer = motionEvent.pointers[pointerIndex];
@@ -253,8 +328,6 @@ void handle_input(android_app *app) {
         switch (action & AMOTION_EVENT_ACTION_MASK) {
             case AMOTION_EVENT_ACTION_DOWN:
             case AMOTION_EVENT_ACTION_POINTER_DOWN:
-                aout << "(" << pointer.id << ", " << x << ", " << y << ") "
-                     << "Pointer Down";
                 app_touch_press(pointer.id, x, y);
                 break;
 
@@ -264,8 +337,6 @@ void handle_input(android_app *app) {
                 // code pass through on purpose.
             case AMOTION_EVENT_ACTION_UP:
             case AMOTION_EVENT_ACTION_POINTER_UP:
-                aout << "(" << pointer.id << ", " << x << ", " << y << ") "
-                     << "Pointer Up";
                 app_touch_release(pointer.id, x, y);
                 break;
 
@@ -277,58 +348,47 @@ void handle_input(android_app *app) {
                     pointer = motionEvent.pointers[index];
                     x = GameActivityPointerAxes_getX(&pointer);
                     y = GameActivityPointerAxes_getY(&pointer);
-                    aout << "(" << pointer.id << ", " << x << ", " << y << ")";
-
-                    if (index != (motionEvent.pointerCount - 1)) aout << ",";
-                    aout << " ";
                 }
-                aout << "Pointer Move";
-                app_touch_move(pointer.id, x, y);
+                app_touch_move(pointer.id, (uint32_t) x, (uint32_t) y);
                 break;
             default:
-                aout << "Unknown MotionEvent Action: " << action;
+                aout << "Unknown MotionEvent Action: " << action << std::endl;
+                break;
         }
-        aout << std::endl;
     }
+
     // clear the motion input count in this buffer for main thread to re-use.
     android_app_clear_motion_events(inputBuffer);
-
-    // handle input key events.
-    for (auto i = 0; i < inputBuffer->keyEventsCount; i++) {
-        auto &keyEvent = inputBuffer->keyEvents[i];
-        aout << "Key: " << keyEvent.keyCode <<" ";
-        switch (keyEvent.action) {
-            case AKEY_EVENT_ACTION_DOWN:
-                aout << "Key Down";
-                if (keyEvent.keyCode == AKEYCODE_BACK)
-                    GameActivity_finish(app->activity);
-                break;
-            case AKEY_EVENT_ACTION_UP:
-                aout << "Key Up";
-                break;
-            case AKEY_EVENT_ACTION_MULTIPLE:
-                // Deprecated since Android API level 29.
-                aout << "Multiple Key Actions";
-                break;
-            default:
-                aout << "Unknown KeyEvent Action: " << keyEvent.action;
-        }
-        aout << std::endl;
-    }
-    // clear the key input count too.
     android_app_clear_key_events(inputBuffer);
+}
+
+static inline void resize_if_needed() {
+    EGLint width;
+    EGLint height;
+    eglQuerySurface(display_, surface_, EGL_WIDTH, &width);
+    eglQuerySurface(display_, surface_, EGL_HEIGHT, &height);
+
+    if (width != width_ || height != height_) {
+        width_ = width;
+        height_ = height;
+        app_set_size(width_, height_);
+        aout << "Viewport resize: w=" << width_ << " h=" << height_ << std::endl;
+    }
 }
 
 /*!
  * This the main entry point for a native activity
  */
 void android_main(struct android_app *pApp) {
-    rom_fd = -1;
     display_ = EGL_NO_DISPLAY;
     surface_ = EGL_NO_SURFACE;
     context_ = EGL_NO_CONTEXT;
     width_ = 0;
     height_ = 0;
+    gRefreshRate = 60.0f;
+    force_no_reset = false;
+
+    memset(&config, 0, sizeof(config));
 
     // Register an event handler for Android events
     pApp->onAppCmd = handle_cmd;
@@ -337,6 +397,12 @@ void android_main(struct android_app *pApp) {
     // Note that for key inputs, this example uses the default default_key_filter()
     // implemented in android_native_app_glue.c.
     android_app_set_motion_event_filter(pApp, motion_event_filter_func);
+
+    auto nextEmuTime = std::chrono::steady_clock::now();
+    auto nextDrawTime = nextEmuTime;
+
+    double emulatorFrameTime = 1000.0 / 60.0;      // emulator fixed
+    double displayFrameTime = 1000.0 / gRefreshRate; // device actual
 
     // This sets up a typical game/event loop. It will run until the app is destroyed.
     do {
@@ -370,33 +436,30 @@ void android_main(struct android_app *pApp) {
 
         // Check if any user data is associated. This is assigned in handle_cmd
         if (pApp->userData) {
-            if (rom_fd >= 0) {
-                FILE* f = fdopen(rom_fd, "r");
-
-                size_t len;
-                uint8_t *rom = read_file_f(f, &len);
-
-                if (!app_load_cartridge(rom, len)) {
-                    GameActivity_finish(pApp->activity);
-                    return;
-                }
-
-                app_set_pause(false);
-
-                fclose(f);
-                rom_fd = -1;
-            }
-
+            resize_if_needed();
             handle_input(pApp);
 
-            app_run_frame();
-            app_render();
+            auto now = std::chrono::steady_clock::now();
 
-            // TODO ensure 60 fps
-            auto swapResult = eglSwapBuffers(display_, surface_);
-            assert(swapResult == EGL_TRUE);
-            //usleep((1.0f / 60.0f) * 1000000.0f);
+            // Run emulator frames at ~60Hz
+            if (now >= nextEmuTime) {
+                app_run_frame();
+
+                nextEmuTime = now + std::chrono::milliseconds((int)emulatorFrameTime);
+            }
+
+            // Draw at display rate (e.g., 120Hz)
+            if (now >= nextDrawTime) {
+                app_render();
+                eglSwapBuffers(display_, surface_);
+                nextDrawTime = now + std::chrono::milliseconds((int)displayFrameTime);
+            }
+
+            // TODO this is polling: not good --> sleep exact time needed
+            //      try using blocking swap buffers to delay until next vsync, then
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     } while (!pApp->destroyRequested);
+    aout << "pApp->destroyRequested" << std::endl;
 }
 }

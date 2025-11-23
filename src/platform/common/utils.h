@@ -11,12 +11,12 @@ int dir_exists(const char *directory_path);
 /**
  * Creates directory_path and its parents if they don't exist.
  */
-void mkdirp(const char *directory_path);
+bool mkdirp(const char *directory_path);
 
 /**
  * Makes all parent dirs of filepath if necessary
  */
-void make_parent_dirs(const char *filepath);
+bool make_parent_dirs(const char *filepath);
 
 uint8_t *read_file(const char *path, size_t *len);
 
@@ -53,5 +53,5 @@ char *get_savestate_path(const char *rom_title, int slot);
  */
 void fit_image(uint8_t *dst, const uint8_t *src, int src_width, int src_height, int row_stride, int rotation);
 
-
+// TODO remove?
 uint8_t *read_file_f(FILE *f, size_t *len);
