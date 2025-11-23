@@ -215,7 +215,7 @@ static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
 
 char *get_config_dir(void) {
     static char path[192];
-    char       *xdg_config = get_xdg_path("XDG_DATA_HOME", ".config");
+    char       *xdg_config = get_xdg_path("XDG_CONFIG_HOME", ".config");
 
     snprintf(path, sizeof(path), "%s/gbmulator", xdg_config);
     return path;

@@ -138,7 +138,23 @@ extern "C" {
 
 static config_t config = {};
 static float gRefreshRate = 60.0f;
-static bool force_no_reset = false;
+
+JNIEXPORT void JNICALL Java_io_github_mpostaire_gbmulator_EmulatorActivity_updateCameraBuffer(
+        JNIEnv* env,
+        jobject thiz,
+        jbyteArray data,
+        jsize width,
+        jsize height,
+        jsize row_stride,
+        jsize rotation)
+{
+    jboolean is_copy;
+    jbyte *image = env->GetByteArrayElements(data, &is_copy);
+
+    app_update_camera_buffer(reinterpret_cast<uint8_t *>(image), width, height, row_stride, rotation);
+
+    env->ReleaseByteArrayElements(data, image, JNI_ABORT);
+}
 
 void showSocketDialogFromNative(android_app *pApp) {
     JNIEnv* env = nullptr;
@@ -149,6 +165,15 @@ void showSocketDialogFromNative(android_app *pApp) {
     jint sfd = env->CallIntMethod(pApp->activity->javaGameActivity, mid);
 
     pApp->activity->vm->DetachCurrentThread();
+}
+
+static void init_camera(android_app *pApp) {
+    JNIEnv* env = nullptr;
+    pApp->activity->vm->AttachCurrentThread(&env, nullptr);
+
+    jclass cls = env->GetObjectClass(pApp->activity->javaGameActivity);
+    jmethodID mid = env->GetMethodID(cls, "initCamera", "()V");
+    env->CallVoidMethod(pApp->activity->javaGameActivity, mid);
 }
 
 void init_activity(android_app *pApp, config_t *config) {
@@ -175,13 +200,9 @@ void init_activity(android_app *pApp, config_t *config) {
     jfieldID speedField = env->GetFieldID(paramsCls, "speed", "F");
     jfieldID joypadOpacityField = env->GetFieldID(paramsCls, "joypadOpacity", "F");
     jfieldID paletteField = env->GetFieldID(paramsCls, "palette", "I");
-    jfieldID cameraField = env->GetFieldID(paramsCls, "camera", "I");
 
     jint rom_fd = env->GetIntField(emuParamsObj, romFdField);
     jboolean reset = env->GetBooleanField(emuParamsObj, resetField);
-
-    if (force_no_reset)
-        reset = false;
 
     gRefreshRate = env->GetFloatField(emuParamsObj, refreshRateField);
 
@@ -194,13 +215,10 @@ void init_activity(android_app *pApp, config_t *config) {
     config->sound_drc = true;
     config->enable_joypad = true;
 
-    jint camera = env->GetIntField(emuParamsObj, cameraField);
-
-    // TODO apply camera
     // TODO add ability to force config and save paths in app_* (and/or utils?)
 
     aout << "Display refresh rate is " << gRefreshRate << " Hz" << std::endl;
-    aout << "mode=" << config->mode << " sound=" << config->sound << " speed=" << config->speed << " joypad_opacity=" << config->joypad_opacity << " palette=" << config->color_palette << " camera=" << camera << std::endl;
+    aout << "mode=" << config->mode << " sound=" << config->sound << " speed=" << config->speed << " joypad_opacity=" << config->joypad_opacity << " palette=" << config->color_palette << std::endl;
 
     pApp->activity->vm->DetachCurrentThread();
 
@@ -212,7 +230,8 @@ void init_activity(android_app *pApp, config_t *config) {
     config->on_link_button_touched_user_data = pApp;
     config->on_link_button_touched = reinterpret_cast<link_touch_button_cb_t>(showSocketDialogFromNative);
 
-    setenv("HOME", pApp->activity->externalDataPath, 1);
+    setenv("XDG_CONFIG_HOME", pApp->activity->externalDataPath, 1); // TODO remove this and add option to not save config file
+    setenv("XDG_DATA_HOME", pApp->activity->externalDataPath, 1);
     aout << "savestate_dir: " << get_savestate_dir() << std::endl;
     aout << "save_dir: " << get_save_dir() << std::endl;
 
@@ -234,8 +253,10 @@ void init_activity(android_app *pApp, config_t *config) {
     if (!reset)
         app_load_state(0);
 
+    if (app_has_camera())
+        init_camera(pApp);
+
     app_set_pause(false);
-    force_no_reset = false;
 }
 
 /*!
@@ -262,25 +283,8 @@ void handle_cmd(android_app *pApp, int32_t cmd) {
             app_save_state(0);
             app_quit();
             deinit_gl_context(); // TODO after link dialog at least once, this cause a later segfault that crashes whole app
-            break;
-        case APP_CMD_PAUSE:
-            aout << "APP_CMD_PAUSE" << std::endl;
-            break;
-        case APP_CMD_RESUME:
-            aout << "APP_CMD_RESUME" << std::endl;
-            break;
-        case APP_CMD_SAVE_STATE:
-            aout << "APP_CMD_SAVE_STATE" << std::endl;
-            force_no_reset = true;
-            break;
-        case APP_CMD_START:
-            aout << "APP_CMD_START" << std::endl;
-            break;
-        case APP_CMD_STOP:
-            aout << "APP_CMD_STOP" << std::endl;
-            break;
-        case APP_CMD_DESTROY:
-            aout << "APP_CMD_DESTROY" << std::endl;
+
+            GameActivity_finish(pApp->activity);
             break;
         default:
             break;
@@ -357,6 +361,20 @@ void handle_input(android_app *app) {
         }
     }
 
+    // handle input key events.
+    for (auto i = 0; i < inputBuffer->keyEventsCount; i++) {
+        auto &keyEvent = inputBuffer->keyEvents[i];
+        switch (keyEvent.action) {
+            case AKEY_EVENT_ACTION_DOWN:
+                if (keyEvent.keyCode == AKEYCODE_BACK)
+                    GameActivity_finish(app->activity);
+                break;
+            default:
+                aout << "Unknown KeyEvent Action: " << keyEvent.action << std::endl;
+                break;
+        }
+    }
+
     // clear the motion input count in this buffer for main thread to re-use.
     android_app_clear_motion_events(inputBuffer);
     android_app_clear_key_events(inputBuffer);
@@ -386,7 +404,6 @@ void android_main(struct android_app *pApp) {
     width_ = 0;
     height_ = 0;
     gRefreshRate = 60.0f;
-    force_no_reset = false;
 
     memset(&config, 0, sizeof(config));
 
@@ -460,6 +477,5 @@ void android_main(struct android_app *pApp) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     } while (!pApp->destroyRequested);
-    aout << "pApp->destroyRequested" << std::endl;
 }
 }

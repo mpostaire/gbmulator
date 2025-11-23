@@ -3,12 +3,21 @@ package io.github.mpostaire.gbmulator
 import SocketHelper.safeCloseFd
 import SocketHelper.startClient
 import SocketHelper.startServer
+import android.Manifest
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.util.Size
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
+import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.androidgamesdk.GameActivity
 import io.github.mpostaire.gbmulator.ui.components.LinkDialog
@@ -26,8 +36,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.CompletableFuture
-import kotlin.Int
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 import kotlin.coroutines.cancellation.CancellationException
+
 
 data class EmuParams(
     val romFd: Int,
@@ -37,8 +50,7 @@ data class EmuParams(
     val sound: Float,
     val speed: Float,
     val joypadOpacity: Float,
-    val palette: Int,
-    val camera: Int
+    val palette: Int
 )
 
 class EmulatorActivity : GameActivity() {
@@ -89,8 +101,7 @@ class EmulatorActivity : GameActivity() {
                 UserSettings.sound.first(),
                 UserSettings.speed.first(),
                 UserSettings.joypadOpacity.first(),
-                UserSettings.palette.first().toInt(),
-                UserSettings.camera.first().toInt()
+                UserSettings.palette.first().toInt()
             )
         }
     }
@@ -206,5 +217,91 @@ class EmulatorActivity : GameActivity() {
             errorToast("Connected!")
 
         return sfd
+    }
+
+    var imgAnalyzer: ImageAnalysis? = null
+    private val executor: Executor = Executors.newSingleThreadExecutor()
+    var cameraGrayscaleData: ByteArray? = null
+    external fun updateCameraBuffer(
+        data: ByteArray?,
+        width: Int,
+        height: Int,
+        row_stride: Int,
+        rotation: Int
+    )
+
+    fun initImageAnalysis() {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+
+        cameraProviderFuture.addListener({
+            val cameraProvider = cameraProviderFuture.get()
+
+            val resolutionSelector = ResolutionSelector.Builder()
+                .setAllowedResolutionMode(ResolutionSelector.PREFER_CAPTURE_RATE_OVER_HIGHER_RESOLUTION)
+                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                .setResolutionStrategy(
+                    ResolutionStrategy(
+                        Size(128, 128),
+                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER
+                    )
+                )
+                .build()
+
+            imgAnalyzer = ImageAnalysis.Builder()
+                .setResolutionSelector(resolutionSelector)
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setTargetRotation(display.rotation)
+                .build()
+
+            imgAnalyzer!!.setAnalyzer(executor) { image ->
+                val y = image.planes[0]
+                val buffer = y.buffer
+
+                // Allocate only once
+                if (cameraGrayscaleData == null ||
+                    cameraGrayscaleData!!.size != image.width * image.height
+                ) {
+                    cameraGrayscaleData = ByteArray(image.width * image.height)
+                }
+
+                buffer.get(cameraGrayscaleData!!)
+                buffer.rewind()
+
+                updateCameraBuffer(
+                    cameraGrayscaleData,
+                    image.width,
+                    image.height,
+                    y.rowStride,
+                    image.imageInfo.rotationDegrees
+                )
+                image.close()
+            }
+
+            val cameraSelector = runBlocking {
+                if (UserSettings.camera.first().toInt() == 0)
+                    CameraSelector.DEFAULT_BACK_CAMERA
+                else
+                    CameraSelector.DEFAULT_FRONT_CAMERA
+            }
+
+            cameraProvider.unbindAll()
+            cameraProvider.bindToLifecycle(this@EmulatorActivity, cameraSelector, imgAnalyzer)
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 42024 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) initImageAnalysis()
+    }
+
+    fun initCamera() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+            initImageAnalysis()
+        else
+            requestPermissions(arrayOf<String?>(Manifest.permission.CAMERA), 42024)
     }
 }

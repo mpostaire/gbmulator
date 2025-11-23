@@ -32,6 +32,14 @@ static struct {
     uint8_t               joypad_touch_counter[GBMULATOR_JOYPAD_END];
     bool                  joypad_key_press_counter[GBMULATOR_JOYPAD_END];
     glrenderer_obj_id_t   touches_current_obj[32];
+
+    struct {
+        uint8_t *data;
+        int      width;
+        int      height;
+        int      row_stride;
+        int      rotation;
+    } camera;
 } app;
 
 static void set_steps_per_frame(void) {
@@ -209,6 +217,10 @@ __attribute_used__ void app_quit(void) {
         app.printer = NULL;
     }
 
+    if (app.camera.data)
+        free(app.camera.data);
+
+    // TODO add option to not save config
     config_save_to_file(&app.config, get_config_path());
 
     alrenderer_quit();
@@ -376,6 +388,14 @@ __attribute_used__ void app_touch_move(uint8_t touch_id, uint32_t x, uint32_t y)
     app.touches_current_obj[touch_id] = obj_id;
 }
 
+static bool on_camera_capture_image(uint8_t *pixels) {
+    if (!app.camera.data)
+        return false;
+
+    fit_image(pixels, app.camera.data, app.camera.width, app.camera.height, app.camera.row_stride, app.camera.rotation);
+    return true;
+}
+
 static void on_new_frame_cb(const uint8_t *pixels) {
     glrenderer_update_screen(app.renderer, pixels);
 }
@@ -385,14 +405,15 @@ __attribute_used__ bool app_load_cartridge(uint8_t *rom, size_t rom_size) {
         return false;
 
     gbmulator_options_t opts = {
-        .rom               = rom,
-        .rom_size          = rom_size,
-        .mode              = app.config.mode,
-        .on_new_sample     = alrenderer_queue_sample,
-        .on_new_frame      = on_new_frame_cb,
-        .apu_speed         = app.config.speed,
-        .apu_sampling_rate = alrenderer_get_sampling_rate(),
-        .palette           = app.config.color_palette
+        .rom                     = rom,
+        .rom_size                = rom_size,
+        .mode                    = app.config.mode,
+        .on_new_sample           = alrenderer_queue_sample,
+        .on_new_frame            = on_new_frame_cb,
+        .on_camera_capture_image = on_camera_capture_image,
+        .apu_speed               = app.config.speed,
+        .apu_sampling_rate       = alrenderer_get_sampling_rate(),
+        .palette                 = app.config.color_palette
     };
     gbmulator_t *new_emu = gbmulator_init(&opts);
     if (!new_emu) {
@@ -730,4 +751,17 @@ __attribute_used__ void app_link_disconnect(void) {
         gbmulator_quit(app.linked_emu);
         app.linked_emu = NULL;
     }
+}
+
+__attribute_used__ void app_update_camera_buffer(uint8_t *data, int width, int height, int row_stride, int rotation) {
+    size_t sz = width * height * sizeof(*app.camera.data);
+    if (!app.camera.data)
+        app.camera.data = xmalloc(sz);
+
+    memcpy(app.camera.data, data, sz);
+
+    app.camera.width      = width;
+    app.camera.height     = height;
+    app.camera.row_stride = row_stride;
+    app.camera.rotation   = rotation;
 }

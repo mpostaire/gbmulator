@@ -54,7 +54,7 @@ typedef void (*gbmulator_new_line_cb_t)(const uint8_t *pixels, size_t current_he
 typedef void (*gbmulator_new_frame_cb_t)(const uint8_t *pixels);
 typedef void (*gbmulator_new_sample_cb_t)(const gbmulator_apu_sample_t sample, uint32_t *dynamic_sampling_rate);
 typedef void (*gbmulator_accelerometer_request_cb_t)(double *x, double *y);
-typedef uint8_t (*gbmulator_camera_capture_image_cb_t)(uint8_t *image);
+typedef bool (*gbmulator_camera_capture_image_cb_t)(uint8_t *image);
 
 typedef enum {
     GBMULATOR_MODE_GB,
