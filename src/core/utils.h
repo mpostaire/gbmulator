@@ -57,9 +57,10 @@
 #else
 static inline unsigned int stdc_count_ones_impl(unsigned long long v) {
     int count = 0;
-    while (v) {
+    for (uint8_t i = 0; i < sizeof(v) * 8; i++) {
+        if (v & 1)
+            count++;
         v >>= 1;
-        count++;
     }
     return count;
 }
@@ -69,6 +70,9 @@ static inline unsigned int stdc_first_trailing_one_impl(unsigned long long v) {
     while ((v & 1) == 0) {
         v >>= 1;
         idx++;
+
+        if (idx > sizeof(v) * 8)
+            return 0;
     }
     return idx + 1;
 }
