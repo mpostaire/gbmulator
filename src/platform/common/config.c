@@ -242,6 +242,9 @@ bool config_load_from_file(config_t *config, const char *path) {
 }
 
 bool config_save_to_file(config_t *config, const char *path) {
+    if (config->disable_save_config_to_file)
+        return false;
+
     char *config_str = config_save_to_string(config);
     return write_file(path, (uint8_t *) config_str, strlen(config_str));
 }

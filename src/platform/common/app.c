@@ -220,7 +220,6 @@ __attribute_used__ void app_quit(void) {
     if (app.camera.data)
         free(app.camera.data);
 
-    // TODO add option to not save config
     config_save_to_file(&app.config, get_config_path());
 
     alrenderer_quit();

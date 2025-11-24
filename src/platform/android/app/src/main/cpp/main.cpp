@@ -214,8 +214,7 @@ void init_activity(android_app *pApp, config_t *config) {
 
     config->sound_drc = true;
     config->enable_joypad = true;
-
-    // TODO add ability to force config and save paths in app_* (and/or utils?)
+    config->disable_save_config_to_file = true;
 
     aout << "Display refresh rate is " << gRefreshRate << " Hz" << std::endl;
     aout << "mode=" << config->mode << " sound=" << config->sound << " speed=" << config->speed << " joypad_opacity=" << config->joypad_opacity << " palette=" << config->color_palette << std::endl;
@@ -230,7 +229,6 @@ void init_activity(android_app *pApp, config_t *config) {
     config->on_link_button_touched_user_data = pApp;
     config->on_link_button_touched = reinterpret_cast<link_touch_button_cb_t>(showSocketDialogFromNative);
 
-    setenv("XDG_CONFIG_HOME", pApp->activity->externalDataPath, 1); // TODO remove this and add option to not save config file
     setenv("XDG_DATA_HOME", pApp->activity->externalDataPath, 1);
     aout << "savestate_dir: " << get_savestate_dir() << std::endl;
     aout << "save_dir: " << get_save_dir() << std::endl;
@@ -282,7 +280,7 @@ void handle_cmd(android_app *pApp, int32_t cmd) {
 
             app_save_state(0);
             app_quit();
-            deinit_gl_context(); // TODO after link dialog at least once, this cause a later segfault that crashes whole app
+            deinit_gl_context();
 
             GameActivity_finish(pApp->activity);
             break;
