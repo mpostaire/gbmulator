@@ -1,6 +1,7 @@
 #include <stdlib.h>
 
 #include "bmp.h"
+#include "../../core/types.h"
 
 typedef struct
 {

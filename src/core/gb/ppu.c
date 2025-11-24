@@ -113,6 +113,12 @@ static inline void cgb_get_color(gb_mmu_t *mmu, gb_pixel_t *pixel, uint8_t is_ob
     *g = (color_data & 0x3E0) >> 5;
     *b = (color_data & 0x7C00) >> 10;
 
+#ifdef DISABLE_COLOR_CORRECTION
+    // from 5 bit depth to 8 bit depth (no color correction)
+    *r = (*r << 3) | (*r >> 2);
+    *g = (*g << 3) | (*g >> 2);
+    *b = (*b << 3) | (*b >> 2);
+#else
     int R = (26 * *r) + (4 * *g) + (2 * *b);
     int G = (24 * *g) + (8 * *b);
     int B = (6 * *r) + (4 * *g) + (22 * *b);
@@ -120,6 +126,7 @@ static inline void cgb_get_color(gb_mmu_t *mmu, gb_pixel_t *pixel, uint8_t is_ob
     *r = MIN(960, R) >> 2;
     *g = MIN(960, G) >> 2;
     *b = MIN(960, B) >> 2;
+#endif
 }
 
 static inline uint8_t cgb_get_bg_win_tile_attributes(gb_t *gb) {

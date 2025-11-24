@@ -35,7 +35,7 @@ int dir_exists(const char *directory_path) {
     return 1;
 }
 
-void mkdirp(const char *directory_path) {
+bool mkdirp(const char *directory_path) {
     char buf[256];
     snprintf(buf, sizeof(buf), "%s", directory_path);
     size_t len = strlen(buf);
@@ -48,7 +48,7 @@ void mkdirp(const char *directory_path) {
             *p = 0;
             if (mkdir(buf, S_IRWXU | S_IRGRP | S_IROTH) && errno != EEXIST) {
                 errnoprintf("mkdir");
-                exit(EXIT_FAILURE);
+                return false;
             }
             *p = '/';
         }
@@ -56,11 +56,13 @@ void mkdirp(const char *directory_path) {
 
     if (mkdir(buf, S_IRWXU | S_IRGRP | S_IROTH) && errno != EEXIST) {
         errnoprintf("mkdir");
-        exit(EXIT_FAILURE);
+        return false;
     }
+
+    return true;
 }
 
-void make_parent_dirs(const char *filepath) {
+bool make_parent_dirs(const char *filepath) {
     char *last_slash       = strrchr(filepath, '/');
     int   last_slash_index = last_slash ? (int) (last_slash - filepath) : -1;
 
@@ -69,8 +71,34 @@ void make_parent_dirs(const char *filepath) {
         snprintf(directory_path, last_slash_index + 1, "%s", filepath);
 
         if (!dir_exists(directory_path))
-            mkdirp(directory_path);
+            if (!mkdirp(directory_path))
+                return false;
     }
+
+    return true;
+}
+
+uint8_t *read_file_f(FILE *f, size_t *len) {
+    long size = fsize(f);
+    if (size < 0) {
+        fclose(f);
+        return NULL;
+    }
+
+    *len = size;
+
+    uint8_t *buf = xmalloc(*len);
+
+    if (!fread(buf, *len, 1, f)) {
+        eprintf("fread()");
+        fclose(f);
+        free(buf);
+        return NULL;
+    }
+
+    fclose(f);
+
+    return buf;
 }
 
 uint8_t *read_file(const char *path, size_t *len) {
@@ -83,33 +111,15 @@ uint8_t *read_file(const char *path, size_t *len) {
         return NULL;
     }
 
-    long size = fsize(f);
-    if (size < 0) {
-        fclose(f);
-        return NULL;
-    }
-
-    *len = size;
-
-    uint8_t *buf = xmalloc(*len);
-
-    if (!fread(buf, *len, 1, f)) {
-        errnoprintf("fread(%s)", path);
-        fclose(f);
-        free(buf);
-        return NULL;
-    }
-
-    fclose(f);
-
-    return buf;
+    return read_file_f(f, len);
 }
 
 bool write_file(const char *path, const uint8_t *data, size_t len) {
     if (!path || !data)
         return false;
 
-    make_parent_dirs(path);
+    if (!make_parent_dirs(path))
+        return false;
 
     FILE *f = fopen(path, "wb");
     if (!f) {
@@ -205,7 +215,7 @@ static char *get_xdg_path(const char *xdg_variable, const char *fallback) {
 
 char *get_config_dir(void) {
     static char path[192];
-    char       *xdg_config = get_xdg_path("XDG_DATA_HOME", ".config");
+    char       *xdg_config = get_xdg_path("XDG_CONFIG_HOME", ".config");
 
     snprintf(path, sizeof(path), "%s/gbmulator", xdg_config);
     return path;

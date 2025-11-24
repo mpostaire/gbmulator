@@ -88,3 +88,5 @@ void app_link_set_port(uint16_t port);
 bool app_link_start(bool is_server);
 
 void app_link_disconnect(void);
+
+void app_update_camera_buffer(uint8_t *data, int width, int height, int row_stride, int rotation);

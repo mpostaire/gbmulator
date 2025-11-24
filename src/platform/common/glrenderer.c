@@ -315,9 +315,16 @@ void glrenderer_quit(glrenderer_t *renderer) {
     glDeleteBuffers(1, &renderer->vbo);
     glDeleteBuffers(1, &renderer->ebo);
 
-    if (shader_program_ref_counter == 1)
-        glDeleteProgram(shader_program);
-    shader_program_ref_counter--;
+    if (shader_program_ref_counter > 0) {
+        shader_program_ref_counter--;
+
+        if (shader_program_ref_counter == 0) {
+            glDeleteProgram(shader_program);
+            shader_program = 0;
+        }
+    }
+
+    free(renderer);
 }
 
 void glrenderer_render(glrenderer_t *renderer) {

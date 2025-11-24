@@ -437,10 +437,11 @@
 
             Module.mode = Number(elem.value);
             let mode_changed = Module.ccall('app_set_mode', 'boolean', ['number'], [Module.mode]);
-            Module.ccall('set_scale', 'void', ['number'], [scale]);
 
-            if (mode_changed)
+            if (mode_changed) {
+                Module.ccall('set_scale', 'void', ['number'], [scale]);
                 setTheme(Module.mode);
+            }
         };
     </script>
     {{{ SCRIPT }}}
