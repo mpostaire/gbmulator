@@ -155,7 +155,7 @@ void alrenderer_enable_dynamic_rate_control(ALboolean enabled) {
 
 static inline uint32_t dynamic_rate_control(void) {
     // https://github.com/kevinbchen/nes-emu/blob/a993b0a5c080bc689de5f41e1e492e9e219e14e6/src/audio.cpp#L39
-    int queue_size  = alrenderer_get_queue_size() / sizeof(gbmulator_apu_sample_t);
+    int queue_size      = alrenderer_get_queue_size() / sizeof(gbmulator_apu_sample_t);
     alr.ewma_queue_size = queue_size * DRC_ALPHA + alr.ewma_queue_size * (1.0 - DRC_ALPHA);
 
     // Adjust sample frequency to try and maintain a constant queue size
