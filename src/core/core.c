@@ -198,7 +198,7 @@ static inline void gbmulator_step_linked(gbmulator_t *emu) {
     emu->step(emu->impl);
 
     if (emu->cable.other_device)
-        emu->cable.other_device->step(emu->cable.other_device);
+        emu->cable.other_device->step(emu->cable.other_device->impl);
 }
 
 void gbmulator_step(gbmulator_t *emu) {

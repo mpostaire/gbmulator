@@ -7,22 +7,22 @@
 #include "../core_priv.h"
 
 // Because the documentation is incomplete and sources contradict each other, the implementation is based on SameBoy:
-// https://github.com/LIJI32/SameBoy/blob/master/Core/printer.c 
+// https://github.com/LIJI32/SameBoy/blob/master/Core/printer.c
 
 // TODO printing pictures taken with the gb camera isn't working
 
 #define MAGIC_1 0x88
 #define MAGIC_2 0x33
 
-#define STATUS_IDLE 0x00
-#define STATUS_DONE 0x04
+#define STATUS_IDLE     0x00
+#define STATUS_DONE     0x04
 #define STATUS_PRINTING 0x06
-#define STATUS_READY 0x08
+#define STATUS_READY    0x08
 
-#define PRINTER_IMG_WIDTH 160
-#define PRINTER_LINE_SIZE (PRINTER_IMG_WIDTH * 2)
+#define PRINTER_IMG_WIDTH         160
+#define PRINTER_LINE_SIZE         (PRINTER_IMG_WIDTH * 2)
 #define N_LINES_TO_PRINT(printer) ((printer)->ram_len / (PRINTER_LINE_SIZE / 8))
-#define LINE_PRINTING_TIME (GB_CPU_FREQ / 8) // 8 lines per second
+#define LINE_PRINTING_TIME        (GB_CPU_FREQ / 8) // 8 lines per second
 
 typedef enum {
     WAIT_MAGIC_1,
@@ -38,9 +38,9 @@ typedef enum {
 } printer_state_t;
 
 typedef enum {
-    INIT = 0x01,
-    PRINT = 0x02,
-    FILL = 0x04,
+    INIT   = 0x01,
+    PRINT  = 0x02,
+    FILL   = 0x04,
     STATUS = 0x0F
 } printer_cmd_t;
 
@@ -52,7 +52,9 @@ typedef enum {
 } gbprinter_color_t;
 
 gbprinter_t *gbprinter_init(gbmulator_t *base) {
-    return xcalloc(1, sizeof(gbprinter_t));
+    gbprinter_t *printer = xcalloc(1, sizeof(*printer));
+    printer->base        = base;
+    return printer;
 }
 
 void gbprinter_quit(gbprinter_t *printer) {
@@ -66,7 +68,7 @@ uint8_t *gbprinter_get_image(gbprinter_t *printer, size_t *height) {
 }
 
 void gbprinter_clear_image(gbprinter_t *printer) {
-    printer->image.height = 0;
+    printer->image.height           = 0;
     printer->image.allocated_height = 0;
     free(printer->image.data);
     printer->image.data = NULL; // important to avoid the xrealloc of the PRINT command to cause a double free (because it would realloc on an freed pointer)
@@ -74,7 +76,7 @@ void gbprinter_clear_image(gbprinter_t *printer) {
 
 static inline void render_line(gbprinter_t *printer) {
     for (uint8_t tile_number = 0; tile_number < 20; tile_number++) { // PRINTER_IMG_WIDTH / 8 == 20 tiles per line
-        uint16_t line_offset = ((printer->ram_printing_line_index % 8) * 2) + ((printer->ram_printing_line_index / 8) * PRINTER_LINE_SIZE);
+        uint16_t line_offset     = ((printer->ram_printing_line_index % 8) * 2) + ((printer->ram_printing_line_index / 8) * PRINTER_LINE_SIZE);
         uint16_t tileslice_index = line_offset + (tile_number * 16);
 
         uint8_t tileslice_lo = printer->ram[tileslice_index];
@@ -83,32 +85,32 @@ static inline void render_line(gbprinter_t *printer) {
         for (uint8_t bit_number = 0; bit_number < 8; bit_number++) {
             uint8_t bit_lo = GET_BIT(tileslice_lo, 7 - bit_number);
             uint8_t bit_hi = GET_BIT(tileslice_hi, 7 - bit_number);
-            uint8_t color = (bit_hi << 1) | bit_lo;
+            uint8_t color  = (bit_hi << 1) | bit_lo;
 
             // apply palette
             uint8_t palette = printer->cmd_data[2];
-            color = (palette >> (color << 1)) & 0x03;
+            color           = (palette >> (color << 1)) & 0x03;
 
-            int x = (tile_number * 8) + bit_number;
+            int x                = (tile_number * 8) + bit_number;
             int image_data_index = (printer->image.height * PRINTER_IMG_WIDTH * 4) + (x * 4);
             switch (color) {
             case COLOR_WHITE:
-                printer->image.data[image_data_index] = 0xFF;
+                printer->image.data[image_data_index]     = 0xFF;
                 printer->image.data[image_data_index + 1] = 0xFF;
                 printer->image.data[image_data_index + 2] = 0xFF;
                 break;
             case COLOR_LIGHT_GRAY:
-                printer->image.data[image_data_index] = 0xAA;
+                printer->image.data[image_data_index]     = 0xAA;
                 printer->image.data[image_data_index + 1] = 0xAA;
                 printer->image.data[image_data_index + 2] = 0xAA;
                 break;
             case COLOR_DARK_GRAY:
-                printer->image.data[image_data_index] = 0x55;
+                printer->image.data[image_data_index]     = 0x55;
                 printer->image.data[image_data_index + 1] = 0x55;
                 printer->image.data[image_data_index + 2] = 0x55;
                 break;
             case COLOR_BLACK:
-                printer->image.data[image_data_index] = 0x00;
+                printer->image.data[image_data_index]     = 0x00;
                 printer->image.data[image_data_index + 1] = 0x00;
                 printer->image.data[image_data_index + 2] = 0x00;
                 break;
@@ -153,10 +155,10 @@ static inline uint8_t check_ram_len(gbprinter_t *printer) {
 static void exec_command(gbprinter_t *printer) {
     switch (printer->cmd) {
     case INIT:
-        printer->status = STATUS_IDLE;
-        printer->ram_len = 0;
+        printer->status                  = STATUS_IDLE;
+        printer->ram_len                 = 0;
         printer->ram_printing_line_index = 0;
-        printer->got_eof = 0;
+        printer->got_eof                 = 0;
         break;
     case PRINT:
         if (!printer->got_eof || printer->cmd_data_len != 4) {
@@ -175,32 +177,35 @@ static void exec_command(gbprinter_t *printer) {
         // uint8_t exposure = printer->cmd_data[3] & 0x7F; // 0x00 -> -25% darkness, 0x7F -> +25% darkness
 
         printer->image.allocated_height = printer->image.height + N_LINES_TO_PRINT(printer);
-        printer->image.data = xrealloc(printer->image.data, printer->image.allocated_height * PRINTER_IMG_WIDTH * 4);
+        printer->image.data             = xrealloc(printer->image.data, printer->image.allocated_height * PRINTER_IMG_WIDTH * 4);
 
         printer->printing_line_time_remaining = LINE_PRINTING_TIME;
-        printer->delayed_status = STATUS_PRINTING;
+        printer->delayed_status               = STATUS_PRINTING;
         break;
     case FILL:
         printer->got_eof = printer->cmd_data_len == 0;
         if (!printer->got_eof) {
             for (uint16_t i = 0; i < printer->cmd_data_len; i++) {
                 if (printer->compress_flag) {
-                    uint8_t is_compressed_run = GET_BIT(printer->cmd_data[i], 7);
-                    uint16_t run_length = (printer->cmd_data[i] & 0x7F) + 1 + is_compressed_run;
+                    uint8_t  is_compressed_run = GET_BIT(printer->cmd_data[i], 7);
+                    uint16_t run_length        = (printer->cmd_data[i] & 0x7F) + 1 + is_compressed_run;
                     if (is_compressed_run) {
                         i++;
                         for (uint16_t j = 0; j < run_length; j++) {
-                            if (!check_ram_len(printer)) break;
+                            if (!check_ram_len(printer))
+                                break;
                             printer->ram[printer->ram_len++] = printer->cmd_data[i];
                         }
                     } else {
                         for (uint16_t j = 0; j < run_length; j++) {
-                            if (!check_ram_len(printer)) break;
+                            if (!check_ram_len(printer))
+                                break;
                             printer->ram[printer->ram_len++] = printer->cmd_data[++i];
                         }
                     }
                 } else {
-                    if (!check_ram_len(printer)) break;
+                    if (!check_ram_len(printer))
+                        break;
                     printer->ram[printer->ram_len++] = printer->cmd_data[i];
                 }
             }
@@ -236,7 +241,7 @@ void gbprinter_link_data_received(gbprinter_t *printer) {
         if (printer->sb == MAGIC_1)
             printer->state = WAIT_MAGIC_2;
         RESET_BIT(printer->status, 0); // reset invalid checksum bit
-        printer->sb = 0x00;
+        printer->sb       = 0x00;
         printer->checksum = 0;
         break;
     case WAIT_MAGIC_2:
@@ -251,27 +256,27 @@ void gbprinter_link_data_received(gbprinter_t *printer) {
     case WAIT_COMMAND:
         printer->cmd = printer->sb;
         printer->checksum += printer->sb;
-        printer->sb = 0x00;
+        printer->sb    = 0x00;
         printer->state = WAIT_COMPRESS_FLAG;
         break;
     case WAIT_COMPRESS_FLAG:
         printer->compress_flag = printer->sb & 0x01;
         printer->checksum += printer->sb;
-        printer->sb = 0x00;
+        printer->sb    = 0x00;
         printer->state = WAIT_DATA_LEN_LO;
         break;
     case WAIT_DATA_LEN_LO:
         printer->cmd_data_len = printer->sb;
         printer->checksum += printer->sb;
-        printer->sb = 0x00;
+        printer->sb    = 0x00;
         printer->state = WAIT_DATA_LEN_HI;
         break;
     case WAIT_DATA_LEN_HI:
         printer->cmd_data_len |= printer->sb << 8;
-        printer->cmd_data_len = MIN(printer->cmd_data_len, GBPRINTER_CHUNK_SIZE);
+        printer->cmd_data_len        = MIN(printer->cmd_data_len, GBPRINTER_CHUNK_SIZE);
         printer->cmd_data_recv_index = 0;
         printer->checksum += printer->sb;
-        printer->sb = 0x00;
+        printer->sb    = 0x00;
         printer->state = printer->cmd_data_len > 0 ? WAIT_DATA : WAIT_CHKSUM_LO;
         break;
     case WAIT_DATA:
@@ -283,21 +288,21 @@ void gbprinter_link_data_received(gbprinter_t *printer) {
         break;
     case WAIT_CHKSUM_LO:
         printer->checksum ^= printer->sb;
-        printer->sb = 0x00;
+        printer->sb    = 0x00;
         printer->state = WAIT_CHKSUM_HI;
         break;
     case WAIT_CHKSUM_HI:
         printer->checksum ^= printer->sb << 8;
         CHANGE_BIT(printer->status, 0, !!printer->checksum);
 
-        printer->sb = 0x81; // send alive byte
+        printer->sb    = 0x81; // send alive byte
         printer->state = SEND_STATUS;
         break;
     case SEND_STATUS:
         exec_command(printer);
         printer->sb = printer->status; // send status
         if (printer->delayed_status) {
-            printer->status = printer->delayed_status;
+            printer->status         = printer->delayed_status;
             printer->delayed_status = 0;
         }
         printer->state = WAIT_MAGIC_1;
