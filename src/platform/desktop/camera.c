@@ -5,13 +5,13 @@
 #include "../common/utils.h"
 
 static uint8_t *camera_data = NULL;
-static guint new_sample_src_id;
-static guint bus_error_src_id;
+static guint    new_sample_src_id;
+static guint    bus_error_src_id;
 
 static GstElement *pipeline;
 
-static gsize devices_len;
-static gchar **devices_paths;
+static gsize          devices_len;
+static gchar        **devices_paths;
 static GtkStringList *devices_names;
 
 static GstFlowReturn gstreamer_new_sample_cb(GstElement *sink, gpointer userdata) {
@@ -39,7 +39,7 @@ static GstFlowReturn gstreamer_new_sample_cb(GstElement *sink, gpointer userdata
 
 static void gstreamer_error_cb(GstBus *bus, GstMessage *msg, gpointer userdata) {
     GError *err;
-    gchar *debug_info;
+    gchar  *debug_info;
 
     gst_message_parse_error(msg, &err, &debug_info);
     eprintf("Error received from element %s: %s\n", GST_OBJECT_NAME(msg->src), err->message);
@@ -77,21 +77,21 @@ gboolean camera_find_devices(void) {
 
     GList *devices = gst_device_monitor_get_devices(monitor);
     for (GList *iter = devices; iter != NULL; iter = g_list_next(iter)) {
-        GstDevice *device = GST_DEVICE(iter->data);
-        GstStructure *props = gst_device_get_properties(device);
+        GstDevice    *device = GST_DEVICE(iter->data);
+        GstStructure *props  = gst_device_get_properties(device);
         if (g_strcmp0("v4l2", gst_structure_get_string(props, "device.api")))
             continue;
 
         const gchar *path = gst_structure_get_string(props, "object.path");
-        path = strchr(path, '/');
+        path              = strchr(path, '/');
         if (!path)
             return FALSE;
 
         const gchar *name = gst_structure_get_string(props, "node.description");
 
         devices_len++;
-        devices_paths = xrealloc(devices_paths, sizeof(*devices_paths) * devices_len);
-        size_t path_len = strnlen(path, 256) + 1;
+        devices_paths                  = xrealloc(devices_paths, sizeof(*devices_paths) * devices_len);
+        size_t path_len                = strnlen(path, 256) + 1;
         devices_paths[devices_len - 1] = xmalloc(path_len);
         strncpy(devices_paths[devices_len - 1], path, path_len);
 
@@ -127,13 +127,13 @@ gchar ***camera_get_devices_paths(gsize *len) {
 }
 
 gboolean camera_init(gchar *device_path) {
-    pipeline = gst_pipeline_new("webcam-pipeline");
-    GstElement *src = gst_element_factory_make("v4l2src", "video-source");
-    GstElement *videoconvert = gst_element_factory_make("videoconvert", "video-converter");
+    pipeline                    = gst_pipeline_new("webcam-pipeline");
+    GstElement *src             = gst_element_factory_make("v4l2src", "video-source");
+    GstElement *videoconvert    = gst_element_factory_make("videoconvert", "video-converter");
     GstElement *aspectratiocrop = gst_element_factory_make("aspectratiocrop", "aspect-ratio-crop");
-    GstElement *videoscale = gst_element_factory_make("videoscale", "video-scaler");
-    GstElement *capsfilter = gst_element_factory_make("capsfilter", "caps-filter");
-    GstElement *sink = gst_element_factory_make("appsink", "app-sink");
+    GstElement *videoscale      = gst_element_factory_make("videoscale", "video-scaler");
+    GstElement *capsfilter      = gst_element_factory_make("capsfilter", "caps-filter");
+    GstElement *sink            = gst_element_factory_make("appsink", "app-sink");
 
     if (!pipeline || !src || !videoconvert || !videoscale || !capsfilter || !sink) {
         eprintf("Failed creating gstreamer pipeline\n");

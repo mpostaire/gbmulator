@@ -166,9 +166,9 @@ static int exchange_info(int sfd, gbmulator_t *emu, gbmulator_mode_t *mode, bool
     uint8_t pkt[4] = { 0 };
     pkt[0]         = PKT_INFO;
     pkt[1]         = opts.mode;
-    pkt[1] |= opts.mode & PKT_CONFIG_CABLE_MASK;
-    pkt[1] |= opts.mode & PKT_CONFIG_IR_MASK;
-    pkt[1] |= opts.mode & PKT_CONFIG_COMPRESS_MASK;
+    pkt[1] |= PKT_CONFIG_CABLE_MASK;
+    pkt[1] |= PKT_CONFIG_IR_MASK;
+    pkt[1] |= PKT_CONFIG_COMPRESS_MASK;
     memcpy(&pkt[2], &checksum, 2);
 
     send(sfd, pkt, 4, 0);
@@ -265,11 +265,12 @@ static bool exchange_savestate(int sfd, gbmulator_t *emu, int can_compress, uint
 
 bool link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
     // TODO connection lost detection (return -1)
+
     *linked_emu                    = NULL;
     gbmulator_mode_t mode          = GBMULATOR_MODE_GB;
-    bool             can_compress  = 0;
-    bool             is_cable_link = 0;
-    bool             is_ir_link    = 0;
+    bool             can_compress  = false;
+    bool             is_cable_link = false;
+    bool             is_ir_link    = false;
     size_t           rom_size      = 0;
     uint8_t         *rom           = NULL;
     size_t           savestate_len;
@@ -283,17 +284,17 @@ bool link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
 
     // --- LINK BACKGROUND EMULATOR ---
 
-    gbmulator_options_t opts;
-    gbmulator_get_options(emu, &opts);
-    opts.mode     = mode;
-    opts.rom      = rom;
-    opts.rom_size = rom_size;
+    gbmulator_options_t opts = {
+        .mode     = mode,
+        .rom      = rom,
+        .rom_size = rom_size
+    };
 
-    if (rom) {
+    if (opts.rom) {
         *linked_emu = gbmulator_init(&opts);
         if (!*linked_emu) {
             eprintf("received invalid or corrupted PKT_ROM\n");
-            free(rom);
+            free(opts.rom);
             close(sfd);
             return false;
         }
@@ -320,13 +321,18 @@ bool link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
 }
 
 bool link_exchange_joypad(int sfd, gbmulator_t *emu, gbmulator_t *linked_emu) {
-    char buf[2];
+    uint16_t joypad_state = gbmulator_get_joypad_state(emu);
+
+    uint8_t buf[3];
     buf[0] = PKT_JOYPAD;
-    buf[1] = gbmulator_get_joypad_state(emu);
-    send(sfd, buf, 2, 0);
+    buf[1] = joypad_state;
+    buf[2] = joypad_state >> 8;
+    send(sfd, buf, sizeof(buf), 0);
+
+    buf[0] = 0xFF;
 
     do {
-        if (!receive(sfd, buf, 2, 0)) {
+        if (!receive(sfd, buf, sizeof(buf), 0)) {
             printf("Link cable disconnected\n");
             gbmulator_link_disconnect(emu, GBMULATOR_LINK_CABLE);
             gbmulator_link_disconnect(emu, GBMULATOR_LINK_IR);
@@ -338,7 +344,7 @@ bool link_exchange_joypad(int sfd, gbmulator_t *emu, gbmulator_t *linked_emu) {
             eprintf("received packet type %d but expected %d (ignored)\n", buf[0], PKT_JOYPAD);
     } while (buf[0] != PKT_JOYPAD);
 
-    gbmulator_set_joypad_state(linked_emu, buf[1]);
+    gbmulator_set_joypad_state(linked_emu, (buf[2] << 8) | buf[1]);
 
     return true;
 }

@@ -198,7 +198,7 @@ static inline void gbmulator_step_linked(gbmulator_t *emu) {
     emu->step(emu->impl);
 
     if (emu->cable.other_device)
-        emu->cable.other_device->step(emu->cable.other_device);
+        emu->cable.other_device->step(emu->cable.other_device->impl);
 }
 
 void gbmulator_step(gbmulator_t *emu) {
@@ -361,17 +361,21 @@ void gbmulator_link_connect(gbmulator_t *emu, gbmulator_t *other, gbmulator_link
 }
 
 void gbmulator_link_disconnect(gbmulator_t *emu, gbmulator_link_t type) {
-    if (!emu || !emu->cable.other_device)
+    if (!emu)
         return;
 
     switch (type) {
     case GBMULATOR_LINK_CABLE:
-        emu->cable.other_device->cable.other_device = NULL;
-        emu->cable.other_device                     = NULL;
+        if (emu->cable.other_device) {
+            emu->cable.other_device->cable.other_device = NULL;
+            emu->cable.other_device                     = NULL;
+        }
         break;
     case GBMULATOR_LINK_IR:
-        emu->ir.other_device->ir.other_device = NULL;
-        emu->ir.other_device                  = NULL;
+        if (emu->ir.other_device) {
+            emu->ir.other_device->ir.other_device = NULL;
+            emu->ir.other_device                  = NULL;
+        }
         break;
     default:
         break;
