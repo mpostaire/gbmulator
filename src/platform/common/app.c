@@ -726,16 +726,16 @@ __attribute_used__ bool app_link_start(bool is_server) {
         app.sfd = link_connect_to_server(app.config.link_host, app.config.link_port);
 
     gbmulator_t *new_linked_emu;
-    if (app.sfd > 0 && link_init_transfer(app.sfd, app.emu, &new_linked_emu)) {
+    if (app.sfd >= 0 && link_init_transfer(app.sfd, app.emu, &new_linked_emu)) {
         app.linked_emu = new_linked_emu;
         set_steps_per_frame();
 
         gbmulator_set_apu_speed(app.emu, 1.0f);
+        return true;
     } else {
         app.sfd = -1; // closed by link_init_transfer in case of error
+        return false;
     }
-
-    return true;
 }
 
 __attribute_used__ void app_link_disconnect(void) {
