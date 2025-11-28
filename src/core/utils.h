@@ -56,7 +56,7 @@
 #include <stdbit.h>
 #else
 static inline unsigned int stdc_count_ones_impl(unsigned long long v) {
-    int count = 0;
+    unsigned int count = 0;
     for (uint8_t i = 0; i < sizeof(v) * 8; i++) {
         if (v & 1)
             count++;
@@ -66,7 +66,7 @@ static inline unsigned int stdc_count_ones_impl(unsigned long long v) {
 }
 
 static inline unsigned int stdc_first_trailing_one_impl(unsigned long long v) {
-    int idx = 0;
+    unsigned int idx = 0;
     while ((v & 1) == 0) {
         v >>= 1;
         idx++;
