@@ -9,7 +9,6 @@ find_package (oboe REQUIRED CONFIG)
 
 include(FetchContent)
 
-# TODO maybe add oboe as an openal backend
 FetchContent_Declare(
     openal-soft
     GIT_REPOSITORY https://github.com/kcat/openal-soft.git
@@ -46,21 +45,18 @@ set(EGL_INCLUDE  ${NDK_SYSROOT}/usr/include/EGL)
 set(GBMULATOR_ROOT_DIR ${CMAKE_SOURCE_DIR}/../../../../../../..)
 set(GBMULATOR_BUILD_DIR ${GBMULATOR_ROOT_DIR}/build/android/${CMAKE_ANDROID_ARCH})
 add_custom_command(
-        OUTPUT ${GBMULATOR_BUILD_DIR}/common/common.a
-        OUTPUT ${GBMULATOR_BUILD_DIR}/core/core.a
-        WORKING_DIRECTORY ${GBMULATOR_ROOT_DIR}
-        COMMAND make common CC=${CMAKE_C_COMPILER} PLATFORM_ODIR=${GBMULATOR_BUILD_DIR} "EXTRA_CFLAGS=-fPIC --target=${CMAKE_C_COMPILER_TARGET} -I${openal-soft_SOURCE_DIR}/include -I${GLES_INCLUDE} -I${EGL_INCLUDE} -I${ZLIB_INCLUDE}"
-        COMMENT "Building core and common static libraries via Makefile"
+    OUTPUT ${GBMULATOR_BUILD_DIR}/gbmulator.a
+    WORKING_DIRECTORY ${GBMULATOR_ROOT_DIR}
+    COMMAND make PLATFORM=android CC=${CMAKE_C_COMPILER} BOOTROM_ODIR=${GBMULATOR_ROOT_DIR}/build/bootroms ROOT_ODIR=${GBMULATOR_BUILD_DIR} "EXTRA_CFLAGS=-fPIC --target=${CMAKE_C_COMPILER_TARGET} -I${openal-soft_SOURCE_DIR}/include -I${GLES_INCLUDE} -I${EGL_INCLUDE} -I${ZLIB_INCLUDE}"
 )
-add_custom_target(common_lib DEPENDS ${GBMULATOR_BUILD_DIR}/core/core.a ${GBMULATOR_BUILD_DIR}/common/common.a)
-add_dependencies(gbmulator common_lib)
+add_custom_target(gbmulator_lib DEPENDS ${GBMULATOR_BUILD_DIR}/gbmulator.a)
+add_dependencies(gbmulator gbmulator_lib)
 
 # Configure libraries CMake uses to link your target library.
 target_link_libraries(gbmulator
     oboe::oboe
     OpenAL::OpenAL
-    ${GBMULATOR_BUILD_DIR}/core/core.a
-    ${GBMULATOR_BUILD_DIR}/common/common.a
+    ${GBMULATOR_BUILD_DIR}/gbmulator.a
     # The game activity
     game-activity::game-activity_static
     # EGL and other dependent libraries required for drawing

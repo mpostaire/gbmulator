@@ -87,7 +87,9 @@ def generate_tests(tests_root, category, max_depth, output_file,
                     continue
                 continue
 
-            dmg_ref_images = ["/".join(x.split("/")[1:]) for x in reference_image_getter("GBMULATOR_MODE_GB", full_rom_path)]
+            a = reference_image_getter("GBMULATOR_MODE_GB", full_rom_path)
+
+            dmg_ref_images = ["/".join(x.split("/")[1:]) for x in a]
             cgb_ref_images = ["/".join(x.split("/")[1:]) for x in reference_image_getter("GBMULATOR_MODE_GBC", full_rom_path)]
 
             if not dmg_ref_images and not cgb_ref_images:
