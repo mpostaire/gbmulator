@@ -12,7 +12,8 @@
 #include <dirent.h>
 #include <MagickWand/MagickWand.h>
 
-#include "../core/gb/gb_priv.h"
+#include "../common/utils.h"
+#include "../../core/gb/gb_priv.h"
 
 #define BOLD         "\033[1m"
 #define COLOR_OFF    "\033[0m"
@@ -77,13 +78,13 @@ static void load_bootroms(void) {
 static uint8_t *get_rom(const char *path, size_t *rom_size) {
     const char *dot = strrchr(path, '.');
     if (!dot || (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) && strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))))) {
-        eprintf("%s: wrong file extension (expected .gb or .gbc)\n", path);
+        printf("%s: wrong file extension (expected .gb or .gbc)\n", path);
         return NULL;
     }
 
     FILE *f = fopen(path, "rb");
     if (!f) {
-        errnoprintf("opening file %s", path);
+        printf("fopen(%s): %s\n", path, strerror(errno));
         return NULL;
     }
 
@@ -93,7 +94,7 @@ static uint8_t *get_rom(const char *path, size_t *rom_size) {
 
     uint8_t *buf = xmalloc(len);
     if (!fread(buf, len, 1, f)) {
-        errnoprintf("reading %s", path);
+        printf("fread(%s): %s\n", path, strerror(errno));
         fclose(f);
         return NULL;
     }
@@ -102,56 +103,6 @@ static uint8_t *get_rom(const char *path, size_t *rom_size) {
     if (rom_size)
         *rom_size = len;
     return buf;
-}
-
-static int dir_exists(const char *directory_path) {
-    DIR *dir = opendir(directory_path);
-    if (dir == NULL) {
-        if (errno == ENOENT)
-            return 0;
-        errnoprintf("opendir");
-        exit(EXIT_FAILURE);
-    }
-    closedir(dir);
-    return 1;
-}
-
-static void mkdirp(const char *directory_path) {
-    char buf[256];
-    snprintf(buf, sizeof(buf), "%s", directory_path);
-    size_t len = strlen(buf);
-
-    if (buf[len - 1] == '/')
-        buf[len - 1] = 0;
-
-    for (char *p = buf + 1; *p; p++) {
-        if (*p == '/') {
-            *p = 0;
-            if (mkdir(buf, 0744) && errno != EEXIST) {
-                perror("mkdir");
-                exit(EXIT_FAILURE);
-            }
-            *p = '/';
-        }
-    }
-
-    if (mkdir(buf, 0744) && errno != EEXIST) {
-        perror("mkdir");
-        exit(EXIT_FAILURE);
-    }
-}
-
-static void make_parent_dirs(const char *filepath) {
-    char *last_slash       = strrchr(filepath, '/');
-    int   last_slash_index = last_slash ? (int) (last_slash - filepath) : -1;
-
-    if (last_slash_index != -1) {
-        char directory_path[last_slash_index + 1];
-        snprintf(directory_path, last_slash_index + 1, "%s", filepath);
-
-        if (!dir_exists(directory_path))
-            mkdirp(directory_path);
-    }
 }
 
 static void magick_wand_error(MagickWand *wand) {
@@ -397,7 +348,7 @@ static void *run_tests(UNUSED void *arg) {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        eprintf("Usage: %s /path/to/test/root/dir\n", argv[0]);
+        printf("Usage: %s /path/to/test/root/dir\n", argv[0]);
         return EXIT_FAILURE;
     }
 
@@ -426,7 +377,7 @@ int main(int argc, char **argv) {
     pthread_t *threads = xcalloc(num_cpus, sizeof(*threads));
     for (size_t i = 0; i < num_cpus; i++) {
         if (pthread_create(&threads[i], NULL, run_tests, NULL)) {
-            errnoprintf("");
+            perror("pthread_create");
             return EXIT_FAILURE;
         }
     }
