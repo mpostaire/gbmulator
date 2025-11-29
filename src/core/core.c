@@ -81,7 +81,7 @@ gbmulator_t *gbmulator_init(const gbmulator_options_t *opts) {
         return NULL;
     }
 
-    emu->rewind_stack.states = xmalloc(N_REWIND_STATES * /*get_savestate_expected_len(emu)*/ 100000);
+    // emu->rewind_stack.states = xmalloc(N_REWIND_STATES * /*get_savestate_expected_len(emu)*/ 100000);
     emu->rewind_stack.head   = -1;
 
     return emu;
@@ -150,9 +150,9 @@ static void rewind_push(gbmulator_t *emu) {
     if (!emu)
         return;
 
-    emu->rewind_stack.head = (emu->rewind_stack.head + 1) % N_REWIND_STATES;
-    if (emu->rewind_stack.len < N_REWIND_STATES)
-        emu->rewind_stack.len++;
+    // emu->rewind_stack.head = (emu->rewind_stack.head + 1) % N_REWIND_STATES;
+    // if (emu->rewind_stack.len < N_REWIND_STATES)
+    //     emu->rewind_stack.len++;
 
     // TODO
     // gbmulator_savestate_t *savestate = emu->get_savestate(emu->impl, &emu->rewind_stack.state_size, false); // TODO specify the dest buffer to avoid redundant memcpy
@@ -164,15 +164,15 @@ static void rewind_pop(gbmulator_t *emu) {
     if (!emu)
         return;
 
-    eprintf("rewind pop");
-    if (emu->rewind_stack.len == 0)
-        return;
+    // eprintf("rewind pop");
+    // if (emu->rewind_stack.len == 0)
+    //     return;
 
-    eprintf("gb_load_savestate pop %ld", emu->rewind_stack.head);
-    emu->load_savestate(emu->impl, &emu->rewind_stack.states[emu->rewind_stack.head * emu->rewind_stack.state_size], emu->rewind_stack.state_size);
+    // eprintf("gb_load_savestate pop %ld", emu->rewind_stack.head);
+    // emu->load_savestate(emu->impl, &emu->rewind_stack.states[emu->rewind_stack.head * emu->rewind_stack.state_size], emu->rewind_stack.state_size);
 
-    emu->rewind_stack.head = emu->rewind_stack.head == 0 ? (N_REWIND_STATES - 1) : emu->rewind_stack.head - 1;
-    emu->rewind_stack.len--;
+    // emu->rewind_stack.head = emu->rewind_stack.head == 0 ? (N_REWIND_STATES - 1) : emu->rewind_stack.head - 1;
+    // emu->rewind_stack.len--;
     // if len == 0, set head back to -1??
 }
 

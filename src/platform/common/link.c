@@ -305,9 +305,14 @@ bool link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
         *linked_emu   = gbmulator_init(&opts);
     }
 
-    if (!gbmulator_load_savestate(*linked_emu, savestate_data, savestate_len)) {
+    bool is_savestate_loaded = gbmulator_load_savestate(*linked_emu, savestate_data, savestate_len);
+    free(savestate_data);
+
+    if (!is_savestate_loaded) {
         eprintf("received invalid or corrupted savestate\n");
         close(sfd);
+        gbmulator_quit(*linked_emu);
+        *linked_emu = NULL;
         return false;
     }
 
@@ -316,7 +321,6 @@ bool link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
     if (is_ir_link)
         gbmulator_link_connect(emu, *linked_emu, GBMULATOR_LINK_IR);
 
-    free(savestate_data);
     return true;
 }
 
@@ -334,10 +338,6 @@ bool link_exchange_joypad(int sfd, gbmulator_t *emu, gbmulator_t *linked_emu) {
     do {
         if (!receive(sfd, buf, sizeof(buf), 0)) {
             printf("Link cable disconnected\n");
-            gbmulator_link_disconnect(emu, GBMULATOR_LINK_CABLE);
-            gbmulator_link_disconnect(emu, GBMULATOR_LINK_IR);
-            gbmulator_quit(linked_emu);
-            close(sfd);
             return false;
         }
         if (buf[0] != PKT_JOYPAD)
