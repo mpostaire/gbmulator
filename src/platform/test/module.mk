@@ -5,7 +5,8 @@ BIN := $(ODIR)/tester
 CFLAGS += $(shell pkg-config --cflags zlib opengl openal MagickWand) -fanalyzer -O0 -ggdb3 -DDISABLE_COLOR_CORRECTION
 LDLIBS += $(shell pkg-config --libs zlib opengl openal MagickWand) -lpthread
 
-# CFLAGS += -Wl,--wrap=_gba_bus_read_byte -Wl,--wrap=_gba_bus_read_half -Wl,--wrap=_gba_bus_read_word -Wl,--wrap=_gba_bus_write_byte -Wl,--wrap=_gba_bus_write_half -Wl,--wrap=_gba_bus_write_word
+# For gba tests io mocking
+CFLAGS += -Wl,--wrap=_gba_bus_read_byte -Wl,--wrap=_gba_bus_read_half -Wl,--wrap=_gba_bus_read_word -Wl,--wrap=_gba_bus_write_byte -Wl,--wrap=_gba_bus_write_half -Wl,--wrap=_gba_bus_write_word
 
 TEST_ROMS=$(SDIR)/platform/$(PLATFORM)/test_roms
 
@@ -23,7 +24,7 @@ _clean:
 $(SDIR)/platform/$(PLATFORM)/tests.txt: $(SDIR)/platform/$(PLATFORM)/tests_generator.py $(TEST_ROMS)
 	cd $(dir $<) && python3 $(notdir $<) $(notdir $(TEST_ROMS))
 
-$(BIN): $(SDIR)/platform/$(PLATFORM)/tests.txt $(OBJ)
+$(BIN): $(SDIR)/platform/$(PLATFORM)/tests.txt $(OBJ) $(SDIR)/platform/$(PLATFORM)/ARM7TDMI
 	$(CC) -o $(BIN) $(OBJ) $(CFLAGS) $(LDLIBS)
 
 $(TEST_ROMS):
@@ -45,5 +46,8 @@ $(TEST_ROMS):
 		-fill "#000000" -opaque "#104000" \
 		$(TEST_ROMS)/docboy-test-suite/success.png
 	rm -rf $(SDIR)/platform/$(PLATFORM)/game-boy-test-roms-v6.0.zip $(SDIR)/platform/$(PLATFORM)/docboy-test-suite.zip $(SDIR)/platform/$(PLATFORM)/docboy-test-suite-master
+
+$(SDIR)/platform/$(PLATFORM)/ARM7TDMI:
+	git -C $(dir $@) clone https://github.com/SingleStepTests/ARM7TDMI.git 
 
 .PHONY: _test _clean
