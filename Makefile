@@ -12,6 +12,8 @@ CFLAGS  := -std=gnu23 -O3 -I$(SDIR) \
 LDLIBS  :=
 
 ifeq ($(DEBUG),1)
+CFLAGS += -ggdb -O0
+else ifeq ($(DEBUG),2)
 CFLAGS += -ggdb -O0 -DDEBUG
 else
 CFLAGS += -DNDEBUG

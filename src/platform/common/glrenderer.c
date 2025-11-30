@@ -222,7 +222,7 @@ static void create_buffers(glrenderer_t *renderer) {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-void create_buttons(glrenderer_t *renderer) {
+static void create_buttons(glrenderer_t *renderer) {
     if (glIsTexture(renderer->btn_atlas_tex))
         return;
 

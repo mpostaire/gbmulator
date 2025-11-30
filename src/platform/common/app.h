@@ -79,6 +79,8 @@ void app_printer_render(void);
 
 bool app_printer_reset(void);
 
+bool app_printer_save(const char *path);
+
 bool app_has_camera(void);
 
 void app_link_set_host(const char *host);

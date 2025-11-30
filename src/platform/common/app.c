@@ -4,6 +4,7 @@
 #include "app.h"
 #include "utils.h"
 #include "link.h"
+#include "bmp.h"
 #include "glrenderer.h"
 #include "alrenderer.h"
 
@@ -399,6 +400,10 @@ static void on_new_frame_cb(const uint8_t *pixels) {
     glrenderer_update_screen(app.renderer, pixels);
 }
 
+// TODO renderer buttons scaled smaller when in GBA mode
+// TODO printer shows white only but saving as image works better (it prints something but with an offset)
+// TODO mode auto detect is buggy
+
 __attribute_used__ bool app_load_cartridge(uint8_t *rom, size_t rom_size) {
     if (!app.renderer)
         return false;
@@ -415,6 +420,9 @@ __attribute_used__ bool app_load_cartridge(uint8_t *rom, size_t rom_size) {
         .palette                 = app.config.color_palette
     };
     gbmulator_t *new_emu = gbmulator_init(&opts);
+    // TODO move mode detection inside gbmulator_init and change opts.mode into opts.prefered_mode
+    //      ---> mode always auto detected
+    //      ---> gba and printer can only reset to itself, gb/gbc can reset to each other
     if (!new_emu) {
         if (opts.mode == GBMULATOR_MODE_GBA)
             opts.mode = GBMULATOR_MODE_GBC;
@@ -626,7 +634,6 @@ __attribute_used__ bool app_set_binding(bool is_gamepad, gbmulator_joypad_t joyp
     return true;
 }
 
-// TODO link cable (therefore also printer) not working anymore --> git bisect: maybe gb bit shifter is wrong
 static void on_printer_new_line_cb(const uint8_t *pixels, size_t current_height, size_t total_height) {
     if (!app.printer || !app.printer_renderer)
         return;
@@ -693,9 +700,37 @@ __attribute_used__ bool app_printer_reset(void) {
     free(pixels);
 
     if (app.printer)
-        todo("gbprinter_clear_image(app.printer)");
+        todo("gbprinter_clear_image(app.printer)"); // gbmulator_reset(app.printer, 0);
 
     return true;
+}
+
+__attribute_used__ bool app_printer_save(const char *path) {
+    if (!app.printer)
+        return false;
+
+    // TODO change gbmulator_get_save to allow setting dest buffer to reduce allocs and copies
+    size_t   printer_heigth = 0;
+    uint8_t *printer_data   = gbmulator_get_save(app.printer, &printer_heigth);
+
+    bmp_image_t *image = xmalloc(sizeof(*image) + GBPRINTER_IMG_WIDTH * printer_heigth * 4);
+    image->w           = GBPRINTER_IMG_WIDTH;
+    image->h           = printer_heigth;
+
+    memcpy(image->data, printer_data, image->w * image->h * 4);
+    // free(printer_data); // gbmulator_get_save on printer is special: it returns internal pointer --> do not free it
+
+    size_t   data_len = 0;
+    uint8_t *data     = bmp_encode(image, &data_len);
+    free(image);
+
+    bool ret = false;
+    if (data && write_file(path, data, data_len))
+        ret = true;
+
+    free(data);
+
+    return ret;
 }
 
 __attribute_used__ bool app_has_camera(void) {

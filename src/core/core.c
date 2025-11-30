@@ -82,7 +82,7 @@ gbmulator_t *gbmulator_init(const gbmulator_options_t *opts) {
     }
 
     // emu->rewind_stack.states = xmalloc(N_REWIND_STATES * /*get_savestate_expected_len(emu)*/ 100000);
-    emu->rewind_stack.head   = -1;
+    emu->rewind_stack.head = -1;
 
     return emu;
 }
