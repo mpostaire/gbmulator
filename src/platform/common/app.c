@@ -252,9 +252,8 @@ __attribute_used__ void app_run_frame(void) {
             if (!link_exchange_joypad(app.sfd, app.emu, app.linked_emu)) {
                 app_link_disconnect();
                 set_steps_per_frame();
-                // TODO callback to notify gui
-                // set_link_gui_actions(TRUE, TRUE);
-                // show_toast("Link Cable disconnected");
+                if (app.config.on_link_disconnected)
+                    app.config.on_link_disconnected();
             }
         }
 

@@ -7,6 +7,7 @@
 
 typedef bool (*keycode_filter_t)(unsigned int keycode);
 typedef void (*link_touch_button_cb_t)(void *user_data);
+typedef void (*link_disconnected_cb_t)(void);
 
 typedef struct {
     gbmulator_mode_t   mode;
@@ -25,6 +26,7 @@ typedef struct {
     keycode_filter_t       keycode_filter;
     link_touch_button_cb_t on_link_button_touched;
     void                  *on_link_button_touched_user_data;
+    link_disconnected_cb_t on_link_disconnected;
 
     bool disable_save_config_to_file;
 } config_t;

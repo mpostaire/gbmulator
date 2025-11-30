@@ -27,6 +27,7 @@
 static bool     keycode_filter(unsigned int keyval);
 static bool     load_cartridge(void);
 static gboolean loop_func(gpointer user_data);
+static void     on_link_disconnected(void);
 
 // clang-format off
 static const config_t default_config = {
@@ -65,7 +66,9 @@ static const config_t default_config = {
         [GBMULATOR_JOYPAD_R]      = GDK_KEY_KP_5,
         [GBMULATOR_JOYPAD_L]      = GDK_KEY_KP_4,
     },
-    .keycode_filter = keycode_filter
+    .keycode_filter = keycode_filter,
+
+    .on_link_disconnected = on_link_disconnected
 };
 // clang-format on
 
@@ -138,6 +141,7 @@ static void show_link_emu_dialog(GSimpleAction *action, GVariant *parameter, gpo
 static void show_printer_window(GSimpleAction *action, GVariant *parameter, gpointer app);
 static void ask_restart_emulator(GSimpleAction *action, GVariant *parameter, gpointer app);
 static void toggle_pause(GSimpleAction *action, GVariant *parameter, gpointer app);
+static void set_link_gui_actions(bool enabled, bool link_is_gb);
 
 static bool keycode_filter(unsigned int keyval) {
     switch (keyval) {
@@ -377,6 +381,9 @@ static void disconnect_emu(GSimpleAction *action, GVariant *parameter, gpointer 
         g_cancellable_cancel(link_task_cancellable);
     else
         app_link_disconnect();
+
+    set_link_gui_actions(true, true);
+    show_toast("Link Cable disconnected");
 }
 
 static void set_link_gui_actions(bool enabled, bool link_is_gb) {
@@ -410,6 +417,11 @@ static void set_link_gui_actions(bool enabled, bool link_is_gb) {
             g_action_map_remove_action(G_ACTION_MAP(app), "play_pause");
         }
     }
+}
+
+static void on_link_disconnected(void) {
+    show_toast("Link Cable disconnected");
+    set_link_gui_actions(true, true);
 }
 
 static void start_link_thread_cb(GObject *source_object, GAsyncResult *res, gpointer data) {
