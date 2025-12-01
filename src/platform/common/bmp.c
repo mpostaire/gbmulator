@@ -223,9 +223,7 @@ bmp_image_t *bmp_decode(uint8_t *data, size_t size) {
     uint32_t b_bitshift = get_shift_from_mask(v5_header.b_bitmask);
     uint32_t a_bitshift = get_shift_from_mask(v5_header.a_bitmask);
 
-    bmp_image_t *img = malloc(sizeof(*img) + (v5_header.w * v5_header.h * (v5_header.depth / 4)));
-    if (!img)
-        return NULL;
+    bmp_image_t *img = xmalloc(sizeof(*img) + (v5_header.w * v5_header.h * (v5_header.depth / 4)));
 
     // bmp data rows are stored bottom to top and 0-padded at the end to the nearest 4-byte boundary
     uint8_t padding = (v5_header.w * (v5_header.depth / 4)) % 4;

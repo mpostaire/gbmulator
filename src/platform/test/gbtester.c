@@ -75,34 +75,14 @@ static void load_bootroms(void) {
     }
 }
 
-static uint8_t *get_rom(const char *path, size_t *rom_size) {
+static uint8_t *load_rom(const char *path, size_t *rom_size) {
     const char *dot = strrchr(path, '.');
     if (!dot || (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) && strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))))) {
         printf("%s: wrong file extension (expected .gb or .gbc)\n", path);
         return NULL;
     }
 
-    FILE *f = fopen(path, "rb");
-    if (!f) {
-        printf("fopen(%s): %s\n", path, strerror(errno));
-        return NULL;
-    }
-
-    fseek(f, 0, SEEK_END);
-    size_t len = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    uint8_t *buf = xmalloc(len);
-    if (!fread(buf, len, 1, f)) {
-        printf("fread(%s): %s\n", path, strerror(errno));
-        fclose(f);
-        return NULL;
-    }
-    fclose(f);
-
-    if (rom_size)
-        *rom_size = len;
-    return buf;
+    return read_file(path, rom_size);
 }
 
 static void magick_wand_error(MagickWand *wand) {
@@ -121,9 +101,9 @@ static int save_and_check_result(test_t *test, gb_t *gb, char *rom_path) {
     int   path_until_extension_len = strrchr(rom_path, '.') - path_from_category;
     int   new_dir_path_len         = rom_name - 1 - path_from_category;
 
-    char *reference_old_path = NULL;
-    char *reference_new_path = NULL;
-    char *diff_path          = NULL;
+    char reference_old_path[BUF_SIZE + 2];
+    char reference_new_path[BUF_SIZE];
+    char diff_path[BUF_SIZE];
 
     char  result_path[BUF_SIZE];
     char *label  = test->mode == GBMULATOR_MODE_GBC ? "cgb" : "dmg";
@@ -131,10 +111,6 @@ static int save_and_check_result(test_t *test, gb_t *gb, char *rom_path) {
     snprintf(result_path, sizeof(result_path), "results/%.*s-%s%s.result.png", path_until_extension_len, path_from_category, suffix, label);
 
     if (test->reference_image_filename) {
-        reference_old_path = xmalloc(BUF_SIZE + 2);
-        reference_new_path = xmalloc(BUF_SIZE);
-        diff_path          = xmalloc(BUF_SIZE);
-
         snprintf(reference_old_path, BUF_SIZE + 2, "%s/%s", root_path, test->reference_image_filename);
 
         char *reference_extension          = strrchr(test->reference_image_filename, '.');
@@ -181,13 +157,6 @@ static int save_and_check_result(test_t *test, gb_t *gb, char *rom_path) {
         DestroyMagickWand(reference_wand);
         DestroyMagickWand(diff_wand);
         DestroyPixelWand(pixel_wand);
-
-        if (reference_old_path)
-            free(reference_old_path);
-        if (reference_new_path)
-            free(reference_new_path);
-        if (diff_path)
-            free(diff_path);
 
         // rtc3test.gb test for sub-second-writes can have a little margin of error:
         // because the emulator goes very fast, there is an error of 0.1 ms in the sub second writes test of rtc3test.gb
@@ -256,7 +225,7 @@ static int run_test(test_t *test) {
         exit(EXIT_FAILURE);
 
     size_t   rom_size = 0;
-    uint8_t *rom      = get_rom(rom_path, &rom_size);
+    uint8_t *rom      = load_rom(rom_path, &rom_size);
     if (!rom)
         return 0;
 

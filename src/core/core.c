@@ -103,6 +103,8 @@ void gbmulator_quit(gbmulator_t *emu) {
 }
 
 bool gbmulator_reset(gbmulator_t *emu, gbmulator_mode_t new_mode) {
+    // TODO this could be simplified and allocs removed if gb/gba had reset functions that keep rom and save data
+
     if (!emu)
         return false;
 

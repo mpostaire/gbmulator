@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "../../core/gba/gba_priv.h"
+#include "../common/utils.h"
 
 #define MAGIC 0xD33DBAE0
 
@@ -14,24 +15,24 @@ typedef enum {
     REG_IDX_INVALID_MODE
 } cpu_mode_reg_indexes_t;
 
-static uint8_t regs_mode_hashes[] = {
-    REG_IDX_USR_SYS,
-    REG_IDX_FIQ,
-    REG_IDX_IRQ,
-    REG_IDX_SVC,
-    REG_IDX_INVALID_MODE,
-    REG_IDX_INVALID_MODE,
-    REG_IDX_INVALID_MODE,
-    REG_IDX_ABT,
-    REG_IDX_INVALID_MODE,
-    REG_IDX_INVALID_MODE,
-    REG_IDX_INVALID_MODE,
-    REG_IDX_UND,
-    REG_IDX_INVALID_MODE,
-    REG_IDX_INVALID_MODE,
-    REG_IDX_INVALID_MODE,
-    REG_IDX_USR_SYS
-};
+// static uint8_t regs_mode_hashes[] = {
+//     REG_IDX_USR_SYS,
+//     REG_IDX_FIQ,
+//     REG_IDX_IRQ,
+//     REG_IDX_SVC,
+//     REG_IDX_INVALID_MODE,
+//     REG_IDX_INVALID_MODE,
+//     REG_IDX_INVALID_MODE,
+//     REG_IDX_ABT,
+//     REG_IDX_INVALID_MODE,
+//     REG_IDX_INVALID_MODE,
+//     REG_IDX_INVALID_MODE,
+//     REG_IDX_UND,
+//     REG_IDX_INVALID_MODE,
+//     REG_IDX_INVALID_MODE,
+//     REG_IDX_INVALID_MODE,
+//     REG_IDX_USR_SYS
+// };
 
 typedef struct {
     bool is_done;
@@ -128,7 +129,7 @@ static bool cpu_equals(gba_cpu_t *expected, gba_cpu_t *got, bool is_arm_str_ldr)
     for (size_t j = 0; j < sizeof(*expected->banked_regs_13_14) / sizeof(**expected->banked_regs_13_14); j++) {
         if (expected->banked_regs_13_14[REG_IDX_FIQ][j] != got->banked_regs_13_14[REG_IDX_FIQ][j]) {
             success = false;
-            printf("R%zu (bank %zu) expected 0x%08X, got 0x%08X\n", j + 13, REG_IDX_FIQ, expected->banked_regs_13_14[REG_IDX_FIQ][j], got->banked_regs_13_14[REG_IDX_FIQ][j]);
+            printf("R%zu (bank %zu) expected 0x%08X, got 0x%08X\n", j + 13, (size_t) REG_IDX_FIQ, expected->banked_regs_13_14[REG_IDX_FIQ][j], got->banked_regs_13_14[REG_IDX_FIQ][j]);
         }
     }
 
@@ -264,21 +265,8 @@ static bool gba_cpu_tester_run(const char *path) {
     if (!path)
         return false;
 
-    FILE *f = fopen(path, "r");
-    if (!f) {
-        errnoprintf("fopen");
-        return false;
-    }
-
-    fseek(f, 0, SEEK_END);
-    size_t len = ftell(f);
-    rewind(f);
-
-    uint8_t *test_data = xmalloc(len + 1);
-
-    fread(test_data, 1, len, f);
-    test_data[len] = '\0';
-    fclose(f);
+    size_t   len;
+    uint8_t *test_data = read_file(path, &len);
 
     uint8_t *test_data_ptr = test_data;
 
@@ -296,8 +284,8 @@ static bool gba_cpu_tester_run(const char *path) {
 
     uint32_t errors = 0;
     for (uint32_t i = 0; i < num_tests; i++) {
-        uint8_t *start_ptr = test_data_ptr;
-        uint32_t full_sz   = parse_u32(&test_data_ptr);
+        // uint8_t *start_ptr = test_data_ptr;
+        /* uint32_t full_sz = */ parse_u32(&test_data_ptr);
 
         parse_state(&test_data_ptr, &((gba_t *) gba_cpu_tester.init->impl)->cpu);
         parse_state(&test_data_ptr, &((gba_t *) gba_cpu_tester.expected->impl)->cpu);
@@ -305,7 +293,7 @@ static bool gba_cpu_tester_run(const char *path) {
         parse_opcodes(&test_data_ptr, &((gba_t *) gba_cpu_tester.init->impl)->cpu);
 
         uint8_t mode = CPSR_GET_MODE(&((gba_t *) gba_cpu_tester.init->impl)->cpu);
-        uint8_t bank = regs_mode_hashes[mode & 0x0F];
+        // uint8_t bank = regs_mode_hashes[mode & 0x0F];
 
         if (i < 6)
             continue;

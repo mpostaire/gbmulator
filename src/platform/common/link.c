@@ -95,16 +95,15 @@ int link_start_server(const char *port) {
     printf("Link server waiting for client on port %s...\n", port);
 
     // wait for a client connection
-    socklen_t        client_addr_len = sizeof(struct sockaddr_in6); // take the largest possible size regardless of IP version
-    struct sockaddr *client_addr     = xmalloc(client_addr_len);
-    int              client_sfd      = accept(server_sfd, client_addr, &client_addr_len);
+    struct sockaddr_in6 client_addr;
+    socklen_t           client_addr_len = sizeof(client_addr);
+    int                 client_sfd      = accept(server_sfd, (struct sockaddr *) &client_addr, &client_addr_len);
     if (client_sfd == -1)
         return -1;
 
     close(server_sfd); // don't accept additional connections
     server_sfd = -1;
-    print_connected_to(client_addr);
-    free(client_addr);
+    print_connected_to((struct sockaddr *) &client_addr);
 
     return client_sfd;
 }
