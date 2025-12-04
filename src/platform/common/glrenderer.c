@@ -55,6 +55,8 @@ struct glrenderer_t {
     GLuint vbo; // Vertex Buffer Object
     GLuint ebo; // Element Buffer Object
 
+    GLuint shader_program;
+
     GLint u_tex;
     GLint u_proj;
 
@@ -65,6 +67,7 @@ struct glrenderer_t {
     GLsizei viewport_w;
     GLsizei viewport_h;
 
+    GLushort vertex_indices[(GLRENDERER_OBJ_ID_SCREEN + 1) * VERTEX_INDICES_OBJ_STRIDE];
     rect_t   btn_coords[GLRENDERER_OBJ_ID_SCREEN];
     uint32_t visible_btns_mask;
     GLfloat  tints[GLRENDERER_OBJ_ID_SCREEN + 1];
@@ -75,10 +78,7 @@ struct glrenderer_t {
     GLfloat clear_b;
 };
 
-static GLuint shader_program             = 0;
-static size_t shader_program_ref_counter = 0;
-
-static rect_t btn_atlas_regions[] = {
+static const rect_t btn_atlas_regions[] = {
     [GLRENDERER_OBJ_ID_A]               = { .x = 48, .y = 16, .w = 16, .h = 16 },
     [GLRENDERER_OBJ_ID_B]               = { .x = 48, .y = 32, .w = 16, .h = 16 },
     [GLRENDERER_OBJ_ID_SELECT]          = { .x = 32, .y = 48, .w = 32, .h = 8  },
@@ -96,8 +96,6 @@ static rect_t btn_atlas_regions[] = {
     [GLRENDERER_OBJ_ID_DPAD_DOWN_RIGHT] = { .x = 32, .y = 32, .w = 16, .h = 16 },
     [GLRENDERER_OBJ_ID_DPAD_DOWN_LEFT]  = { .x = 0,  .y = 32, .w = 16, .h = 16 }
 };
-
-static GLushort vertex_indices[(GLRENDERER_OBJ_ID_SCREEN + 1) * VERTEX_INDICES_OBJ_STRIDE] = {};
 
 static GLuint compile_shader(GLenum type, const char *source) {
     // Create Vertex Shader Object and get its reference
@@ -190,30 +188,30 @@ static void create_buffers(glrenderer_t *renderer) {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, renderer->ebo);
 
     GLushort j = 0;
-    for (size_t i = 0; i < sizeof(vertex_indices) / sizeof(*vertex_indices);) {
-        vertex_indices[i++] = j++;
-        vertex_indices[i++] = j++;
-        vertex_indices[i++] = j++;
-        vertex_indices[i++] = j++;
-        vertex_indices[i++] = 0xFFFF; // primitive restart index
+    for (size_t i = 0; i < sizeof(renderer->vertex_indices) / sizeof(*renderer->vertex_indices);) {
+        renderer->vertex_indices[i++] = j++;
+        renderer->vertex_indices[i++] = j++;
+        renderer->vertex_indices[i++] = j++;
+        renderer->vertex_indices[i++] = j++;
+        renderer->vertex_indices[i++] = 0xFFFF; // primitive restart index
     }
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(vertex_indices), vertex_indices, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(renderer->vertex_indices), renderer->vertex_indices, GL_STATIC_DRAW);
 
     GLsizei vertex_stride = 6 * sizeof(GLfloat);
 
-    GLint position_loc = glGetAttribLocation(shader_program, "position");
+    GLint position_loc = glGetAttribLocation(renderer->shader_program, "position");
     glVertexAttribPointer(position_loc, 2, GL_FLOAT, GL_FALSE, vertex_stride, (GLvoid *) 0);
     glEnableVertexAttribArray(position_loc);
 
-    GLint tex_coord_loc = glGetAttribLocation(shader_program, "tex_coord");
+    GLint tex_coord_loc = glGetAttribLocation(renderer->shader_program, "tex_coord");
     glVertexAttribPointer(tex_coord_loc, 2, GL_FLOAT, GL_FALSE, vertex_stride, (GLvoid *) (2 * sizeof(GLfloat)));
     glEnableVertexAttribArray(tex_coord_loc);
 
-    GLint tint_loc = glGetAttribLocation(shader_program, "tint");
+    GLint tint_loc = glGetAttribLocation(renderer->shader_program, "tint");
     glVertexAttribPointer(tint_loc, 1, GL_FLOAT, GL_FALSE, vertex_stride, (GLvoid *) (4 * sizeof(GLfloat)));
     glEnableVertexAttribArray(tint_loc);
 
-    GLint alpha_loc = glGetAttribLocation(shader_program, "alpha");
+    GLint alpha_loc = glGetAttribLocation(renderer->shader_program, "alpha");
     glVertexAttribPointer(alpha_loc, 1, GL_FLOAT, GL_FALSE, vertex_stride, (GLvoid *) (5 * sizeof(GLfloat)));
     glEnableVertexAttribArray(alpha_loc);
 
@@ -258,13 +256,11 @@ glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, uint32_t visib
 
     glEnable(GL_PRIMITIVE_RESTART_FIXED_INDEX);
 
-    if (!shader_program)
-        shader_program = create_shader_program(vertex_shader_source, fragment_shader_source);
-    shader_program_ref_counter++;
-
     glrenderer_t *renderer = calloc(1, sizeof(*renderer));
     if (!renderer)
         return NULL;
+
+    renderer->shader_program = create_shader_program(vertex_shader_source, fragment_shader_source);
 
     renderer->visible_btns_mask = visible_btns_mask;
 
@@ -277,12 +273,12 @@ glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, uint32_t visib
     if (renderer->visible_btns_mask)
         create_buttons(renderer);
 
-    glUseProgram(shader_program);
+    glUseProgram(renderer->shader_program);
 
-    renderer->u_tex = glGetUniformLocation(shader_program, "tex");
+    renderer->u_tex = glGetUniformLocation(renderer->shader_program, "tex");
     glUniform1i(renderer->u_tex, 0);
 
-    renderer->u_proj = glGetUniformLocation(shader_program, "proj");
+    renderer->u_proj = glGetUniformLocation(renderer->shader_program, "proj");
 
     for (glrenderer_obj_id_t obj_id = 0; obj_id <= GLRENDERER_OBJ_ID_SCREEN; obj_id++) {
         renderer->tints[obj_id]  = 1.0f;
@@ -315,14 +311,7 @@ void glrenderer_quit(glrenderer_t *renderer) {
     glDeleteBuffers(1, &renderer->vbo);
     glDeleteBuffers(1, &renderer->ebo);
 
-    if (shader_program_ref_counter > 0) {
-        shader_program_ref_counter--;
-
-        if (shader_program_ref_counter == 0) {
-            glDeleteProgram(shader_program);
-            shader_program = 0;
-        }
-    }
+    glDeleteProgram(renderer->shader_program);
 
     free(renderer);
 }
@@ -342,11 +331,11 @@ void glrenderer_render(glrenderer_t *renderer) {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, renderer->ebo);
 
     glBindTexture(GL_TEXTURE_2D, renderer->screen_tex);
-    glDrawElements(GL_TRIANGLE_STRIP, VERTEX_INDICES_OBJ_STRIDE, GL_UNSIGNED_SHORT, (GLvoid *) (GLRENDERER_OBJ_ID_SCREEN * VERTEX_INDICES_OBJ_STRIDE * sizeof(*vertex_indices)));
+    glDrawElements(GL_TRIANGLE_STRIP, VERTEX_INDICES_OBJ_STRIDE, GL_UNSIGNED_SHORT, (GLvoid *) (GLRENDERER_OBJ_ID_SCREEN * VERTEX_INDICES_OBJ_STRIDE * sizeof(*renderer->vertex_indices)));
 
     if (renderer->visible_btns_mask) {
         glBindTexture(GL_TEXTURE_2D, renderer->btn_atlas_tex);
-        glDrawElements(GL_TRIANGLE_STRIP, (sizeof(vertex_indices) / sizeof(*vertex_indices)) - VERTEX_INDICES_OBJ_STRIDE, GL_UNSIGNED_SHORT, 0);
+        glDrawElements(GL_TRIANGLE_STRIP, (sizeof(renderer->vertex_indices) / sizeof(*renderer->vertex_indices)) - VERTEX_INDICES_OBJ_STRIDE, GL_UNSIGNED_SHORT, 0);
     }
 
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -356,6 +345,7 @@ void glrenderer_render(glrenderer_t *renderer) {
     glBindVertexArray(0);
 }
 
+// TODO every function to update render screen or smth else is wrong: we are not sure which context is active
 void glrenderer_update_screen(glrenderer_t *renderer, const GLvoid *pixels) {
     if (!renderer)
         return;
