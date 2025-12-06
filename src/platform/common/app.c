@@ -679,7 +679,9 @@ __attribute_used__ void app_printer_disconnect(void) {
 
     gbmulator_link_disconnect(app.emu, GBMULATOR_LINK_CABLE);
     gbmulator_quit(app.printer);
+    glrenderer_quit(app.printer_renderer);
     app.printer = NULL;
+    app.printer_renderer = NULL;
 }
 
 __attribute_used__ void app_printer_render(void) {

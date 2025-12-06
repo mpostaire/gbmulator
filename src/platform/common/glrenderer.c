@@ -68,7 +68,7 @@ struct glrenderer_t {
     GLsizei viewport_h;
 
     GLushort vertex_indices[(GLRENDERER_OBJ_ID_SCREEN + 1) * VERTEX_INDICES_OBJ_STRIDE];
-    rect_t   btn_coords[GLRENDERER_OBJ_ID_SCREEN];
+    rect_t   obj_coords[GLRENDERER_OBJ_ID_SCREEN + 1];
     uint32_t visible_btns_mask;
     GLfloat  tints[GLRENDERER_OBJ_ID_SCREEN + 1];
     GLfloat  alphas[GLRENDERER_OBJ_ID_SCREEN + 1];
@@ -76,6 +76,10 @@ struct glrenderer_t {
     GLfloat clear_r;
     GLfloat clear_g;
     GLfloat clear_b;
+
+    bool     resize_screen_requested;
+    bool     resize_viewport_requested;
+    uint32_t update_obj_requests;
 };
 
 static const rect_t btn_atlas_regions[] = {
@@ -243,7 +247,85 @@ static void create_buttons(glrenderer_t *renderer) {
     }
 }
 
-// TODO try printer renderer to check it doesn't break it
+static inline void update_orthographic_proj(glrenderer_t *renderer, GLfloat left, GLfloat right, GLfloat bottom, GLfloat top, GLfloat near, GLfloat far) {
+    // clang-format off
+    GLfloat proj_data[] = {
+        2.0f / (right - left),            0.0f,                             0.0f,                         0.0f,
+        0.0f,                             2.0f / (top - bottom),            0.0f,                         0.0f,
+        0.0f,                             0.0f,                             -2.0f / (far - near),         0.0f,
+        -(right + left) / (right - left), -(top + bottom) / (top - bottom), -(far + near) / (far - near), 1.0f
+    };
+    // clang-format on
+
+    glUniformMatrix4fv(renderer->u_proj, 1, GL_FALSE, proj_data);
+}
+
+static inline void update_vertices(glrenderer_t *renderer, GLint obj_id, rect_t *coords) {
+    GLfloat u0, v0;
+    GLfloat u1, v1;
+
+    GLfloat tint  = renderer->tints[obj_id];
+    GLfloat alpha = 0.0f;
+
+    if (obj_id == GLRENDERER_OBJ_ID_SCREEN) {
+        u0    = 0.0f;
+        u1    = 1.0f;
+        v0    = 0.0f;
+        v1    = 1.0f;
+        alpha = 1.0f;
+    } else {
+        u0 = btn_atlas_regions[obj_id].x / (GLfloat) renderer->btn_atlas_tex_w;
+        v0 = btn_atlas_regions[obj_id].y / (GLfloat) renderer->btn_atlas_tex_h;
+        u1 = (btn_atlas_regions[obj_id].x + btn_atlas_regions[obj_id].w) / (GLfloat) renderer->btn_atlas_tex_w;
+        v1 = (btn_atlas_regions[obj_id].y + btn_atlas_regions[obj_id].h) / (GLfloat) renderer->btn_atlas_tex_h;
+        if (renderer->visible_btns_mask & (1 << obj_id))
+            alpha = renderer->alphas[obj_id];
+    }
+
+    // clang-format off
+    GLfloat vertices[N_VERTEX_PER_OBJ] = {
+        //        x,                      y,            u,  v,  tint, alpha
+        coords->x,              coords->y + coords->h,  u0, v1, tint, alpha, // bottom-left
+        coords->x + coords->w,  coords->y + coords->h,  u1, v1, tint, alpha, // bottom-right
+        coords->x,              coords->y,              u0, v0, tint, alpha, // top-left
+        coords->x + coords->w,  coords->y,              u1, v0, tint, alpha  // top-right
+    };
+    // clang-format on
+
+    GLintptr offset = obj_id * sizeof(vertices);
+
+    glBindBuffer(GL_ARRAY_BUFFER, renderer->vbo);
+    glBufferSubData(GL_ARRAY_BUFFER, offset, sizeof(vertices), vertices);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+static void resize_screen(glrenderer_t *renderer) {
+    glBindTexture(GL_TEXTURE_2D, renderer->screen_tex);
+    // NULL as pixel data: opengl allocates texture but doesn't copy any pixel data
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, renderer->screen_tex_w, renderer->screen_tex_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    renderer->resize_screen_requested = false;
+}
+
+static void resize_viewport(glrenderer_t *renderer) {
+    glViewport(0, 0, renderer->viewport_w, renderer->viewport_h);
+    update_orthographic_proj(renderer, 0, renderer->viewport_w, renderer->viewport_h, 0, -1, 1);
+
+    for (glrenderer_obj_id_t obj_id = 0; obj_id <= GLRENDERER_OBJ_ID_SCREEN; obj_id++)
+        update_vertices(renderer, obj_id, &renderer->obj_coords[obj_id]);
+
+    renderer->resize_viewport_requested = false;
+}
+
+static void update_objs(glrenderer_t *renderer) {
+    for (glrenderer_obj_id_t obj_id = 0; obj_id <= GLRENDERER_OBJ_ID_SCREEN; obj_id++)
+        if (renderer->update_obj_requests & (1 << obj_id))
+            update_vertices(renderer, obj_id, &renderer->obj_coords[obj_id]);
+
+    renderer->update_obj_requests = 0;
+}
+
 glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, uint32_t visible_btns_mask) {
     static bool is_first_init = true;
     if (is_first_init) {
@@ -320,6 +402,15 @@ void glrenderer_render(glrenderer_t *renderer) {
     if (!renderer)
         return;
 
+    if (renderer->resize_screen_requested)
+        resize_screen(renderer);
+
+    if (renderer->resize_viewport_requested)
+        resize_viewport(renderer);
+
+    if (renderer->update_obj_requests)
+        update_objs(renderer);
+
     glClearColor(renderer->clear_r, renderer->clear_g, renderer->clear_b, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -359,72 +450,17 @@ void glrenderer_resize_screen(glrenderer_t *renderer, GLsizei width, GLsizei hei
     if (!renderer || (width == renderer->screen_tex_w && height == renderer->screen_tex_h))
         return;
 
-    glBindTexture(GL_TEXTURE_2D, renderer->screen_tex);
-    // NULL as pixel data: opengl allocates texture but doesn't copy any pixel data
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    renderer->resize_screen_requested = true;
 
     renderer->screen_tex_w = width;
     renderer->screen_tex_h = height;
 }
 
-static inline void update_orthographic_proj(glrenderer_t *renderer, GLfloat left, GLfloat right, GLfloat bottom, GLfloat top, GLfloat near, GLfloat far) {
-    // clang-format off
-    GLfloat proj_data[] = {
-        2.0f / (right - left),            0.0f,                             0.0f,                         0.0f,
-        0.0f,                             2.0f / (top - bottom),            0.0f,                         0.0f,
-        0.0f,                             0.0f,                             -2.0f / (far - near),         0.0f,
-        -(right + left) / (right - left), -(top + bottom) / (top - bottom), -(far + near) / (far - near), 1.0f
-    };
-    // clang-format on
-
-    glUniformMatrix4fv(renderer->u_proj, 1, GL_FALSE, proj_data);
-}
-
-static inline void update_vertices(glrenderer_t *renderer, GLint obj_id, rect_t *coords) {
-    GLfloat u0, v0;
-    GLfloat u1, v1;
-
-    GLfloat tint  = renderer->tints[obj_id];
-    GLfloat alpha = 0.0f;
-
-    if (obj_id == GLRENDERER_OBJ_ID_SCREEN) {
-        u0    = 0.0f;
-        u1    = 1.0f;
-        v0    = 0.0f;
-        v1    = 1.0f;
-        alpha = 1.0f;
-    } else {
-        u0 = btn_atlas_regions[obj_id].x / (GLfloat) renderer->btn_atlas_tex_w;
-        v0 = btn_atlas_regions[obj_id].y / (GLfloat) renderer->btn_atlas_tex_h;
-        u1 = (btn_atlas_regions[obj_id].x + btn_atlas_regions[obj_id].w) / (GLfloat) renderer->btn_atlas_tex_w;
-        v1 = (btn_atlas_regions[obj_id].y + btn_atlas_regions[obj_id].h) / (GLfloat) renderer->btn_atlas_tex_h;
-        if (renderer->visible_btns_mask & (1 << obj_id))
-            alpha = renderer->alphas[obj_id];
-    }
-
-    // clang-format off
-    GLfloat vertices[N_VERTEX_PER_OBJ] = {
-        //        x,                      y,            u,  v,  tint, alpha
-        coords->x,              coords->y + coords->h,  u0, v1, tint, alpha, // bottom-left
-        coords->x + coords->w,  coords->y + coords->h,  u1, v1, tint, alpha, // bottom-right
-        coords->x,              coords->y,              u0, v0, tint, alpha, // top-left
-        coords->x + coords->w,  coords->y,              u1, v0, tint, alpha  // top-right
-    };
-    // clang-format on
-
-    GLintptr offset = obj_id * sizeof(vertices);
-
-    glBindBuffer(GL_ARRAY_BUFFER, renderer->vbo);
-    glBufferSubData(GL_ARRAY_BUFFER, offset, sizeof(vertices), vertices);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-}
-
 glrenderer_obj_id_t glrenderer_get_obj_at_coord(glrenderer_t *renderer, uint32_t x, uint32_t y) {
-    for (glrenderer_obj_id_t obj_id = 0; obj_id < GLRENDERER_OBJ_ID_SCREEN; obj_id++) {
+    for (glrenderer_obj_id_t obj_id = 0; obj_id <= GLRENDERER_OBJ_ID_SCREEN; obj_id++) {
         if (!(renderer->visible_btns_mask & (1 << obj_id)))
             continue;
-        if (x < renderer->btn_coords[obj_id].x || x > renderer->btn_coords[obj_id].x + renderer->btn_coords[obj_id].w || y < renderer->btn_coords[obj_id].y || y > renderer->btn_coords[obj_id].y + renderer->btn_coords[obj_id].h)
+        if (x < renderer->obj_coords[obj_id].x || x > renderer->obj_coords[obj_id].x + renderer->obj_coords[obj_id].w || y < renderer->obj_coords[obj_id].y || y > renderer->obj_coords[obj_id].y + renderer->obj_coords[obj_id].h)
             continue;
         return obj_id;
     }
@@ -436,167 +472,160 @@ void glrenderer_resize_viewport(glrenderer_t *renderer, GLsizei width, GLsizei h
     if (!renderer)
         return;
 
-    glViewport(0, 0, width, height);
+    renderer->resize_viewport_requested = true;
 
     renderer->viewport_w = width;
     renderer->viewport_h = height;
-
-    update_orthographic_proj(renderer, 0, renderer->viewport_w, renderer->viewport_h, 0, -1, 1);
 
     // fit screen_tex inside viewport while keeping aspect ratio
     GLfloat image_ratio    = (GLfloat) renderer->screen_tex_w / (GLfloat) renderer->screen_tex_h;
     GLfloat viewport_ratio = (GLfloat) renderer->viewport_w / (GLfloat) renderer->viewport_h;
 
-    rect_t screen_coords;
-
     if (image_ratio > viewport_ratio) {
-        screen_coords.w = renderer->viewport_w;
-        screen_coords.h = screen_coords.w / image_ratio;
+        renderer->obj_coords[GLRENDERER_OBJ_ID_SCREEN].w = renderer->viewport_w;
+        renderer->obj_coords[GLRENDERER_OBJ_ID_SCREEN].h = renderer->obj_coords[GLRENDERER_OBJ_ID_SCREEN].w / image_ratio;
     } else {
-        screen_coords.h = renderer->viewport_h;
-        screen_coords.w = screen_coords.h * image_ratio;
+        renderer->obj_coords[GLRENDERER_OBJ_ID_SCREEN].h = renderer->viewport_h;
+        renderer->obj_coords[GLRENDERER_OBJ_ID_SCREEN].w = renderer->obj_coords[GLRENDERER_OBJ_ID_SCREEN].h * image_ratio;
     }
 
-    screen_coords.x = (renderer->viewport_w - screen_coords.w) / 2.0;
+    renderer->obj_coords[GLRENDERER_OBJ_ID_SCREEN].x = (renderer->viewport_w - renderer->obj_coords[GLRENDERER_OBJ_ID_SCREEN].w) / 2.0;
     if (renderer->visible_btns_mask)
-        screen_coords.y = 0;
+        renderer->obj_coords[GLRENDERER_OBJ_ID_SCREEN].y = 0;
     else
-        screen_coords.y = (renderer->viewport_h - screen_coords.h) / 2.0;
-
-    update_vertices(renderer, GLRENDERER_OBJ_ID_SCREEN, &screen_coords);
+        renderer->obj_coords[GLRENDERER_OBJ_ID_SCREEN].y = (renderer->viewport_h - renderer->obj_coords[GLRENDERER_OBJ_ID_SCREEN].h) / 2.0;
 
     if (renderer->visible_btns_mask) {
-        GLfloat btn_scale = screen_coords.w / (GLfloat) renderer->screen_tex_w;
+        GLfloat btn_scale = renderer->obj_coords[GLRENDERER_OBJ_ID_SCREEN].w / (GLfloat) renderer->screen_tex_w;
 
-        renderer->btn_coords[GLRENDERER_OBJ_ID_SELECT] = (rect_t) {
+        renderer->obj_coords[GLRENDERER_OBJ_ID_SELECT] = (rect_t) {
             .x = 1.25f * (btn_atlas_regions[GLRENDERER_OBJ_ID_SELECT].w * btn_scale),
             .y = renderer->viewport_h - 2.0f * (btn_atlas_regions[GLRENDERER_OBJ_ID_SELECT].h * btn_scale),
             .w = btn_atlas_regions[GLRENDERER_OBJ_ID_SELECT].w * btn_scale,
             .h = btn_atlas_regions[GLRENDERER_OBJ_ID_SELECT].h * btn_scale
         };
-        renderer->btn_coords[GLRENDERER_OBJ_ID_START] = (rect_t) {
+        renderer->obj_coords[GLRENDERER_OBJ_ID_START] = (rect_t) {
             .x = renderer->viewport_w - 2.25f * (btn_atlas_regions[GLRENDERER_OBJ_ID_START].w * btn_scale),
             .y = renderer->viewport_h - 2.0f * (btn_atlas_regions[GLRENDERER_OBJ_ID_START].h * btn_scale),
             .w = btn_atlas_regions[GLRENDERER_OBJ_ID_START].w * btn_scale,
             .h = btn_atlas_regions[GLRENDERER_OBJ_ID_START].h * btn_scale
         };
 
-        renderer->btn_coords[GLRENDERER_OBJ_ID_R] = (rect_t) {
+        renderer->obj_coords[GLRENDERER_OBJ_ID_R] = (rect_t) {
             .x = renderer->viewport_w - 1.5f * (btn_atlas_regions[GLRENDERER_OBJ_ID_R].w * btn_scale),
-            .y = (renderer->viewport_h - screen_coords.h) + (btn_atlas_regions[GLRENDERER_OBJ_ID_L].h * btn_scale),
+            .y = (renderer->viewport_h - renderer->obj_coords[GLRENDERER_OBJ_ID_SCREEN].h) + (btn_atlas_regions[GLRENDERER_OBJ_ID_L].h * btn_scale),
             .w = btn_atlas_regions[GLRENDERER_OBJ_ID_R].w * btn_scale,
             .h = btn_atlas_regions[GLRENDERER_OBJ_ID_R].h * btn_scale
         };
-        renderer->btn_coords[GLRENDERER_OBJ_ID_L] = (rect_t) {
+        renderer->obj_coords[GLRENDERER_OBJ_ID_L] = (rect_t) {
             .x = 0.5f * (btn_atlas_regions[GLRENDERER_OBJ_ID_L].w * btn_scale),
-            .y = (renderer->viewport_h - screen_coords.h) + (btn_atlas_regions[GLRENDERER_OBJ_ID_L].h * btn_scale),
+            .y = (renderer->viewport_h - renderer->obj_coords[GLRENDERER_OBJ_ID_SCREEN].h) + (btn_atlas_regions[GLRENDERER_OBJ_ID_L].h * btn_scale),
             .w = btn_atlas_regions[GLRENDERER_OBJ_ID_L].w * btn_scale,
             .h = btn_atlas_regions[GLRENDERER_OBJ_ID_L].h * btn_scale
         };
 
         rect_t dpad_rect = {
             .x = btn_atlas_regions[GLRENDERER_OBJ_ID_DPAD_CENTER].w * btn_scale,
-            .y = renderer->btn_coords[GLRENDERER_OBJ_ID_SELECT].y - 4.0f * (btn_atlas_regions[GLRENDERER_OBJ_ID_DPAD_CENTER].h * btn_scale),
+            .y = renderer->obj_coords[GLRENDERER_OBJ_ID_SELECT].y - 4.0f * (btn_atlas_regions[GLRENDERER_OBJ_ID_DPAD_CENTER].h * btn_scale),
             .w = btn_atlas_regions[GLRENDERER_OBJ_ID_DPAD_CENTER].w * btn_scale,
             .h = btn_atlas_regions[GLRENDERER_OBJ_ID_DPAD_CENTER].h * btn_scale
         };
 
-        renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_UP_LEFT] = (rect_t) {
+        renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_UP_LEFT] = (rect_t) {
             .x = dpad_rect.x,
             .y = dpad_rect.y,
             .w = dpad_rect.w,
             .h = dpad_rect.h
         };
 
-        renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_LEFT] = (rect_t) {
+        renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_LEFT] = (rect_t) {
             .x = dpad_rect.x,
-            .y = dpad_rect.y + renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_UP_LEFT].h,
+            .y = dpad_rect.y + renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_UP_LEFT].h,
             .w = dpad_rect.w,
             .h = dpad_rect.h
         };
-        renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_CENTER] = (rect_t) {
-            .x = renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_LEFT].x + dpad_rect.w,
-            .y = renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_LEFT].y,
+        renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_CENTER] = (rect_t) {
+            .x = renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_LEFT].x + dpad_rect.w,
+            .y = renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_LEFT].y,
             .w = dpad_rect.w,
             .h = dpad_rect.h
         };
-        renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_RIGHT] = (rect_t) {
-            .x = renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_CENTER].x + dpad_rect.w,
-            .y = renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_CENTER].y,
+        renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_RIGHT] = (rect_t) {
+            .x = renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_CENTER].x + dpad_rect.w,
+            .y = renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_CENTER].y,
             .w = dpad_rect.w,
             .h = dpad_rect.h
         };
-        renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_UP] = (rect_t) {
-            .x = renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_CENTER].x,
+        renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_UP] = (rect_t) {
+            .x = renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_CENTER].x,
             .y = dpad_rect.y,
             .w = dpad_rect.w,
             .h = dpad_rect.h
         };
-        renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_DOWN] = (rect_t) {
-            .x = renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_CENTER].x,
-            .y = renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_CENTER].y + renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_CENTER].h,
+        renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_DOWN] = (rect_t) {
+            .x = renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_CENTER].x,
+            .y = renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_CENTER].y + renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_CENTER].h,
             .w = dpad_rect.w,
             .h = dpad_rect.h
         };
 
-        renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_UP_RIGHT] = (rect_t) {
-            .x = renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_UP].x + renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_UP].w,
+        renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_UP_RIGHT] = (rect_t) {
+            .x = renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_UP].x + renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_UP].w,
             .y = dpad_rect.y,
             .w = dpad_rect.w,
             .h = dpad_rect.h
         };
-        renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_DOWN_LEFT] = (rect_t) {
+        renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_DOWN_LEFT] = (rect_t) {
             .x = dpad_rect.x,
-            .y = renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_RIGHT].y + renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_RIGHT].h,
+            .y = renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_RIGHT].y + renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_RIGHT].h,
             .w = dpad_rect.w,
             .h = dpad_rect.h
         };
-        renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_DOWN_RIGHT] = (rect_t) {
-            .x = renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_CENTER].x + dpad_rect.w,
-            .y = renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_RIGHT].y + renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_RIGHT].h,
+        renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_DOWN_RIGHT] = (rect_t) {
+            .x = renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_CENTER].x + dpad_rect.w,
+            .y = renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_RIGHT].y + renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_RIGHT].h,
             .w = dpad_rect.w,
             .h = dpad_rect.h
         };
 
-        renderer->btn_coords[GLRENDERER_OBJ_ID_A] = (rect_t) {
+        renderer->obj_coords[GLRENDERER_OBJ_ID_A] = (rect_t) {
             .x = renderer->viewport_w - 2.0f * (btn_atlas_regions[GLRENDERER_OBJ_ID_A].w * btn_scale),
-            .y = renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_UP].y + 0.8f * btn_atlas_regions[GLRENDERER_OBJ_ID_A].w,
+            .y = renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_UP].y + 0.8f * btn_atlas_regions[GLRENDERER_OBJ_ID_A].w,
             .w = btn_atlas_regions[GLRENDERER_OBJ_ID_A].w * btn_scale,
             .h = btn_atlas_regions[GLRENDERER_OBJ_ID_A].h * btn_scale
         };
-        renderer->btn_coords[GLRENDERER_OBJ_ID_B] = (rect_t) {
-            .x = renderer->btn_coords[GLRENDERER_OBJ_ID_A].x - btn_atlas_regions[GLRENDERER_OBJ_ID_B].w * btn_scale,
-            .y = renderer->btn_coords[GLRENDERER_OBJ_ID_DPAD_DOWN].y - 0.8f * btn_atlas_regions[GLRENDERER_OBJ_ID_B].w,
+        renderer->obj_coords[GLRENDERER_OBJ_ID_B] = (rect_t) {
+            .x = renderer->obj_coords[GLRENDERER_OBJ_ID_A].x - btn_atlas_regions[GLRENDERER_OBJ_ID_B].w * btn_scale,
+            .y = renderer->obj_coords[GLRENDERER_OBJ_ID_DPAD_DOWN].y - 0.8f * btn_atlas_regions[GLRENDERER_OBJ_ID_B].w,
             .w = btn_atlas_regions[GLRENDERER_OBJ_ID_B].w * btn_scale,
             .h = btn_atlas_regions[GLRENDERER_OBJ_ID_B].h * btn_scale
         };
 
-        renderer->btn_coords[GLRENDERER_OBJ_ID_LINK] = (rect_t) {
+        renderer->obj_coords[GLRENDERER_OBJ_ID_LINK] = (rect_t) {
             .x = 0.5f * renderer->viewport_w - 0.5f * (btn_atlas_regions[GLRENDERER_OBJ_ID_LINK].w * btn_scale),
-            .y = (renderer->viewport_h - screen_coords.h) + 0.5f * (btn_atlas_regions[GLRENDERER_OBJ_ID_LINK].h * btn_scale),
+            .y = (renderer->viewport_h - renderer->obj_coords[GLRENDERER_OBJ_ID_SCREEN].h) + 0.5f * (btn_atlas_regions[GLRENDERER_OBJ_ID_LINK].h * btn_scale),
             .w = btn_atlas_regions[GLRENDERER_OBJ_ID_LINK].w * btn_scale,
             .h = btn_atlas_regions[GLRENDERER_OBJ_ID_LINK].h * btn_scale
         };
-
-        for (glrenderer_obj_id_t obj_id = 0; obj_id < GLRENDERER_OBJ_ID_SCREEN; obj_id++)
-            update_vertices(renderer, obj_id, &renderer->btn_coords[obj_id]);
     }
 }
 
 void glrenderer_set_obj_tint(glrenderer_t *renderer, glrenderer_obj_id_t obj_id, GLfloat tint) {
-    if (!renderer || obj_id < 0 || obj_id > GLRENDERER_OBJ_ID_SCREEN || !(renderer->visible_btns_mask & (1 << obj_id)) || tint < 0.0f || tint > 1.0f)
+    if (!renderer || obj_id < 0 || !(renderer->visible_btns_mask & (1 << obj_id)) || tint < 0.0f || tint > 1.0f)
         return;
 
+    renderer->update_obj_requests |= (1 << obj_id);
+
     renderer->tints[obj_id] = tint;
-    update_vertices(renderer, obj_id, &renderer->btn_coords[obj_id]);
 }
 
 void glrenderer_set_obj_alpha(glrenderer_t *renderer, glrenderer_obj_id_t obj_id, GLfloat alpha) {
-    if (!renderer || obj_id < 0 || obj_id > GLRENDERER_OBJ_ID_SCREEN || !(renderer->visible_btns_mask & (1 << obj_id)) || alpha < 0.0f || alpha > 1.0f)
+    if (!renderer || obj_id < 0 || !(renderer->visible_btns_mask & (1 << obj_id)) || alpha < 0.0f || alpha > 1.0f)
         return;
 
+    renderer->update_obj_requests |= (1 << obj_id);
+
     renderer->alphas[obj_id] = alpha;
-    update_vertices(renderer, obj_id, &renderer->btn_coords[obj_id]);
 }
 
 void glrenderer_set_show_buttons(glrenderer_t *renderer, uint32_t visible_btns_mask) {
