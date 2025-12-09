@@ -917,10 +917,10 @@ GetPaletteIndex:
 .newLicensee
     ld l, $44
     ld a, [hli]
-    cp "0"
+    cp '0'
     jr nz, .notNintendo
     ld a, [hl]
-    cp "1"
+    cp '1'
     jr nz, .notNintendo
 
 .doChecksum
