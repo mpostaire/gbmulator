@@ -304,7 +304,6 @@ void gbmulator_set_options(gbmulator_t *emu, const gbmulator_options_t *opts) {
 
     emu->opts.palette                  = opts->palette;
     emu->opts.apu_speed                = MAX(opts->apu_speed, 1.0f);
-    emu->opts.on_new_line              = opts->on_new_line;
     emu->opts.on_new_frame             = opts->on_new_frame;
     emu->opts.on_new_sample            = opts->on_new_sample;
     emu->opts.on_accelerometer_request = opts->on_accelerometer_request;

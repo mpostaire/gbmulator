@@ -653,6 +653,8 @@ static bool and_handler(gba_t *gba, uint32_t instr) {
     return true;
 }
 
+// TODO refactor --> do not make it cycle accurate for performance resasons: 1 cycle == 1 instruction
+
 // TODO refactor bank switching logic
 /*static inline*/ void bank_registers(gba_cpu_t *cpu, uint8_t old_mode, uint8_t new_mode) {
     if (old_mode == new_mode)

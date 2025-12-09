@@ -55,6 +55,9 @@ struct glrenderer_t {
     GLuint vbo; // Vertex Buffer Object
     GLuint ebo; // Element Buffer Object
 
+    GLsizei pbo_index;
+    GLuint  pbos[2]; // Pixel Buffer Object
+
     GLuint shader_program;
 
     GLint u_tex;
@@ -67,11 +70,11 @@ struct glrenderer_t {
     GLsizei viewport_w;
     GLsizei viewport_h;
 
-    GLushort vertex_indices[(GLRENDERER_OBJ_ID_SCREEN + 1) * VERTEX_INDICES_OBJ_STRIDE];
-    rect_t   obj_coords[GLRENDERER_OBJ_ID_SCREEN + 1];
+    GLushort vertex_indices[GLRENDERER_OBJ_ID_END * VERTEX_INDICES_OBJ_STRIDE];
+    rect_t   obj_coords[GLRENDERER_OBJ_ID_END];
     uint32_t visible_btns_mask;
-    GLfloat  tints[GLRENDERER_OBJ_ID_SCREEN + 1];
-    GLfloat  alphas[GLRENDERER_OBJ_ID_SCREEN + 1];
+    GLfloat  tints[GLRENDERER_OBJ_ID_END];
+    GLfloat  alphas[GLRENDERER_OBJ_ID_END];
 
     GLfloat clear_r;
     GLfloat clear_g;
@@ -80,6 +83,9 @@ struct glrenderer_t {
     bool     resize_screen_requested;
     bool     resize_viewport_requested;
     uint32_t update_obj_requests;
+    bool     update_screen_requested;
+
+    uint8_t *screen_buffer;
 };
 
 static const rect_t btn_atlas_regions[] = {
@@ -185,8 +191,16 @@ static void create_buffers(glrenderer_t *renderer) {
     glGenBuffers(1, &renderer->vbo);
     glGenBuffers(1, &renderer->ebo);
 
+    renderer->pbo_index = 0;
+    glGenBuffers(2, renderer->pbos);
+    for (GLuint i = 0; i < 2; i++) {
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, renderer->pbos[i]);
+        glBufferData(GL_PIXEL_UNPACK_BUFFER, 160 * 144 * 4, NULL, GL_STREAM_DRAW); // TODO size
+    }
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+
     glBindBuffer(GL_ARRAY_BUFFER, renderer->vbo);
-    glBufferData(GL_ARRAY_BUFFER, N_VERTEX_PER_OBJ * sizeof(GLfloat) * (GLRENDERER_OBJ_ID_SCREEN + 1), NULL, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, N_VERTEX_PER_OBJ * sizeof(GLfloat) * GLRENDERER_OBJ_ID_END, NULL, GL_STATIC_DRAW);
 
     glBindVertexArray(renderer->vao);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, renderer->ebo);
@@ -312,18 +326,41 @@ static void resize_viewport(glrenderer_t *renderer) {
     glViewport(0, 0, renderer->viewport_w, renderer->viewport_h);
     update_orthographic_proj(renderer, 0, renderer->viewport_w, renderer->viewport_h, 0, -1, 1);
 
-    for (glrenderer_obj_id_t obj_id = 0; obj_id <= GLRENDERER_OBJ_ID_SCREEN; obj_id++)
+    for (glrenderer_obj_id_t obj_id = 0; obj_id < GLRENDERER_OBJ_ID_END; obj_id++)
         update_vertices(renderer, obj_id, &renderer->obj_coords[obj_id]);
 
     renderer->resize_viewport_requested = false;
 }
 
 static void update_objs(glrenderer_t *renderer) {
-    for (glrenderer_obj_id_t obj_id = 0; obj_id <= GLRENDERER_OBJ_ID_SCREEN; obj_id++)
+    for (glrenderer_obj_id_t obj_id = 0; obj_id < GLRENDERER_OBJ_ID_END; obj_id++)
         if (renderer->update_obj_requests & (1 << obj_id))
             update_vertices(renderer, obj_id, &renderer->obj_coords[obj_id]);
 
     renderer->update_obj_requests = 0;
+}
+
+static void update_screen(glrenderer_t *renderer) {
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, renderer->pbos[renderer->pbo_index]);
+    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+
+    glBindTexture(GL_TEXTURE_2D, renderer->screen_tex);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, renderer->screen_tex_w, renderer->screen_tex_h, GL_RGBA, GL_UNSIGNED_BYTE, (void *) 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    renderer->pbo_index = (renderer->pbo_index + 1) & 1;
+
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, renderer->pbos[renderer->pbo_index]);
+
+    renderer->screen_buffer = glMapBufferRange(
+        GL_PIXEL_UNPACK_BUFFER,
+        0,
+        renderer->screen_tex_w * renderer->screen_tex_h * 4,
+        GL_MAP_WRITE_BIT);
+
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+
+    renderer->update_screen_requested = false;
 }
 
 glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, uint32_t visible_btns_mask) {
@@ -362,7 +399,7 @@ glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, uint32_t visib
 
     renderer->u_proj = glGetUniformLocation(renderer->shader_program, "proj");
 
-    for (glrenderer_obj_id_t obj_id = 0; obj_id <= GLRENDERER_OBJ_ID_SCREEN; obj_id++) {
+    for (glrenderer_obj_id_t obj_id = 0; obj_id < GLRENDERER_OBJ_ID_END; obj_id++) {
         renderer->tints[obj_id]  = 1.0f;
         renderer->alphas[obj_id] = 1.0f;
     }
@@ -392,6 +429,7 @@ void glrenderer_quit(glrenderer_t *renderer) {
     glDeleteVertexArrays(1, &renderer->vao);
     glDeleteBuffers(1, &renderer->vbo);
     glDeleteBuffers(1, &renderer->ebo);
+    glDeleteBuffers(2, renderer->pbos);
 
     glDeleteProgram(renderer->shader_program);
 
@@ -410,6 +448,9 @@ void glrenderer_render(glrenderer_t *renderer) {
 
     if (renderer->update_obj_requests)
         update_objs(renderer);
+
+    if (renderer->update_screen_requested)
+        update_screen(renderer);
 
     glClearColor(renderer->clear_r, renderer->clear_g, renderer->clear_b, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -436,14 +477,16 @@ void glrenderer_render(glrenderer_t *renderer) {
     glBindVertexArray(0);
 }
 
-// TODO every function to update render screen or smth else is wrong: we are not sure which context is active
-void glrenderer_update_screen(glrenderer_t *renderer, const GLvoid *pixels) {
+uint8_t *glrenderer_update_screen(glrenderer_t *renderer) {
     if (!renderer)
-        return;
+        return NULL;
 
-    glBindTexture(GL_TEXTURE_2D, renderer->screen_tex);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, renderer->screen_tex_w, renderer->screen_tex_h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    // TODO rename on_new_frame cb into request_pixel_buffer and remove on_new_line cb to use request_pixel_buffer instead.
+    // TODO ppu core should ask for a pixel buffer upon its very first cycle (now it always skips first frame)
+
+    renderer->update_screen_requested = true;
+
+    return renderer->screen_buffer;
 }
 
 void glrenderer_resize_screen(glrenderer_t *renderer, GLsizei width, GLsizei height) {
@@ -457,7 +500,7 @@ void glrenderer_resize_screen(glrenderer_t *renderer, GLsizei width, GLsizei hei
 }
 
 glrenderer_obj_id_t glrenderer_get_obj_at_coord(glrenderer_t *renderer, uint32_t x, uint32_t y) {
-    for (glrenderer_obj_id_t obj_id = 0; obj_id <= GLRENDERER_OBJ_ID_SCREEN; obj_id++) {
+    for (glrenderer_obj_id_t obj_id = 0; obj_id < GLRENDERER_OBJ_ID_END; obj_id++) {
         if (!(renderer->visible_btns_mask & (1 << obj_id)))
             continue;
         if (x < renderer->obj_coords[obj_id].x || x > renderer->obj_coords[obj_id].x + renderer->obj_coords[obj_id].w || y < renderer->obj_coords[obj_id].y || y > renderer->obj_coords[obj_id].y + renderer->obj_coords[obj_id].h)

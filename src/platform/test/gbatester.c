@@ -312,12 +312,10 @@ static bool gba_cpu_tester_run(const char *path) {
         // TODO when cpu sets cpsr, we shouldn't always (never?) mirror it to spsr[0]
         // ----> understand exactly when/where spsr is written
 
-        if (cpu_equals(&((gba_t *) gba_cpu_tester.expected->impl)->cpu, &((gba_t *) gba_cpu_tester.init->impl)->cpu, is_arm_str_ldr) && check_transactions()) {
-            printf("✅ CPU test passed (%u)!\n", i);
-        } else {
+        if (!cpu_equals(&((gba_t *) gba_cpu_tester.expected->impl)->cpu, &((gba_t *) gba_cpu_tester.init->impl)->cpu, is_arm_str_ldr) || !check_transactions()) {
             printf("❌ CPU state mismatch (%u)!\n", i);
-            break;
             errors++;
+            break;
         }
     }
 

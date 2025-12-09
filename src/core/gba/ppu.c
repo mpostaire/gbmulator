@@ -21,6 +21,8 @@
 
 #define SET_PIXEL_RGB(gba, x, y, r, g, b)                                       \
     do {                                                                        \
+        if (!((gba)->ppu.pixels))                                               \
+            break;                                                              \
         (gba)->ppu.pixels[((y) * GBA_SCREEN_WIDTH * 4) + ((x) * 4)]     = (r);  \
         (gba)->ppu.pixels[((y) * GBA_SCREEN_WIDTH * 4) + ((x) * 4) + 1] = (g);  \
         (gba)->ppu.pixels[((y) * GBA_SCREEN_WIDTH * 4) + ((x) * 4) + 2] = (b);  \
@@ -541,7 +543,7 @@ void gba_ppu_step(gba_t *gba) {
                 RESET_BIT(gba->bus.io[IO_DISPSTAT], 0);
 
                 if (gba->base->opts.on_new_frame)
-                    gba->base->opts.on_new_frame(ppu->pixels);
+                    ppu->pixels = gba->base->opts.on_new_frame();
             }
         }
         break;

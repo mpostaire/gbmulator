@@ -29,6 +29,8 @@
 
 #define SET_PIXEL_DMG(gb, x, y, color)                                                                               \
     do {                                                                                                             \
+        if (!((gb)->ppu.pixels))                                                                                     \
+            break;                                                                                                   \
         (gb)->ppu.pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)]     = dmg_palettes[(gb)->dmg_palette][(color)][0]; \
         (gb)->ppu.pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1] = dmg_palettes[(gb)->dmg_palette][(color)][1]; \
         (gb)->ppu.pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2] = dmg_palettes[(gb)->dmg_palette][(color)][2]; \
@@ -37,6 +39,8 @@
 
 #define SET_PIXEL_CGB(gb, x, y, r, g, b)                                      \
     do {                                                                      \
+        if (!((gb)->ppu.pixels))                                              \
+            break;                                                            \
         (gb)->ppu.pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)]     = (r);  \
         (gb)->ppu.pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1] = (g);  \
         (gb)->ppu.pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2] = (b);  \
@@ -682,7 +686,7 @@ static inline void hblank_step(gb_t *gb) {
         }
 
         if (gb->base->opts.on_new_frame)
-            gb->base->opts.on_new_frame(ppu->pixels);
+            ppu->pixels = gb->base->opts.on_new_frame();
     } else {
         ppu->oam_scan.size = 0;
         set_mode(gb, PPU_MODE_OAM);
@@ -764,7 +768,7 @@ void ppu_disable_lcd(gb_t *gb) {
     }
 
     if (gb->base->opts.on_new_frame)
-        gb->base->opts.on_new_frame(gb->ppu.pixels);
+        gb->ppu.pixels = gb->base->opts.on_new_frame();
 }
 
 void ppu_update_stat_irq_line(gb_t *gb) {

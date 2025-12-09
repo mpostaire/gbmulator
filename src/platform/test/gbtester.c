@@ -47,6 +47,8 @@ typedef struct {
     int              is_gbmicrotest;
 } test_t;
 
+static uint8_t *pixels;
+
 static test_t tests[] = {
 #include "./tests.txt"
 };
@@ -219,7 +221,7 @@ static void exec_input_sequence(gbmulator_t *emu, char *input_sequence) {
     pthread_mutex_unlock(&mutex);
 }
 
-static int run_test(test_t *test) {
+static int run_test(test_t *test, size_t thread_index) {
     char rom_path[BUF_SIZE];
     if (snprintf(rom_path, BUF_SIZE, "%s/%s", root_path, test->rom_path) < 0)
         exit(EXIT_FAILURE);
@@ -240,7 +242,8 @@ static int run_test(test_t *test) {
     if (!emu)
         return 0;
 
-    gb_t *gb = emu->impl;
+    gb_t *gb       = emu->impl;
+    gb->ppu.pixels = &pixels[thread_index * GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 4];
 
     if (dmg_boot_found)
         gb->mmu.dmg_boot_rom = dmg_boot;
@@ -277,9 +280,10 @@ static int run_test(test_t *test) {
     return ret;
 }
 
-static void *run_tests(UNUSED void *arg) {
+static void *run_tests(void *arg) {
     size_t        num_tests    = sizeof(tests) / sizeof(*tests);
     static size_t num_finished = 0;
+    size_t        thread_index = (size_t) arg;
 
     pthread_mutex_lock(&next_test_mutex);
     while (next_test < num_tests) {
@@ -289,7 +293,7 @@ static void *run_tests(UNUSED void *arg) {
         char *label  = test.mode == GBMULATOR_MODE_GBC ? "CGB" : "DMG";
         char *suffix = test.result_diff_image_suffix ? test.result_diff_image_suffix : "";
 
-        int success = run_test(&test);
+        int success = run_test(&test, thread_index);
 
         pthread_mutex_lock(&next_test_mutex);
 
@@ -343,9 +347,11 @@ int gbtester_main(int argc, char **argv) {
 
     MagickWandGenesis();
 
+    pixels = xmalloc(num_cpus * GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 4);
+
     pthread_t *threads = xcalloc(num_cpus, sizeof(*threads));
     for (size_t i = 0; i < num_cpus; i++) {
-        if (pthread_create(&threads[i], NULL, run_tests, NULL)) {
+        if (pthread_create(&threads[i], NULL, run_tests, (void *) i)) {
             perror("pthread_create");
             return EXIT_FAILURE;
         }
@@ -355,6 +361,7 @@ int gbtester_main(int argc, char **argv) {
         pthread_join(threads[i], NULL);
 
     free(threads);
+    free(pixels);
     MagickWandTerminus();
 
     fclose(output_file);

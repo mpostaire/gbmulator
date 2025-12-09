@@ -133,8 +133,9 @@ void gbprinter_step(gbprinter_t *printer) {
 
     render_line(printer);
 
-    if (printer->base->opts.on_new_line)
-        printer->base->opts.on_new_line(printer->image.data, printer->image.height, printer->image.allocated_height);
+    // TODO
+    // if (printer->base->opts.on_new_frame)
+    //     printer->base->opts.on_new_frame(printer->image.data, printer->image.height, printer->image.allocated_height);
 
     if (printer->image.height == printer->image.allocated_height)
         printer->status = STATUS_DONE;
