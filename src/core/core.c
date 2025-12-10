@@ -126,6 +126,7 @@ bool gbmulator_reset(gbmulator_t *emu, gbmulator_mode_t new_mode) {
 
     if (!set_funcs(emu, emu->opts.mode)) {
         free(emu);
+        free(rom_bak);
         return false;
     }
 
@@ -135,11 +136,13 @@ bool gbmulator_reset(gbmulator_t *emu, gbmulator_mode_t new_mode) {
 
     if (!emu->impl) {
         free(emu);
+        free(rom_bak);
         return false;
     }
 
     if (save_data) {
-        emu->load_save(emu->impl, save_data, save_len);
+        if (emu->load_save)
+            emu->load_save(emu->impl, save_data, save_len);
         free(save_data);
     }
 
@@ -245,7 +248,7 @@ uint8_t *gbmulator_get_savestate(gbmulator_t *emu, size_t *length, bool is_compr
 }
 
 bool gbmulator_load_savestate(gbmulator_t *emu, uint8_t *data, size_t length) {
-    if (!emu)
+    if (!emu || !emu->impl || !emu->load_savestate)
         return false;
 
     gbmulator_savestate_t *savestate = (gbmulator_savestate_t *) data;
@@ -257,13 +260,17 @@ bool gbmulator_load_savestate(gbmulator_t *emu, uint8_t *data, size_t length) {
 
     if (strncmp(savestate->identifier, SAVESTATE_STRING, sizeof(SAVESTATE_STRING))) {
         eprintf("invalid format %s\n", savestate->identifier);
-        free(savestate);
         return false;
     }
+
     const char *rom_title = gbmulator_get_rom_title(emu);
+    if (!rom_title) {
+        eprintf("could not get rom title %s\n", savestate->identifier);
+        return false;
+    }
+
     if (strncmp(savestate->rom_title, rom_title, sizeof(savestate->rom_title))) {
         eprintf("rom title mismatch (expected: '%.16s'; got: '%.16s')\n", rom_title, savestate->rom_title);
-        free(savestate);
         return false;
     }
 
@@ -282,11 +289,14 @@ bool gbmulator_load_savestate(gbmulator_t *emu, uint8_t *data, size_t length) {
         return false;
     }
 
+    if (!emu->load_savestate)
+        return false;
+
     return emu->load_savestate(emu->impl, savestate, length);
 }
 
 void gbmulator_get_options(gbmulator_t *emu, gbmulator_options_t *opts) {
-    if (emu)
+    if (emu && opts)
         *opts = emu->opts;
 }
 
@@ -311,14 +321,14 @@ void gbmulator_set_options(gbmulator_t *emu, const gbmulator_options_t *opts) {
 }
 
 char *gbmulator_get_rom_title(gbmulator_t *emu) {
-    if (!emu)
+    if (!emu || !emu->get_rom_title)
         return NULL;
 
     return emu->get_rom_title(emu->impl);
 }
 
 void gbmulator_print_status(gbmulator_t *emu) {
-    if (emu)
+    if (emu && emu->print_status && emu->impl)
         emu->print_status(emu->impl);
 }
 
