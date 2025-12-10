@@ -6,7 +6,7 @@ SDIR := src
 ODIR := $(ROOT_ODIR)/$(PLATFORM)
 
 CC      := gcc
-CFLAGS  := -std=gnu23 -O3 -I$(SDIR) \
+CFLAGS  := -std=gnu23 -I$(SDIR) \
            -DVERSION=$(shell git rev-parse --short HEAD) \
 		   -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers
 LDLIBS  :=
@@ -16,7 +16,7 @@ CFLAGS += -ggdb -O0
 else ifeq ($(DEBUG),2)
 CFLAGS += -ggdb -O0 -DDEBUG
 else
-CFLAGS += -DNDEBUG
+CFLAGS += -O3 -flto -DNDEBUG -Werror
 endif
 
 # This is needed because includes below may add recipes
