@@ -250,8 +250,12 @@ static int gamepad_button_name_parser(const char *button_name) {
 static void start_loop(void) {
     if (loop_source > 0 || link_task)
         return;
+
     app_set_pause(false);
-    loop_source = g_timeout_add(1000 / 60, G_SOURCE_FUNC(loop_func), NULL);
+
+    uint32_t fps = app_get_fps();
+    if (fps > 0)
+        loop_source = g_timeout_add(1000 / fps, G_SOURCE_FUNC(loop_func), NULL);
 }
 
 static void stop_loop(void) {
@@ -289,6 +293,7 @@ static inline gboolean loop_func(gpointer user_data) {
     app_run_frame();
 
     gtk_gl_area_queue_render(GTK_GL_AREA(emu_gl_area));
+    gtk_gl_area_queue_render(GTK_GL_AREA(printer_gl_area));
 
     return G_SOURCE_CONTINUE;
 }

@@ -9,6 +9,9 @@
 #define VERTEX_INDICES_OBJ_STRIDE 5
 #define N_VERTEX_PER_OBJ          24
 
+// Triple buffering screen PBO
+#define SCREEN_BUFFER_COUNT 3
+
 static const char *vertex_shader_source =
     "#version 300 es\n"
     "in vec2 position;\n"
@@ -55,8 +58,16 @@ struct glrenderer_t {
     GLuint vbo; // Vertex Buffer Object
     GLuint ebo; // Element Buffer Object
 
-    GLsizei pbo_index;
-    GLuint  pbos[2]; // Pixel Buffer Object
+    struct {
+        void  *ptr;
+        GLuint pbo; // Pixel Buffer Object
+        enum {
+            PBO_STATE_IDLE,
+            PBO_STATE_WRITING,
+            PBO_STATE_PENDING_RENDER,
+            PBO_STATE_RENDERING
+        } state;
+    } screen_buffers[SCREEN_BUFFER_COUNT];
 
     GLuint shader_program;
 
@@ -84,8 +95,6 @@ struct glrenderer_t {
     bool     resize_viewport_requested;
     uint32_t update_obj_requests;
     bool     update_screen_requested;
-
-    uint8_t *screen_buffer;
 };
 
 static const rect_t btn_atlas_regions[] = {
@@ -186,16 +195,35 @@ static GLuint create_texture(GLsizei width, GLsizei height, const GLvoid *pixels
     return texture_id;
 }
 
+static bool change_state(glrenderer_t *renderer, GLsizei pbo, int new_state) {
+    if (pbo < 0 || pbo >= SCREEN_BUFFER_COUNT)
+        return false;
+
+    // GLsizei old_state = renderer->screen_buffers[pbo].state;
+
+    renderer->screen_buffers[pbo].state = new_state;
+
+    // static char *states_str[] = { "PBO_STATE_IDLE", "PBO_STATE_WRITING", "PBO_STATE_PENDING_RENDER", "PBO_STATE_RENDERING" };
+    // printf("%d: %s --> %s\n", pbo, states_str[old_state], states_str[new_state]);
+
+    return true;
+}
+
 static void create_buffers(glrenderer_t *renderer) {
     glGenVertexArrays(1, &renderer->vao);
     glGenBuffers(1, &renderer->vbo);
     glGenBuffers(1, &renderer->ebo);
 
-    renderer->pbo_index = 0;
-    glGenBuffers(2, renderer->pbos);
-    for (GLuint i = 0; i < 2; i++) {
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, renderer->pbos[i]);
-        glBufferData(GL_PIXEL_UNPACK_BUFFER, 160 * 144 * 4, NULL, GL_STREAM_DRAW); // TODO size
+    for (GLuint i = 0; i < SCREEN_BUFFER_COUNT; i++) {
+        glGenBuffers(1, &renderer->screen_buffers[i].pbo);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, renderer->screen_buffers[i].pbo);
+        glBufferData(GL_PIXEL_UNPACK_BUFFER, renderer->screen_tex_w * renderer->screen_tex_h * 4, NULL, GL_STREAM_DRAW);
+        renderer->screen_buffers[i].ptr = glMapBufferRange(
+            GL_PIXEL_UNPACK_BUFFER,
+            0,
+            renderer->screen_tex_w * renderer->screen_tex_h * 4,
+            GL_MAP_WRITE_BIT);
+        change_state(renderer, i, PBO_STATE_IDLE);
     }
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
@@ -319,6 +347,12 @@ static void resize_screen(glrenderer_t *renderer) {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, renderer->screen_tex_w, renderer->screen_tex_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
     glBindTexture(GL_TEXTURE_2D, 0);
 
+    // for (GLuint i = 0; i < SCREEN_BUFFER_COUNT; i++) {
+    //     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, renderer->screen_buffers[i].pbo);
+    //     glBufferData(GL_PIXEL_UNPACK_BUFFER, renderer->screen_tex_w * renderer->screen_tex_h * 4, NULL, GL_STREAM_DRAW);
+    // }
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+
     renderer->resize_screen_requested = false;
 }
 
@@ -341,22 +375,34 @@ static void update_objs(glrenderer_t *renderer) {
 }
 
 static void update_screen(glrenderer_t *renderer) {
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, renderer->pbos[renderer->pbo_index]);
-    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+    for (GLsizei i = 0; i < SCREEN_BUFFER_COUNT; i++) {
+        switch (renderer->screen_buffers[i].state) {
+        case PBO_STATE_IDLE:
+        case PBO_STATE_WRITING:
+            break;
+        case PBO_STATE_PENDING_RENDER:
+            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, renderer->screen_buffers[i].pbo);
+            glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
 
-    glBindTexture(GL_TEXTURE_2D, renderer->screen_tex);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, renderer->screen_tex_w, renderer->screen_tex_h, GL_RGBA, GL_UNSIGNED_BYTE, (void *) 0);
-    glBindTexture(GL_TEXTURE_2D, 0);
+            glBindTexture(GL_TEXTURE_2D, renderer->screen_tex);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, renderer->screen_tex_w, renderer->screen_tex_h, GL_RGBA, GL_UNSIGNED_BYTE, (void *) 0);
+            glBindTexture(GL_TEXTURE_2D, 0);
 
-    renderer->pbo_index = (renderer->pbo_index + 1) & 1;
+            change_state(renderer, i, PBO_STATE_RENDERING);
+            break;
+        case PBO_STATE_RENDERING:
+            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, renderer->screen_buffers[i].pbo);
 
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, renderer->pbos[renderer->pbo_index]);
+            renderer->screen_buffers[i].ptr = glMapBufferRange(
+                GL_PIXEL_UNPACK_BUFFER,
+                0,
+                renderer->screen_tex_w * renderer->screen_tex_h * 4,
+                GL_MAP_WRITE_BIT);
 
-    renderer->screen_buffer = glMapBufferRange(
-        GL_PIXEL_UNPACK_BUFFER,
-        0,
-        renderer->screen_tex_w * renderer->screen_tex_h * 4,
-        GL_MAP_WRITE_BIT);
+            change_state(renderer, i, PBO_STATE_IDLE);
+            break;
+        }
+    }
 
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
@@ -383,11 +429,11 @@ glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, uint32_t visib
 
     renderer->visible_btns_mask = visible_btns_mask;
 
-    create_buffers(renderer);
-
     renderer->screen_tex   = create_texture(screen_w, screen_h, NULL);
     renderer->screen_tex_w = screen_w;
     renderer->screen_tex_h = screen_h;
+
+    create_buffers(renderer);
 
     if (renderer->visible_btns_mask)
         create_buttons(renderer);
@@ -429,7 +475,9 @@ void glrenderer_quit(glrenderer_t *renderer) {
     glDeleteVertexArrays(1, &renderer->vao);
     glDeleteBuffers(1, &renderer->vbo);
     glDeleteBuffers(1, &renderer->ebo);
-    glDeleteBuffers(2, renderer->pbos);
+
+    for (GLuint i = 0; i < SCREEN_BUFFER_COUNT; i++)
+        glDeleteBuffers(1, &renderer->screen_buffers[i].pbo);
 
     glDeleteProgram(renderer->shader_program);
 
@@ -441,7 +489,7 @@ void glrenderer_render(glrenderer_t *renderer) {
         return;
 
     if (renderer->resize_screen_requested)
-        resize_screen(renderer);
+        resize_screen(renderer); // TODO this invalidates pixels pointer which may break things (also seems to completely break printer rendering)
 
     if (renderer->resize_viewport_requested)
         resize_viewport(renderer);
@@ -452,7 +500,7 @@ void glrenderer_render(glrenderer_t *renderer) {
     if (renderer->update_screen_requested)
         update_screen(renderer);
 
-    glClearColor(renderer->clear_r, renderer->clear_g, renderer->clear_b, 1.0f);
+    glClearColor(0.0f, renderer->clear_g, renderer->clear_b, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
     // Call to glUseProgram useless as only one program is ever used in the lifespan of a glrenderer_t instance
@@ -486,7 +534,26 @@ uint8_t *glrenderer_update_screen(glrenderer_t *renderer) {
 
     renderer->update_screen_requested = true;
 
-    return renderer->screen_buffer;
+    GLsizei old_writing = -1;
+    GLsizei new_writing = -1;
+
+    for (GLsizei i = 0; i < SCREEN_BUFFER_COUNT; i++) {
+        // Reuse screen buffer if pending to render to render later only most recent screen buffer and avoid screen
+        // buffer starvations
+        if (renderer->screen_buffers[i].state == PBO_STATE_PENDING_RENDER)
+            change_state(renderer, i, PBO_STATE_IDLE);
+
+        if (renderer->screen_buffers[i].state == PBO_STATE_WRITING)
+            old_writing = i;
+        else if (new_writing < 0 && renderer->screen_buffers[i].state == PBO_STATE_IDLE)
+            new_writing = i;
+    }
+
+    change_state(renderer, old_writing, PBO_STATE_PENDING_RENDER);
+    if (change_state(renderer, new_writing, PBO_STATE_WRITING))
+        return renderer->screen_buffers[new_writing].ptr;
+
+    return NULL;
 }
 
 void glrenderer_resize_screen(glrenderer_t *renderer, GLsizei width, GLsizei height) {
