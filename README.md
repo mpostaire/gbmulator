@@ -106,8 +106,11 @@ GB/GBC:
 GBA:
 
 - https://emudev.org/system_resources
+- https://www.coranac.com/tonc/text/toc.htm
 - https://mgba.io/2015/06/27/cycle-counting-prefetch/
 - https://problemkaputt.de/gbatek.htm#armcpureference
+- https://nba-emu.github.io/hw-docs/
+- https://www.cs.rit.edu/~tjh8300/CowBite/CowBiteSpecFrame.htm
 - https://github.com/nba-emu/NanoBoyAdvance/blob/master/src/nba/src/arm/handlers/arithmetic.inl#L84
 - https://vision.gel.ulaval.ca/~jflalonde/cours/1001/h17/docs/arm-instructionset.pdf
 - https://github.com/Normmatt/gba_bios/blob/master/asm/bios.s
