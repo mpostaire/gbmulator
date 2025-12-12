@@ -156,12 +156,14 @@ uint8_t gb_link_shift_bit(gb_t *gb, uint8_t in_bit) {
     uint8_t out_bit = GET_BIT(gb->mmu.io_registers[IO_SB], 7);
     gb->mmu.io_registers[IO_SB] <<= 1;
     CHANGE_BIT(gb->mmu.io_registers[IO_SB], 0, in_bit);
-    return out_bit;
-}
 
-void gb_link_data_received(gb_t *gb) {
-    RESET_BIT(gb->mmu.io_registers[IO_SC], 7);
-    CPU_REQUEST_INTERRUPT(gb, IRQ_SERIAL);
+    if (++gb->link.bit_shift_counter >= 8) {
+        gb->link.bit_shift_counter = 0;
+        RESET_BIT(gb->mmu.io_registers[IO_SC], 7);
+        CPU_REQUEST_INTERRUPT(gb, IRQ_SERIAL);
+    }
+
+    return out_bit;
 }
 
 void gb_joypad_press(gb_t *gb, gbmulator_joypad_t key) {

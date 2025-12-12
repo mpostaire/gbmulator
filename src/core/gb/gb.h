@@ -47,8 +47,6 @@ void gb_print_status(gb_t *gb);
 
 uint8_t gb_link_shift_bit(gb_t *gb, uint8_t in_bit);
 
-void gb_link_data_received(gb_t *gb);
-
 void gb_joypad_press(gb_t *gb, gbmulator_joypad_t key);
 
 void gb_joypad_release(gb_t *gb, gbmulator_joypad_t key);

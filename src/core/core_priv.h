@@ -16,7 +16,6 @@ typedef void (*set_joypad_state_func_t)(void *impl, uint16_t state);
 typedef uint8_t *(*get_rom_func_t)(void *impl, size_t *rom_size);
 
 typedef uint8_t (*cable_shift_bit_cb_t)(void *impl, uint8_t in_bit);
-typedef void (*cable_data_received_cb_t)(void *impl);
 
 struct gbmulator_t {
     gbmulator_options_t opts;
@@ -36,9 +35,8 @@ struct gbmulator_t {
     get_rom_func_t          get_rom;
 
     struct {
-        gbmulator_t             *other_device;
-        cable_shift_bit_cb_t     shift_bit;
-        cable_data_received_cb_t data_received;
+        gbmulator_t         *other_device;
+        cable_shift_bit_cb_t shift_bit;
     } cable;
 
     struct {

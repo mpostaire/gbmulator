@@ -72,6 +72,9 @@ void gbprinter_clear_image(gbprinter_t *printer) {
     printer->image.allocated_height = 0;
     free(printer->image.data);
     printer->image.data = NULL; // important to avoid the xrealloc of the PRINT command to cause a double free (because it would realloc on an freed pointer)
+
+    if (printer->pixels)
+        memset(printer->pixels, 0xFF, GBPRINTER_IMG_WIDTH * 4);
 }
 
 static inline void render_line(gbprinter_t *printer) {
@@ -121,6 +124,9 @@ static inline void render_line(gbprinter_t *printer) {
 
     printer->ram_printing_line_index++;
     printer->image.height++;
+
+    if (printer->pixels)
+        memcpy(printer->pixels, printer->image.data, GBPRINTER_IMG_WIDTH * printer->image.height * 4);
 }
 
 void gbprinter_step(gbprinter_t *printer) {
@@ -133,9 +139,8 @@ void gbprinter_step(gbprinter_t *printer) {
 
     render_line(printer);
 
-    // TODO
-    // if (printer->base->opts.on_new_frame)
-    //     printer->base->opts.on_new_frame(printer->image.data, printer->image.height, printer->image.allocated_height);
+    if (printer->base->opts.on_new_frame)
+        printer->pixels = printer->base->opts.on_new_frame();
 
     if (printer->image.height == printer->image.allocated_height)
         printer->status = STATUS_DONE;
@@ -229,14 +234,7 @@ static void exec_command(gbprinter_t *printer) {
         printer->status = STATUS_IDLE;
 }
 
-uint8_t gbprinter_link_shift_bit(gbprinter_t *printer, uint8_t in_bit) {
-    uint8_t out_bit = GET_BIT(printer->sb, 7);
-    printer->sb <<= 1;
-    CHANGE_BIT(printer->sb, 0, in_bit);
-    return out_bit;
-}
-
-void gbprinter_link_data_received(gbprinter_t *printer) {
+static void link_data_received(gbprinter_t *printer) {
     switch (printer->state) {
     case WAIT_MAGIC_1:
         if (printer->sb == MAGIC_1)
@@ -309,4 +307,17 @@ void gbprinter_link_data_received(gbprinter_t *printer) {
         printer->state = WAIT_MAGIC_1;
         break;
     }
+}
+
+uint8_t gbprinter_link_shift_bit(gbprinter_t *printer, uint8_t in_bit) {
+    uint8_t out_bit = GET_BIT(printer->sb, 7);
+    printer->sb <<= 1;
+    CHANGE_BIT(printer->sb, 0, in_bit);
+
+    if (++printer->bit_shift_counter >= 8) {
+        printer->bit_shift_counter = 0;
+        link_data_received(printer);
+    }
+
+    return out_bit;
 }
