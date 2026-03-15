@@ -5,8 +5,8 @@ SRC += $(wildcard $(SDIR)/platform/$(PLATFORM)/*.c)
 OBJ := $(SRC:$(SDIR)/%.c=$(ODIR)/%.o) $(UI_RESOURCES).o
 BIN := $(ODIR)/$(BINNAME)
 
-CFLAGS += $(shell pkg-config --cflags gtk4 libadwaita-1 manette-0.2 opengl openal gstreamer-1.0) -fanalyzer
-LDLIBS += $(shell pkg-config --libs gtk4 libadwaita-1 manette-0.2 opengl openal gstreamer-1.0)
+override CFLAGS += $(shell pkg-config --cflags gtk4 libadwaita-1 manette-0.2 opengl openal gstreamer-1.0) -fanalyzer
+override LDLIBS += $(shell pkg-config --libs gtk4 libadwaita-1 manette-0.2 opengl openal gstreamer-1.0)
 
 $(UI_RESOURCES).c: $(SDIR)/platform/$(PLATFORM)/ui/$(BINNAME).gresource.xml $(wildcard $(SDIR)/platform/$(PLATFORM)/ui/*.ui)
 	glib-compile-resources $< --target=$@ --generate-source --sourcedir=$(SDIR)/platform/$(PLATFORM)

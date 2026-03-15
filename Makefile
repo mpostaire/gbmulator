@@ -5,18 +5,17 @@ ROOT_ODIR ?= build
 SDIR := src
 ODIR := $(ROOT_ODIR)/$(PLATFORM)
 
-CC      := gcc
-CFLAGS  := -std=gnu23 -I$(SDIR) \
-           -DVERSION=$(shell git rev-parse --short HEAD) \
-		   -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers
-LDLIBS  :=
+CC				:=	gcc
+override CFLAGS +=	-std=gnu23 -I$(SDIR) \
+					-DVERSION=$(shell git rev-parse --short HEAD) \
+					-Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers
 
 ifeq ($(DEBUG),1)
-CFLAGS += -ggdb -O0
+override CFLAGS += -ggdb -O0
 else ifeq ($(DEBUG),2)
-CFLAGS += -ggdb -O0 -DDEBUG
+override CFLAGS += -ggdb -O0 -DDEBUG
 else
-CFLAGS += -O3 -flto -DNDEBUG -Werror
+override CFLAGS += -O3 -flto -DNDEBUG
 endif
 
 # This is needed because includes below may add recipes
@@ -36,7 +35,7 @@ $(ODIR_STRUCTURE):
 	mkdir -p $@
 
 $(ODIR)/%.o: $(SDIR)/%.c
-	$(CC) -o $@ -c $< $(CFLAGS) -MMD -MP $(LDLIBS)
+	$(CC) -o $@ -c $< $(CFLAGS) -MMD -MP
 
 -include $(OBJ:.o=.d)
 
