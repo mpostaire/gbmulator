@@ -347,10 +347,10 @@ static void resize_screen(glrenderer_t *renderer) {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, renderer->screen_tex_w, renderer->screen_tex_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    // for (GLuint i = 0; i < SCREEN_BUFFER_COUNT; i++) {
-    //     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, renderer->screen_buffers[i].pbo);
-    //     glBufferData(GL_PIXEL_UNPACK_BUFFER, renderer->screen_tex_w * renderer->screen_tex_h * 4, NULL, GL_STREAM_DRAW);
-    // }
+    for (GLuint i = 0; i < SCREEN_BUFFER_COUNT; i++) {
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, renderer->screen_buffers[i].pbo);
+        glBufferData(GL_PIXEL_UNPACK_BUFFER, renderer->screen_tex_w * renderer->screen_tex_h * 4, NULL, GL_STREAM_DRAW);
+    }
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
     renderer->resize_screen_requested = false;

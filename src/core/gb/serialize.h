@@ -1,13 +1,13 @@
 #pragma once
 
 #define SERIALIZED_SIZE_FUNCTION_DECL(name) size_t name##_serialized_length(gb_t *gb)
-#define SERIALIZER_FUNCTION_DECL(name)      uint8_t *name##_serialize(gb_t *gb, size_t *size)
-#define UNSERIALIZER_FUNCTION_DECL(name)    size_t name##_unserialize(gb_t *gb, uint8_t *buf)
+#define SERIALIZER_FUNCTION_DECL(name)      uint8_t *name##_serialize(gb_t *gb, uint8_t *buf)
+#define DESERIALIZER_FUNCTION_DECL(name)    size_t name##_deserialize(gb_t *gb, uint8_t *buf)
 
 #define SERIALIZE_FUNCTION_DECLS(name)   \
     SERIALIZED_SIZE_FUNCTION_DECL(name); \
     SERIALIZER_FUNCTION_DECL(name);      \
-    UNSERIALIZER_FUNCTION_DECL(name);
+    DESERIALIZER_FUNCTION_DECL(name);
 
 #define SERIALIZED_SIZE_FUNCTION(type, name, ...) \
     SERIALIZED_SIZE_FUNCTION_DECL(name) {         \
@@ -17,18 +17,16 @@
         return length;                            \
     }
 
-#define SERIALIZER_FUNCTION(type, name, ...)            \
-    SERIALIZER_FUNCTION_DECL(name) {                    \
-        *size           = name##_serialized_length(gb); \
-        uint8_t *buf    = xmalloc(*size);               \
-        size_t   offset = 0;                            \
-        type    *tmp    = &gb->name;                    \
-        __VA_ARGS__;                                    \
-        return buf;                                     \
+#define SERIALIZER_FUNCTION(type, name, ...) \
+    SERIALIZER_FUNCTION_DECL(name) {         \
+        size_t offset = 0;                   \
+        type  *tmp    = &gb->name;           \
+        __VA_ARGS__;                         \
+        return buf;                          \
     }
 
-#define UNSERIALIZER_FUNCTION(type, name, ...) \
-    UNSERIALIZER_FUNCTION_DECL(name) {         \
+#define DESERIALIZER_FUNCTION(type, name, ...) \
+    DESERIALIZER_FUNCTION_DECL(name) {         \
         type  *tmp    = &gb->name;             \
         size_t offset = 0;                     \
         __VA_ARGS__;                           \
@@ -52,13 +50,13 @@
         offset += sizeof(tmp->array[i].member);                                      \
     }
 
-#define UNSERIALIZE(member)                                        \
+#define DESERIALIZE(member)                                        \
     do {                                                           \
         memcpy(&(tmp->member), buf + offset, sizeof(tmp->member)); \
         offset += sizeof(tmp->member);                             \
     } while (0)
 
-#define UNSERIALIZE_ARRAY_OF_STRUCTS(array, member)                                  \
+#define DESERIALIZE_ARRAY_OF_STRUCTS(array, member)                                  \
     for (size_t i = 0; i < sizeof(tmp->array) / sizeof(tmp->array[0]); i++) {        \
         memcpy(&(tmp->array[i].member), buf + offset, sizeof(tmp->array[i].member)); \
         offset += sizeof(tmp->array[i].member);                                      \
@@ -76,7 +74,7 @@
         offset += sz;                                                              \
     } while (0)
 
-#define UNSERIALIZE_COND_LITERAL(member, cond, size_literal_true, size_literal_else) \
+#define DESERIALIZE_COND_LITERAL(member, cond, size_literal_true, size_literal_else) \
     do {                                                                             \
         size_t sz = cond ? size_literal_true : size_literal_else;                    \
         memcpy(&(tmp->member), buf + offset, sz);                                    \
@@ -93,7 +91,7 @@
         offset += sz;                                          \
     } while (0)
 
-#define UNSERIALIZE_FROM_MEMBER(member, size_member, multiplier) \
+#define DESERIALIZE_FROM_MEMBER(member, size_member, multiplier) \
     do {                                                         \
         size_t sz = tmp->size_member * (multiplier);             \
         memcpy(&(tmp->member), buf + offset, sz);                \
@@ -109,8 +107,8 @@
             SERIALIZE(member);                         \
     } while (0)
 
-#define UNSERIALIZE_IF_CGB(member)                     \
+#define DESERIALIZE_IF_CGB(member)                     \
     do {                                               \
         if (gb->base->opts.mode == GBMULATOR_MODE_GBC) \
-            UNSERIALIZE(member);                       \
+            DESERIALIZE(member);                       \
     } while (0)

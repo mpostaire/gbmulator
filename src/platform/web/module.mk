@@ -4,7 +4,7 @@ SRC += $(wildcard $(SDIR)/platform/$(PLATFORM)/*.c)
 OBJ := $(SRC:$(SDIR)/%.c=$(ODIR)/%.o)
 BIN := $(ODIR)/index.html
 
-CFLAGS += -Wno-unused-command-line-argument -sUSE_ZLIB=1
+CFLAGS += -Wno-unused-command-line-argument
 LDLIBS += -lopenal -lidbfs.js -lz
 
 CC = emcc

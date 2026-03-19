@@ -90,27 +90,20 @@ void gba_set_joypad_state(gba_t *gba, uint16_t state) {
     // TODO interrupts
 }
 
-uint8_t *gba_get_save(gba_t *gba, size_t *save_length) {
+void gba_get_save(gba_t *gba, uint8_t *data, size_t *length) {
     // TODO
-    return NULL;
 }
 
-bool gba_load_save(gba_t *gba, uint8_t *save_data, size_t save_length) {
+bool gba_load_save(gba_t *gba, uint8_t *data, size_t length) {
     // TODO
     return false;
 }
 
-uint8_t *gba_get_savestate(gba_t *gba, size_t *length, bool is_compressed) {
+void gba_get_savestate(gba_t *gba, uint8_t *data, size_t *length) {
     // TODO
-    return NULL;
 }
 
 bool gba_load_savestate(gba_t *gba, uint8_t *data, size_t length) {
     // TODO
     return false;
-}
-
-uint8_t *gba_get_rom(gba_t *gba, size_t *rom_size) {
-    *rom_size = gba->bus.rom_size;
-    return gba->bus.rom;
 }

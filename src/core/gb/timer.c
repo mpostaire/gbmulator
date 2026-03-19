@@ -78,6 +78,6 @@ SERIALIZED_SIZE_FUNCTION(gb_timer_t, timer, SERIALIZED_MEMBERS)
 SERIALIZER_FUNCTION(gb_timer_t, timer, SERIALIZED_MEMBERS)
 #undef X
 
-#define X(value) UNSERIALIZE(value);
-UNSERIALIZER_FUNCTION(gb_timer_t, timer, SERIALIZED_MEMBERS)
+#define X(value) DESERIALIZE(value);
+DESERIALIZER_FUNCTION(gb_timer_t, timer, SERIALIZED_MEMBERS)
 #undef X

@@ -17,22 +17,23 @@
 #define MAX_TOUCHES 32
 
 static struct {
-    bool                  is_paused;
-    bool                  is_rewinding;
-    uint32_t              steps_per_frame;
-    glrenderer_t         *renderer;
-    glrenderer_t         *printer_renderer;
-    uint16_t              joypad_state;
-    gbmulator_t          *emu;
-    gbmulator_t          *linked_emu;
-    gbmulator_t          *printer;
-    int                   sfd;
-    uint32_t              printer_height;
-    printer_new_line_cb_t on_printer_new_line;
-    config_t              config;
-    uint8_t               joypad_touch_counter[GBMULATOR_JOYPAD_END];
-    bool                  joypad_key_press_counter[GBMULATOR_JOYPAD_END];
-    glrenderer_obj_id_t   touches_current_obj[32];
+    bool                is_paused;
+    bool                is_rewinding;
+    uint32_t            steps_per_frame;
+    glrenderer_t       *renderer;
+    glrenderer_t       *printer_renderer;
+    uint16_t            joypad_state;
+    gbmulator_t        *emu;
+    gbmulator_t        *linked_emu;
+    gbmulator_t        *printer;
+    int                 sfd;
+    uint32_t            printer_height;
+    config_t            config;
+    uint8_t             joypad_touch_counter[GBMULATOR_JOYPAD_END];
+    bool                joypad_key_press_counter[GBMULATOR_JOYPAD_END];
+    glrenderer_obj_id_t touches_current_obj[32];
+
+    uint8_t *rom;
 
     struct {
         uint8_t *data;
@@ -42,6 +43,9 @@ static struct {
         int      rotation;
     } camera;
 } app;
+
+// TODO merge with struct app
+static uint8_t link_touch_counter = 0;
 
 static void set_steps_per_frame(void) {
     float speed = app.linked_emu ? 1.0f : app.config.speed;
@@ -152,6 +156,12 @@ static inline void apply_config(void) {
     app_set_sound(app.config.sound);
 
     app_set_touchscreen_mode(app.config.enable_joypad);
+
+    uint32_t screen_w;
+    uint32_t screen_h;
+    app_get_screen_size(&screen_w, &screen_h);
+
+    glrenderer_resize_screen(app.renderer, screen_w, screen_h);
 }
 
 __attribute_used__ void app_init(void) {
@@ -166,15 +176,9 @@ __attribute_used__ void app_init(void) {
 
     app.joypad_state = 0xFF;
 
-    size_t screen_w;
-    size_t screen_h;
-    if (app.config.mode == GBMULATOR_MODE_GBA) {
-        screen_w = GBA_SCREEN_WIDTH;
-        screen_h = GBA_SCREEN_HEIGHT;
-    } else {
-        screen_w = GB_SCREEN_WIDTH;
-        screen_h = GB_SCREEN_HEIGHT;
-    }
+    uint32_t screen_w;
+    uint32_t screen_h;
+    app_get_screen_size(&screen_w, &screen_h);
 
     for (int i = 0; i < MAX_TOUCHES; i++)
         app.touches_current_obj[i] = GLRENDERER_OBJ_ID_SCREEN;
@@ -182,8 +186,6 @@ __attribute_used__ void app_init(void) {
     app.renderer = glrenderer_init(screen_w, screen_h, 0);
 
     alrenderer_init(0);
-
-    apply_config();
 
     app.sfd = -1;
 }
@@ -221,6 +223,9 @@ __attribute_used__ void app_quit(void) {
     if (app.camera.data)
         free(app.camera.data);
 
+    if (app.rom)
+        free(app.rom);
+
     config_save_to_file(&app.config, get_config_path());
 
     alrenderer_quit();
@@ -233,7 +238,7 @@ __attribute_used__ void app_reset(void) {
 
     save_battery_to_file(app.emu, get_save_path(gbmulator_get_rom_title(app.emu)));
 
-    gbmulator_reset(app.emu, app.config.mode);
+    gbmulator_reset(app.emu);
     gbmulator_print_status(app.emu);
     alrenderer_clear_queue();
 }
@@ -280,8 +285,6 @@ __attribute_used__ void app_gamepad_press(unsigned int button) {
 __attribute_used__ void app_gamepad_release(unsigned int button) {
     btn_release(app_button_to_joypad(button), false);
 }
-
-static uint8_t link_touch_counter = 0;
 
 static inline void btn_touch_press(glrenderer_obj_id_t obj_id) {
     switch (obj_id) {
@@ -407,6 +410,10 @@ __attribute_used__ bool app_load_cartridge(uint8_t *rom, size_t rom_size) {
     if (!app.renderer)
         return false;
 
+    if (app.rom)
+        free(app.rom);
+    app.rom = rom;
+
     gbmulator_options_t opts = {
         .rom                     = rom,
         .rom_size                = rom_size,
@@ -418,10 +425,8 @@ __attribute_used__ bool app_load_cartridge(uint8_t *rom, size_t rom_size) {
         .apu_sampling_rate       = alrenderer_get_sampling_rate(),
         .palette                 = app.config.color_palette
     };
+
     gbmulator_t *new_emu = gbmulator_init(&opts);
-    // TODO move mode detection inside gbmulator_init and change opts.mode into opts.prefered_mode
-    //      ---> mode always auto detected
-    //      ---> gba and printer can only reset to itself, gb/gbc can reset to each other
     if (!new_emu) {
         if (opts.mode == GBMULATOR_MODE_GBA)
             opts.mode = GBMULATOR_MODE_GBC;
@@ -549,7 +554,7 @@ __attribute_used__ bool app_is_paused(void) {
 
 __attribute_used__ void app_save_state(int slot) {
     if (app.emu && !app.linked_emu)
-        save_state_to_file(app.emu, get_savestate_path(gbmulator_get_rom_title(app.emu), slot), true);
+        save_state_to_file(app.emu, get_savestate_path(gbmulator_get_rom_title(app.emu), slot));
 }
 
 __attribute_used__ void app_load_state(int slot) {
@@ -670,7 +675,8 @@ __attribute_used__ bool app_connect_printer(printer_new_line_cb_t on_new_line) {
     if (!app.printer_renderer)
         app.printer_renderer = glrenderer_init(GBPRINTER_IMG_WIDTH, app.printer_height, 0);
 
-    app.on_printer_new_line = on_new_line;
+    // TODO
+    // app.on_printer_new_line = on_new_line;
 
     return true;
 }
@@ -715,7 +721,8 @@ __attribute_used__ bool app_printer_save(const char *path) {
 
     // TODO change gbmulator_get_save to allow setting dest buffer to reduce allocs and copies
     size_t   printer_heigth = 0;
-    uint8_t *printer_data   = gbmulator_get_save(app.printer, &printer_heigth);
+    uint8_t *printer_data   = NULL;
+    gbmulator_get_save(app.printer, printer_data, &printer_heigth);
 
     bmp_image_t *image = xmalloc(sizeof(*image) + GBPRINTER_IMG_WIDTH * printer_heigth * 4);
     image->w           = GBPRINTER_IMG_WIDTH;

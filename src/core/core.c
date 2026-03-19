@@ -21,7 +21,6 @@ static bool set_funcs(gbmulator_t *emu, gbmulator_mode_t mode) {
         emu->print_status     = (print_status_func_t) gb_print_status;
         emu->get_joypad_state = (get_joypad_state_func_t) gb_get_joypad_state;
         emu->set_joypad_state = (set_joypad_state_func_t) gb_set_joypad_state;
-        emu->get_rom          = (get_rom_func_t) gb_get_rom;
         emu->cable.shift_bit  = (cable_shift_bit_cb_t) gb_link_shift_bit;
         return true;
     case GBMULATOR_MODE_GBA:
@@ -36,7 +35,6 @@ static bool set_funcs(gbmulator_t *emu, gbmulator_mode_t mode) {
         emu->print_status     = (print_status_func_t) gba_print_status;
         emu->get_joypad_state = (get_joypad_state_func_t) gba_get_joypad_state;
         emu->set_joypad_state = (set_joypad_state_func_t) gba_set_joypad_state;
-        emu->get_rom          = (get_rom_func_t) gba_get_rom;
         emu->cable.shift_bit  = NULL;
         return true;
     case GBMULATOR_MODE_GBPRINTER:
@@ -51,7 +49,6 @@ static bool set_funcs(gbmulator_t *emu, gbmulator_mode_t mode) {
         emu->print_status     = NULL;
         emu->get_joypad_state = NULL;
         emu->set_joypad_state = NULL;
-        emu->get_rom          = NULL;
         emu->cable.shift_bit  = (cable_shift_bit_cb_t) gbprinter_link_shift_bit;
         return true;
     default:
@@ -99,53 +96,11 @@ void gbmulator_quit(gbmulator_t *emu) {
     free(emu);
 }
 
-bool gbmulator_reset(gbmulator_t *emu, gbmulator_mode_t new_mode) {
-    // TODO this could be simplified and allocs removed if gb/gba had reset functions that keep rom and save data
-
+void gbmulator_reset(gbmulator_t *emu) {
     if (!emu)
-        return false;
+        return;
 
-    size_t   rom_size;
-    uint8_t *rom = emu->get_rom(emu->impl, &rom_size);
-
-    if (rom_size == 0 || !rom)
-        return false;
-
-    uint8_t *rom_bak = xmalloc(rom_size);
-    memcpy(rom_bak, rom, rom_size);
-
-    emu->opts.mode = new_mode;
-
-    size_t   save_len;
-    uint8_t *save_data = emu->get_save(emu->impl, &save_len);
-
-    emu->quit(emu->impl);
-
-    if (!set_funcs(emu, emu->opts.mode)) {
-        free(emu);
-        free(rom_bak);
-        return false;
-    }
-
-    emu->opts.rom      = rom_bak;
-    emu->opts.rom_size = rom_size;
-    emu->impl          = emu->init(emu);
-
-    if (!emu->impl) {
-        free(emu);
-        free(rom_bak);
-        return false;
-    }
-
-    if (save_data) {
-        if (emu->load_save)
-            emu->load_save(emu->impl, save_data, save_len);
-        free(save_data);
-    }
-
-    free(rom_bak);
-
-    return true;
+    emu->init(emu);
 }
 
 static void rewind_push(gbmulator_t *emu) {
@@ -184,7 +139,7 @@ void gbmulator_rewind(gbmulator_t *emu, uint64_t frame) {
         rewind_pop(emu);
 }
 
-static inline void gbmulator_step_linked(gbmulator_t *emu) {
+void gbmulator_step(gbmulator_t *emu) {
     if (!emu)
         return;
 
@@ -203,45 +158,53 @@ static inline void gbmulator_step_linked(gbmulator_t *emu) {
         emu->cable.other_device->step(emu->cable.other_device->impl);
 }
 
-void gbmulator_step(gbmulator_t *emu) {
-    gbmulator_step_linked(emu);
-}
-
 void gbmulator_run_steps(gbmulator_t *emu, uint64_t steps_limit) {
     if (!emu)
         return;
 
     for (uint64_t steps_count = 0; steps_count < steps_limit; steps_count++)
-        gbmulator_step_linked(emu);
+        gbmulator_step(emu);
 }
 
 void gbmulator_run_frames(gbmulator_t *emu, uint64_t frames_limit) {
     gbmulator_run_steps(emu, frames_limit * GB_CPU_STEPS_PER_FRAME);
 }
 
-uint8_t *gbmulator_get_save(gbmulator_t *emu, size_t *save_length) {
+void gbmulator_get_save(gbmulator_t *emu, uint8_t *data, size_t *length) {
     if (!emu)
-        return NULL;
+        return;
 
-    return emu->get_save(emu->impl, save_length);
+    emu->get_save(emu->impl, data, length);
 }
 
-bool gbmulator_load_save(gbmulator_t *emu, uint8_t *save_data, size_t save_length) {
+bool gbmulator_load_save(gbmulator_t *emu, uint8_t *data, size_t length) {
     if (!emu)
         return false;
 
-    return emu->load_save(emu->impl, save_data, save_length);
+    return emu->load_save(emu->impl, data, length);
 }
 
-uint8_t *gbmulator_get_savestate(gbmulator_t *emu, size_t *length, bool is_compressed) {
-    if (!emu)
-        return NULL;
+void gbmulator_get_savestate(gbmulator_t *emu, uint8_t *data, size_t *length) {
+    if (!emu || !emu->impl || !emu->load_savestate || !length)
+        return;
 
-    gbmulator_savestate_t *savestate = emu->get_savestate(emu->impl, length, is_compressed);
-    if (!savestate)
-        return NULL;
+    if (!data) {
+        emu->get_savestate(emu->impl, NULL, length);
+        *length += sizeof(gbmulator_savestate_t);
+        return;
+    }
 
-    return (uint8_t *) savestate;
+    gbmulator_savestate_t *savestate = (gbmulator_savestate_t *) data;
+    memset(savestate, 0, sizeof(*savestate));
+
+    size_t rom_title_len = strnlen(emu->get_rom_title(emu->impl), sizeof(savestate->rom_title));
+
+    memcpy(savestate->identifier, SAVESTATE_STRING, sizeof(savestate->identifier));
+    memcpy(savestate->rom_title, emu->get_rom_title(emu->impl), rom_title_len);
+    savestate->mode = emu->opts.mode;
+
+    emu->get_savestate(emu->impl, savestate->data, length);
+    *length += sizeof(gbmulator_savestate_t);
 }
 
 bool gbmulator_load_savestate(gbmulator_t *emu, uint8_t *data, size_t length) {
@@ -267,17 +230,18 @@ bool gbmulator_load_savestate(gbmulator_t *emu, uint8_t *data, size_t length) {
     }
 
     if (strncmp(savestate->rom_title, rom_title, sizeof(savestate->rom_title))) {
-        eprintf("rom title mismatch (expected: '%.16s'; got: '%.16s')\n", rom_title, savestate->rom_title);
+        eprintf("rom title mismatch (expected: '%.16s'; got: '%.16s')", rom_title, savestate->rom_title);
         return false;
     }
 
     switch (savestate->mode) {
     case GBMULATOR_MODE_GB:
     case GBMULATOR_MODE_GBC:
-        if (emu->opts.mode != savestate->mode) {
-            if (!gbmulator_reset(emu, savestate->mode))
-                return false;
-        }
+        if (emu->opts.mode == GBMULATOR_MODE_GBA)
+            return false;
+
+        emu->opts.mode = savestate->mode; // allow load_savestate to switch between GB/GBC
+        gbmulator_reset(emu);
         break;
     case GBMULATOR_MODE_GBA:
         break;
@@ -286,10 +250,7 @@ bool gbmulator_load_savestate(gbmulator_t *emu, uint8_t *data, size_t length) {
         return false;
     }
 
-    if (!emu->load_savestate)
-        return false;
-
-    return emu->load_savestate(emu->impl, savestate, length);
+    return emu->load_savestate(emu->impl, savestate->data, length - sizeof(gbmulator_savestate_t));
 }
 
 void gbmulator_get_options(gbmulator_t *emu, gbmulator_options_t *opts) {
@@ -345,7 +306,10 @@ uint8_t *gbmulator_get_rom(gbmulator_t *emu, size_t *rom_size) {
     if (!emu)
         return NULL;
 
-    return emu->get_rom(emu->impl, rom_size);
+    if (rom_size)
+        *rom_size = emu->opts.rom_size;
+
+    return emu->opts.rom;
 }
 
 void gbmulator_link_connect(gbmulator_t *emu, gbmulator_t *other, gbmulator_link_t type) {

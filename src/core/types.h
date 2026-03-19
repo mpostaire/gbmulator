@@ -20,7 +20,6 @@
 typedef struct __attribute__((packed)) {
     char    identifier[sizeof(SAVESTATE_STRING)];
     char    rom_title[16];
-    bool    is_compressed;
     uint8_t mode;
     uint8_t data[];
 } gbmulator_savestate_t;

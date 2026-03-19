@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
-#include <zlib.h>
 
 #include "gb_priv.h"
 
@@ -46,17 +45,24 @@ void gb_step(gb_t *gb) {
 }
 
 gb_t *gb_init(gbmulator_t *base) {
-    gb_t *gb = xcalloc(1, sizeof(*gb));
-    gb->base = base;
+    gb_t *gb;
+
+    if (!base->impl) {
+        gb       = xcalloc(1, sizeof(*gb));
+        gb->base = base;
+    } else {
+        gb = base->impl;
+    }
 
     gb->cgb_mode_enabled = gb->base->opts.mode == GBMULATOR_MODE_GBC;
 
     gb_set_palette(gb, gb->base->opts.palette);
 
-    if (!mmu_reset(gb, base->opts.rom, base->opts.rom_size)) {
+    if (!mmu_reset(gb)) {
         free(gb);
         return NULL;
     }
+
     cpu_reset(gb);
     apu_reset(gb);
     ppu_reset(gb);
@@ -68,7 +74,6 @@ gb_t *gb_init(gbmulator_t *base) {
 }
 
 void gb_quit(gb_t *gb) {
-    mmu_quit(gb);
     free(gb);
 }
 
@@ -88,7 +93,7 @@ static const char *get_new_licensee(gb_t *gb) {
     };
     // clang-format on
 
-    uint8_t code = ((gb->mmu.rom[0x0144] - 0x30) * 10) + (gb->mmu.rom[0x0145]) - 0x30;
+    uint8_t code = ((gb->base->opts.rom[0x0144] - 0x30) * 10) + (gb->base->opts.rom[0x0145]) - 0x30;
     return new_licensees[code];
 }
 
@@ -122,7 +127,7 @@ static const char *get_licensee(gb_t *gb) {
     };
     // clang-format on
 
-    uint8_t code = gb->mmu.rom[0x014B];
+    uint8_t code = gb->base->opts.rom[0x014B];
     return code == 0x33 ? get_new_licensee(gb) : old_licensees[code];
 }
 
@@ -137,7 +142,7 @@ void gb_print_status(gb_t *gb) {
     printf("[%s] Playing %s (v%d)%s\n",
            gb->base->opts.mode == GBMULATOR_MODE_GBC ? "CGB" : "DMG",
            gb->rom_title,
-           mmu->rom[0x014C],
+           gb->base->opts.rom[0x014C],
            licensee ? str_buf : "");
 
     if (mmu->eram_banks > 0)
@@ -196,62 +201,61 @@ void gb_set_joypad_state(gb_t *gb, uint16_t state) {
     joypad->direction = direction;
 }
 
-uint8_t *gb_get_save(gb_t *gb, size_t *save_length) {
+void gb_get_save(gb_t *gb, uint8_t *data, size_t *length) {
+    if (!gb || !length)
+        return;
+
     if (gb->mmu.mbc.type == MBC7) {
-        *save_length       = sizeof(gb->mmu.mbc.mbc7.eeprom.data);
-        uint8_t *save_data = xmalloc(*save_length);
-        memcpy(save_data, gb->mmu.mbc.mbc7.eeprom.data, *save_length);
-        return save_data;
+        *length = sizeof(gb->mmu.mbc.mbc7.eeprom.data);
+
+        if (data)
+            memcpy(data, gb->mmu.mbc.mbc7.eeprom.data, *length);
+
+        return;
     }
 
     if (!gb->mmu.has_battery || (!gb->mmu.has_rtc && gb->mmu.eram_banks == 0)) {
-        *save_length = 0;
-        return NULL;
+        *length = 0;
+        return;
     }
 
-    size_t rtc_len   = gb->mmu.has_rtc ? 48 : 0;
-    size_t eram_len  = gb->mmu.eram_banks * ERAM_BANK_SIZE;
-    size_t total_len = eram_len + rtc_len;
-    if (save_length)
-        *save_length = total_len;
+    size_t rtc_len  = gb->mmu.has_rtc ? 48 : 0;
+    size_t eram_len = gb->mmu.eram_banks * ERAM_BANK_SIZE;
+    *length         = eram_len + rtc_len;
 
-    if (total_len == 0)
-        return NULL;
-
-    uint8_t *save_data = xmalloc(total_len);
+    if (*length == 0 || !data)
+        return;
 
     if (eram_len > 0)
-        memcpy(save_data, gb->mmu.eram, eram_len);
+        memcpy(data, gb->mmu.eram, eram_len);
 
     if (rtc_len > 0) {
-        save_data[eram_len]      = gb->mmu.mbc.mbc3.rtc.s;
-        save_data[eram_len + 4]  = gb->mmu.mbc.mbc3.rtc.m;
-        save_data[eram_len + 8]  = gb->mmu.mbc.mbc3.rtc.h;
-        save_data[eram_len + 12] = gb->mmu.mbc.mbc3.rtc.dl;
-        save_data[eram_len + 16] = gb->mmu.mbc.mbc3.rtc.dh;
-        save_data[eram_len + 20] = gb->mmu.mbc.mbc3.rtc.latched_s;
-        save_data[eram_len + 24] = gb->mmu.mbc.mbc3.rtc.latched_m;
-        save_data[eram_len + 28] = gb->mmu.mbc.mbc3.rtc.latched_h;
-        save_data[eram_len + 32] = gb->mmu.mbc.mbc3.rtc.latched_dl;
-        save_data[eram_len + 36] = gb->mmu.mbc.mbc3.rtc.latched_dh;
+        data[eram_len]      = gb->mmu.mbc.mbc3.rtc.s;
+        data[eram_len + 4]  = gb->mmu.mbc.mbc3.rtc.m;
+        data[eram_len + 8]  = gb->mmu.mbc.mbc3.rtc.h;
+        data[eram_len + 12] = gb->mmu.mbc.mbc3.rtc.dl;
+        data[eram_len + 16] = gb->mmu.mbc.mbc3.rtc.dh;
+        data[eram_len + 20] = gb->mmu.mbc.mbc3.rtc.latched_s;
+        data[eram_len + 24] = gb->mmu.mbc.mbc3.rtc.latched_m;
+        data[eram_len + 28] = gb->mmu.mbc.mbc3.rtc.latched_h;
+        data[eram_len + 32] = gb->mmu.mbc.mbc3.rtc.latched_dl;
+        data[eram_len + 36] = gb->mmu.mbc.mbc3.rtc.latched_dh;
         // fill rtc save padding bytes with 0
         for (size_t i = eram_len; i < eram_len + 40; i++)
             if (i % 4 != 0)
-                save_data[i] = 0;
+                data[i] = 0;
 
         time_t rtc_timestamp = time(NULL);
         for (int i = 0; i < 8; i++) // little endian serialization of rtc_timestamp
-            save_data[eram_len + 40 + i] = rtc_timestamp >> (i * 8);
+            data[eram_len + 40 + i] = rtc_timestamp >> (i * 8);
     }
-
-    return save_data;
 }
 
-bool gb_load_save(gb_t *gb, uint8_t *save_data, size_t save_length) {
+bool gb_load_save(gb_t *gb, uint8_t *data, size_t length) {
     if (gb->mmu.mbc.type == MBC7) {
-        if (save_length != sizeof(gb->mmu.mbc.mbc7.eeprom.data))
+        if (length != sizeof(gb->mmu.mbc.mbc7.eeprom.data))
             return 0;
-        memcpy(gb->mmu.mbc.mbc7.eeprom.data, save_data, save_length);
+        memcpy(gb->mmu.mbc.mbc7.eeprom.data, data, length);
         return 1;
     }
 
@@ -260,36 +264,36 @@ bool gb_load_save(gb_t *gb, uint8_t *save_data, size_t save_length) {
         return 0;
 
     size_t eram_len = gb->mmu.eram_banks * ERAM_BANK_SIZE;
-    if (save_length < eram_len || save_length == 0)
+    if (length < eram_len || length == 0)
         return 0;
 
     if (eram_len > 0)
-        memcpy(gb->mmu.eram, save_data, eram_len);
+        memcpy(gb->mmu.eram, data, eram_len);
 
     if (!gb->mmu.has_rtc)
         return 1;
 
-    size_t rtc_len = save_length - eram_len;
+    size_t rtc_len = length - eram_len;
     if (rtc_len != 44 && rtc_len != 48) {
         eprintf("Invalid rtc format\n");
         return 1;
     }
 
     // get saved rtc registers and timestamp
-    uint8_t s                       = save_data[eram_len];
-    uint8_t m                       = save_data[eram_len + 4];
-    uint8_t h                       = save_data[eram_len + 8];
-    uint8_t dl                      = save_data[eram_len + 12];
-    uint8_t dh                      = save_data[eram_len + 16];
-    gb->mmu.mbc.mbc3.rtc.latched_s  = save_data[eram_len + 20];
-    gb->mmu.mbc.mbc3.rtc.latched_m  = save_data[eram_len + 24];
-    gb->mmu.mbc.mbc3.rtc.latched_h  = save_data[eram_len + 28];
-    gb->mmu.mbc.mbc3.rtc.latched_dl = save_data[eram_len + 32];
-    gb->mmu.mbc.mbc3.rtc.latched_dh = save_data[eram_len + 36];
+    uint8_t s                       = data[eram_len];
+    uint8_t m                       = data[eram_len + 4];
+    uint8_t h                       = data[eram_len + 8];
+    uint8_t dl                      = data[eram_len + 12];
+    uint8_t dh                      = data[eram_len + 16];
+    gb->mmu.mbc.mbc3.rtc.latched_s  = data[eram_len + 20];
+    gb->mmu.mbc.mbc3.rtc.latched_m  = data[eram_len + 24];
+    gb->mmu.mbc.mbc3.rtc.latched_h  = data[eram_len + 28];
+    gb->mmu.mbc.mbc3.rtc.latched_dl = data[eram_len + 32];
+    gb->mmu.mbc.mbc3.rtc.latched_dh = data[eram_len + 36];
 
     time_t rtc_timestamp = 0;
-    for (int i = 0; i < (rtc_len == 48 ? 8 : 4); i++) // little endian unserialization of rtc_timestamp
-        rtc_timestamp |= ((time_t) save_data[eram_len + 40 + i]) << (i * 8);
+    for (int i = 0; i < (rtc_len == 48 ? 8 : 4); i++) // little endian deserialization of rtc_timestamp
+        rtc_timestamp |= ((time_t) data[eram_len + 40 + i]) << (i * 8);
 
     // add elapsed time
     time_t rtc_registers_time = s + m * 60 + h * 3600 + ((dh << 8) | dl) * 86400;
@@ -319,97 +323,47 @@ bool gb_load_save(gb_t *gb, uint8_t *save_data, size_t save_length) {
     return 1;
 }
 
-gbmulator_savestate_t *gb_get_savestate(gb_t *gb, size_t *savestate_length, bool is_compressed) {
-    size_t   cpu_len;
-    uint8_t *cpu = cpu_serialize(gb, &cpu_len);
-    size_t   timer_len;
-    uint8_t *timer = timer_serialize(gb, &timer_len);
-    size_t   ppu_len;
-    uint8_t *ppu = ppu_serialize(gb, &ppu_len);
-    size_t   mmu_len;
-    uint8_t *mmu = mmu_serialize(gb, &mmu_len);
+void gb_get_savestate(gb_t *gb, uint8_t *data, size_t *length) {
+    if (!gb || !length)
+        return;
 
-    // don't write each component length into the savestate as the only variable length is the mmu which is written
-    // last and it's length can be computed using the eram_banks number and the mode (both in the header)
-    size_t                 savestate_data_len = cpu_len + timer_len + ppu_len + mmu_len;
-    gbmulator_savestate_t *savestate          = xmalloc(sizeof(*savestate) + savestate_data_len);
+    size_t cpu_len   = cpu_serialized_length(gb);
+    size_t timer_len = timer_serialized_length(gb);
+    size_t ppu_len   = ppu_serialized_length(gb);
+    size_t mmu_len   = mmu_serialized_length(gb);
 
-    memcpy(savestate->identifier, SAVESTATE_STRING, sizeof(savestate->identifier));
-    memcpy(savestate->rom_title, gb->rom_title, sizeof(savestate->rom_title));
-    savestate->mode = gb->base->opts.mode;
+    *length = cpu_len + timer_len + ppu_len + mmu_len;
+
+    if (length == 0 || !data)
+        return;
 
     size_t offset = 0;
-    memcpy(savestate->data, cpu, cpu_len);
+    cpu_serialize(gb, &data[offset]);
     offset += cpu_len;
-    memcpy(&savestate->data[offset], timer, timer_len);
+    timer_serialize(gb, &data[offset]);
     offset += timer_len;
-    memcpy(&savestate->data[offset], ppu, ppu_len);
+    ppu_serialize(gb, &data[offset]);
     offset += ppu_len;
-    memcpy(&savestate->data[offset], mmu, mmu_len);
-
-    free(cpu);
-    free(timer);
-    free(ppu);
-    free(mmu);
-
-    // compress savestate data if specified
-    if (is_compressed) {
-        uLongf   dest_len = compressBound(savestate_data_len);
-        uint8_t *dest     = xmalloc(dest_len);
-        if (compress(dest, &dest_len, savestate->data, savestate_data_len) == Z_OK) {
-            savestate->is_compressed = true;
-            savestate                = xrealloc(savestate, dest_len + sizeof(*savestate));
-            memcpy(savestate->data, dest, dest_len);
-            savestate_data_len = dest_len;
-        } else {
-            eprintf("Couldn't compress savestate, using an uncompressed savestate instead\n");
-        }
-        free(dest);
-    }
-
-    *savestate_length = sizeof(*savestate) + savestate_data_len;
-
-    return savestate;
+    mmu_serialize(gb, &data[offset]);
 }
 
-bool gb_load_savestate(gb_t *gb, gbmulator_savestate_t *savestate, size_t savestate_length) {
+bool gb_load_savestate(gb_t *gb, uint8_t *data, size_t length) {
     size_t expected_data_len = 0;
     expected_data_len += cpu_serialized_length(gb);
     expected_data_len += timer_serialized_length(gb);
     expected_data_len += ppu_serialized_length(gb);
     expected_data_len += mmu_serialized_length(gb);
 
-    size_t   savestate_data_length = savestate_length - sizeof(*savestate);
-    uint8_t *savestate_data        = savestate->data;
-
-    if (savestate->is_compressed) {
-        uint8_t *dest     = xmalloc(expected_data_len);
-        uLongf   dest_len = expected_data_len;
-        if (uncompress(dest, &dest_len, savestate_data, savestate_data_length) == Z_OK) {
-            savestate_data_length = dest_len;
-            savestate_data        = dest;
-        } else {
-            eprintf("uncompress failure\n");
-            free(dest);
-            return false;
-        }
-    }
-
-    if (savestate_data_length != expected_data_len) {
-        eprintf("invalid savestate data length (expected: %zu; got: %zu)\n", expected_data_len, savestate_data_length);
-        if (savestate->is_compressed)
-            free(savestate_data);
+    if (length != expected_data_len) {
+        eprintf("invalid savestate data length (expected: %zu; got: %zu)\n", expected_data_len, length);
         return false;
     }
 
     size_t offset = 0;
-    offset += cpu_unserialize(gb, &savestate_data[offset]);
-    offset += timer_unserialize(gb, &savestate_data[offset]);
-    offset += ppu_unserialize(gb, &savestate_data[offset]);
-    offset += mmu_unserialize(gb, &savestate_data[offset]);
-
-    if (savestate->is_compressed)
-        free(savestate_data);
+    offset += cpu_deserialize(gb, &data[offset]);
+    offset += timer_deserialize(gb, &data[offset]);
+    offset += ppu_deserialize(gb, &data[offset]);
+    offset += mmu_deserialize(gb, &data[offset]);
 
     // resets apu's internal state to prevent glitchy audio if resuming from state without sound playing from state with sound playing
     apu_reset(gb);
@@ -419,12 +373,6 @@ bool gb_load_savestate(gb_t *gb, gbmulator_savestate_t *savestate, size_t savest
 
 char *gb_get_rom_title(gb_t *gb) {
     return gb->rom_title;
-}
-
-uint8_t *gb_get_rom(gb_t *gb, size_t *rom_size) {
-    if (rom_size)
-        *rom_size = gb->mmu.rom_size;
-    return gb->mmu.rom;
 }
 
 uint8_t gb_has_accelerometer(gb_t *gb) {

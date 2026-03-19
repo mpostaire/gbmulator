@@ -893,21 +893,18 @@ void ppu_reset(gb_t *gb) {
 
 #define X(value)        SERIALIZED_LENGTH(value);
 #define Y(array, value) SERIALIZED_LENGTH_ARRAY_OF_STRUCTS(array, value);
-SERIALIZED_SIZE_FUNCTION(gb_ppu_t, ppu,
-                         SERIALIZED_MEMBERS)
+SERIALIZED_SIZE_FUNCTION(gb_ppu_t, ppu, SERIALIZED_MEMBERS)
 #undef X
 #undef Y
 
 #define X(value)        SERIALIZE(value);
 #define Y(array, value) SERIALIZE_ARRAY_OF_STRUCTS(array, value);
-SERIALIZER_FUNCTION(gb_ppu_t, ppu,
-                    SERIALIZED_MEMBERS)
+SERIALIZER_FUNCTION(gb_ppu_t, ppu, SERIALIZED_MEMBERS)
 #undef X
 #undef Y
 
-#define X(value)        UNSERIALIZE(value);
-#define Y(array, value) UNSERIALIZE_ARRAY_OF_STRUCTS(array, value);
-UNSERIALIZER_FUNCTION(gb_ppu_t, ppu,
-                      SERIALIZED_MEMBERS)
+#define X(value)        DESERIALIZE(value);
+#define Y(array, value) DESERIALIZE_ARRAY_OF_STRUCTS(array, value);
+DESERIALIZER_FUNCTION(gb_ppu_t, ppu, SERIALIZED_MEMBERS)
 #undef X
 #undef Y

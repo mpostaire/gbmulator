@@ -32,7 +32,6 @@ Various dependencies are needed to build the desktop app:
 - libmanette
 - opengl
 - openal
-- zlib (compressed savestates)
 - gstreamer (camera input for Game Boy Camera)
 
 In addition to these dependencies, the following tools are needed to build the desktop app:

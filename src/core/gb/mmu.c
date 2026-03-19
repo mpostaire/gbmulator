@@ -19,7 +19,7 @@ static uint8_t cgb_boot_rom[] = {
 };
 // clang-format on
 
-int parse_header_mbc_byte(uint8_t mbc_byte, uint8_t *mbc_type, uint8_t *has_eram, uint8_t *has_battery, uint8_t *has_rtc, uint8_t *has_rumble) {
+static bool parse_header_mbc_byte(uint8_t mbc_byte, uint8_t *mbc_type, uint8_t *has_eram, uint8_t *has_battery, uint8_t *has_rtc, uint8_t *has_rumble) {
     uint8_t tmp_mbc_type = 0, tmp_has_eram = 0, tmp_has_battery = 0, tmp_has_rtc = 0, tmp_has_rumble = 0;
 
     switch (mbc_byte) {
@@ -120,7 +120,7 @@ int parse_header_mbc_byte(uint8_t mbc_byte, uint8_t *mbc_type, uint8_t *has_eram
         tmp_has_battery = 1;
         break;
     default:
-        return 0;
+        return false;
     }
 
     if (mbc_type)
@@ -134,7 +134,7 @@ int parse_header_mbc_byte(uint8_t mbc_byte, uint8_t *mbc_type, uint8_t *has_eram
     if (has_rumble)
         *has_rumble = tmp_has_rumble;
 
-    return 1;
+    return true;
 }
 
 int validate_header_checksum(const uint8_t *rom) {
@@ -144,23 +144,26 @@ int validate_header_checksum(const uint8_t *rom) {
     return checksum == rom[0x014D];
 }
 
-static int parse_cartridge(gb_t *gb) {
+static bool parse_cartridge(gb_t *gb) {
+    if (!gb->base->opts.rom || gb->base->opts.rom_size < 0x8000)
+        return false;
+
     gb_mmu_t *mmu = &gb->mmu;
 
     // 8-bit cartridge header checksum validation
-    if (!validate_header_checksum(mmu->rom)) {
+    if (!validate_header_checksum(gb->base->opts.rom)) {
         eprintf("invalid checksum\n");
-        return 0;
+        return false;
     }
 
     uint8_t has_eram = 0;
-    if (!parse_header_mbc_byte(mmu->rom[0x0147], &mmu->mbc.type, &has_eram, &mmu->has_battery, &mmu->has_rtc, &mmu->has_rumble)) {
-        eprintf("MBC byte %02X not supported\n", mmu->rom[0x0147]);
+    if (!parse_header_mbc_byte(gb->base->opts.rom[0x0147], &mmu->mbc.type, &has_eram, &mmu->has_battery, &mmu->has_rtc, &mmu->has_rumble)) {
+        eprintf("MBC byte %02X not supported\n", gb->base->opts.rom[0x0147]);
         return 0;
     }
 
     // detect MBC1M
-    if (mmu->mbc.type == MBC1 && mmu->rom_size == 0x100000) {
+    if (mmu->mbc.type == MBC1 && gb->base->opts.rom_size == 0x100000) {
         const unsigned int addrs[] = { 0x00104, 0x40104, 0x80104, 0xC0104 };
         uint8_t            logo[]  = {
             0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0C, 0x00, 0x0D,
@@ -170,7 +173,7 @@ static int parse_cartridge(gb_t *gb) {
 
         uint8_t matches = 0;
         for (uint8_t i = 0; i < 4; i++) {
-            matches += memcmp(&mmu->rom[addrs[i]], logo, sizeof(logo)) ? 0 : 1;
+            matches += memcmp(&gb->base->opts.rom[addrs[i]], logo, sizeof(logo)) ? 0 : 1;
             if (matches > 1) {
                 mmu->mbc.type = MBC1M;
                 break;
@@ -178,10 +181,10 @@ static int parse_cartridge(gb_t *gb) {
         }
     }
 
-    mmu->rom_banks = 2 << mmu->rom[0x0148];
+    mmu->rom_banks = 2 << gb->base->opts.rom[0x0148];
 
     if (has_eram) {
-        switch (mmu->rom[0x0149]) {
+        switch (gb->base->opts.rom[0x0149]) {
         case 0x00:
             mmu->eram_banks = 0;
             break;
@@ -202,13 +205,13 @@ static int parse_cartridge(gb_t *gb) {
 
     // MBC3 cartridges are 2MiB, MBC30 cartridges are 4MiB (but the mbctest.gb test rom is a bit smaller)
     if (mmu->mbc.type == MBC3)
-        if (mmu->eram_banks == 8 || mmu->rom_size > 0x00200000)
+        if (mmu->eram_banks == 8 || gb->base->opts.rom_size > 0x00200000)
             mmu->mbc.type = MBC30;
 
     // get rom title
-    memcpy(gb->rom_title, (char *) &mmu->rom[0x0134], 16);
+    memcpy(gb->rom_title, (char *) &gb->base->opts.rom[0x0134], 16);
     gb->rom_title[16] = '\0';
-    uint8_t cgb_flag  = mmu->rom[0x0143] & 0xC0;
+    uint8_t cgb_flag  = gb->base->opts.rom[0x0143] & 0xC0;
     if (cgb_flag)
         gb->rom_title[15] = '\0';
 
@@ -216,19 +219,52 @@ static int parse_cartridge(gb_t *gb) {
     for (char *c = &gb->rom_title[16]; c >= gb->rom_title && !isalnum(*c); c--)
         *c = '\0';
 
-    return 1;
+    return true;
 }
 
-int mmu_reset(gb_t *gb, const uint8_t *rom, size_t rom_size) {
-    memset(&gb->mmu, 0, sizeof(gb->mmu));
-    gb->mmu.rom      = xcalloc(1, rom_size);
-    gb->mmu.rom_size = rom_size;
-    memcpy(gb->mmu.rom, rom, gb->mmu.rom_size);
+int mmu_reset(gb_t *gb) {
+    bool full_reset = gb->base->opts.rom && gb->base->opts.rom_size;
 
-    if (!parse_cartridge(gb)) {
-        mmu_quit(gb);
-        return 0;
+    memset(gb->mmu.vram, 0, sizeof(gb->mmu.vram));
+    if (full_reset)
+        memset(gb->mmu.eram, 0, sizeof(gb->mmu.eram));
+    memset(gb->mmu.wram, 0, sizeof(gb->mmu.wram));
+    memset(gb->mmu.oam, 0, sizeof(gb->mmu.oam));
+    memset(gb->mmu.io_registers, 0, sizeof(gb->mmu.io_registers));
+    gb->mmu.ie = 0;
+    memset(gb->mmu.hram, 0, sizeof(gb->mmu.hram));
+    memset(gb->mmu.cram_bg, 0, sizeof(gb->mmu.cram_bg));
+    memset(gb->mmu.cram_obj, 0, sizeof(gb->mmu.cram_obj));
+
+    gb->mmu.boot_finished = 0;
+
+    memset(&gb->mmu.hdma, 0, sizeof(gb->mmu.hdma));
+    memset(&gb->mmu.oam_dma, 0, sizeof(gb->mmu.oam_dma));
+
+    gb->mmu.vram_bank_addr_offset  = 0;
+    gb->mmu.wram_bankn_addr_offset = 0;
+    gb->mmu.rom_banks              = 0;
+    gb->mmu.eram_banks             = 0;
+
+    gb->mmu.rom_bank0_addr = 0;
+    gb->mmu.rom_bankn_addr = 0;
+    gb->mmu.eram_bank_addr = 0;
+    gb->mmu.has_battery    = 0;
+    gb->mmu.has_rumble     = 0;
+    gb->mmu.has_rtc        = 0;
+
+    if (full_reset) {
+        memset(&gb->mmu.mbc, 0, sizeof(gb->mmu.mbc));
+    } else {
+        gb->mmu.mbc.mbc3.rtc.enabled    = 0;
+        gb->mmu.mbc.mbc3.rtc.reg        = 0; // rtc register
+        gb->mmu.mbc.mbc3.rtc.latch      = 0;
+        gb->mmu.mbc.mbc3.rtc.rtc_cycles = 0;
     }
+
+    // TODO this should be at the top but i need to remove side effects
+    if (!parse_cartridge(gb))
+        return 0;
 
     gb->mmu.mbc.mbc1.bank_lo = 1;
     // gb->mmu.rom_bank0_addr = 0; // initialized to 0 by memset
@@ -252,10 +288,6 @@ int mmu_reset(gb_t *gb, const uint8_t *rom, size_t rom_size) {
     gb->mmu.cgb_boot_rom = cgb_boot_rom;
 
     return 1;
-}
-
-void mmu_quit(gb_t *gb) {
-    free(gb->mmu.rom);
 }
 
 static inline uint8_t is_oam_locked_for_cpu_read(gb_t *gb) {
@@ -862,12 +894,12 @@ uint8_t mmu_read_io_src(gb_t *gb, uint16_t address, gb_io_source_t io_src) {
     case MMU_ROM_BANK0 + 0x1000:
     case MMU_ROM_BANK0 + 0x2000:
     case MMU_ROM_BANK0 + 0x3000:
-        return mmu->rom[mmu->rom_bank0_addr + address];
+        return gb->base->opts.rom[mmu->rom_bank0_addr + address];
     case MMU_ROM_BANKN:
     case MMU_ROM_BANKN + 0x1000:
     case MMU_ROM_BANKN + 0x2000:
     case MMU_ROM_BANKN + 0x3000:
-        return mmu->rom[mmu->rom_bankn_addr + address];
+        return gb->base->opts.rom[mmu->rom_bankn_addr + address];
     case MMU_VRAM:
     case MMU_VRAM + 0x1000:
         if (io_src == IO_SRC_GDMA_HDMA)
@@ -972,7 +1004,6 @@ void mmu_write_io_src(gb_t *gb, uint16_t address, uint8_t data, gb_io_source_t i
 
 // serialize everything except rom
 #define SERIALIZED_MEMBERS                                                                     \
-    X(rom_size)                                                                                \
     Y(vram, gb->base->opts.mode == GBMULATOR_MODE_GBC, 2 * VRAM_BANK_SIZE, VRAM_BANK_SIZE)     \
     Z(eram, eram_banks, ERAM_BANK_SIZE)                                                        \
     Y(wram, gb->base->opts.mode == GBMULATOR_MODE_GBC, 8 * WRAM_BANK_SIZE, 2 * WRAM_BANK_SIZE) \
@@ -1029,11 +1060,11 @@ SERIALIZER_FUNCTION(gb_mmu_t, mmu, SERIALIZED_MEMBERS {
 #undef Y
 #undef X
 
-#define X(value) UNSERIALIZE(value);
-#define Y(...)   UNSERIALIZE_COND_LITERAL(__VA_ARGS__);
-#define Z(...)   UNSERIALIZE_FROM_MEMBER(__VA_ARGS__);
-#define W(...)   UNSERIALIZE_IF_CGB(__VA_ARGS__);
-UNSERIALIZER_FUNCTION(gb_mmu_t, mmu, SERIALIZED_MEMBERS {
+#define X(value) DESERIALIZE(value);
+#define Y(...)   DESERIALIZE_COND_LITERAL(__VA_ARGS__);
+#define Z(...)   DESERIALIZE_FROM_MEMBER(__VA_ARGS__);
+#define W(...)   DESERIALIZE_IF_CGB(__VA_ARGS__);
+DESERIALIZER_FUNCTION(gb_mmu_t, mmu, SERIALIZED_MEMBERS {
         gb_mbc_t *tmp = &gb->mmu.mbc;
         MBC_SERIALIZED_MEMBERS })
 #undef W

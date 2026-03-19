@@ -8,10 +8,9 @@
 
 #include "../../core/core.h"
 
-#define PKT_CONFIG_MODE_MASK     0x03
-#define PKT_CONFIG_IR_MASK       0x04
-#define PKT_CONFIG_CABLE_MASK    0x08
-#define PKT_CONFIG_COMPRESS_MASK 0x80
+#define PKT_CONFIG_MODE_MASK  0x03
+#define PKT_CONFIG_IR_MASK    0x04
+#define PKT_CONFIG_CABLE_MASK 0x08
 
 typedef enum {
     PKT_INFO,
@@ -154,7 +153,7 @@ static inline int receive(int fd, void *buf, size_t n, int flags) {
     return 1;
 }
 
-static int exchange_info(int sfd, gbmulator_t *emu, gbmulator_mode_t *mode, bool *can_compress, bool *is_cable_link, bool *is_ir_link) {
+static int exchange_info(int sfd, gbmulator_t *emu, gbmulator_mode_t *mode, bool *is_cable_link, bool *is_ir_link) {
     // --- SEND PKT_INFO ---
 
     uint16_t checksum = gbmulator_get_rom_checksum(emu);
@@ -167,7 +166,6 @@ static int exchange_info(int sfd, gbmulator_t *emu, gbmulator_mode_t *mode, bool
     pkt[1]         = opts.mode;
     pkt[1] |= PKT_CONFIG_CABLE_MASK;
     pkt[1] |= PKT_CONFIG_IR_MASK;
-    pkt[1] |= PKT_CONFIG_COMPRESS_MASK;
     memcpy(&pkt[2], &checksum, 2);
 
     send(sfd, pkt, 4, 0);
@@ -182,9 +180,8 @@ static int exchange_info(int sfd, gbmulator_t *emu, gbmulator_mode_t *mode, bool
     }
 
     *mode          = pkt[1] & PKT_CONFIG_MODE_MASK;
-    *is_cable_link = (pkt[1] & PKT_CONFIG_CABLE_MASK) == PKT_CONFIG_CABLE_MASK;       // cable-link
-    *is_ir_link    = (pkt[1] & PKT_CONFIG_IR_MASK) == PKT_CONFIG_IR_MASK;             // ir-link
-    *can_compress  = (pkt[1] & PKT_CONFIG_COMPRESS_MASK) == PKT_CONFIG_COMPRESS_MASK; // compress
+    *is_cable_link = (pkt[1] & PKT_CONFIG_CABLE_MASK) == PKT_CONFIG_CABLE_MASK; // cable-link
+    *is_ir_link    = (pkt[1] & PKT_CONFIG_IR_MASK) == PKT_CONFIG_IR_MASK;       // ir-link
 
     uint16_t received_checksum = 0;
     memcpy(&received_checksum, &pkt[2], 2);
@@ -199,7 +196,6 @@ static int exchange_info(int sfd, gbmulator_t *emu, gbmulator_mode_t *mode, bool
 static int exchange_rom(int sfd, gbmulator_t *emu, uint8_t **other_rom, size_t *rom_len) {
     // --- SEND PKT_ROM ---
 
-    // TODO compression
     uint8_t *this_rom = gbmulator_get_rom(emu, rom_len);
 
     uint8_t *pkt = xcalloc(1, *rom_len + 9);
@@ -212,7 +208,6 @@ static int exchange_rom(int sfd, gbmulator_t *emu, uint8_t **other_rom, size_t *
 
     // --- RECEIVE PKT_ROM ---
 
-    // TODO compression
     uint8_t pkt_header[9] = { 0 };
     receive(sfd, pkt_header, 9, 0);
 
@@ -229,19 +224,22 @@ static int exchange_rom(int sfd, gbmulator_t *emu, uint8_t **other_rom, size_t *
     return 1;
 }
 
-static bool exchange_savestate(int sfd, gbmulator_t *emu, int can_compress, uint8_t **savestate_data, size_t *savestate_len) {
+static bool exchange_savestate(int sfd, gbmulator_t *emu, uint8_t **savestate_data, size_t *savestate_len) {
     // --- SEND PKT_STATE ---
 
-    uint8_t *local_savestate_data = gbmulator_get_savestate(emu, savestate_len, can_compress);
+    *savestate_len = 0;
+    gbmulator_get_savestate(emu, NULL, savestate_len);
+
+    if (*savestate_len == 0)
+        return false;
 
     uint8_t *pkt = xcalloc(1, *savestate_len + 9);
     pkt[0]       = PKT_STATE;
     memcpy(&pkt[1], savestate_len, sizeof(size_t));
-    memcpy(&pkt[9], local_savestate_data, *savestate_len);
+    gbmulator_get_savestate(emu, &pkt[9], savestate_len);
 
     send(sfd, pkt, *savestate_len + 9, 0);
     free(pkt);
-    free(local_savestate_data);
 
     // --- RECEIVE PKT_STATE ---
 
@@ -267,7 +265,6 @@ bool link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
 
     *linked_emu                    = NULL;
     gbmulator_mode_t mode          = GBMULATOR_MODE_GB;
-    bool             can_compress  = false;
     bool             is_cable_link = false;
     bool             is_ir_link    = false;
     size_t           rom_size      = 0;
@@ -276,10 +273,10 @@ bool link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
     uint8_t         *savestate_data = NULL;
 
     // TODO handle wrong packet type received
-    int ret = exchange_info(sfd, emu, &mode, &can_compress, &is_cable_link, &is_ir_link);
+    int ret = exchange_info(sfd, emu, &mode, &is_cable_link, &is_ir_link);
     if (ret == 0)
         exchange_rom(sfd, emu, &rom, &rom_size);
-    exchange_savestate(sfd, emu, can_compress, &savestate_data, &savestate_len);
+    exchange_savestate(sfd, emu, &savestate_data, &savestate_len);
 
     // --- LINK BACKGROUND EMULATOR ---
 

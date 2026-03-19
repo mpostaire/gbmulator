@@ -2,8 +2,8 @@ SRC += $(wildcard $(SDIR)/platform/$(PLATFORM)/*.c)
 OBJ := $(SRC:$(SDIR)/%.c=$(ODIR)/%.o)
 BIN := $(ODIR)/tester
 
-CFLAGS += $(shell pkg-config --cflags zlib opengl openal MagickWand) -fanalyzer -O0 -ggdb3 -DDISABLE_COLOR_CORRECTION
-LDLIBS += $(shell pkg-config --libs zlib opengl openal MagickWand) -lpthread
+CFLAGS += $(shell pkg-config --cflags opengl openal MagickWand) -fanalyzer -O0 -ggdb3 -DDISABLE_COLOR_CORRECTION
+LDLIBS += $(shell pkg-config --libs opengl openal MagickWand) -lpthread
 
 # For gba tests io mocking
 CFLAGS += -Wl,--wrap=_gba_bus_read_byte -Wl,--wrap=_gba_bus_read_half -Wl,--wrap=_gba_bus_read_word -Wl,--wrap=_gba_bus_write_byte -Wl,--wrap=_gba_bus_write_half -Wl,--wrap=_gba_bus_write_word

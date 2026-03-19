@@ -120,9 +120,6 @@ typedef struct {
     uint8_t *dmg_boot_rom;
     uint8_t *cgb_boot_rom;
 
-    size_t   rom_size;
-    uint8_t *rom; // max size: 8400000
-
     uint8_t vram[2 * VRAM_BANK_SIZE];  // DMG: 1 bank / CGB: 2 banks of size 0x2000
     uint8_t eram[16 * ERAM_BANK_SIZE]; // max 16 banks of size 0x2000
     uint8_t wram[8 * WRAM_BANK_SIZE];  // DMG: 2 banks / CGB: 8 banks of size 0x1000 (bank 0 non switchable)
@@ -176,13 +173,9 @@ typedef struct {
     gb_mbc_t mbc;
 } gb_mmu_t;
 
-int parse_header_mbc_byte(uint8_t mbc_byte, uint8_t *mbc_type, uint8_t *has_eram, uint8_t *has_battery, uint8_t *has_rtc, uint8_t *has_rumble);
-
 int validate_header_checksum(const uint8_t *rom);
 
-int mmu_reset(gb_t *gb, const uint8_t *rom, size_t rom_size);
-
-void mmu_quit(gb_t *gb);
+int mmu_reset(gb_t *gb);
 
 uint8_t mmu_read_io_src(gb_t *gb, uint16_t address, gb_io_source_t io_src);
 

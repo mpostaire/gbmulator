@@ -39,7 +39,6 @@ set(CMAKE_SHARED_LINKER_FLAGS
 
 # NDK sysroot
 set(NDK_SYSROOT ${ANDROID_NDK}/toolchains/llvm/prebuilt/${CMAKE_HOST_SYSTEM_NAME}-x86_64/sysroot)
-set(ZLIB_INCLUDE ${NDK_SYSROOT}/usr/include)
 set(GLES_INCLUDE ${NDK_SYSROOT}/usr/include/GLES3)
 set(EGL_INCLUDE  ${NDK_SYSROOT}/usr/include/EGL)
 set(GBMULATOR_ROOT_DIR ${CMAKE_SOURCE_DIR}/../../../../../../..)
@@ -47,7 +46,7 @@ set(GBMULATOR_BUILD_DIR ${GBMULATOR_ROOT_DIR}/build/android/${CMAKE_ANDROID_ARCH
 add_custom_command(
     OUTPUT ${GBMULATOR_BUILD_DIR}/gbmulator.a
     WORKING_DIRECTORY ${GBMULATOR_ROOT_DIR}
-    COMMAND make PLATFORM=android CC=${CMAKE_C_COMPILER} BOOTROM_ODIR=${GBMULATOR_ROOT_DIR}/build/bootroms ROOT_ODIR=${GBMULATOR_BUILD_DIR} "EXTRA_CFLAGS=-fPIC --target=${CMAKE_C_COMPILER_TARGET} -I${openal-soft_SOURCE_DIR}/include -I${GLES_INCLUDE} -I${EGL_INCLUDE} -I${ZLIB_INCLUDE}"
+    COMMAND make PLATFORM=android CC=${CMAKE_C_COMPILER} BOOTROM_ODIR=${GBMULATOR_ROOT_DIR}/build/bootroms ROOT_ODIR=${GBMULATOR_BUILD_DIR} "EXTRA_CFLAGS=-fPIC --target=${CMAKE_C_COMPILER_TARGET} -I${openal-soft_SOURCE_DIR}/include -I${GLES_INCLUDE} -I${EGL_INCLUDE}"
 )
 add_custom_target(gbmulator_lib DEPENDS ${GBMULATOR_BUILD_DIR}/gbmulator.a)
 add_dependencies(gbmulator gbmulator_lib)

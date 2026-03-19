@@ -62,9 +62,9 @@ void gbprinter_quit(gbprinter_t *printer) {
     free(printer);
 }
 
-uint8_t *gbprinter_get_image(gbprinter_t *printer, size_t *height) {
+void gbprinter_get_image(gbprinter_t *printer, uint8_t *image_data, size_t *height) {
     *height = printer->image.height;
-    return printer->image.data;
+    memcpy(image_data, printer->image.data, *height * GBPRINTER_IMG_WIDTH * 4);
 }
 
 void gbprinter_clear_image(gbprinter_t *printer) {
