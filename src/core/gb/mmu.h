@@ -173,9 +173,9 @@ typedef struct {
     gb_mbc_t mbc;
 } gb_mmu_t;
 
-int validate_header_checksum(const uint8_t *rom);
+bool mmu_validate_rom(const uint8_t *rom, size_t size);
 
-int mmu_reset(gb_t *gb);
+void mmu_reset(gb_t *gb);
 
 uint8_t mmu_read_io_src(gb_t *gb, uint16_t address, gb_io_source_t io_src);
 

@@ -108,6 +108,7 @@ void gbmulator_reset(gbmulator_t *emu, gbmulator_options_t *opts) {
 
         emu->opts = *opts;
 
+        // allow mode swith only between GBMULATOR_MODE_GB <-> GBMULATOR_MODE_GBC
         if (!is_gb_currently || !is_gb_requested)
             emu->opts.mode = current_mode;
     }

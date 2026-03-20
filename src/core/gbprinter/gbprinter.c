@@ -51,9 +51,27 @@ typedef enum {
     COLOR_BLACK
 } gbprinter_color_t;
 
+static void gbprinter_clear_image(gbprinter_t *printer) {
+    printer->image.height           = 0;
+    printer->image.allocated_height = 0;
+    free(printer->image.data);
+    printer->image.data = NULL; // important to avoid the xrealloc of the PRINT command to cause a double free (because it would realloc on an freed pointer)
+
+    if (printer->pixels)
+        memset(printer->pixels, 0xFF, GBPRINTER_IMG_WIDTH * 4);
+}
+
 gbprinter_t *gbprinter_init(gbmulator_t *base) {
-    gbprinter_t *printer = xcalloc(1, sizeof(*printer));
-    printer->base        = base;
+    gbprinter_t *printer = base->impl;
+
+    if (!printer) {
+        printer       = xcalloc(1, sizeof(*printer));
+        printer->base = base;
+    } else {
+        // gbprinter reset clears the image
+        gbprinter_clear_image(printer);
+    }
+
     return printer;
 }
 
@@ -65,16 +83,6 @@ void gbprinter_quit(gbprinter_t *printer) {
 void gbprinter_get_image(gbprinter_t *printer, uint8_t *image_data, size_t *height) {
     *height = printer->image.height;
     memcpy(image_data, printer->image.data, *height * GBPRINTER_IMG_WIDTH * 4);
-}
-
-void gbprinter_clear_image(gbprinter_t *printer) {
-    printer->image.height           = 0;
-    printer->image.allocated_height = 0;
-    free(printer->image.data);
-    printer->image.data = NULL; // important to avoid the xrealloc of the PRINT command to cause a double free (because it would realloc on an freed pointer)
-
-    if (printer->pixels)
-        memset(printer->pixels, 0xFF, GBPRINTER_IMG_WIDTH * 4);
 }
 
 static inline void render_line(gbprinter_t *printer) {

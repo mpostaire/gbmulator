@@ -45,24 +45,20 @@ void gb_step(gb_t *gb) {
 }
 
 gb_t *gb_init(gbmulator_t *base) {
-    gb_t *gb;
+    if (!mmu_validate_rom(base->opts.rom, base->opts.rom_size))
+        return NULL;
 
-    if (!base->impl) {
+    gb_t *gb = base->impl;
+    if (!gb) {
         gb       = xcalloc(1, sizeof(*gb));
         gb->base = base;
-    } else {
-        gb = base->impl;
     }
 
     gb->cgb_mode_enabled = gb->base->opts.mode == GBMULATOR_MODE_GBC;
 
     gb_set_palette(gb, gb->base->opts.palette);
 
-    if (!mmu_reset(gb)) {
-        free(gb);
-        return NULL;
-    }
-
+    mmu_reset(gb);
     cpu_reset(gb);
     apu_reset(gb);
     ppu_reset(gb);

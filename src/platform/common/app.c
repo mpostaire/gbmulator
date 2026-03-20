@@ -713,7 +713,7 @@ __attribute_used__ bool app_printer_reset(void) {
     // free(pixels);
 
     if (app.printer)
-        todo("gbprinter_clear_image(app.printer)"); // gbmulator_reset(app.printer, 0);
+        gbmulator_reset(app.printer, NULL);
 
     return true;
 }

@@ -16,5 +16,3 @@ void gbprinter_step(gbprinter_t *printer);
 uint8_t gbprinter_link_shift_bit(gbprinter_t *printer, uint8_t in_bit);
 
 void gbprinter_get_image(gbprinter_t *printer, uint8_t *image_data, size_t *height);
-
-void gbprinter_clear_image(gbprinter_t *printer);

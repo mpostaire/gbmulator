@@ -16,14 +16,16 @@ void gba_step(gba_t *gba) {
 }
 
 gba_t *gba_init(gbmulator_t *base) {
-    gba_t *gba = xcalloc(1, sizeof(*gba));
-    gba->base  = base;
-
-    if (!gba_bus_reset(gba, base->opts.rom, base->opts.rom_size)) {
-        free(gba);
+    if (!gba_bus_validate_rom(base->opts.rom, base->opts.rom_size))
         return NULL;
+
+    gba_t *gba = base->impl;
+    if (!gba) {
+        gba       = xcalloc(1, sizeof(*gba));
+        gba->base = base;
     }
 
+    gba_bus_reset(gba);
     gba_cpu_reset(gba);
     gba_ppu_reset(gba);
     gba_tmr_reset(gba);

@@ -137,33 +137,16 @@ static bool parse_header_mbc_byte(uint8_t mbc_byte, uint8_t *mbc_type, uint8_t *
     return true;
 }
 
-int validate_header_checksum(const uint8_t *rom) {
-    uint8_t checksum = 0;
-    for (int i = 0x0134; i <= 0x014C; i++)
-        checksum = checksum - rom[i] - 1;
-    return checksum == rom[0x014D];
-}
-
-static bool parse_cartridge(gb_t *gb) {
-    if (!gb->base->opts.rom || gb->base->opts.rom_size < 0x8000)
-        return false;
-
-    gb_mmu_t *mmu = &gb->mmu;
-
-    // 8-bit cartridge header checksum validation
-    if (!validate_header_checksum(gb->base->opts.rom)) {
-        eprintf("invalid checksum\n");
-        return false;
-    }
+static void parse_cartridge(gb_t *gb) {
+    gb_mmu_t *mmu      = &gb->mmu;
+    uint8_t  *rom      = gb->base->opts.rom;
+    size_t    rom_size = gb->base->opts.rom_size;
 
     uint8_t has_eram = 0;
-    if (!parse_header_mbc_byte(gb->base->opts.rom[0x0147], &mmu->mbc.type, &has_eram, &mmu->has_battery, &mmu->has_rtc, &mmu->has_rumble)) {
-        eprintf("MBC byte %02X not supported\n", gb->base->opts.rom[0x0147]);
-        return 0;
-    }
+    parse_header_mbc_byte(rom[0x0147], &mmu->mbc.type, &has_eram, &mmu->has_battery, &mmu->has_rtc, &mmu->has_rumble);
 
     // detect MBC1M
-    if (mmu->mbc.type == MBC1 && gb->base->opts.rom_size == 0x100000) {
+    if (mmu->mbc.type == MBC1 && rom_size == 0x100000) {
         const unsigned int addrs[] = { 0x00104, 0x40104, 0x80104, 0xC0104 };
         uint8_t            logo[]  = {
             0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0C, 0x00, 0x0D,
@@ -173,7 +156,7 @@ static bool parse_cartridge(gb_t *gb) {
 
         uint8_t matches = 0;
         for (uint8_t i = 0; i < 4; i++) {
-            matches += memcmp(&gb->base->opts.rom[addrs[i]], logo, sizeof(logo)) ? 0 : 1;
+            matches += memcmp(&rom[addrs[i]], logo, sizeof(logo)) ? 0 : 1;
             if (matches > 1) {
                 mmu->mbc.type = MBC1M;
                 break;
@@ -181,10 +164,10 @@ static bool parse_cartridge(gb_t *gb) {
         }
     }
 
-    mmu->rom_banks = 2 << gb->base->opts.rom[0x0148];
+    mmu->rom_banks = 2 << rom[0x0148];
 
     if (has_eram) {
-        switch (gb->base->opts.rom[0x0149]) {
+        switch (rom[0x0149]) {
         case 0x00:
             mmu->eram_banks = 0;
             break;
@@ -205,24 +188,46 @@ static bool parse_cartridge(gb_t *gb) {
 
     // MBC3 cartridges are 2MiB, MBC30 cartridges are 4MiB (but the mbctest.gb test rom is a bit smaller)
     if (mmu->mbc.type == MBC3)
-        if (mmu->eram_banks == 8 || gb->base->opts.rom_size > 0x00200000)
+        if (mmu->eram_banks == 8 || rom_size > 0x00200000)
             mmu->mbc.type = MBC30;
 
     // get rom title
-    memcpy(gb->rom_title, (char *) &gb->base->opts.rom[0x0134], 16);
+    memcpy(gb->rom_title, (char *) &rom[0x0134], 16);
     gb->rom_title[16] = '\0';
-    uint8_t cgb_flag  = gb->base->opts.rom[0x0143] & 0xC0;
+    uint8_t cgb_flag  = rom[0x0143] & 0xC0;
     if (cgb_flag)
         gb->rom_title[15] = '\0';
 
     // remove trailing non alphanumeric characters from the rom title
     for (char *c = &gb->rom_title[16]; c >= gb->rom_title && !isalnum(*c); c--)
         *c = '\0';
+}
+
+bool mmu_validate_rom(const uint8_t *rom, size_t size) {
+    if (!rom || size < 0x8000) {
+        eprintf("invalid rom or rom size");
+        return false;
+    }
+
+    // 8-bit cartridge header checksum validation
+    uint8_t checksum = 0;
+    for (uint16_t i = 0x0134; i <= 0x014C; i++)
+        checksum = checksum - rom[i] - 1;
+
+    if (checksum != rom[0x014D]) {
+        eprintf("invalid checksum");
+        return false;
+    }
+
+    if (!parse_header_mbc_byte(rom[0x0147], NULL, NULL, NULL, NULL, NULL)) {
+        eprintf("invalid MBC byte: 0x%02X", rom[0x0147]);
+        return false;
+    }
 
     return true;
 }
 
-int mmu_reset(gb_t *gb) {
+void mmu_reset(gb_t *gb) {
     bool full_reset = gb->base->opts.rom && gb->base->opts.rom_size;
 
     memset(gb->mmu.vram, 0, sizeof(gb->mmu.vram));
@@ -262,9 +267,7 @@ int mmu_reset(gb_t *gb) {
         gb->mmu.mbc.mbc3.rtc.rtc_cycles = 0;
     }
 
-    // TODO this should be at the top but i need to remove side effects
-    if (!parse_cartridge(gb))
-        return 0;
+    parse_cartridge(gb);
 
     gb->mmu.mbc.mbc1.bank_lo = 1;
     // gb->mmu.rom_bank0_addr = 0; // initialized to 0 by memset
@@ -286,47 +289,45 @@ int mmu_reset(gb_t *gb) {
 
     gb->mmu.dmg_boot_rom = dmg_boot_rom;
     gb->mmu.cgb_boot_rom = cgb_boot_rom;
-
-    return 1;
 }
 
-static inline uint8_t is_oam_locked_for_cpu_read(gb_t *gb) {
+static inline bool is_oam_locked_for_cpu_read(gb_t *gb) {
     // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
     // but it has some quirks for the other memory regions (check links below):
     // https://www.reddit.com/r/EmuDev/comments/5hahss/comment/daz9cbi/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
     // https://github.com/Gekkio/mooneye-gb/issues/39#issuecomment-265953981
     if (IS_OAM_DMA_RUNNING(&gb->mmu))
-        return 1;
+        return true;
 
     // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
     return IS_LCD_ENABLED(gb) && (PPU_STAT_IS_MODE(gb, PPU_MODE_OAM) || PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING) || gb->ppu.pending_stat_mode == PPU_MODE_OAM);
 }
 
-static inline uint8_t is_oam_locked_for_cpu_write(gb_t *gb) {
+static inline bool is_oam_locked_for_cpu_write(gb_t *gb) {
     // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
     // but it has some quirks for the other memory regions (check links below):
     // https://www.reddit.com/r/EmuDev/comments/5hahss/comment/daz9cbi/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
     // https://github.com/Gekkio/mooneye-gb/issues/39#issuecomment-265953981
     if (IS_OAM_DMA_RUNNING(&gb->mmu))
-        return 1;
+        return true;
 
     if (!IS_LCD_ENABLED(gb))
-        return 0;
+        return false;
 
     uint8_t lcd_booting_up_into_drawing = PPU_STAT_IS_MODE(gb, PPU_MODE_HBLANK) && gb->ppu.pending_stat_mode == PPU_MODE_DRAWING;
     uint8_t starting_drawing            = gb->ppu.mode == PPU_MODE_DRAWING && PPU_STAT_IS_MODE(gb, PPU_MODE_OAM);
     if (starting_drawing || lcd_booting_up_into_drawing)
-        return 0;
+        return false;
 
     return PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING) || PPU_STAT_IS_MODE(gb, PPU_MODE_OAM);
 }
 
-static inline uint8_t is_vram_locked_for_cpu_read(gb_t *gb) {
+static inline bool is_vram_locked_for_cpu_read(gb_t *gb) {
     // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
     return IS_LCD_ENABLED(gb) && (PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING) || (PPU_STAT_IS_MODE(gb, PPU_MODE_OAM) && gb->ppu.pending_stat_mode == PPU_MODE_DRAWING));
 }
 
-static inline uint8_t is_vram_locked_for_cpu_write(gb_t *gb) {
+static inline bool is_vram_locked_for_cpu_write(gb_t *gb) {
     // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
     return IS_LCD_ENABLED(gb) && PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING);
 }
@@ -494,7 +495,7 @@ static inline uint8_t read_io_register(gb_t *gb, uint8_t io_reg_addr) {
     case 0x78 ... 0x7F:
         return 0xFF;
     default:
-        eprintf("invalid read at 0xFF%02X\n", io_reg_addr);
+        eprintf("invalid read at 0xFF%02X", io_reg_addr);
         exit(EXIT_FAILURE);
     }
 }
@@ -941,7 +942,7 @@ uint8_t mmu_read_io_src(gb_t *gb, uint16_t address, gb_io_source_t io_src) {
 
         return mmu->ie;
     default:
-        eprintf("invalid cpu read at address 0x%X\n", address);
+        eprintf("invalid cpu read at address 0x%X", address);
         exit(EXIT_FAILURE);
     }
 }
@@ -997,7 +998,7 @@ void mmu_write_io_src(gb_t *gb, uint16_t address, uint8_t data, gb_io_source_t i
         }
         break;
     default:
-        eprintf("invalid write of 0x%02X at address 0x%X\n", data, address);
+        eprintf("invalid write of 0x%02X at address 0x%X", data, address);
         exit(EXIT_FAILURE);
     }
 }
