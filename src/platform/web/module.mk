@@ -5,7 +5,7 @@ OBJ := $(SRC:$(SDIR)/%.c=$(ODIR)/%.o)
 BIN := $(ODIR)/index.html
 
 override CFLAGS += -Wno-unused-command-line-argument
-override LDLIBS += -lopenal -lidbfs.js -lz
+override LDLIBS += -lopenal -lidbfs.js
 
 CC = emcc
 

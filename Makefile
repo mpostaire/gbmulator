@@ -3,20 +3,24 @@ DEBUG     ?= 0
 ROOT_ODIR ?= build
 
 SDIR := src
-ODIR := $(ROOT_ODIR)/$(PLATFORM)
 
 CC				:=	gcc
 override CFLAGS +=	-std=gnu23 -I$(SDIR) \
 					-DVERSION=$(shell git rev-parse --short HEAD) \
 					-Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers
 
+BUILD_TYPE := debug
+
 ifeq ($(DEBUG),1)
 override CFLAGS += -ggdb -O0
 else ifeq ($(DEBUG),2)
 override CFLAGS += -ggdb -O0 -DDEBUG
 else
-override CFLAGS += -O3 -DNDEBUG -flto -Werror
+override CFLAGS += -O3 -DNDEBUG
+BUILD_TYPE := release
 endif
+
+ODIR := $(ROOT_ODIR)/$(BUILD_TYPE)/$(PLATFORM)
 
 # This is needed because includes below may add recipes
 .DEFAULT_GOAL := all

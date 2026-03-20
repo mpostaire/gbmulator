@@ -43,19 +43,21 @@ set(GLES_INCLUDE ${NDK_SYSROOT}/usr/include/GLES3)
 set(EGL_INCLUDE  ${NDK_SYSROOT}/usr/include/EGL)
 set(GBMULATOR_ROOT_DIR ${CMAKE_SOURCE_DIR}/../../../../../../..)
 set(GBMULATOR_BUILD_DIR ${GBMULATOR_ROOT_DIR}/build/android/${CMAKE_ANDROID_ARCH})
+set(GBMULATOR_STATIC_LIB_PATH ${GBMULATOR_BUILD_DIR}/release/gbmulator.a)
+
 add_custom_command(
-    OUTPUT ${GBMULATOR_BUILD_DIR}/gbmulator.a
+    OUTPUT ${GBMULATOR_STATIC_LIB_PATH}
     WORKING_DIRECTORY ${GBMULATOR_ROOT_DIR}
-    COMMAND make PLATFORM=android CC=${CMAKE_C_COMPILER} BOOTROM_ODIR=${GBMULATOR_ROOT_DIR}/build/bootroms ROOT_ODIR=${GBMULATOR_BUILD_DIR} "EXTRA_CFLAGS=-fPIC --target=${CMAKE_C_COMPILER_TARGET} -I${openal-soft_SOURCE_DIR}/include -I${GLES_INCLUDE} -I${EGL_INCLUDE}"
+    COMMAND make PLATFORM=android DEBUG=0 CC=${CMAKE_C_COMPILER} BOOTROM_ODIR=${GBMULATOR_ROOT_DIR}/build/bootroms ROOT_ODIR=${GBMULATOR_BUILD_DIR} "CFLAGS+=-fPIC --target=${CMAKE_C_COMPILER_TARGET} -I${openal-soft_SOURCE_DIR}/include -I${GLES_INCLUDE} -I${EGL_INCLUDE}"
 )
-add_custom_target(gbmulator_lib DEPENDS ${GBMULATOR_BUILD_DIR}/gbmulator.a)
+add_custom_target(gbmulator_lib DEPENDS ${GBMULATOR_STATIC_LIB_PATH})
 add_dependencies(gbmulator gbmulator_lib)
 
 # Configure libraries CMake uses to link your target library.
 target_link_libraries(gbmulator
     oboe::oboe
     OpenAL::OpenAL
-    ${GBMULATOR_BUILD_DIR}/gbmulator.a
+    ${GBMULATOR_STATIC_LIB_PATH}
     # The game activity
     game-activity::game-activity_static
     # EGL and other dependent libraries required for drawing
@@ -64,5 +66,4 @@ target_link_libraries(gbmulator
     GLESv3
     android
     log
-    z
 )
