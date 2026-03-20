@@ -16,7 +16,7 @@ gbmulator_t *gbmulator_init(const gbmulator_options_t *opts);
 
 void gbmulator_quit(gbmulator_t *emu);
 
-void gbmulator_reset(gbmulator_t *emu);
+void gbmulator_reset(gbmulator_t *emu, gbmulator_options_t *opts);
 
 void gbmulator_rewind(gbmulator_t *emu, uint64_t frame);
 

@@ -15,7 +15,7 @@ override CFLAGS += -ggdb -O0
 else ifeq ($(DEBUG),2)
 override CFLAGS += -ggdb -O0 -DDEBUG
 else
-override CFLAGS += -O3 -flto -DNDEBUG
+override CFLAGS += -O3 -DNDEBUG -flto -Werror
 endif
 
 # This is needed because includes below may add recipes

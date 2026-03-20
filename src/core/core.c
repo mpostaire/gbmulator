@@ -96,9 +96,21 @@ void gbmulator_quit(gbmulator_t *emu) {
     free(emu);
 }
 
-void gbmulator_reset(gbmulator_t *emu) {
+void gbmulator_reset(gbmulator_t *emu, gbmulator_options_t *opts) {
     if (!emu)
         return;
+
+    if (opts) {
+        gbmulator_mode_t current_mode = emu->opts.mode;
+
+        bool is_gb_currently = current_mode == GBMULATOR_MODE_GB || current_mode == GBMULATOR_MODE_GBC;
+        bool is_gb_requested = opts->mode == GBMULATOR_MODE_GB || opts->mode == GBMULATOR_MODE_GBC;
+
+        emu->opts = *opts;
+
+        if (!is_gb_currently || !is_gb_requested)
+            emu->opts.mode = current_mode;
+    }
 
     emu->init(emu);
 }
@@ -241,7 +253,7 @@ bool gbmulator_load_savestate(gbmulator_t *emu, uint8_t *data, size_t length) {
             return false;
 
         emu->opts.mode = savestate->mode; // allow load_savestate to switch between GB/GBC
-        gbmulator_reset(emu);
+        gbmulator_reset(emu, NULL);
         break;
     case GBMULATOR_MODE_GBA:
         break;

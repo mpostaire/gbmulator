@@ -31,6 +31,7 @@ static struct {
     config_t            config;
     uint8_t             joypad_touch_counter[GBMULATOR_JOYPAD_END];
     bool                joypad_key_press_counter[GBMULATOR_JOYPAD_END];
+    uint8_t             link_touch_counter;
     glrenderer_obj_id_t touches_current_obj[32];
 
     uint8_t *rom;
@@ -43,9 +44,6 @@ static struct {
         int      rotation;
     } camera;
 } app;
-
-// TODO merge with struct app
-static uint8_t link_touch_counter = 0;
 
 static void set_steps_per_frame(void) {
     float speed = app.linked_emu ? 1.0f : app.config.speed;
@@ -238,7 +236,12 @@ __attribute_used__ void app_reset(void) {
 
     save_battery_to_file(app.emu, get_save_path(gbmulator_get_rom_title(app.emu)));
 
-    gbmulator_reset(app.emu);
+    gbmulator_options_t opts;
+    gbmulator_get_options(app.emu, &opts);
+    opts.mode = app.config.mode;
+
+    gbmulator_reset(app.emu, &opts);
+
     gbmulator_print_status(app.emu);
     alrenderer_clear_queue();
 }
@@ -305,9 +308,9 @@ static inline void btn_touch_press(glrenderer_obj_id_t obj_id) {
         btn_press(GBMULATOR_JOYPAD_LEFT, true);
         break;
     case GLRENDERER_OBJ_ID_LINK:
-        link_touch_counter++;
+        app.link_touch_counter++;
 
-        if (link_touch_counter == 1)
+        if (app.link_touch_counter == 1)
             glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) GLRENDERER_OBJ_ID_LINK, 0.5f);
         break;
     case GLRENDERER_OBJ_ID_DPAD_CENTER:
@@ -338,10 +341,10 @@ static inline void btn_touch_release(glrenderer_obj_id_t obj_id) {
         btn_release(GBMULATOR_JOYPAD_LEFT, true);
         break;
     case GLRENDERER_OBJ_ID_LINK:
-        if (link_touch_counter > 0)
-            link_touch_counter--;
+        if (app.link_touch_counter > 0)
+            app.link_touch_counter--;
 
-        if (link_touch_counter == 0) {
+        if (app.link_touch_counter == 0) {
             glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) GLRENDERER_OBJ_ID_LINK, 0.5f);
             if (app.config.on_link_button_touched)
                 app.config.on_link_button_touched(app.config.on_link_button_touched_user_data);
