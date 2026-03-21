@@ -266,9 +266,11 @@ bool gbmulator_load_savestate(gbmulator_t *emu, uint8_t *data, size_t length) {
     return emu->load_savestate(emu->impl, savestate->data, length - sizeof(gbmulator_savestate_t));
 }
 
-void gbmulator_get_options(gbmulator_t *emu, gbmulator_options_t *opts) {
-    if (emu && opts)
-        *opts = emu->opts;
+gbmulator_options_t gbmulator_get_options(gbmulator_t *emu) {
+    if (!emu)
+        return (gbmulator_options_t){};
+
+    return emu->opts;
 }
 
 void gbmulator_set_options(gbmulator_t *emu, const gbmulator_options_t *opts) {
@@ -313,16 +315,6 @@ uint16_t gbmulator_get_joypad_state(gbmulator_t *emu) {
 void gbmulator_set_joypad_state(gbmulator_t *emu, uint16_t state) {
     if (emu)
         emu->set_joypad_state(emu->impl, state);
-}
-
-uint8_t *gbmulator_get_rom(gbmulator_t *emu, size_t *rom_size) {
-    if (!emu)
-        return NULL;
-
-    if (rom_size)
-        *rom_size = emu->opts.rom_size;
-
-    return emu->opts.rom;
 }
 
 void gbmulator_link_connect(gbmulator_t *emu, gbmulator_t *other, gbmulator_link_t type) {
@@ -371,9 +363,12 @@ uint16_t gbmulator_get_rom_checksum(gbmulator_t *emu) {
     if (!emu)
         return 0;
 
+    gbmulator_options_t opts = gbmulator_get_options(emu);
+
+    uint8_t *rom      = opts.rom;
+    size_t   rom_size = opts.rom_size;
+
     uint16_t checksum = 0;
-    size_t   rom_size;
-    uint8_t *rom = gbmulator_get_rom(emu, &rom_size);
     for (unsigned int i = 0; i < rom_size; i += 2)
         checksum = checksum - (rom[i] + rom[i + 1]) - 1;
     return checksum;

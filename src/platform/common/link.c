@@ -158,8 +158,7 @@ static int exchange_info(int sfd, gbmulator_t *emu, gbmulator_mode_t *mode, bool
 
     uint16_t checksum = gbmulator_get_rom_checksum(emu);
 
-    gbmulator_options_t opts;
-    gbmulator_get_options(emu, &opts);
+    gbmulator_options_t opts = gbmulator_get_options(emu);
 
     uint8_t pkt[4]  = { 0 };
     pkt[0]          = PKT_INFO;
@@ -196,7 +195,9 @@ static int exchange_info(int sfd, gbmulator_t *emu, gbmulator_mode_t *mode, bool
 static int exchange_rom(int sfd, gbmulator_t *emu, uint8_t **other_rom, size_t *rom_len) {
     // --- SEND PKT_ROM ---
 
-    uint8_t *this_rom = gbmulator_get_rom(emu, rom_len);
+    gbmulator_options_t opts     = gbmulator_get_options(emu);
+    uint8_t            *this_rom = opts.rom;
+    *rom_len                     = opts.rom_size;
 
     uint8_t *pkt = xcalloc(1, *rom_len + 9);
     pkt[0]       = PKT_ROM;
@@ -294,11 +295,11 @@ bool link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
             close(sfd);
             return false;
         }
-        free(rom);
     } else {
-        opts.rom      = gbmulator_get_rom(emu, &rom_size);
-        opts.rom_size = rom_size;
-        *linked_emu   = gbmulator_init(&opts);
+        gbmulator_options_t tmp_opts = gbmulator_get_options(emu);
+        opts.rom                     = tmp_opts.rom;
+        opts.rom_size                = tmp_opts.rom_size;
+        *linked_emu                  = gbmulator_init(&opts);
     }
 
     bool is_savestate_loaded = gbmulator_load_savestate(*linked_emu, savestate_data, savestate_len);

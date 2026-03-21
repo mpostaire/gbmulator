@@ -238,9 +238,10 @@ static int run_test(test_t *test, size_t thread_index) {
         .palette  = PPU_COLOR_PALETTE_GRAY
     };
     gbmulator_t *emu = gbmulator_init(&opts);
-    free(rom);
-    if (!emu)
+    if (!emu) {
+        free(rom);
         return 0;
+    }
 
     gb_t *gb       = emu->impl;
     gb->ppu.pixels = &pixels[thread_index * GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 4];
@@ -277,6 +278,9 @@ static int run_test(test_t *test, size_t thread_index) {
 
     if (!ret && timeout_cycles <= 0)
         ret = -1;
+
+    free(rom);
+
     return ret;
 }
 
@@ -327,7 +331,8 @@ int gbtester_main(int argc, char **argv) {
 
     cpu_set_t cpuset;
     sched_getaffinity(0, sizeof(cpuset), &cpuset);
-    num_cpus = CPU_COUNT(&cpuset);
+    // num_cpus = CPU_COUNT(&cpuset);
+    num_cpus = 1;
 
     size_t root_path_len = strlen(argv[1]);
     while (argv[1][root_path_len - 1] == '/')

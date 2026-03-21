@@ -73,8 +73,8 @@ typedef enum {
 
 typedef struct {
     gbmulator_mode_t mode;
-    uint8_t         *rom;      // TODO this with gbmulator_get_options is ambiguous because it may be invalid after init: use gbmulator_get_rom
-    size_t           rom_size; // TODO this with gbmulator_get_options is ambiguous because it may be invalid after init: use gbmulator_get_rom
+    uint8_t         *rom;
+    size_t           rom_size;
 
     gb_color_palette_t palette;
     float              apu_speed;

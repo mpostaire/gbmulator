@@ -34,7 +34,7 @@ void gbmulator_get_savestate(gbmulator_t *emu, uint8_t *data, size_t *length);
 
 bool gbmulator_load_savestate(gbmulator_t *emu, uint8_t *data, size_t length);
 
-void gbmulator_get_options(gbmulator_t *emu, gbmulator_options_t *opts);
+gbmulator_options_t gbmulator_get_options(gbmulator_t *emu);
 
 void gbmulator_set_options(gbmulator_t *emu, const gbmulator_options_t *opts);
 
@@ -45,8 +45,6 @@ void gbmulator_print_status(gbmulator_t *emu);
 uint16_t gbmulator_get_joypad_state(gbmulator_t *emu);
 
 void gbmulator_set_joypad_state(gbmulator_t *emu, uint16_t state);
-
-uint8_t *gbmulator_get_rom(gbmulator_t *emu, size_t *rom_size);
 
 /**
  * Connects 2 emulators through the link cable.

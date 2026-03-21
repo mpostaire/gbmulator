@@ -236,9 +236,8 @@ __attribute_used__ void app_reset(void) {
 
     save_battery_to_file(app.emu, get_save_path(gbmulator_get_rom_title(app.emu)));
 
-    gbmulator_options_t opts;
-    gbmulator_get_options(app.emu, &opts);
-    opts.mode = app.config.mode;
+    gbmulator_options_t opts = gbmulator_get_options(app.emu);
+    opts.mode                = app.config.mode;
 
     gbmulator_reset(app.emu, &opts);
 
@@ -418,7 +417,7 @@ __attribute_used__ bool app_load_cartridge(uint8_t *rom, size_t rom_size) {
     app.rom = rom;
 
     gbmulator_options_t opts = {
-        .rom                     = rom,
+        .rom                     = app.rom,
         .rom_size                = rom_size,
         .mode                    = app.config.mode,
         .on_new_sample           = alrenderer_queue_sample,
@@ -481,8 +480,7 @@ __attribute_used__ gbmulator_mode_t app_get_mode(void) {
     if (!app.emu)
         return app.config.mode;
 
-    gbmulator_options_t opts;
-    gbmulator_get_options(app.emu, &opts);
+    gbmulator_options_t opts = gbmulator_get_options(app.emu);
 
     return opts.mode;
 }
@@ -796,6 +794,8 @@ __attribute_used__ void app_link_disconnect(void) {
     app.sfd = -1;
 
     if (app.linked_emu) {
+        gbmulator_options_t opts = gbmulator_get_options(app.linked_emu);
+        free(opts.rom);
         gbmulator_quit(app.linked_emu);
         app.linked_emu = NULL;
     }
