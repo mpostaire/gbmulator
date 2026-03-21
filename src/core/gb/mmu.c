@@ -204,8 +204,14 @@ static void parse_cartridge(gb_t *gb) {
 }
 
 bool mmu_validate_rom(const uint8_t *rom, size_t size) {
-    if (!rom || size < 0x8000) {
-        eprintf("invalid rom or rom size");
+    if (!rom) {
+        eprintf("null ROM");
+        return false;
+    }
+
+    size_t rom_banks = 2 << rom[0x0148];
+    if (size < rom_banks * ROM_BANK_SIZE) {
+        eprintf("invalid ROM size");
         return false;
     }
 
@@ -215,7 +221,7 @@ bool mmu_validate_rom(const uint8_t *rom, size_t size) {
         checksum = checksum - rom[i] - 1;
 
     if (checksum != rom[0x014D]) {
-        eprintf("invalid checksum");
+        eprintf("invalid ROM header checksum");
         return false;
     }
 
