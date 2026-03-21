@@ -331,8 +331,7 @@ int gbtester_main(int argc, char **argv) {
 
     cpu_set_t cpuset;
     sched_getaffinity(0, sizeof(cpuset), &cpuset);
-    // num_cpus = CPU_COUNT(&cpuset);
-    num_cpus = 1;
+    num_cpus = CPU_COUNT(&cpuset);
 
     size_t root_path_len = strlen(argv[1]);
     while (argv[1][root_path_len - 1] == '/')
