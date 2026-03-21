@@ -723,7 +723,7 @@ static inline void sra(gb_cpu_t *cpu, uint8_t *reg) {
     ((*reg) & 0x01) ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
     // shift right
     (*reg) >>= 1;
-    (*reg) |= msb;
+    (*reg)  |= msb;
 
     (*reg) ? RESET_FLAG(cpu, FLAG_Z) : SET_FLAG(cpu, FLAG_Z);
     RESET_FLAG(cpu, FLAG_N | FLAG_H);

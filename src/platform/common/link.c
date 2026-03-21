@@ -161,11 +161,11 @@ static int exchange_info(int sfd, gbmulator_t *emu, gbmulator_mode_t *mode, bool
     gbmulator_options_t opts;
     gbmulator_get_options(emu, &opts);
 
-    uint8_t pkt[4] = { 0 };
-    pkt[0]         = PKT_INFO;
-    pkt[1]         = opts.mode;
-    pkt[1] |= PKT_CONFIG_CABLE_MASK;
-    pkt[1] |= PKT_CONFIG_IR_MASK;
+    uint8_t pkt[4]  = { 0 };
+    pkt[0]          = PKT_INFO;
+    pkt[1]          = opts.mode;
+    pkt[1]         |= PKT_CONFIG_CABLE_MASK;
+    pkt[1]         |= PKT_CONFIG_IR_MASK;
     memcpy(&pkt[2], &checksum, 2);
 
     send(sfd, pkt, 4, 0);

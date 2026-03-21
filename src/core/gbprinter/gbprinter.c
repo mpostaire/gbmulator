@@ -261,42 +261,42 @@ static void link_data_received(gbprinter_t *printer) {
         printer->sb = 0x00;
         break;
     case WAIT_COMMAND:
-        printer->cmd = printer->sb;
+        printer->cmd       = printer->sb;
         printer->checksum += printer->sb;
-        printer->sb    = 0x00;
-        printer->state = WAIT_COMPRESS_FLAG;
+        printer->sb        = 0x00;
+        printer->state     = WAIT_COMPRESS_FLAG;
         break;
     case WAIT_COMPRESS_FLAG:
-        printer->compress_flag = printer->sb & 0x01;
-        printer->checksum += printer->sb;
-        printer->sb    = 0x00;
-        printer->state = WAIT_DATA_LEN_LO;
+        printer->compress_flag  = printer->sb & 0x01;
+        printer->checksum      += printer->sb;
+        printer->sb             = 0x00;
+        printer->state          = WAIT_DATA_LEN_LO;
         break;
     case WAIT_DATA_LEN_LO:
-        printer->cmd_data_len = printer->sb;
-        printer->checksum += printer->sb;
-        printer->sb    = 0x00;
-        printer->state = WAIT_DATA_LEN_HI;
+        printer->cmd_data_len  = printer->sb;
+        printer->checksum     += printer->sb;
+        printer->sb            = 0x00;
+        printer->state         = WAIT_DATA_LEN_HI;
         break;
     case WAIT_DATA_LEN_HI:
-        printer->cmd_data_len |= printer->sb << 8;
-        printer->cmd_data_len        = MIN(printer->cmd_data_len, GBPRINTER_CHUNK_SIZE);
-        printer->cmd_data_recv_index = 0;
-        printer->checksum += printer->sb;
-        printer->sb    = 0x00;
-        printer->state = printer->cmd_data_len > 0 ? WAIT_DATA : WAIT_CHKSUM_LO;
+        printer->cmd_data_len        |= printer->sb << 8;
+        printer->cmd_data_len         = MIN(printer->cmd_data_len, GBPRINTER_CHUNK_SIZE);
+        printer->cmd_data_recv_index  = 0;
+        printer->checksum            += printer->sb;
+        printer->sb                   = 0x00;
+        printer->state                = printer->cmd_data_len > 0 ? WAIT_DATA : WAIT_CHKSUM_LO;
         break;
     case WAIT_DATA:
-        printer->cmd_data[printer->cmd_data_recv_index++] = printer->sb;
-        printer->checksum += printer->sb;
-        printer->sb = 0x00;
+        printer->cmd_data[printer->cmd_data_recv_index++]  = printer->sb;
+        printer->checksum                                 += printer->sb;
+        printer->sb                                        = 0x00;
         if (printer->cmd_data_recv_index == printer->cmd_data_len)
             printer->state = WAIT_CHKSUM_LO;
         break;
     case WAIT_CHKSUM_LO:
         printer->checksum ^= printer->sb;
-        printer->sb    = 0x00;
-        printer->state = WAIT_CHKSUM_HI;
+        printer->sb        = 0x00;
+        printer->state     = WAIT_CHKSUM_HI;
         break;
     case WAIT_CHKSUM_HI:
         printer->checksum ^= printer->sb << 8;
@@ -318,8 +318,8 @@ static void link_data_received(gbprinter_t *printer) {
 }
 
 uint8_t gbprinter_link_shift_bit(gbprinter_t *printer, uint8_t in_bit) {
-    uint8_t out_bit = GET_BIT(printer->sb, 7);
-    printer->sb <<= 1;
+    uint8_t out_bit   = GET_BIT(printer->sb, 7);
+    printer->sb     <<= 1;
     CHANGE_BIT(printer->sb, 0, in_bit);
 
     if (++printer->bit_shift_counter >= 8) {

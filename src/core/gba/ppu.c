@@ -53,8 +53,8 @@ static inline uint8_t render_text_tile_8bpp(gba_t *gba, uint32_t tile_base_addr,
     if (flip_y)
         tile_y = 7 - tile_y;
 
-    uint32_t char_addr_offset = tile_id * 0x40;
-    char_addr_offset += (tile_y * 8) + tile_x;
+    uint32_t char_addr_offset  = tile_id * 0x40;
+    char_addr_offset          += (tile_y * 8) + tile_x;
 
     uint32_t char_data_addr = tile_base_addr + char_addr_offset;
 
@@ -73,8 +73,8 @@ static inline uint8_t render_text_tile_4bpp(gba_t *gba, uint32_t tile_base_addr,
     if (flip_y)
         tile_y = 7 - tile_y;
 
-    uint32_t char_addr_offset = tile_id * 0x20;
-    char_addr_offset += (tile_y * 4) + tile_x / 2; // tile_y * 4 and tile_x / 2 because 4bpp
+    uint32_t char_addr_offset  = tile_id * 0x20;
+    char_addr_offset          += (tile_y * 4) + tile_x / 2; // tile_y * 4 and tile_x / 2 because 4bpp
 
     uint32_t char_data_addr = tile_base_addr + char_addr_offset;
 
@@ -113,10 +113,10 @@ static inline void draw_text_bg(gba_t *gba, uint8_t bg, uint32_t x, uint32_t y) 
     uint32_t voffset = gba->bus.io[bgxvofs] & 0x03FF;
     uint32_t hoffset = gba->bus.io[bgxhofs] & 0x03FF;
 
-    uint32_t base_x = x + hoffset;
-    base_x %= n_tiles_x * 8;
-    uint32_t base_y = y + voffset;
-    base_y %= n_tiles_y * 8;
+    uint32_t base_x  = x + hoffset;
+    base_x          %= n_tiles_x * 8;
+    uint32_t base_y  = y + voffset;
+    base_y          %= n_tiles_y * 8;
 
     uint32_t screen_block = 0;
     switch (screen_size) {
@@ -124,27 +124,27 @@ static inline void draw_text_bg(gba_t *gba, uint8_t bg, uint32_t x, uint32_t y) 
         break;
     case 0b01:
         if (base_x >= 256) {
-            screen_block = 1;
-            base_x %= 256;
+            screen_block  = 1;
+            base_x       %= 256;
         }
         break;
     case 0b10:
         if (base_y >= 256) {
-            screen_block = 1;
-            base_y %= 256;
+            screen_block  = 1;
+            base_y       %= 256;
         }
         break;
     case 0b11:
         if (base_x >= 256 && base_y >= 256) {
-            screen_block = 3;
-            base_x %= 256;
-            base_y %= 256;
+            screen_block  = 3;
+            base_x       %= 256;
+            base_y       %= 256;
         } else if (base_x >= 256) {
-            screen_block = 1;
-            base_x %= 256;
+            screen_block  = 1;
+            base_x       %= 256;
         } else if (base_y >= 256) {
-            screen_block = 2;
-            base_y %= 256;
+            screen_block  = 2;
+            base_y       %= 256;
         }
         break;
     default:
@@ -155,9 +155,9 @@ static inline void draw_text_bg(gba_t *gba, uint8_t bg, uint32_t x, uint32_t y) 
     uint32_t sbe_base  = BUS_VRAM + ((screen_base_block + screen_block) * 0x0800);
     uint32_t char_base = BUS_VRAM + (char_base_block * 0x4000);
 
-    uint32_t sbe_addr_offset = (base_y / 8) * 32 + (base_x / 8); // y * 32 because a screenblock can fit 32x32 sbe
-    sbe_addr_offset *= 2;
-    uint16_t sbe = gba_bus_read_half(gba, sbe_base + sbe_addr_offset);
+    uint32_t sbe_addr_offset  = (base_y / 8) * 32 + (base_x / 8); // y * 32 because a screenblock can fit 32x32 sbe
+    sbe_addr_offset          *= 2;
+    uint16_t sbe              = gba_bus_read_half(gba, sbe_base + sbe_addr_offset);
 
     uint16_t tile_id = sbe & 0x03FF;
     bool     flip_x  = CHECK_BIT(sbe, 10);

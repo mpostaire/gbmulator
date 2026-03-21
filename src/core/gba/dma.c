@@ -101,9 +101,9 @@ static inline void check_dma_requests(gba_t *gba) {
         else if (i == 3)
             dst_addr_mask = 0x0FFFFFFF;
 
-        channel->src = IO_DMAxSAD(gba, i);
+        channel->src  = IO_DMAxSAD(gba, i);
         channel->src &= src_addr_mask;
-        channel->dst = IO_DMAxDAD(gba, i);
+        channel->dst  = IO_DMAxDAD(gba, i);
         channel->dst &= dst_addr_mask;
 
         channel->is_half       = IS_DMA_HALF(gba, i);

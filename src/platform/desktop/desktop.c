@@ -1232,7 +1232,7 @@ static void activate_cb(GtkApplication *app) {
 
     // Drag and drop
     GtkDropTarget *target = gtk_drop_target_new(G_TYPE_INVALID, GDK_ACTION_COPY);
-    gtk_drop_target_set_gtypes(target, (GType[1]) { GDK_TYPE_FILE_LIST }, 1);
+    gtk_drop_target_set_gtypes(target, (GType[1]){ GDK_TYPE_FILE_LIST }, 1);
     g_signal_connect(target, "drop", G_CALLBACK(on_drop), NULL);
     gtk_widget_add_controller(GTK_WIDGET(main_window), GTK_EVENT_CONTROLLER(target));
 

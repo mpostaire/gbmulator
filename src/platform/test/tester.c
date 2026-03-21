@@ -1,8 +1,8 @@
-#include "gbtester.h"
 #include "gbatester.h"
+#include "gbtester.h"
 
 int main(int argc, char **argv) {
-    gbtester_main(argc, argv);
-    gbatester_main(argc, argv);
-    return 0;
+    int ret  = gbtester_main(argc, argv);
+    ret     |= gbatester_main(argc, argv);
+    return ret;
 }

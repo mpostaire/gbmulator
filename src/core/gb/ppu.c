@@ -358,10 +358,10 @@ static inline void fetch_tileslice_high(gb_t *gb) {
     }
 
     for (uint8_t i = 0; i < 8; i++) {
-        ppu->pixel_fetcher.pixels[i].color |= GET_BIT(tileslice, 7 - i) << 1;
-        ppu->pixel_fetcher.pixels[i].palette    = palette;
-        ppu->pixel_fetcher.pixels[i].attributes = attributes;
-        ppu->pixel_fetcher.pixels[i].oam_pos    = oam_pos;
+        ppu->pixel_fetcher.pixels[i].color      |= GET_BIT(tileslice, 7 - i) << 1;
+        ppu->pixel_fetcher.pixels[i].palette     = palette;
+        ppu->pixel_fetcher.pixels[i].attributes  = attributes;
+        ppu->pixel_fetcher.pixels[i].oam_pos     = oam_pos;
     }
 }
 
@@ -779,7 +779,7 @@ void ppu_update_stat_irq_line(gb_t *gb) {
 
     uint8_t old_stat_irq_line = ppu->stat_irq_line;
 
-    ppu->stat_irq_line = IS_HBLANK_IRQ_STAT_ENABLED(gb) && ppu->mode == PPU_MODE_HBLANK;
+    ppu->stat_irq_line  = IS_HBLANK_IRQ_STAT_ENABLED(gb) && ppu->mode == PPU_MODE_HBLANK;
     ppu->stat_irq_line |= IS_VBLANK_IRQ_STAT_ENABLED(gb) && ppu->mode == PPU_MODE_VBLANK;
     ppu->stat_irq_line |= IS_OAM_IRQ_STAT_ENABLED(gb) && ppu->mode == PPU_MODE_OAM;
     ppu->stat_irq_line |= IS_LY_LYC_IRQ_STAT_ENABLED(gb) && gb->mmu.io_registers[IO_LY] == gb->mmu.io_registers[IO_LYC];

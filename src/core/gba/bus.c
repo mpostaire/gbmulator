@@ -47,8 +47,8 @@ static void gba_parse_cartridge(gba_t *gba) {
 }
 
 static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
-    uint32_t mask = 0xFFFF;
-    address >>= 1;
+    uint32_t mask   = 0xFFFF;
+    address       >>= 1;
 
     switch (address) {
     // LCD I/O Registers
@@ -407,8 +407,8 @@ static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
 }
 
 static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
-    uint16_t mask = 0xFFFF;
-    address >>= 1;
+    uint16_t mask   = 0xFFFF;
+    address       >>= 1;
 
     switch (address) {
     // LCD I/O Registers
@@ -849,7 +849,7 @@ static uint32_t rom_read(gba_t *gba, uint8_t mode, uint32_t address) {
         // Reading from GamePak ROM when no Cartridge is inserted (or address beyond cartridge capacity)
         // Because Gamepak uses the same signal-lines for both 16bit data and for lower 16bit halfword address, the
         // entire gamepak ROM area is effectively filled by incrementing 16bit values (Address/2 AND FFFFh).
-        data = (bus->rom_address_latch >> 1) & 0xFFFF;
+        data  = (bus->rom_address_latch >> 1) & 0xFFFF;
         data |= (data + 1) << 16;
     } else {
         data = *((uint32_t *) &bus->rom[bus->rom_address_latch]);
@@ -917,8 +917,8 @@ static void iwram_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t dat
 }
 
 static void io_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
-    uint8_t size = ((mode >> 2) & 0x03) + 1;
-    address -= BUS_IO;
+    uint8_t size  = ((mode >> 2) & 0x03) + 1;
+    address      -= BUS_IO;
 
     io_regs_write(gba, address, data);
     if (size == 4)

@@ -38,8 +38,8 @@ typedef struct
 } bmp_v5_header_t;
 
 static inline uint8_t read_u8(uint8_t **buffer) {
-    uint8_t ret = **buffer;
-    *buffer += sizeof(ret);
+    uint8_t ret  = **buffer;
+    *buffer     += sizeof(ret);
     return ret;
 }
 
@@ -52,8 +52,8 @@ static inline uint32_t read_u32(uint8_t **buffer) {
 }
 
 static inline void write_u8(uint8_t **buffer, uint8_t data) {
-    **buffer = data;
-    *buffer += sizeof(data);
+    **buffer  = data;
+    *buffer  += sizeof(data);
 }
 
 static inline void write_u16(uint8_t **buffer, uint16_t data) {

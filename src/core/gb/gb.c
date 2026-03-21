@@ -154,7 +154,7 @@ void gb_print_status(gb_t *gb) {
 }
 
 uint8_t gb_link_shift_bit(gb_t *gb, uint8_t in_bit) {
-    uint8_t out_bit = GET_BIT(gb->mmu.io_registers[IO_SB], 7);
+    uint8_t out_bit               = GET_BIT(gb->mmu.io_registers[IO_SB], 7);
     gb->mmu.io_registers[IO_SB] <<= 1;
     CHANGE_BIT(gb->mmu.io_registers[IO_SB], 0, in_bit);
 
@@ -292,11 +292,11 @@ bool gb_load_save(gb_t *gb, uint8_t *data, size_t length) {
         rtc_timestamp |= ((time_t) data[eram_len + 40 + i]) << (i * 8);
 
     // add elapsed time
-    time_t rtc_registers_time = s + m * 60 + h * 3600 + ((dh << 8) | dl) * 86400;
-    rtc_registers_time += time(NULL) - rtc_timestamp;
+    time_t rtc_registers_time  = s + m * 60 + h * 3600 + ((dh << 8) | dl) * 86400;
+    rtc_registers_time        += time(NULL) - rtc_timestamp;
 
     // convert elapsed time back into rtc registers
-    uint16_t d = rtc_registers_time / 86400;
+    uint16_t d          = rtc_registers_time / 86400;
     rtc_registers_time %= 86400;
 
     // day overflow
@@ -306,13 +306,13 @@ bool gb_load_save(gb_t *gb, uint8_t *data, size_t length) {
     }
 
     gb->mmu.mbc.mbc3.rtc.dh |= (d & 0x100) >> 8;
-    gb->mmu.mbc.mbc3.rtc.dl = d & 0xFF;
+    gb->mmu.mbc.mbc3.rtc.dl  = d & 0xFF;
 
-    gb->mmu.mbc.mbc3.rtc.h = rtc_registers_time / 3600;
-    rtc_registers_time %= 3600;
+    gb->mmu.mbc.mbc3.rtc.h  = rtc_registers_time / 3600;
+    rtc_registers_time     %= 3600;
 
-    gb->mmu.mbc.mbc3.rtc.m = rtc_registers_time / 60;
-    rtc_registers_time %= 60;
+    gb->mmu.mbc.mbc3.rtc.m  = rtc_registers_time / 60;
+    rtc_registers_time     %= 60;
 
     gb->mmu.mbc.mbc3.rtc.s = rtc_registers_time;
 
@@ -344,22 +344,22 @@ void gb_get_savestate(gb_t *gb, uint8_t *data, size_t *length) {
 }
 
 bool gb_load_savestate(gb_t *gb, uint8_t *data, size_t length) {
-    size_t expected_data_len = 0;
-    expected_data_len += cpu_serialized_length(gb);
-    expected_data_len += timer_serialized_length(gb);
-    expected_data_len += ppu_serialized_length(gb);
-    expected_data_len += mmu_serialized_length(gb);
+    size_t expected_data_len  = 0;
+    expected_data_len        += cpu_serialized_length(gb);
+    expected_data_len        += timer_serialized_length(gb);
+    expected_data_len        += ppu_serialized_length(gb);
+    expected_data_len        += mmu_serialized_length(gb);
 
     if (length != expected_data_len) {
         eprintf("invalid savestate data length (expected: %zu; got: %zu)\n", expected_data_len, length);
         return false;
     }
 
-    size_t offset = 0;
-    offset += cpu_deserialize(gb, &data[offset]);
-    offset += timer_deserialize(gb, &data[offset]);
-    offset += ppu_deserialize(gb, &data[offset]);
-    offset += mmu_deserialize(gb, &data[offset]);
+    size_t offset  = 0;
+    offset        += cpu_deserialize(gb, &data[offset]);
+    offset        += timer_deserialize(gb, &data[offset]);
+    offset        += ppu_deserialize(gb, &data[offset]);
+    offset        += mmu_deserialize(gb, &data[offset]);
 
     // resets apu's internal state to prevent glitchy audio if resuming from state without sound playing from state with sound playing
     apu_reset(gb);

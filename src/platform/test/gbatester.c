@@ -161,8 +161,8 @@ static bool check_transactions(void) {
 }
 
 static uint32_t parse_u32(uint8_t **test_data) {
-    uint32_t ret = *((uint32_t *) *test_data);
-    *test_data += sizeof(ret);
+    uint32_t ret  = *((uint32_t *) *test_data);
+    *test_data   += sizeof(ret);
     return ret;
 }
 

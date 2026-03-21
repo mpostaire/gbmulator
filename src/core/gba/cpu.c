@@ -22,10 +22,10 @@
 #define CPSR_MODE_SYS 0b11111 // System (sys): A privileged user mode for the operating system
 
 #define CPSR_CHECK_FLAG(cpu, flag) ((cpu)->cpsr & (flag))
-#define CPSR_CHANGE_FLAG(cpu, flag, value)                \
-    do {                                                  \
-        (cpu)->cpsr ^= (-(value) ^ (cpu)->cpsr) & (flag); \
-        (cpu)->spsr[0] = (cpu)->cpsr;                     \
+#define CPSR_CHANGE_FLAG(cpu, flag, value)                   \
+    do {                                                     \
+        (cpu)->cpsr    ^= (-(value) ^ (cpu)->cpsr) & (flag); \
+        (cpu)->spsr[0]  = (cpu)->cpsr;                       \
     } while (0)
 
 #define CPSR_MODE_MASK     0x0000001F // Mode bits
@@ -204,7 +204,7 @@ static char *_rlist_to_str(uint16_t rlist, char *buf, size_t buf_size) {
     for (int i = 0; i < 16; i++) {
         if (CHECK_BIT(rlist, i)) {
             if (first < 0) {
-                first = i;
+                first       = i;
                 buf_offset += snprintf(buf + buf_offset, buf_size - buf_offset, "%s%s", last >= 0 ? "," : "", reg_names[i]);
             } else if (buf_offset > 0 && buf[buf_offset - 1] != '-') {
                 buf_offset += snprintf(buf + buf_offset, buf_size - buf_offset, "-");
@@ -226,8 +226,8 @@ static char *_rlist_to_str(uint16_t rlist, char *buf, size_t buf_size) {
 }
 
 static char *_strh_addr_str(uint8_t rn, int32_t offset, bool offset_is_reg, bool p, bool u, bool w, char *buf, size_t buf_size) {
-    size_t buf_offset = 0;
-    buf_offset += snprintf(buf + buf_offset, buf_size - buf_offset, "[%s", reg_names[rn]);
+    size_t buf_offset  = 0;
+    buf_offset        += snprintf(buf + buf_offset, buf_size - buf_offset, "[%s", reg_names[rn]);
 
     if (p) {
         if (offset_is_reg)
@@ -253,11 +253,11 @@ static char *_msr_op_to_str(uint32_t instr, uint8_t op, bool i, char *buf, size_
     return buf;
 }
 
-#define strh_addr_str(rn, offset, offset_is_reg, p, u, w) _strh_addr_str((rn), (offset), (offset_is_reg), (p), (u), (w), (char[32]) {}, 32)
+#define strh_addr_str(rn, offset, offset_is_reg, p, u, w) _strh_addr_str((rn), (offset), (offset_is_reg), (p), (u), (w), (char[32]){}, 32)
 
-#define rlist_to_str(rlist) _rlist_to_str((rlist), (char[32]) {}, 32)
+#define rlist_to_str(rlist) _rlist_to_str((rlist), (char[32]){}, 32)
 
-#define msr_op_to_str(instr, op, i) _msr_op_to_str((instr), (op), (i), (char[32]) {}, 32)
+#define msr_op_to_str(instr, op, i) _msr_op_to_str((instr), (op), (i), (char[32]){}, 32)
 #endif
 
 static inline void flush_pipeline(gba_t *gba) {
@@ -327,7 +327,7 @@ static inline void stm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, b
     //     dest_addr += 4;
     if (!u) {
         dest_addr -= transfer_size;
-        p = !p;
+        p          = !p;
     }
 
     unsigned int first_reg       = stdc_first_trailing_one(rlist) - 1;
@@ -374,7 +374,7 @@ static inline bool ldm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, b
     //     dest_addr += 4;
     if (!u) {
         dest_addr -= transfer_size;
-        p = !p;
+        p          = !p;
     }
 
     uint32_t writeback_value = u ? dest_addr + transfer_size : dest_addr;
@@ -1689,7 +1689,7 @@ static bool bl_handler(gba_t *gba, uint32_t instr) {
         offset |= 0xFF000000;
     offset <<= 2;
 
-    gba->cpu.regs[REG_LR] = gba->cpu.regs[REG_PC] - 4; // store addr of next instr before jumping
+    gba->cpu.regs[REG_LR]  = gba->cpu.regs[REG_PC] - 4; // store addr of next instr before jumping
     gba->cpu.regs[REG_PC] += offset;
 
     flush_pipeline(gba);
