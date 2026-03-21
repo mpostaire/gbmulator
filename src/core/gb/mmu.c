@@ -234,44 +234,7 @@ bool mmu_validate_rom(const uint8_t *rom, size_t size) {
 }
 
 void mmu_reset(gb_t *gb) {
-    bool full_reset = gb->base->opts.rom && gb->base->opts.rom_size;
-
-    memset(gb->mmu.vram, 0, sizeof(gb->mmu.vram));
-    if (full_reset)
-        memset(gb->mmu.eram, 0, sizeof(gb->mmu.eram));
-    memset(gb->mmu.wram, 0, sizeof(gb->mmu.wram));
-    memset(gb->mmu.oam, 0, sizeof(gb->mmu.oam));
-    memset(gb->mmu.io_registers, 0, sizeof(gb->mmu.io_registers));
-    gb->mmu.ie = 0;
-    memset(gb->mmu.hram, 0, sizeof(gb->mmu.hram));
-    memset(gb->mmu.cram_bg, 0, sizeof(gb->mmu.cram_bg));
-    memset(gb->mmu.cram_obj, 0, sizeof(gb->mmu.cram_obj));
-
-    gb->mmu.boot_finished = 0;
-
-    memset(&gb->mmu.hdma, 0, sizeof(gb->mmu.hdma));
-    memset(&gb->mmu.oam_dma, 0, sizeof(gb->mmu.oam_dma));
-
-    gb->mmu.vram_bank_addr_offset  = 0;
-    gb->mmu.wram_bankn_addr_offset = 0;
-    gb->mmu.rom_banks              = 0;
-    gb->mmu.eram_banks             = 0;
-
-    gb->mmu.rom_bank0_addr = 0;
-    gb->mmu.rom_bankn_addr = 0;
-    gb->mmu.eram_bank_addr = 0;
-    gb->mmu.has_battery    = 0;
-    gb->mmu.has_rumble     = 0;
-    gb->mmu.has_rtc        = 0;
-
-    if (full_reset) {
-        memset(&gb->mmu.mbc, 0, sizeof(gb->mmu.mbc));
-    } else {
-        gb->mmu.mbc.mbc3.rtc.enabled    = 0;
-        gb->mmu.mbc.mbc3.rtc.reg        = 0; // rtc register
-        gb->mmu.mbc.mbc3.rtc.latch      = 0;
-        gb->mmu.mbc.mbc3.rtc.rtc_cycles = 0;
-    }
+    memset(&gb->mmu, 0, sizeof(gb->mmu));
 
     parse_cartridge(gb);
 

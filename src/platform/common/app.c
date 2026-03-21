@@ -234,12 +234,16 @@ __attribute_used__ void app_reset(void) {
     if (!app.emu)
         return;
 
-    save_battery_to_file(app.emu, get_save_path(gbmulator_get_rom_title(app.emu)));
+    char *save_path = get_save_path(gbmulator_get_rom_title(app.emu));
+
+    save_battery_to_file(app.emu, save_path);
 
     gbmulator_options_t opts = gbmulator_get_options(app.emu);
     opts.mode                = app.config.mode;
 
     gbmulator_reset(app.emu, &opts);
+
+    load_battery_from_file(app.emu, save_path);
 
     gbmulator_print_status(app.emu);
     alrenderer_clear_queue();
