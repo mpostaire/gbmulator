@@ -818,7 +818,7 @@ static void clear_printer_gl_area(void) {
         return; // segfault if printer gl area was not realized (printer window not shown at least once before printing)
 
     gtk_gl_area_queue_render(GTK_GL_AREA(printer_gl_area));
-    gtk_widget_set_size_request(GTK_WIDGET(printer_gl_area), GB_SCREEN_WIDTH * 2, GB_SCREEN_HEIGHT * 2);
+    gtk_widget_set_size_request(GTK_WIDGET(printer_gl_area), GB_SCREEN_WIDTH * 2, 1);
 
     gtk_widget_set_sensitive(GTK_WIDGET(printer_save_btn), FALSE);
     gtk_widget_set_sensitive(GTK_WIDGET(printer_clear_btn), FALSE);
