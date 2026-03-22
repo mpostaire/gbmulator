@@ -716,26 +716,24 @@ __attribute_used__ bool app_printer_save(const char *path) {
     if (!app.printer.emu)
         return false;
 
-    size_t   printer_heigth = 0;
-    uint8_t *printer_data   = NULL;
-    gbmulator_get_save(app.printer.emu, printer_data, &printer_heigth);
+    size_t printer_heigth = 0;
+    gbmulator_get_save(app.printer.emu, NULL, &printer_heigth);
 
     bmp_image_t *image = xmalloc(sizeof(*image) + GBPRINTER_IMG_WIDTH * printer_heigth * 4);
     image->w           = GBPRINTER_IMG_WIDTH;
     image->h           = printer_heigth;
 
-    memcpy(image->data, printer_data, image->w * image->h * 4);
-    // free(printer_data); // gbmulator_get_save on printer is special: it returns internal pointer --> do not free it
+    gbmulator_get_save(app.printer.emu, image->data, &printer_heigth);
 
     size_t   data_len = 0;
     uint8_t *data     = bmp_encode(image, &data_len);
     free(image);
 
     bool ret = false;
-    if (data && write_file(path, data, data_len))
+    if (data && write_file(path, data, data_len)) {
         ret = true;
-
-    free(data);
+        free(data);
+    }
 
     return ret;
 }

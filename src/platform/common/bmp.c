@@ -28,7 +28,8 @@ typedef struct
     uint32_t g_bitmask;
     uint32_t b_bitmask;
     uint32_t a_bitmask;
-    uint32_t color_space_endpoints;
+    uint32_t color_space_type;
+    uint8_t  color_space_endpoints[36];
     uint32_t r_gamma;
     uint32_t g_gamma;
     uint32_t b_gamma;
@@ -123,12 +124,15 @@ static bool read_v5_header(uint8_t **buffer, bmp_v5_header_t *v5_header) {
     v5_header->b_bitmask = read_u32(buffer);
     v5_header->a_bitmask = read_u32(buffer);
 
-    v5_header->color_space_endpoints = read_u32(buffer);
-    v5_header->r_gamma               = read_u32(buffer);
-    v5_header->g_gamma               = read_u32(buffer);
-    v5_header->b_gamma               = read_u32(buffer);
-    v5_header->intent                = read_u32(buffer);
-    v5_header->icc_profile_data      = read_u32(buffer);
+    v5_header->color_space_type = read_u32(buffer);
+    for (size_t i = 0; i < sizeof(v5_header->color_space_endpoints); i++)
+        v5_header->color_space_endpoints[i] = read_u8(buffer);
+
+    v5_header->r_gamma          = read_u32(buffer);
+    v5_header->g_gamma          = read_u32(buffer);
+    v5_header->b_gamma          = read_u32(buffer);
+    v5_header->intent           = read_u32(buffer);
+    v5_header->icc_profile_data = read_u32(buffer);
 
     v5_header->icc_profile_size = read_u32(buffer);
     if (v5_header->icc_profile_size != 0)
@@ -188,7 +192,10 @@ static bool write_v5_header(uint8_t **buffer, bmp_v5_header_t *v5_header) {
     write_u32(buffer, v5_header->b_bitmask);
     write_u32(buffer, v5_header->a_bitmask);
 
-    write_u32(buffer, v5_header->color_space_endpoints);
+    write_u32(buffer, v5_header->color_space_type);
+    for (size_t i = 0; i < sizeof(v5_header->color_space_endpoints); i++)
+        write_u8(buffer, v5_header->color_space_endpoints[i]);
+
     write_u32(buffer, v5_header->r_gamma);
     write_u32(buffer, v5_header->g_gamma);
     write_u32(buffer, v5_header->b_gamma);
@@ -290,7 +297,8 @@ uint8_t *bmp_encode(const bmp_image_t *img, size_t *out_size) {
         .g_bitmask                  = 0x0000FF00,
         .b_bitmask                  = 0x000000FF,
         .a_bitmask                  = 0xFF000000,
-        .color_space_endpoints      = 0,
+        .color_space_type           = 0,
+        .color_space_endpoints      = {},
         .r_gamma                    = 0,
         .g_gamma                    = 0,
         .b_gamma                    = 0,
