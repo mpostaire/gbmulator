@@ -204,31 +204,23 @@ static void parse_cartridge(gb_t *gb) {
 }
 
 bool mmu_validate_rom(const uint8_t *rom, size_t size) {
-    if (!rom) {
-        eprintf("null ROM");
+    if (!rom)
         return false;
-    }
 
     size_t rom_banks = 2 << rom[0x0148];
-    if (size < rom_banks * ROM_BANK_SIZE) {
-        eprintf("invalid ROM size");
+    if (size < rom_banks * ROM_BANK_SIZE)
         return false;
-    }
 
     // 8-bit cartridge header checksum validation
     uint8_t checksum = 0;
     for (uint16_t i = 0x0134; i <= 0x014C; i++)
         checksum = checksum - rom[i] - 1;
 
-    if (checksum != rom[0x014D]) {
-        eprintf("invalid ROM header checksum");
+    if (checksum != rom[0x014D])
         return false;
-    }
 
-    if (!parse_header_mbc_byte(rom[0x0147], NULL, NULL, NULL, NULL, NULL)) {
-        eprintf("invalid MBC byte: 0x%02X", rom[0x0147]);
+    if (!parse_header_mbc_byte(rom[0x0147], NULL, NULL, NULL, NULL, NULL))
         return false;
-    }
 
     return true;
 }
