@@ -21,13 +21,10 @@ static struct {
     bool                is_rewinding;
     uint32_t            steps_per_frame;
     glrenderer_t       *renderer;
-    glrenderer_t       *printer_renderer;
     uint16_t            joypad_state;
     gbmulator_t        *emu;
     gbmulator_t        *linked_emu;
-    gbmulator_t        *printer;
     int                 sfd;
-    uint32_t            printer_height;
     config_t            config;
     uint8_t             joypad_touch_counter[GBMULATOR_JOYPAD_END];
     bool                joypad_key_press_counter[GBMULATOR_JOYPAD_END];
@@ -37,6 +34,13 @@ static struct {
     uint8_t *rom;
 
     struct {
+        gbmulator_t          *emu;
+        glrenderer_t         *renderer;
+        uint32_t              height;
+        printer_new_line_cb_t on_new_line;
+    } printer;
+
+    struct {
         uint8_t *data;
         int      width;
         int      height;
@@ -44,9 +48,7 @@ static struct {
         int      rotation;
     } camera;
 
-    // TODO substruct for printer
     // TODO substructs for io/emu/etc.
-    printer_new_line_cb_t on_printer_new_line;
 } app;
 
 static void set_steps_per_frame(void) {
@@ -217,9 +219,9 @@ __attribute_used__ void app_quit(void) {
         app.linked_emu = NULL;
     }
 
-    if (app.printer) {
-        gbmulator_quit(app.printer);
-        app.printer = NULL;
+    if (app.printer.emu) {
+        gbmulator_quit(app.printer.emu);
+        app.printer.emu = NULL;
     }
 
     if (app.camera.data)
@@ -413,8 +415,6 @@ static void on_new_frame_cb(uint8_t *pixels) {
 }
 
 // TODO renderer buttons scaled smaller when in GBA mode
-// TODO printer shows white only but saving as image works better (it prints something but with an offset)
-// TODO mode auto detect is buggy
 
 __attribute_used__ bool app_load_cartridge(uint8_t *rom, size_t rom_size) {
     if (!app.renderer)
@@ -493,7 +493,6 @@ __attribute_used__ gbmulator_mode_t app_get_mode(void) {
     return opts.mode;
 }
 
-// TODO every config setter should do value bounds check
 __attribute_used__ bool app_set_mode(gbmulator_mode_t mode) {
     if (mode < 0 || mode >= GBMULATOR_MODE_GBPRINTER)
         return false;
@@ -643,24 +642,24 @@ __attribute_used__ bool app_set_binding(bool is_gamepad, gbmulator_joypad_t joyp
 }
 
 static void on_printer_new_frame_cb(uint8_t *pixels) {
-    if (!app.printer || !app.printer_renderer)
+    if (!app.printer.emu || !app.printer.renderer)
         return;
 
     size_t height;
-    gbmulator_get_save(app.printer, NULL, &height);
-    app.printer_height = height;
+    gbmulator_get_save(app.printer.emu, NULL, &height);
+    app.printer.height = height;
 
-    glrenderer_resize_viewport(app.printer_renderer, GBPRINTER_IMG_WIDTH * 2, app.printer_height * 2);
-    glrenderer_resize_screen(app.printer_renderer, GBPRINTER_IMG_WIDTH, app.printer_height);
+    glrenderer_resize_viewport(app.printer.renderer, GBPRINTER_IMG_WIDTH * 2, app.printer.height * 2);
+    glrenderer_resize_screen(app.printer.renderer, GBPRINTER_IMG_WIDTH, app.printer.height);
 
-    glrenderer_update_screen(app.printer_renderer, pixels);
+    glrenderer_update_screen(app.printer.renderer, pixels);
 
-    if (app.on_printer_new_line)
-        app.on_printer_new_line(app.printer_height, app.printer_height);
+    if (app.printer.on_new_line)
+        app.printer.on_new_line(app.printer.height, app.printer.height);
 }
 
 __attribute_used__ bool app_connect_printer(printer_new_line_cb_t on_new_line) {
-    if (!app.emu || app.printer)
+    if (!app.emu || app.printer.emu)
         return false;
 
     if (app.linked_emu)
@@ -670,13 +669,13 @@ __attribute_used__ bool app_connect_printer(printer_new_line_cb_t on_new_line) {
         .mode         = GBMULATOR_MODE_GBPRINTER,
         .on_new_frame = on_printer_new_frame_cb
     };
-    app.printer = gbmulator_init(&opts);
+    app.printer.emu = gbmulator_init(&opts);
 
-    gbmulator_link_connect(app.emu, app.printer, GBMULATOR_LINK_CABLE);
+    gbmulator_link_connect(app.emu, app.printer.emu, GBMULATOR_LINK_CABLE);
 
-    app.printer_height = 1;
+    app.printer.height = 1;
 
-    app.on_printer_new_line = on_new_line;
+    app.printer.on_new_line = on_new_line;
 
     return true;
 }
@@ -686,37 +685,36 @@ __attribute_used__ void app_printer_disconnect(void) {
         return;
 
     gbmulator_link_disconnect(app.emu, GBMULATOR_LINK_CABLE);
-    gbmulator_quit(app.printer);
-    app.printer = NULL;
+    gbmulator_quit(app.printer.emu);
+    app.printer.emu = NULL;
 }
 
 __attribute_used__ void app_printer_render(void) {
-    if (app.printer && !app.printer_renderer)
-        app.printer_renderer = glrenderer_init(GBPRINTER_IMG_WIDTH, app.printer_height, 0);
+    if (app.printer.emu && !app.printer.renderer)
+        app.printer.renderer = glrenderer_init(GBPRINTER_IMG_WIDTH, app.printer.height, 0);
 
-    glrenderer_render(app.printer_renderer);
+    glrenderer_render(app.printer.renderer);
 }
 
 __attribute_used__ bool app_printer_reset(void) {
-    if (!app.printer_renderer)
+    if (!app.printer.renderer)
         return false;
 
-    app.printer_height = 1;
-    glrenderer_resize_screen(app.printer_renderer, GBPRINTER_IMG_WIDTH, app.printer_height);
+    app.printer.height = 1;
+    glrenderer_resize_screen(app.printer.renderer, GBPRINTER_IMG_WIDTH, app.printer.height);
 
-    gbmulator_reset(app.printer, NULL);
+    gbmulator_reset(app.printer.emu, NULL);
 
     return true;
 }
 
 __attribute_used__ bool app_printer_save(const char *path) {
-    if (!app.printer)
+    if (!app.printer.emu)
         return false;
 
-    // TODO change gbmulator_get_save to allow setting dest buffer to reduce allocs and copies
     size_t   printer_heigth = 0;
     uint8_t *printer_data   = NULL;
-    gbmulator_get_save(app.printer, printer_data, &printer_heigth);
+    gbmulator_get_save(app.printer.emu, printer_data, &printer_heigth);
 
     bmp_image_t *image = xmalloc(sizeof(*image) + GBPRINTER_IMG_WIDTH * printer_heigth * 4);
     image->w           = GBPRINTER_IMG_WIDTH;
