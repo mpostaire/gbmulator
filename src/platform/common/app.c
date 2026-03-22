@@ -17,21 +17,27 @@
 #define MAX_TOUCHES 32
 
 static struct {
-    bool                is_paused;
-    bool                is_rewinding;
-    uint32_t            steps_per_frame;
-    glrenderer_t       *renderer;
-    uint16_t            joypad_state;
-    gbmulator_t        *emu;
-    gbmulator_t        *linked_emu;
-    int                 sfd;
-    config_t            config;
-    uint8_t             joypad_touch_counter[GBMULATOR_JOYPAD_END];
-    bool                joypad_key_press_counter[GBMULATOR_JOYPAD_END];
-    uint8_t             link_touch_counter;
-    glrenderer_obj_id_t touches_current_obj[32];
+    bool          is_paused;
+    bool          is_rewinding;
+    uint32_t      steps_per_frame;
+    glrenderer_t *renderer;
+    gbmulator_t  *emu;
+    config_t      config;
 
     uint8_t *rom;
+
+    struct {
+        gbmulator_t *emu;
+        int          sfd;
+    } link;
+
+    struct {
+        uint16_t            joypad_state;
+        uint8_t             joypad_touch_counter[GBMULATOR_JOYPAD_END];
+        bool                joypad_key_press_counter[GBMULATOR_JOYPAD_END];
+        uint8_t             link_touch_counter;
+        glrenderer_obj_id_t touches_current_obj[32];
+    } input;
 
     struct {
         gbmulator_t          *emu;
@@ -47,12 +53,10 @@ static struct {
         int      row_stride;
         int      rotation;
     } camera;
-
-    // TODO substructs for io/emu/etc.
 } app;
 
 static void set_steps_per_frame(void) {
-    float speed = app.linked_emu ? 1.0f : app.config.speed;
+    float speed = app.link.emu ? 1.0f : app.config.speed;
 
     switch (app.config.mode) {
     case GBMULATOR_MODE_GB:
@@ -123,12 +127,12 @@ static inline void btn_press(gbmulator_joypad_t joypad, bool is_touch) {
         return;
 
     if (is_touch)
-        app.joypad_touch_counter[joypad]++;
+        app.input.joypad_touch_counter[joypad]++;
     else
-        app.joypad_key_press_counter[joypad] = true;
+        app.input.joypad_key_press_counter[joypad] = true;
 
-    if (app.joypad_touch_counter[joypad] + app.joypad_key_press_counter[joypad] == 1) {
-        RESET_BIT(app.joypad_state, joypad);
+    if (app.input.joypad_touch_counter[joypad] + app.input.joypad_key_press_counter[joypad] == 1) {
+        RESET_BIT(app.input.joypad_state, joypad);
         glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) joypad, 0.5f);
     }
 }
@@ -138,15 +142,15 @@ static inline void btn_release(gbmulator_joypad_t joypad, bool is_touch) {
         return;
 
     if (is_touch)
-        app.joypad_touch_counter[joypad]--; // TODO why here?
+        app.input.joypad_touch_counter[joypad]--; // TODO why here?
     else
-        app.joypad_key_press_counter[joypad] = false;
+        app.input.joypad_key_press_counter[joypad] = false;
 
-    if (app.joypad_touch_counter[joypad] > 0)
-        app.joypad_touch_counter[joypad]--; // TODO and here? --> only one of those needed?
+    if (app.input.joypad_touch_counter[joypad] > 0)
+        app.input.joypad_touch_counter[joypad]--; // TODO and here? --> only one of those needed?
 
-    if (app.joypad_touch_counter[joypad] + app.joypad_key_press_counter[joypad] == 0) {
-        SET_BIT(app.joypad_state, joypad);
+    if (app.input.joypad_touch_counter[joypad] + app.input.joypad_key_press_counter[joypad] == 0) {
+        SET_BIT(app.input.joypad_state, joypad);
         glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) joypad, 1.0f);
     }
 }
@@ -178,20 +182,20 @@ __attribute_used__ void app_init(void) {
 
     app_set_pause(true);
 
-    app.joypad_state = 0xFF;
+    app.input.joypad_state = 0xFF;
 
     uint32_t screen_w;
     uint32_t screen_h;
     app_get_screen_size(&screen_w, &screen_h);
 
     for (int i = 0; i < MAX_TOUCHES; i++)
-        app.touches_current_obj[i] = GLRENDERER_OBJ_ID_SCREEN;
+        app.input.touches_current_obj[i] = GLRENDERER_OBJ_ID_SCREEN;
 
     app.renderer = glrenderer_init(screen_w, screen_h, 0);
 
     alrenderer_init(0);
 
-    app.sfd = -1;
+    app.link.sfd = -1;
 }
 
 __attribute_used__ void app_load_config(const config_t *default_config) {
@@ -214,9 +218,9 @@ __attribute_used__ void app_quit(void) {
         app.emu = NULL;
     }
 
-    if (app.linked_emu) {
-        gbmulator_quit(app.linked_emu);
-        app.linked_emu = NULL;
+    if (app.link.emu) {
+        gbmulator_quit(app.link.emu);
+        app.link.emu = NULL;
     }
 
     if (app.printer.emu) {
@@ -262,11 +266,11 @@ __attribute_used__ void app_run_frame(void) {
     if (app.is_rewinding) {
         gbmulator_rewind(app.emu, -1);
     } else {
-        gbmulator_set_joypad_state(app.emu, app.joypad_state);
+        gbmulator_set_joypad_state(app.emu, app.input.joypad_state);
 
         // TODO async or timeout link_exchange_joypad to avoid blocking the gui
-        if (app.linked_emu) {
-            if (!link_exchange_joypad(app.sfd, app.emu, app.linked_emu)) {
+        if (app.link.emu) {
+            if (!link_exchange_joypad(app.link.sfd, app.emu, app.link.emu)) {
                 app_link_disconnect();
                 set_steps_per_frame();
                 if (app.config.on_link_disconnected)
@@ -317,9 +321,9 @@ static inline void btn_touch_press(glrenderer_obj_id_t obj_id) {
         btn_press(GBMULATOR_JOYPAD_LEFT, true);
         break;
     case GLRENDERER_OBJ_ID_LINK:
-        app.link_touch_counter++;
+        app.input.link_touch_counter++;
 
-        if (app.link_touch_counter == 1)
+        if (app.input.link_touch_counter == 1)
             glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) GLRENDERER_OBJ_ID_LINK, 0.5f);
         break;
     case GLRENDERER_OBJ_ID_DPAD_CENTER:
@@ -350,10 +354,10 @@ static inline void btn_touch_release(glrenderer_obj_id_t obj_id) {
         btn_release(GBMULATOR_JOYPAD_LEFT, true);
         break;
     case GLRENDERER_OBJ_ID_LINK:
-        if (app.link_touch_counter > 0)
-            app.link_touch_counter--;
+        if (app.input.link_touch_counter > 0)
+            app.input.link_touch_counter--;
 
-        if (app.link_touch_counter == 0) {
+        if (app.input.link_touch_counter == 0) {
             glrenderer_set_obj_tint(app.renderer, (glrenderer_obj_id_t) GLRENDERER_OBJ_ID_LINK, 0.5f);
             if (app.config.on_link_button_touched)
                 app.config.on_link_button_touched(app.config.on_link_button_touched_user_data);
@@ -376,16 +380,16 @@ __attribute_used__ void app_touch_press(uint8_t touch_id, uint32_t x, uint32_t y
 
     btn_touch_press(obj_id);
 
-    app.touches_current_obj[touch_id] = obj_id;
+    app.input.touches_current_obj[touch_id] = obj_id;
 }
 
 __attribute_used__ void app_touch_release(uint8_t touch_id, uint32_t x, uint32_t y) {
     if (touch_id >= MAX_TOUCHES)
         return;
 
-    btn_touch_release(app.touches_current_obj[touch_id]);
+    btn_touch_release(app.input.touches_current_obj[touch_id]);
 
-    app.touches_current_obj[touch_id] = GLRENDERER_OBJ_ID_SCREEN;
+    app.input.touches_current_obj[touch_id] = GLRENDERER_OBJ_ID_SCREEN;
 }
 
 __attribute_used__ void app_touch_move(uint8_t touch_id, uint32_t x, uint32_t y) {
@@ -394,12 +398,12 @@ __attribute_used__ void app_touch_move(uint8_t touch_id, uint32_t x, uint32_t y)
 
     glrenderer_obj_id_t obj_id = glrenderer_get_obj_at_coord(app.renderer, x, y);
 
-    if (obj_id != app.touches_current_obj[touch_id]) {
-        btn_touch_release(app.touches_current_obj[touch_id]);
+    if (obj_id != app.input.touches_current_obj[touch_id]) {
+        btn_touch_release(app.input.touches_current_obj[touch_id]);
         btn_touch_press(obj_id);
     }
 
-    app.touches_current_obj[touch_id] = obj_id;
+    app.input.touches_current_obj[touch_id] = obj_id;
 }
 
 static bool on_camera_capture_image(uint8_t *pixels) {
@@ -556,12 +560,12 @@ __attribute_used__ bool app_is_paused(void) {
 }
 
 __attribute_used__ void app_save_state(int slot) {
-    if (app.emu && !app.linked_emu)
+    if (app.emu && !app.link.emu)
         save_state_to_file(app.emu, get_savestate_path(gbmulator_get_rom_title(app.emu), slot));
 }
 
 __attribute_used__ void app_load_state(int slot) {
-    if (app.emu && !app.linked_emu)
+    if (app.emu && !app.link.emu)
         load_state_from_file(app.emu, get_savestate_path(gbmulator_get_rom_title(app.emu), slot));
 }
 
@@ -662,7 +666,7 @@ __attribute_used__ bool app_connect_printer(printer_new_line_cb_t on_new_line) {
     if (!app.emu || app.printer.emu)
         return false;
 
-    if (app.linked_emu)
+    if (app.link.emu)
         todo("disconnect linked emu");
 
     gbmulator_options_t opts = {
@@ -755,40 +759,40 @@ __attribute_used__ void app_link_set_port(uint16_t port) {
 }
 
 __attribute_used__ bool app_link_start(bool is_server) {
-    if (app.sfd >= 0 || !app.emu || app.linked_emu)
+    if (app.link.sfd >= 0 || !app.emu || app.link.emu)
         return false;
 
     if (is_server)
-        app.sfd = link_start_server(app.config.link_port);
+        app.link.sfd = link_start_server(app.config.link_port);
     else
-        app.sfd = link_connect_to_server(app.config.link_host, app.config.link_port);
+        app.link.sfd = link_connect_to_server(app.config.link_host, app.config.link_port);
 
     gbmulator_t *new_linked_emu;
-    if (app.sfd >= 0 && link_init_transfer(app.sfd, app.emu, &new_linked_emu)) {
-        app.linked_emu = new_linked_emu;
+    if (app.link.sfd >= 0 && link_init_transfer(app.link.sfd, app.emu, &new_linked_emu)) {
+        app.link.emu = new_linked_emu;
         set_steps_per_frame();
 
         gbmulator_set_apu_speed(app.emu, 1.0f);
         return true;
     } else {
-        app.sfd = -1; // closed by link_init_transfer in case of error
+        app.link.sfd = -1; // closed by link_init_transfer in case of error
         return false;
     }
 }
 
 __attribute_used__ void app_link_disconnect(void) {
-    if (app.sfd < 0)
+    if (app.link.sfd < 0)
         return;
 
     link_cancel();
-    close(app.sfd);
-    app.sfd = -1;
+    close(app.link.sfd);
+    app.link.sfd = -1;
 
-    if (app.linked_emu) {
-        gbmulator_options_t opts = gbmulator_get_options(app.linked_emu);
+    if (app.link.emu) {
+        gbmulator_options_t opts = gbmulator_get_options(app.link.emu);
         free(opts.rom);
-        gbmulator_quit(app.linked_emu);
-        app.linked_emu = NULL;
+        gbmulator_quit(app.link.emu);
+        app.link.emu = NULL;
     }
 }
 
