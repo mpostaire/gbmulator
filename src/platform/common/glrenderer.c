@@ -424,7 +424,7 @@ void glrenderer_render(glrenderer_t *renderer) {
     if (renderer->update_screen_requested)
         update_screen(renderer);
 
-    glClearColor(0.0f, renderer->clear_g, renderer->clear_b, 1.0f);
+    glClearColor(renderer->clear_r, renderer->clear_g, renderer->clear_b, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
     // Call to glUseProgram useless as only one program is ever used in the lifespan of a glrenderer_t instance
