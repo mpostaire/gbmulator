@@ -686,7 +686,7 @@ static inline void hblank_step(gb_t *gb) {
         }
 
         if (gb->base->opts.on_new_frame)
-            ppu->pixels = gb->base->opts.on_new_frame();
+            gb->base->opts.on_new_frame(ppu->pixels);
     } else {
         ppu->oam_scan.size = 0;
         set_mode(gb, PPU_MODE_OAM);
@@ -768,7 +768,7 @@ void ppu_disable_lcd(gb_t *gb) {
     }
 
     if (gb->base->opts.on_new_frame)
-        gb->ppu.pixels = gb->base->opts.on_new_frame();
+        gb->base->opts.on_new_frame(gb->ppu.pixels);
 }
 
 void ppu_update_stat_irq_line(gb_t *gb) {

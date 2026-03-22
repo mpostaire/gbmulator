@@ -40,7 +40,7 @@ void glrenderer_quit(glrenderer_t *renderer);
  */
 void glrenderer_render(glrenderer_t *renderer);
 
-uint8_t *glrenderer_update_screen(glrenderer_t *renderer);
+void glrenderer_update_screen(glrenderer_t *renderer, uint8_t *pixels);
 
 void glrenderer_resize_screen(glrenderer_t *renderer, GLsizei width, GLsizei height);
 

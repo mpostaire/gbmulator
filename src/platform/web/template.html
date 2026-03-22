@@ -397,7 +397,7 @@
             if (document.fullscreenElement) {
                 canvas.width = window.innerWidth;
                 canvas.height = window.innerHeight;
-                Module.ccall('app_set_size', 'void', ['number', 'number'], [canvas.width, canvas.height]);
+                Module.ccall('app_set_viewport_size', 'void', ['number', 'number'], [canvas.width, canvas.height]);
             } else {
                 if (elem)
                     scale = Number(elem.value)

@@ -49,7 +49,7 @@ typedef enum {
     GBMULATOR_JOYPAD_END,
 } gbmulator_joypad_t;
 
-typedef uint8_t *(*gbmulator_new_frame_cb_t)(void);
+typedef void (*gbmulator_new_frame_cb_t)(uint8_t *pixels);
 typedef void (*gbmulator_new_sample_cb_t)(const gbmulator_apu_sample_t sample, uint32_t *dynamic_sampling_rate);
 typedef void (*gbmulator_accelerometer_request_cb_t)(double *x, double *y);
 typedef bool (*gbmulator_camera_capture_image_cb_t)(uint8_t *image);

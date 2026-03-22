@@ -543,7 +543,7 @@ void gba_ppu_step(gba_t *gba) {
                 RESET_BIT(gba->bus.io[IO_DISPSTAT], 0);
 
                 if (gba->base->opts.on_new_frame)
-                    ppu->pixels = gba->base->opts.on_new_frame();
+                    gba->base->opts.on_new_frame(ppu->pixels);
             }
         }
         break;

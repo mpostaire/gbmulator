@@ -386,7 +386,7 @@ static inline void resize_if_needed() {
     if (width != width_ || height != height_) {
         width_  = width;
         height_ = height;
-        app_set_size(width_, height_);
+        app_set_viewport_size(width_, height_);
         aout << "Viewport resize: w=" << width_ << " h=" << height_ << std::endl;
     }
 }

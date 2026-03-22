@@ -56,9 +56,6 @@ static void gbprinter_clear_image(gbprinter_t *printer) {
     printer->image.allocated_height = 0;
     free(printer->image.data);
     printer->image.data = NULL; // important to avoid the xrealloc of the PRINT command to cause a double free (because it would realloc on an freed pointer)
-
-    if (printer->pixels)
-        memset(printer->pixels, 0xFF, GBPRINTER_IMG_WIDTH * 4);
 }
 
 gbprinter_t *gbprinter_init(gbmulator_t *base) {
@@ -82,7 +79,9 @@ void gbprinter_quit(gbprinter_t *printer) {
 
 void gbprinter_get_image(gbprinter_t *printer, uint8_t *image_data, size_t *height) {
     *height = printer->image.height;
-    memcpy(image_data, printer->image.data, *height * GBPRINTER_IMG_WIDTH * 4);
+
+    if (image_data)
+        memcpy(image_data, printer->image.data, *height * GBPRINTER_IMG_WIDTH * 4);
 }
 
 static inline void render_line(gbprinter_t *printer) {
@@ -132,9 +131,6 @@ static inline void render_line(gbprinter_t *printer) {
 
     printer->ram_printing_line_index++;
     printer->image.height++;
-
-    if (printer->pixels)
-        memcpy(printer->pixels, printer->image.data, GBPRINTER_IMG_WIDTH * printer->image.height * 4);
 }
 
 void gbprinter_step(gbprinter_t *printer) {
@@ -148,7 +144,7 @@ void gbprinter_step(gbprinter_t *printer) {
     render_line(printer);
 
     if (printer->base->opts.on_new_frame)
-        printer->pixels = printer->base->opts.on_new_frame();
+        printer->base->opts.on_new_frame(printer->image.data);
 
     if (printer->image.height == printer->image.allocated_height)
         printer->status = STATUS_DONE;

@@ -19,7 +19,7 @@ typedef struct {
     uint16_t line_layers[4][GBA_SCREEN_WIDTH];
     uint16_t obj_layers[2][GBA_SCREEN_WIDTH];
 
-    uint8_t *pixels;
+    uint8_t pixels[GBA_SCREEN_WIDTH * GBA_SCREEN_HEIGHT * 4];
 } gba_ppu_t;
 
 void gba_ppu_reset(gba_t *gba);

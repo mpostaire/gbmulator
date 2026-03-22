@@ -300,6 +300,7 @@ static inline gboolean loop_func(gpointer user_data) {
 
 static void on_emu_realize(GtkGLArea *area, gpointer user_data) {
     gtk_gl_area_make_current(area);
+
     if (gtk_gl_area_get_error(area) != NULL) {
         eprintf("Unknown error\n");
         return;
@@ -316,16 +317,22 @@ static void on_emu_unrealize(GtkGLArea *area, gpointer user_data) {
 }
 
 static gboolean on_emu_render(GtkGLArea *area, GdkGLContext *context, gpointer user_data) {
+    gtk_gl_area_make_current(area);
+
     app_render();
+
     return TRUE;
 }
 
 static void on_emu_resize(GtkGLArea *area, gint width, gint height, gpointer user_data) {
-    app_set_size(width, height);
+    gtk_gl_area_make_current(area);
+
+    app_set_viewport_size(width, height);
 }
 
 static void on_printer_realize(GtkGLArea *area, gpointer user_data) {
     gtk_gl_area_make_current(area);
+
     if (gtk_gl_area_get_error(area) != NULL) {
         eprintf("Unknown error\n");
         return;
@@ -333,13 +340,17 @@ static void on_printer_realize(GtkGLArea *area, gpointer user_data) {
 }
 
 static gboolean on_printer_render(GtkGLArea *area, GdkGLContext *context, gpointer user_data) {
+    gtk_gl_area_make_current(area);
     app_printer_render();
     return TRUE;
 }
 
 static gboolean on_printer_resize(GtkGLArea *area, GdkGLContext *context) {
+    gtk_gl_area_make_current(area);
+
     double adj_upper = gtk_adjustment_get_upper(GTK_ADJUSTMENT(printer_scroll_adj));
     gtk_adjustment_set_value(GTK_ADJUSTMENT(printer_scroll_adj), adj_upper);
+
     return TRUE;
 }
 

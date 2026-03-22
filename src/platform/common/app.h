@@ -51,7 +51,7 @@ void app_set_palette(gb_color_palette_t value);
 
 void app_get_screen_size(uint32_t *screen_w, uint32_t *screen_h);
 
-void app_set_size(uint32_t viewport_w, uint32_t viewport_h);
+void app_set_viewport_size(uint32_t viewport_w, uint32_t viewport_h);
 
 void app_get_config(config_t *config);
 

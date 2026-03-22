@@ -43,6 +43,10 @@ static struct {
         int      row_stride;
         int      rotation;
     } camera;
+
+    // TODO substruct for printer
+    // TODO substructs for io/emu/etc.
+    printer_new_line_cb_t on_printer_new_line;
 } app;
 
 static void set_steps_per_frame(void) {
@@ -404,8 +408,8 @@ static bool on_camera_capture_image(uint8_t *pixels) {
     return true;
 }
 
-static uint8_t *on_new_frame_cb(void) {
-    return glrenderer_update_screen(app.renderer);
+static void on_new_frame_cb(uint8_t *pixels) {
+    glrenderer_update_screen(app.renderer, pixels);
 }
 
 // TODO renderer buttons scaled smaller when in GBA mode
@@ -539,12 +543,7 @@ __attribute_used__ void app_get_screen_size(uint32_t *screen_w, uint32_t *screen
     }
 }
 
-__attribute_used__ void app_set_size(uint32_t viewport_w, uint32_t viewport_h) {
-    uint32_t screen_w;
-    uint32_t screen_h;
-    app_get_screen_size(&screen_w, &screen_h);
-
-    glrenderer_resize_screen(app.renderer, screen_w, screen_h);
+__attribute_used__ void app_set_viewport_size(uint32_t viewport_w, uint32_t viewport_h) {
     glrenderer_resize_viewport(app.renderer, viewport_w, viewport_h);
 }
 
@@ -643,22 +642,22 @@ __attribute_used__ bool app_set_binding(bool is_gamepad, gbmulator_joypad_t joyp
     return true;
 }
 
-// TODO
-// static void on_printer_new_frame_cb(const uint8_t *pixels, size_t current_height, size_t total_height) {
-//     if (!app.printer || !app.printer_renderer)
-//         return;
+static void on_printer_new_frame_cb(uint8_t *pixels) {
+    if (!app.printer || !app.printer_renderer)
+        return;
 
-//     if (current_height != app.printer_height) {
-//         app.printer_height = current_height;
+    size_t height;
+    gbmulator_get_save(app.printer, NULL, &height);
+    app.printer_height = height;
 
-//         glrenderer_resize_screen(app.printer_renderer, GBPRINTER_IMG_WIDTH, app.printer_height);
-//     }
+    glrenderer_resize_viewport(app.printer_renderer, GBPRINTER_IMG_WIDTH * 2, app.printer_height * 2);
+    glrenderer_resize_screen(app.printer_renderer, GBPRINTER_IMG_WIDTH, app.printer_height);
 
-//     // glrenderer_update_screen(app.printer_renderer, pixels);
+    glrenderer_update_screen(app.printer_renderer, pixels);
 
-//     if (app.on_printer_new_line)
-//         app.on_printer_new_line(current_height, total_height);
-// }
+    if (app.on_printer_new_line)
+        app.on_printer_new_line(app.printer_height, app.printer_height);
+}
 
 __attribute_used__ bool app_connect_printer(printer_new_line_cb_t on_new_line) {
     if (!app.emu || app.printer)
@@ -668,20 +667,16 @@ __attribute_used__ bool app_connect_printer(printer_new_line_cb_t on_new_line) {
         todo("disconnect linked emu");
 
     gbmulator_options_t opts = {
-        .mode = GBMULATOR_MODE_GBPRINTER,
-        // TODO
-        // .on_new_frame = on_printer_new_frame_cb
+        .mode         = GBMULATOR_MODE_GBPRINTER,
+        .on_new_frame = on_printer_new_frame_cb
     };
     app.printer = gbmulator_init(&opts);
 
     gbmulator_link_connect(app.emu, app.printer, GBMULATOR_LINK_CABLE);
 
     app.printer_height = 1;
-    if (!app.printer_renderer)
-        app.printer_renderer = glrenderer_init(GBPRINTER_IMG_WIDTH, app.printer_height, 0);
 
-    // TODO
-    // app.on_printer_new_line = on_new_line;
+    app.on_printer_new_line = on_new_line;
 
     return true;
 }
@@ -692,30 +687,24 @@ __attribute_used__ void app_printer_disconnect(void) {
 
     gbmulator_link_disconnect(app.emu, GBMULATOR_LINK_CABLE);
     gbmulator_quit(app.printer);
-    glrenderer_quit(app.printer_renderer);
-    app.printer          = NULL;
-    app.printer_renderer = NULL;
+    app.printer = NULL;
 }
 
 __attribute_used__ void app_printer_render(void) {
-    if (app.printer_renderer)
-        glrenderer_render(app.printer_renderer);
+    if (app.printer && !app.printer_renderer)
+        app.printer_renderer = glrenderer_init(GBPRINTER_IMG_WIDTH, app.printer_height, 0);
+
+    glrenderer_render(app.printer_renderer);
 }
 
 __attribute_used__ bool app_printer_reset(void) {
     if (!app.printer_renderer)
         return false;
 
-    glrenderer_resize_screen(app.printer_renderer, GBPRINTER_IMG_WIDTH, 1);
     app.printer_height = 1;
+    glrenderer_resize_screen(app.printer_renderer, GBPRINTER_IMG_WIDTH, app.printer_height);
 
-    // TODO
-    // void *pixels = xcalloc(1, GBPRINTER_IMG_WIDTH * app.printer_height * 4);
-    // glrenderer_update_screen(app.printer_renderer, pixels);
-    // free(pixels);
-
-    if (app.printer)
-        gbmulator_reset(app.printer, NULL);
+    gbmulator_reset(app.printer, NULL);
 
     return true;
 }

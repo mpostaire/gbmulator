@@ -97,7 +97,7 @@ typedef struct {
         uint8_t x; // x position of the fetcher on the scanline
     } pixel_fetcher;
 
-    uint8_t *pixels;
+    uint8_t pixels[GB_SCREEN_WIDTH * GB_SCREEN_HEIGHT * 4];
 } gb_ppu_t;
 
 void ppu_enable_lcd(gb_t *gb);
