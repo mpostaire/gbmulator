@@ -167,8 +167,13 @@ void gbmulator_step(gbmulator_t *emu) {
 
     emu->step(emu->impl);
 
+    // Step link cable device
     if (emu->cable.other_device)
         emu->cable.other_device->step(emu->cable.other_device->impl);
+
+    // Step IR device only if it isn't also connected via link cable
+    if (emu->ir.other_device && emu->ir.other_device != emu->cable.other_device)
+        emu->ir.other_device->step(emu->ir.other_device->impl);
 }
 
 void gbmulator_run_steps(gbmulator_t *emu, uint64_t steps_limit) {

@@ -787,8 +787,12 @@ __attribute_used__ void app_link_disconnect(void) {
     app.link.sfd = -1;
 
     if (app.link.emu) {
-        gbmulator_options_t opts = gbmulator_get_options(app.link.emu);
-        free(opts.rom);
+        gbmulator_options_t opts        = gbmulator_get_options(app.emu);
+        gbmulator_options_t linked_opts = gbmulator_get_options(app.link.emu);
+
+        if (opts.rom != linked_opts.rom)
+            free(linked_opts.rom);
+
         gbmulator_quit(app.link.emu);
         app.link.emu = NULL;
     }

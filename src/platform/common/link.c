@@ -142,15 +142,15 @@ int link_connect_to_server(const char *address, const char *port) {
     return server_sfd;
 }
 
-static inline int receive(int fd, void *buf, size_t n, int flags) {
+static inline bool receive(int fd, void *buf, size_t n, int flags) {
     ssize_t total_ret = 0;
     while (total_ret != (ssize_t) n) {
         ssize_t ret = recv(fd, &((char *) buf)[total_ret], n - total_ret, flags);
         if (ret <= 0)
-            return 0;
+            return false;
         total_ret += ret;
     }
-    return 1;
+    return true;
 }
 
 static int exchange_info(int sfd, gbmulator_t *emu, gbmulator_mode_t *mode, bool *is_cable_link, bool *is_ir_link) {
@@ -192,7 +192,7 @@ static int exchange_info(int sfd, gbmulator_t *emu, gbmulator_mode_t *mode, bool
     }
 }
 
-static int exchange_rom(int sfd, gbmulator_t *emu, uint8_t **other_rom, size_t *rom_len) {
+static bool exchange_rom(int sfd, gbmulator_t *emu, uint8_t **other_rom, size_t *rom_len) {
     // --- SEND PKT_ROM ---
 
     gbmulator_options_t opts     = gbmulator_get_options(emu);
@@ -214,7 +214,7 @@ static int exchange_rom(int sfd, gbmulator_t *emu, uint8_t **other_rom, size_t *
 
     if (pkt_header[0] != PKT_ROM) {
         eprintf("received packet type %d but expected %d (ignored)\n", pkt_header[0], PKT_ROM);
-        return 0;
+        return false;
     }
 
     memcpy(rom_len, &pkt_header[1], sizeof(size_t));
@@ -222,7 +222,7 @@ static int exchange_rom(int sfd, gbmulator_t *emu, uint8_t **other_rom, size_t *
 
     receive(sfd, *other_rom, *rom_len, 0);
 
-    return 1;
+    return true;
 }
 
 static bool exchange_savestate(int sfd, gbmulator_t *emu, uint8_t **savestate_data, size_t *savestate_len) {
@@ -262,8 +262,6 @@ static bool exchange_savestate(int sfd, gbmulator_t *emu, uint8_t **savestate_da
 }
 
 bool link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
-    // TODO connection lost detection (return -1)
-
     *linked_emu                    = NULL;
     gbmulator_mode_t mode          = GBMULATOR_MODE_GB;
     bool             is_cable_link = false;
@@ -273,11 +271,17 @@ bool link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
     size_t           savestate_len;
     uint8_t         *savestate_data = NULL;
 
-    // TODO handle wrong packet type received
     int ret = exchange_info(sfd, emu, &mode, &is_cable_link, &is_ir_link);
-    if (ret == 0)
-        exchange_rom(sfd, emu, &rom, &rom_size);
-    exchange_savestate(sfd, emu, &savestate_data, &savestate_len);
+    if (ret < 0)
+        return false;
+
+    if (ret == 0) {
+        if (!exchange_rom(sfd, emu, &rom, &rom_size))
+            return false;
+    }
+
+    if (!exchange_savestate(sfd, emu, &savestate_data, &savestate_len))
+        return false;
 
     // --- LINK BACKGROUND EMULATOR ---
 
