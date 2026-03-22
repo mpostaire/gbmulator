@@ -15,3 +15,11 @@ typedef struct {
  * @return Pointer to decoded image. Caller is responsible to free it.
  */
 bmp_image_t *bmp_decode(uint8_t *data, size_t size);
+
+/**
+ * @brief Encodes a bmp image.
+ * @param img bmp image.
+ * @param size Size of encoded data.
+ * @return Pointer to encoded image.
+ */
+uint8_t *bmp_encode(const bmp_image_t *img, size_t *size);

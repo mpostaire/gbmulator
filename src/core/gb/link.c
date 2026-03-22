@@ -30,26 +30,13 @@ void link_step(gb_t *gb) {
     if (!master_transfer_request)
         return;
 
-    if (link->bit_shift_counter < 8) {
-        link->bit_shift_counter++;
-
-        uint8_t other_bit = 1; // this is 1 if no device is connected
-        if (gb->base->cable.other_device) {
-            uint8_t this_bit = GET_BIT(mmu->io_registers[IO_SB], 7);
-            // transfer this gb bit to linked device
-            other_bit = gb->base->cable.other_device->cable.shift_bit(gb->base->cable.other_device->impl, this_bit);
-        }
-
-        // transfer linked_device bit (other bit) to this gb
-        gb->base->cable.shift_bit(gb, other_bit);
-    } else { // transfer is done (all bits were shifted)
-        // TODO maybe both these callbacks are useless --> this condition donest need cb as we can deduce it?
-        // TODO important debug link
-        link->bit_shift_counter = 0;
-
-        if (gb->base->cable.other_device)
-            gb->base->cable.other_device->cable.data_received(gb->base->cable.other_device->impl);
-
-        gb->base->cable.data_received(gb);
+    uint8_t other_bit = 1; // this is 1 if no device is connected
+    if (gb->base->cable.other_device) {
+        uint8_t this_bit = GET_BIT(mmu->io_registers[IO_SB], 7);
+        // transfer this gb bit to linked device
+        other_bit = gb->base->cable.other_device->cable.shift_bit(gb->base->cable.other_device->impl, this_bit);
     }
+
+    // transfer linked_device bit (other bit) to this gb
+    gb->base->cable.shift_bit(gb, other_bit);
 }

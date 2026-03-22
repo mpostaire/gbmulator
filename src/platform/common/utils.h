@@ -26,7 +26,7 @@ bool save_battery_to_file(gbmulator_t *emu, const char *path);
 
 bool load_battery_from_file(gbmulator_t *emu, const char *path);
 
-bool save_state_to_file(gbmulator_t *emu, const char *path, int compressed);
+bool save_state_to_file(gbmulator_t *emu, const char *path);
 
 bool load_state_from_file(gbmulator_t *emu, const char *path);
 

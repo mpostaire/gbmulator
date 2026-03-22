@@ -4,7 +4,7 @@
 
 #define APP_MAX_SPEED 8.0f
 
-typedef void (*printer_new_line_cb_t)(size_t current_height, size_t total_height);
+typedef void (*printer_new_line_cb_t)(size_t current_height);
 
 void app_init(void);
 
@@ -51,7 +51,7 @@ void app_set_palette(gb_color_palette_t value);
 
 void app_get_screen_size(uint32_t *screen_w, uint32_t *screen_h);
 
-void app_set_size(uint32_t viewport_w, uint32_t viewport_h);
+void app_set_viewport_size(uint32_t viewport_w, uint32_t viewport_h);
 
 void app_get_config(config_t *config);
 
@@ -78,6 +78,8 @@ void app_printer_disconnect(void);
 void app_printer_render(void);
 
 bool app_printer_reset(void);
+
+bool app_printer_save(const char *path);
 
 bool app_has_camera(void);
 

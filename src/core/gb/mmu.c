@@ -19,7 +19,7 @@ static uint8_t cgb_boot_rom[] = {
 };
 // clang-format on
 
-int parse_header_mbc_byte(uint8_t mbc_byte, uint8_t *mbc_type, uint8_t *has_eram, uint8_t *has_battery, uint8_t *has_rtc, uint8_t *has_rumble) {
+static bool parse_header_mbc_byte(uint8_t mbc_byte, uint8_t *mbc_type, uint8_t *has_eram, uint8_t *has_battery, uint8_t *has_rtc, uint8_t *has_rumble) {
     uint8_t tmp_mbc_type = 0, tmp_has_eram = 0, tmp_has_battery = 0, tmp_has_rtc = 0, tmp_has_rumble = 0;
 
     switch (mbc_byte) {
@@ -120,7 +120,7 @@ int parse_header_mbc_byte(uint8_t mbc_byte, uint8_t *mbc_type, uint8_t *has_eram
         tmp_has_battery = 1;
         break;
     default:
-        return 0;
+        return false;
     }
 
     if (mbc_type)
@@ -134,33 +134,19 @@ int parse_header_mbc_byte(uint8_t mbc_byte, uint8_t *mbc_type, uint8_t *has_eram
     if (has_rumble)
         *has_rumble = tmp_has_rumble;
 
-    return 1;
+    return true;
 }
 
-int validate_header_checksum(const uint8_t *rom) {
-    uint8_t checksum = 0;
-    for (int i = 0x0134; i <= 0x014C; i++)
-        checksum = checksum - rom[i] - 1;
-    return checksum == rom[0x014D];
-}
-
-static int parse_cartridge(gb_t *gb) {
-    gb_mmu_t *mmu = &gb->mmu;
-
-    // 8-bit cartridge header checksum validation
-    if (!validate_header_checksum(mmu->rom)) {
-        eprintf("invalid checksum\n");
-        return 0;
-    }
+static void parse_cartridge(gb_t *gb) {
+    gb_mmu_t *mmu      = &gb->mmu;
+    uint8_t  *rom      = gb->base->opts.rom;
+    size_t    rom_size = gb->base->opts.rom_size;
 
     uint8_t has_eram = 0;
-    if (!parse_header_mbc_byte(mmu->rom[0x0147], &mmu->mbc.type, &has_eram, &mmu->has_battery, &mmu->has_rtc, &mmu->has_rumble)) {
-        eprintf("MBC byte %02X not supported\n", mmu->rom[0x0147]);
-        return 0;
-    }
+    parse_header_mbc_byte(rom[0x0147], &mmu->mbc.type, &has_eram, &mmu->has_battery, &mmu->has_rtc, &mmu->has_rumble);
 
     // detect MBC1M
-    if (mmu->mbc.type == MBC1 && mmu->rom_size == 0x100000) {
+    if (mmu->mbc.type == MBC1 && rom_size == 0x100000) {
         const unsigned int addrs[] = { 0x00104, 0x40104, 0x80104, 0xC0104 };
         uint8_t            logo[]  = {
             0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0C, 0x00, 0x0D,
@@ -170,7 +156,7 @@ static int parse_cartridge(gb_t *gb) {
 
         uint8_t matches = 0;
         for (uint8_t i = 0; i < 4; i++) {
-            matches += memcmp(&mmu->rom[addrs[i]], logo, sizeof(logo)) ? 0 : 1;
+            matches += memcmp(&rom[addrs[i]], logo, sizeof(logo)) ? 0 : 1;
             if (matches > 1) {
                 mmu->mbc.type = MBC1M;
                 break;
@@ -178,10 +164,10 @@ static int parse_cartridge(gb_t *gb) {
         }
     }
 
-    mmu->rom_banks = 2 << mmu->rom[0x0148];
+    mmu->rom_banks = 2 << rom[0x0148];
 
     if (has_eram) {
-        switch (mmu->rom[0x0149]) {
+        switch (rom[0x0149]) {
         case 0x00:
             mmu->eram_banks = 0;
             break;
@@ -202,33 +188,47 @@ static int parse_cartridge(gb_t *gb) {
 
     // MBC3 cartridges are 2MiB, MBC30 cartridges are 4MiB (but the mbctest.gb test rom is a bit smaller)
     if (mmu->mbc.type == MBC3)
-        if (mmu->eram_banks == 8 || mmu->rom_size > 0x00200000)
+        if (mmu->eram_banks == 8 || rom_size > 0x00200000)
             mmu->mbc.type = MBC30;
 
     // get rom title
-    memcpy(gb->rom_title, (char *) &mmu->rom[0x0134], 16);
+    memcpy(gb->rom_title, (char *) &rom[0x0134], 16);
     gb->rom_title[16] = '\0';
-    uint8_t cgb_flag  = mmu->rom[0x0143] & 0xC0;
+    uint8_t cgb_flag  = rom[0x0143] & 0xC0;
     if (cgb_flag)
         gb->rom_title[15] = '\0';
 
     // remove trailing non alphanumeric characters from the rom title
     for (char *c = &gb->rom_title[16]; c >= gb->rom_title && !isalnum(*c); c--)
         *c = '\0';
-
-    return 1;
 }
 
-int mmu_reset(gb_t *gb, const uint8_t *rom, size_t rom_size) {
-    memset(&gb->mmu, 0, sizeof(gb->mmu));
-    gb->mmu.rom      = xcalloc(1, rom_size);
-    gb->mmu.rom_size = rom_size;
-    memcpy(gb->mmu.rom, rom, gb->mmu.rom_size);
+bool mmu_validate_rom(const uint8_t *rom, size_t size) {
+    if (!rom)
+        return false;
 
-    if (!parse_cartridge(gb)) {
-        mmu_quit(gb);
-        return 0;
-    }
+    size_t rom_banks = 2 << rom[0x0148];
+    if (size < rom_banks * ROM_BANK_SIZE)
+        return false;
+
+    // 8-bit cartridge header checksum validation
+    uint8_t checksum = 0;
+    for (uint16_t i = 0x0134; i <= 0x014C; i++)
+        checksum = checksum - rom[i] - 1;
+
+    if (checksum != rom[0x014D])
+        return false;
+
+    if (!parse_header_mbc_byte(rom[0x0147], NULL, NULL, NULL, NULL, NULL))
+        return false;
+
+    return true;
+}
+
+void mmu_reset(gb_t *gb) {
+    memset(&gb->mmu, 0, sizeof(gb->mmu));
+
+    parse_cartridge(gb);
 
     gb->mmu.mbc.mbc1.bank_lo = 1;
     // gb->mmu.rom_bank0_addr = 0; // initialized to 0 by memset
@@ -250,51 +250,45 @@ int mmu_reset(gb_t *gb, const uint8_t *rom, size_t rom_size) {
 
     gb->mmu.dmg_boot_rom = dmg_boot_rom;
     gb->mmu.cgb_boot_rom = cgb_boot_rom;
-
-    return 1;
 }
 
-void mmu_quit(gb_t *gb) {
-    free(gb->mmu.rom);
-}
-
-static inline uint8_t is_oam_locked_for_cpu_read(gb_t *gb) {
+static inline bool is_oam_locked_for_cpu_read(gb_t *gb) {
     // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
     // but it has some quirks for the other memory regions (check links below):
     // https://www.reddit.com/r/EmuDev/comments/5hahss/comment/daz9cbi/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
     // https://github.com/Gekkio/mooneye-gb/issues/39#issuecomment-265953981
     if (IS_OAM_DMA_RUNNING(&gb->mmu))
-        return 1;
+        return true;
 
     // OAM inaccessible by cpu while ppu in mode 2 or 3 and LCD is enabled (return undefined data)
     return IS_LCD_ENABLED(gb) && (PPU_STAT_IS_MODE(gb, PPU_MODE_OAM) || PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING) || gb->ppu.pending_stat_mode == PPU_MODE_OAM);
 }
 
-static inline uint8_t is_oam_locked_for_cpu_write(gb_t *gb) {
+static inline bool is_oam_locked_for_cpu_write(gb_t *gb) {
     // contrary to most sources, an OAM DMA transfer doesn't prevent the CPU to access all memory except HRAM: it only prevent access to the OAM memory region
     // but it has some quirks for the other memory regions (check links below):
     // https://www.reddit.com/r/EmuDev/comments/5hahss/comment/daz9cbi/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
     // https://github.com/Gekkio/mooneye-gb/issues/39#issuecomment-265953981
     if (IS_OAM_DMA_RUNNING(&gb->mmu))
-        return 1;
+        return true;
 
     if (!IS_LCD_ENABLED(gb))
-        return 0;
+        return false;
 
     uint8_t lcd_booting_up_into_drawing = PPU_STAT_IS_MODE(gb, PPU_MODE_HBLANK) && gb->ppu.pending_stat_mode == PPU_MODE_DRAWING;
     uint8_t starting_drawing            = gb->ppu.mode == PPU_MODE_DRAWING && PPU_STAT_IS_MODE(gb, PPU_MODE_OAM);
     if (starting_drawing || lcd_booting_up_into_drawing)
-        return 0;
+        return false;
 
     return PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING) || PPU_STAT_IS_MODE(gb, PPU_MODE_OAM);
 }
 
-static inline uint8_t is_vram_locked_for_cpu_read(gb_t *gb) {
+static inline bool is_vram_locked_for_cpu_read(gb_t *gb) {
     // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
     return IS_LCD_ENABLED(gb) && (PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING) || (PPU_STAT_IS_MODE(gb, PPU_MODE_OAM) && gb->ppu.pending_stat_mode == PPU_MODE_DRAWING));
 }
 
-static inline uint8_t is_vram_locked_for_cpu_write(gb_t *gb) {
+static inline bool is_vram_locked_for_cpu_write(gb_t *gb) {
     // VRAM inaccessible by cpu while ppu in mode 3 and LCD is enabled (return undefined data)
     return IS_LCD_ENABLED(gb) && PPU_STAT_IS_MODE(gb, PPU_MODE_DRAWING);
 }
@@ -462,7 +456,7 @@ static inline uint8_t read_io_register(gb_t *gb, uint8_t io_reg_addr) {
     case 0x78 ... 0x7F:
         return 0xFF;
     default:
-        eprintf("invalid read at 0xFF%02X\n", io_reg_addr);
+        eprintf("invalid read at 0xFF%02X", io_reg_addr);
         exit(EXIT_FAILURE);
     }
 }
@@ -862,12 +856,12 @@ uint8_t mmu_read_io_src(gb_t *gb, uint16_t address, gb_io_source_t io_src) {
     case MMU_ROM_BANK0 + 0x1000:
     case MMU_ROM_BANK0 + 0x2000:
     case MMU_ROM_BANK0 + 0x3000:
-        return mmu->rom[mmu->rom_bank0_addr + address];
+        return gb->base->opts.rom[mmu->rom_bank0_addr + address];
     case MMU_ROM_BANKN:
     case MMU_ROM_BANKN + 0x1000:
     case MMU_ROM_BANKN + 0x2000:
     case MMU_ROM_BANKN + 0x3000:
-        return mmu->rom[mmu->rom_bankn_addr + address];
+        return gb->base->opts.rom[mmu->rom_bankn_addr + address];
     case MMU_VRAM:
     case MMU_VRAM + 0x1000:
         if (io_src == IO_SRC_GDMA_HDMA)
@@ -909,7 +903,7 @@ uint8_t mmu_read_io_src(gb_t *gb, uint16_t address, gb_io_source_t io_src) {
 
         return mmu->ie;
     default:
-        eprintf("invalid cpu read at address 0x%X\n", address);
+        eprintf("invalid cpu read at address 0x%X", address);
         exit(EXIT_FAILURE);
     }
 }
@@ -965,14 +959,13 @@ void mmu_write_io_src(gb_t *gb, uint16_t address, uint8_t data, gb_io_source_t i
         }
         break;
     default:
-        eprintf("invalid write of 0x%02X at address 0x%X\n", data, address);
+        eprintf("invalid write of 0x%02X at address 0x%X", data, address);
         exit(EXIT_FAILURE);
     }
 }
 
 // serialize everything except rom
 #define SERIALIZED_MEMBERS                                                                     \
-    X(rom_size)                                                                                \
     Y(vram, gb->base->opts.mode == GBMULATOR_MODE_GBC, 2 * VRAM_BANK_SIZE, VRAM_BANK_SIZE)     \
     Z(eram, eram_banks, ERAM_BANK_SIZE)                                                        \
     Y(wram, gb->base->opts.mode == GBMULATOR_MODE_GBC, 8 * WRAM_BANK_SIZE, 2 * WRAM_BANK_SIZE) \
@@ -1029,11 +1022,11 @@ SERIALIZER_FUNCTION(gb_mmu_t, mmu, SERIALIZED_MEMBERS {
 #undef Y
 #undef X
 
-#define X(value) UNSERIALIZE(value);
-#define Y(...)   UNSERIALIZE_COND_LITERAL(__VA_ARGS__);
-#define Z(...)   UNSERIALIZE_FROM_MEMBER(__VA_ARGS__);
-#define W(...)   UNSERIALIZE_IF_CGB(__VA_ARGS__);
-UNSERIALIZER_FUNCTION(gb_mmu_t, mmu, SERIALIZED_MEMBERS {
+#define X(value) DESERIALIZE(value);
+#define Y(...)   DESERIALIZE_COND_LITERAL(__VA_ARGS__);
+#define Z(...)   DESERIALIZE_FROM_MEMBER(__VA_ARGS__);
+#define W(...)   DESERIALIZE_IF_CGB(__VA_ARGS__);
+DESERIALIZER_FUNCTION(gb_mmu_t, mmu, SERIALIZED_MEMBERS {
         gb_mbc_t *tmp = &gb->mmu.mbc;
         MBC_SERIALIZED_MEMBERS })
 #undef W

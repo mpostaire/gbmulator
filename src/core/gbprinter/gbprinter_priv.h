@@ -30,6 +30,8 @@ struct gbprinter_t {
     uint16_t ram_printing_line_index; // when printing, keeps track of which line inside the ram we currently are on (reset to 0 every time the ram is cleared)
     uint32_t printing_line_time_remaining;
 
+    uint8_t bit_shift_counter;
+
     struct {
         uint8_t *data;
         size_t   height;

@@ -29,6 +29,8 @@
 
 #define SET_PIXEL_DMG(gb, x, y, color)                                                                               \
     do {                                                                                                             \
+        if (!((gb)->ppu.pixels))                                                                                     \
+            break;                                                                                                   \
         (gb)->ppu.pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)]     = dmg_palettes[(gb)->dmg_palette][(color)][0]; \
         (gb)->ppu.pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1] = dmg_palettes[(gb)->dmg_palette][(color)][1]; \
         (gb)->ppu.pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2] = dmg_palettes[(gb)->dmg_palette][(color)][2]; \
@@ -37,6 +39,8 @@
 
 #define SET_PIXEL_CGB(gb, x, y, r, g, b)                                      \
     do {                                                                      \
+        if (!((gb)->ppu.pixels))                                              \
+            break;                                                            \
         (gb)->ppu.pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4)]     = (r);  \
         (gb)->ppu.pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 1] = (g);  \
         (gb)->ppu.pixels[((y) * GB_SCREEN_WIDTH * 4) + ((x) * 4) + 2] = (b);  \
@@ -354,10 +358,10 @@ static inline void fetch_tileslice_high(gb_t *gb) {
     }
 
     for (uint8_t i = 0; i < 8; i++) {
-        ppu->pixel_fetcher.pixels[i].color |= GET_BIT(tileslice, 7 - i) << 1;
-        ppu->pixel_fetcher.pixels[i].palette    = palette;
-        ppu->pixel_fetcher.pixels[i].attributes = attributes;
-        ppu->pixel_fetcher.pixels[i].oam_pos    = oam_pos;
+        ppu->pixel_fetcher.pixels[i].color      |= GET_BIT(tileslice, 7 - i) << 1;
+        ppu->pixel_fetcher.pixels[i].palette     = palette;
+        ppu->pixel_fetcher.pixels[i].attributes  = attributes;
+        ppu->pixel_fetcher.pixels[i].oam_pos     = oam_pos;
     }
 }
 
@@ -775,7 +779,7 @@ void ppu_update_stat_irq_line(gb_t *gb) {
 
     uint8_t old_stat_irq_line = ppu->stat_irq_line;
 
-    ppu->stat_irq_line = IS_HBLANK_IRQ_STAT_ENABLED(gb) && ppu->mode == PPU_MODE_HBLANK;
+    ppu->stat_irq_line  = IS_HBLANK_IRQ_STAT_ENABLED(gb) && ppu->mode == PPU_MODE_HBLANK;
     ppu->stat_irq_line |= IS_VBLANK_IRQ_STAT_ENABLED(gb) && ppu->mode == PPU_MODE_VBLANK;
     ppu->stat_irq_line |= IS_OAM_IRQ_STAT_ENABLED(gb) && ppu->mode == PPU_MODE_OAM;
     ppu->stat_irq_line |= IS_LY_LYC_IRQ_STAT_ENABLED(gb) && gb->mmu.io_registers[IO_LY] == gb->mmu.io_registers[IO_LYC];
@@ -889,21 +893,18 @@ void ppu_reset(gb_t *gb) {
 
 #define X(value)        SERIALIZED_LENGTH(value);
 #define Y(array, value) SERIALIZED_LENGTH_ARRAY_OF_STRUCTS(array, value);
-SERIALIZED_SIZE_FUNCTION(gb_ppu_t, ppu,
-                         SERIALIZED_MEMBERS)
+SERIALIZED_SIZE_FUNCTION(gb_ppu_t, ppu, SERIALIZED_MEMBERS)
 #undef X
 #undef Y
 
 #define X(value)        SERIALIZE(value);
 #define Y(array, value) SERIALIZE_ARRAY_OF_STRUCTS(array, value);
-SERIALIZER_FUNCTION(gb_ppu_t, ppu,
-                    SERIALIZED_MEMBERS)
+SERIALIZER_FUNCTION(gb_ppu_t, ppu, SERIALIZED_MEMBERS)
 #undef X
 #undef Y
 
-#define X(value)        UNSERIALIZE(value);
-#define Y(array, value) UNSERIALIZE_ARRAY_OF_STRUCTS(array, value);
-UNSERIALIZER_FUNCTION(gb_ppu_t, ppu,
-                      SERIALIZED_MEMBERS)
+#define X(value)        DESERIALIZE(value);
+#define Y(array, value) DESERIALIZE_ARRAY_OF_STRUCTS(array, value);
+DESERIALIZER_FUNCTION(gb_ppu_t, ppu, SERIALIZED_MEMBERS)
 #undef X
 #undef Y

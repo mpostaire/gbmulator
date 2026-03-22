@@ -21,16 +21,26 @@ typedef enum {
     GLRENDERER_OBJ_ID_DPAD_UP_LEFT,
     GLRENDERER_OBJ_ID_DPAD_DOWN_RIGHT,
     GLRENDERER_OBJ_ID_DPAD_DOWN_LEFT,
-    GLRENDERER_OBJ_ID_SCREEN // must be the last element of this enum
+    GLRENDERER_OBJ_ID_SCREEN, // must be the last element of this enum
+    GLRENDERER_OBJ_ID_END
 } glrenderer_obj_id_t;
 
+/**
+ * This should be called from within a valid opengl context.
+ */
 glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, uint32_t visible_btns_mask);
 
+/**
+ * This should be called from within a valid opengl context.
+ */
 void glrenderer_quit(glrenderer_t *renderer);
 
+/**
+ * This should be called from within a valid opengl context.
+ */
 void glrenderer_render(glrenderer_t *renderer);
 
-void glrenderer_update_screen(glrenderer_t *renderer, const GLvoid *pixels);
+void glrenderer_update_screen(glrenderer_t *renderer, uint8_t *pixels);
 
 void glrenderer_resize_screen(glrenderer_t *renderer, GLsizei width, GLsizei height);
 

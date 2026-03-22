@@ -25,63 +25,30 @@ typedef struct {
     void (*write)(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data);
 } bus_accessors_t;
 
-static bool gba_parse_cartridge(gba_t *gba) {
-    // uint8_t entrypoint = gba->bus.rom[0x00];
+// clang-format off
+static uint8_t gba_bios[] = {
+    #embed "../../../build/bootroms/gba/gba_bios.bin"
+};
+// clang-format on
 
-    memcpy(gba->rom_title, &gba->bus.rom[0xA0], sizeof(gba->rom_title));
+static void gba_parse_cartridge(gba_t *gba) {
+    uint8_t *rom = gba->base->opts.rom;
+
+    // uint8_t entrypoint = rom[0x00];
+
+    memcpy(gba->rom_title, &rom[0xA0], sizeof(gba->rom_title));
     gba->rom_title[12] = '\0';
 
-    // uint8_t game_type = gba->bus.rom[0xAC];
-    // switch (game_type) {
-    //     case 'A':
-    //     case 'B':
-    //     case 'C':
-    //         break;
-    //     case 'F':
-    //     case 'K':
-    //     case 'P':
-    //     case 'R':
-    //     case 'U':
-    //     case 'V':
-    //         eprintf("game type '%c' is not implemented yet", game_type);
-    //         return false;
-    //     default:
-    //         eprintf("invalid game type: %c", game_type);
-    //         return false;
-    // }
-
     // char short_title[3]; // short_title is 2 chars
-    // memcpy(short_title, &gba->bus.rom[0xAD], sizeof(short_title));
+    // memcpy(short_title, &rom[0xAD], sizeof(short_title));
     // short_title[2] = '\0';
 
-    if (gba->bus.rom[0xB2] != 0x96 || gba->bus.rom[0xB3] != 0x00)
-        return false;
-
-    for (int i = 0xB5; i < 0xBC; i++)
-        if (gba->bus.rom[i] != 0x00)
-            return false;
-
-    uint8_t checksum = 0;
-    for (int i = 0xA0; i < 0xBC; i++)
-        checksum -= gba->bus.rom[i];
-    checksum -= 0x19;
-
-    // if (gba->bus.rom[0xBD] != checksum) {
-    //     eprintf("Invalid cartridge header checksum");
-    //     return false;
-    // }
-
-    if (gba->bus.rom[0xBE] != 0x00 && gba->bus.rom[0xBF] != 0x00)
-        return false;
-
     // TODO multiboot entries
-
-    return true;
 }
 
 static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
-    uint32_t mask = 0xFFFF;
-    address >>= 1;
+    uint32_t mask   = 0xFFFF;
+    address       >>= 1;
 
     switch (address) {
     // LCD I/O Registers
@@ -440,8 +407,8 @@ static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
 }
 
 static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
-    uint16_t mask = 0xFFFF;
-    address >>= 1;
+    uint16_t mask   = 0xFFFF;
+    address       >>= 1;
 
     switch (address) {
     // LCD I/O Registers
@@ -882,7 +849,7 @@ static uint32_t rom_read(gba_t *gba, uint8_t mode, uint32_t address) {
         // Reading from GamePak ROM when no Cartridge is inserted (or address beyond cartridge capacity)
         // Because Gamepak uses the same signal-lines for both 16bit data and for lower 16bit halfword address, the
         // entire gamepak ROM area is effectively filled by incrementing 16bit values (Address/2 AND FFFFh).
-        data = (bus->rom_address_latch >> 1) & 0xFFFF;
+        data  = (bus->rom_address_latch >> 1) & 0xFFFF;
         data |= (data + 1) << 16;
     } else {
         data = *((uint32_t *) &bus->rom[bus->rom_address_latch]);
@@ -950,8 +917,8 @@ static void iwram_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t dat
 }
 
 static void io_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
-    uint8_t size = ((mode >> 2) & 0x03) + 1;
-    address -= BUS_IO;
+    uint8_t size  = ((mode >> 2) & 0x03) + 1;
+    address      -= BUS_IO;
 
     io_regs_write(gba, address, data);
     if (size == 4)
@@ -1110,28 +1077,65 @@ void _gba_bus_write_word(gba_t *gba, bus_access_t access, uint32_t address, uint
     bus_write(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_WRITE | access, ALIGN(address, 4), gba->bus.write_data_latch);
 }
 
-// TODO this shouldn't be responsible for cartridge loading and parsing (same for gb_mmu_t)
-bool gba_bus_reset(gba_t *gba, const uint8_t *rom, size_t rom_size) {
-    if (!rom || rom_size < 0xBF || rom_size > sizeof(gba->bus.rom))
+bool gba_bus_validate_rom(const uint8_t *rom, size_t size) {
+    if (!rom || size < 0xBF || size > (BUS_ROM1 - BUS_ROM0))
         return false;
 
-    memset(&gba->bus, 0, sizeof(gba->bus));
-    memcpy(gba->bus.rom, rom, rom_size);
+    // uint8_t game_type = rom[0xAC];
+    // switch (game_type) {
+    //     case 'A':
+    //     case 'B':
+    //     case 'C':
+    //         break;
+    //     case 'F':
+    //     case 'K':
+    //     case 'P':
+    //     case 'R':
+    //     case 'U':
+    //     case 'V':
+    //         eprintf("game type '%c' is not implemented yet", game_type);
+    //         return false;
+    //     default:
+    //         eprintf("invalid game type: %c", game_type);
+    //         return false;
+    // }
 
-    if (!gba_parse_cartridge(gba))
+    // char short_title[3]; // short_title is 2 chars
+    // memcpy(short_title, &rom[0xAD], sizeof(short_title));
+    // short_title[2] = '\0';
+
+    if (rom[0xB2] != 0x96 || rom[0xB3] != 0x00)
         return false;
 
-    gba->bus.rom_size = rom_size;
+    for (int i = 0xB5; i < 0xBC; i++)
+        if (rom[i] != 0x00)
+            return false;
 
-    gba->bus.io[IO_KEYINPUT] = 0x03FF;
+    uint8_t checksum = 0;
+    for (int i = 0xA0; i < 0xBC; i++)
+        checksum -= rom[i];
+    checksum -= 0x19;
 
-    // clang-format off
-    static const uint8_t gba_bios[] = {
-        #embed "../../../build/bootroms/gba/gba_bios.bin"
-    };
-    // clang-format on
+    // if (rom[0xBD] != checksum) {
+    //     eprintf("Invalid cartridge header checksum");
+    //     return false;
+    // }
 
-    memcpy(gba->bus.bios, gba_bios, sizeof(gba_bios));
+    if (rom[0xBE] != 0x00 && rom[0xBF] != 0x00)
+        return false;
 
     return true;
+}
+
+void gba_bus_reset(gba_t *gba) {
+    memset(&gba->bus, 0, sizeof(gba->bus));
+
+    // TODO do not memcpy rom, use pointer from gba.base.opts.rom as in gb_mmu_t (and add bound checks in bus reads/writes)
+    memcpy(gba->bus.rom, gba->base->opts.rom, gba->base->opts.rom_size);
+
+    gba_parse_cartridge(gba);
+
+    gba->bus.rom_size        = gba->base->opts.rom_size;
+    gba->bus.bios            = gba_bios;
+    gba->bus.io[IO_KEYINPUT] = 0x03FF;
 }

@@ -98,7 +98,7 @@ uint8_t gb_camera_read_image(gb_t *gb, uint16_t address) {
             color = 0;
 
         ret <<= 1;
-        ret |= (color >> bit) & 1;
+        ret  |= (color >> bit) & 1;
     }
 
     return ret;

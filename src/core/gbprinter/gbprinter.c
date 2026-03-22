@@ -51,9 +51,24 @@ typedef enum {
     COLOR_BLACK
 } gbprinter_color_t;
 
+static void gbprinter_clear_image(gbprinter_t *printer) {
+    printer->image.height           = 0;
+    printer->image.allocated_height = 0;
+    free(printer->image.data);
+    printer->image.data = NULL; // important to avoid the xrealloc of the PRINT command to cause a double free (because it would realloc on an freed pointer)
+}
+
 gbprinter_t *gbprinter_init(gbmulator_t *base) {
-    gbprinter_t *printer = xcalloc(1, sizeof(*printer));
-    printer->base        = base;
+    gbprinter_t *printer = base->impl;
+
+    if (!printer) {
+        printer       = xcalloc(1, sizeof(*printer));
+        printer->base = base;
+    } else {
+        // gbprinter reset clears the image
+        gbprinter_clear_image(printer);
+    }
+
     return printer;
 }
 
@@ -62,16 +77,11 @@ void gbprinter_quit(gbprinter_t *printer) {
     free(printer);
 }
 
-uint8_t *gbprinter_get_image(gbprinter_t *printer, size_t *height) {
+void gbprinter_get_image(gbprinter_t *printer, uint8_t *image_data, size_t *height) {
     *height = printer->image.height;
-    return printer->image.data;
-}
 
-void gbprinter_clear_image(gbprinter_t *printer) {
-    printer->image.height           = 0;
-    printer->image.allocated_height = 0;
-    free(printer->image.data);
-    printer->image.data = NULL; // important to avoid the xrealloc of the PRINT command to cause a double free (because it would realloc on an freed pointer)
+    if (image_data)
+        memcpy(image_data, printer->image.data, *height * GBPRINTER_IMG_WIDTH * 4);
 }
 
 static inline void render_line(gbprinter_t *printer) {
@@ -133,8 +143,8 @@ void gbprinter_step(gbprinter_t *printer) {
 
     render_line(printer);
 
-    if (printer->base->opts.on_new_line)
-        printer->base->opts.on_new_line(printer->image.data, printer->image.height, printer->image.allocated_height);
+    if (printer->base->opts.on_new_frame)
+        printer->base->opts.on_new_frame(printer->image.data);
 
     if (printer->image.height == printer->image.allocated_height)
         printer->status = STATUS_DONE;
@@ -228,14 +238,7 @@ static void exec_command(gbprinter_t *printer) {
         printer->status = STATUS_IDLE;
 }
 
-uint8_t gbprinter_link_shift_bit(gbprinter_t *printer, uint8_t in_bit) {
-    uint8_t out_bit = GET_BIT(printer->sb, 7);
-    printer->sb <<= 1;
-    CHANGE_BIT(printer->sb, 0, in_bit);
-    return out_bit;
-}
-
-void gbprinter_link_data_received(gbprinter_t *printer) {
+static void link_data_received(gbprinter_t *printer) {
     switch (printer->state) {
     case WAIT_MAGIC_1:
         if (printer->sb == MAGIC_1)
@@ -254,42 +257,42 @@ void gbprinter_link_data_received(gbprinter_t *printer) {
         printer->sb = 0x00;
         break;
     case WAIT_COMMAND:
-        printer->cmd = printer->sb;
+        printer->cmd       = printer->sb;
         printer->checksum += printer->sb;
-        printer->sb    = 0x00;
-        printer->state = WAIT_COMPRESS_FLAG;
+        printer->sb        = 0x00;
+        printer->state     = WAIT_COMPRESS_FLAG;
         break;
     case WAIT_COMPRESS_FLAG:
-        printer->compress_flag = printer->sb & 0x01;
-        printer->checksum += printer->sb;
-        printer->sb    = 0x00;
-        printer->state = WAIT_DATA_LEN_LO;
+        printer->compress_flag  = printer->sb & 0x01;
+        printer->checksum      += printer->sb;
+        printer->sb             = 0x00;
+        printer->state          = WAIT_DATA_LEN_LO;
         break;
     case WAIT_DATA_LEN_LO:
-        printer->cmd_data_len = printer->sb;
-        printer->checksum += printer->sb;
-        printer->sb    = 0x00;
-        printer->state = WAIT_DATA_LEN_HI;
+        printer->cmd_data_len  = printer->sb;
+        printer->checksum     += printer->sb;
+        printer->sb            = 0x00;
+        printer->state         = WAIT_DATA_LEN_HI;
         break;
     case WAIT_DATA_LEN_HI:
-        printer->cmd_data_len |= printer->sb << 8;
-        printer->cmd_data_len        = MIN(printer->cmd_data_len, GBPRINTER_CHUNK_SIZE);
-        printer->cmd_data_recv_index = 0;
-        printer->checksum += printer->sb;
-        printer->sb    = 0x00;
-        printer->state = printer->cmd_data_len > 0 ? WAIT_DATA : WAIT_CHKSUM_LO;
+        printer->cmd_data_len        |= printer->sb << 8;
+        printer->cmd_data_len         = MIN(printer->cmd_data_len, GBPRINTER_CHUNK_SIZE);
+        printer->cmd_data_recv_index  = 0;
+        printer->checksum            += printer->sb;
+        printer->sb                   = 0x00;
+        printer->state                = printer->cmd_data_len > 0 ? WAIT_DATA : WAIT_CHKSUM_LO;
         break;
     case WAIT_DATA:
-        printer->cmd_data[printer->cmd_data_recv_index++] = printer->sb;
-        printer->checksum += printer->sb;
-        printer->sb = 0x00;
+        printer->cmd_data[printer->cmd_data_recv_index++]  = printer->sb;
+        printer->checksum                                 += printer->sb;
+        printer->sb                                        = 0x00;
         if (printer->cmd_data_recv_index == printer->cmd_data_len)
             printer->state = WAIT_CHKSUM_LO;
         break;
     case WAIT_CHKSUM_LO:
         printer->checksum ^= printer->sb;
-        printer->sb    = 0x00;
-        printer->state = WAIT_CHKSUM_HI;
+        printer->sb        = 0x00;
+        printer->state     = WAIT_CHKSUM_HI;
         break;
     case WAIT_CHKSUM_HI:
         printer->checksum ^= printer->sb << 8;
@@ -308,4 +311,17 @@ void gbprinter_link_data_received(gbprinter_t *printer) {
         printer->state = WAIT_MAGIC_1;
         break;
     }
+}
+
+uint8_t gbprinter_link_shift_bit(gbprinter_t *printer, uint8_t in_bit) {
+    uint8_t out_bit   = GET_BIT(printer->sb, 7);
+    printer->sb     <<= 1;
+    CHANGE_BIT(printer->sb, 0, in_bit);
+
+    if (++printer->bit_shift_counter >= 8) {
+        printer->bit_shift_counter = 0;
+        link_data_received(printer);
+    }
+
+    return out_bit;
 }

@@ -63,8 +63,8 @@ bool mkdirp(const char *directory_path) {
 }
 
 bool make_parent_dirs(const char *filepath) {
-    char *last_slash       = strrchr(filepath, '/');
-    int   last_slash_index = last_slash ? (int) (last_slash - filepath) : -1;
+    const char *last_slash       = strrchr(filepath, '/');
+    int         last_slash_index = last_slash ? (int) (last_slash - filepath) : -1;
 
     if (last_slash_index != -1) {
         char directory_path[last_slash_index + 1];
@@ -141,10 +141,15 @@ bool write_file(const char *path, const uint8_t *data, size_t len) {
 }
 
 bool save_battery_to_file(gbmulator_t *emu, const char *path) {
-    size_t   save_length;
-    uint8_t *save_data = gbmulator_get_save(emu, &save_length);
-    if (!save_data)
+    size_t   save_length = 0;
+    uint8_t *save_data   = NULL;
+    gbmulator_get_save(emu, NULL, &save_length);
+
+    if (save_length == 0)
         return false;
+
+    save_data = xmalloc(save_length);
+    gbmulator_get_save(emu, save_data, &save_length);
 
     bool ret = write_file(path, save_data, save_length);
     free(save_data);
@@ -162,11 +167,16 @@ bool load_battery_from_file(gbmulator_t *emu, const char *path) {
     return ret;
 }
 
-bool save_state_to_file(gbmulator_t *emu, const char *path, int compressed) {
-    size_t   savestate_length;
-    uint8_t *savestate_data = gbmulator_get_savestate(emu, &savestate_length, compressed);
-    if (!savestate_data)
+bool save_state_to_file(gbmulator_t *emu, const char *path) {
+    size_t   savestate_length = 0;
+    uint8_t *savestate_data   = NULL;
+    gbmulator_get_savestate(emu, NULL, &savestate_length);
+
+    if (savestate_length == 0)
         return false;
+
+    savestate_data = xmalloc(savestate_length);
+    gbmulator_get_savestate(emu, savestate_data, &savestate_length);
 
     bool ret = write_file(path, savestate_data, savestate_length);
     free(savestate_data);

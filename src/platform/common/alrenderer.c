@@ -170,7 +170,7 @@ static inline uint32_t dynamic_rate_control(void) {
 }
 
 void alrenderer_queue_sample(const gbmulator_apu_sample_t sample, uint32_t *dynamic_sampling_rate) {
-    alr.samples[alr.samples_count++] = (gbmulator_apu_sample_t) { .l = sample.l * alr.sound_level, .r = sample.r * alr.sound_level };
+    alr.samples[alr.samples_count++] = (gbmulator_apu_sample_t){ .l = sample.l * alr.sound_level, .r = sample.r * alr.sound_level };
 
     if (alr.samples_count < N_SAMPLES)
         return;

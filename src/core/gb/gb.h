@@ -3,8 +3,6 @@
 #include "../utils.h"
 #include "../core.h"
 
-#define EMULATOR_NAME "GBmulator"
-
 #define GB_SCREEN_WIDTH  160
 #define GB_SCREEN_HEIGHT 144
 
@@ -47,8 +45,6 @@ void gb_print_status(gb_t *gb);
 
 uint8_t gb_link_shift_bit(gb_t *gb, uint8_t in_bit);
 
-void gb_link_data_received(gb_t *gb);
-
 void gb_joypad_press(gb_t *gb, gbmulator_joypad_t key);
 
 void gb_joypad_release(gb_t *gb, gbmulator_joypad_t key);
@@ -57,23 +53,18 @@ uint16_t gb_get_joypad_state(gb_t *gb);
 
 void gb_set_joypad_state(gb_t *gb, uint16_t state);
 
-uint8_t *gb_get_save(gb_t *gb, size_t *save_length);
+void gb_get_save(gb_t *gb, uint8_t *data, size_t *length);
 
-bool gb_load_save(gb_t *gb, uint8_t *save_data, size_t save_length);
+bool gb_load_save(gb_t *gb, uint8_t *data, size_t length);
 
-gbmulator_savestate_t *gb_get_savestate(gb_t *gb, size_t *savestate_data_length, bool is_compressed);
+void gb_get_savestate(gb_t *gb, uint8_t *data, size_t *length);
 
-bool gb_load_savestate(gb_t *gb, gbmulator_savestate_t *savestate, size_t savestate_data_length);
+bool gb_load_savestate(gb_t *gb, uint8_t *data, size_t length);
 
 /**
  * @returns the ROM title (you must not free the returned pointer).
  */
 char *gb_get_rom_title(gb_t *gb);
-
-/**
- * @returns a pointer to the ROM (you must not free the returned pointer).
- */
-uint8_t *gb_get_rom(gb_t *gb, size_t *rom_size);
 
 uint8_t gb_has_accelerometer(gb_t *gb);
 

@@ -16,9 +16,9 @@ static void channel_step(gb_channel_t *c) {
     c->freq_timer--;
     if (c->freq_timer <= 0) {
         if (c->id == APU_CHANNEL_4) {
-            uint8_t divisor = *c->NRx3 & 0x07;
-            c->freq_timer   = divisor ? divisor << 4 : 8;
-            c->freq_timer <<= (*c->NRx3 >> 4);
+            uint8_t divisor   = *c->NRx3 & 0x07;
+            c->freq_timer     = divisor ? divisor << 4 : 8;
+            c->freq_timer   <<= (*c->NRx3 >> 4);
 
             uint8_t xor_ret = (c->LFSR & 0x01) ^ ((c->LFSR & 0x02) >> 1);
             c->LFSR         = (c->LFSR >> 1) | (xor_ret << 14);
@@ -247,7 +247,7 @@ void apu_step(gb_t *gb) {
             S01_output *= S01_volume;
             S02_output *= S02_volume;
 
-            gb->base->opts.on_new_sample((gbmulator_apu_sample_t) { .l = S02_output * 32767, .r = S01_output * 32767 }, &apu->dynamic_sampling_rate);
+            gb->base->opts.on_new_sample((gbmulator_apu_sample_t){ .l = S02_output * 32767, .r = S01_output * 32767 }, &apu->dynamic_sampling_rate);
         }
     }
 }
@@ -256,7 +256,7 @@ void apu_reset(gb_t *gb) {
     memset(&gb->apu, 0, sizeof(gb->apu));
     gb->apu.dynamic_sampling_rate = gb->base->opts.apu_sampling_rate;
 
-    gb->apu.channels[0] = (gb_channel_t) {
+    gb->apu.channels[0] = (gb_channel_t){
         .NRx0 = &gb->mmu.io_registers[IO_NR10],
         .NRx1 = &gb->mmu.io_registers[IO_NR11],
         .NRx2 = &gb->mmu.io_registers[IO_NR12],
@@ -264,14 +264,14 @@ void apu_reset(gb_t *gb) {
         .NRx4 = &gb->mmu.io_registers[IO_NR14],
         .id   = APU_CHANNEL_1
     };
-    gb->apu.channels[1] = (gb_channel_t) {
+    gb->apu.channels[1] = (gb_channel_t){
         .NRx1 = &gb->mmu.io_registers[IO_NR21],
         .NRx2 = &gb->mmu.io_registers[IO_NR22],
         .NRx3 = &gb->mmu.io_registers[IO_NR23],
         .NRx4 = &gb->mmu.io_registers[IO_NR24],
         .id   = APU_CHANNEL_2
     };
-    gb->apu.channels[2] = (gb_channel_t) {
+    gb->apu.channels[2] = (gb_channel_t){
         .NRx0 = &gb->mmu.io_registers[IO_NR30],
         .NRx1 = &gb->mmu.io_registers[IO_NR31],
         .NRx2 = &gb->mmu.io_registers[IO_NR32],
@@ -279,7 +279,7 @@ void apu_reset(gb_t *gb) {
         .NRx4 = &gb->mmu.io_registers[IO_NR34],
         .id   = APU_CHANNEL_3
     };
-    gb->apu.channels[3] = (gb_channel_t) {
+    gb->apu.channels[3] = (gb_channel_t){
         .NRx1 = &gb->mmu.io_registers[IO_NR41],
         .NRx2 = &gb->mmu.io_registers[IO_NR42],
         .NRx3 = &gb->mmu.io_registers[IO_NR43],

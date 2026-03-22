@@ -62,7 +62,7 @@
                                                 <property name="vexpand">true</property>
                                                 <property name="hexpand">true</property>
                                                 <property name="width-request">320</property>
-                                                <property name="height-request">288</property>
+                                                <property name="height-request">1</property>
                                                 <property name="focusable">true</property>
                                             </object>
                                         </child>

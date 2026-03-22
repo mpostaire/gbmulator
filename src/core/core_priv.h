@@ -5,18 +5,16 @@
 typedef void *(*init_func_t)(gbmulator_t *base);
 typedef void (*quit_func_t)(void *impl);
 typedef void (*step_func_t)(void *impl);
-typedef uint8_t *(*get_save_func_t)(void *impl, size_t *save_length);
-typedef bool (*load_save_func_t)(void *impl, uint8_t *save_data, size_t save_length);
-typedef gbmulator_savestate_t *(*get_savestate_func_t)(void *impl, size_t *savestate_length, bool is_compressed);
-typedef bool (*load_savestate_func_t)(void *impl, gbmulator_savestate_t *data, size_t savestate_length);
+typedef void (*get_save_func_t)(void *impl, uint8_t *data, size_t *length);
+typedef bool (*load_save_func_t)(void *impl, uint8_t *data, size_t length);
+typedef void (*get_savestate_func_t)(void *impl, uint8_t *data, size_t *length);
+typedef bool (*load_savestate_func_t)(void *impl, uint8_t *data, size_t length);
 typedef char *(*get_rom_title_func_t)(void *impl);
 typedef void (*print_status_func_t)(void *impl);
 typedef uint16_t (*get_joypad_state_func_t)(void *impl);
 typedef void (*set_joypad_state_func_t)(void *impl, uint16_t state);
-typedef uint8_t *(*get_rom_func_t)(void *impl, size_t *rom_size);
 
 typedef uint8_t (*cable_shift_bit_cb_t)(void *impl, uint8_t in_bit);
-typedef void (*cable_data_received_cb_t)(void *impl);
 
 struct gbmulator_t {
     gbmulator_options_t opts;
@@ -33,12 +31,10 @@ struct gbmulator_t {
     print_status_func_t     print_status;
     get_joypad_state_func_t get_joypad_state;
     set_joypad_state_func_t set_joypad_state;
-    get_rom_func_t          get_rom;
 
     struct {
-        gbmulator_t             *other_device;
-        cable_shift_bit_cb_t     shift_bit;
-        cable_data_received_cb_t data_received;
+        gbmulator_t         *other_device;
+        cable_shift_bit_cb_t shift_bit;
     } cable;
 
     struct {

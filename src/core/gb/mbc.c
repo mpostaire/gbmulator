@@ -43,7 +43,7 @@ static inline void write_mbc7_eeprom(gb_mbc_t *mbc, uint8_t data) {
         } else {
             // shift in DI to build command
             mbc->mbc7.eeprom.command <<= 1;
-            mbc->mbc7.eeprom.command |= (EEPROM_DI(data) >> 1);
+            mbc->mbc7.eeprom.command  |= (EEPROM_DI(data) >> 1);
 
             if (mbc->mbc7.eeprom.command & 0x0400) {                           // valid command if bit 11 is set (start bit)
                 uint16_t stripped_command = mbc->mbc7.eeprom.command & 0x03FF; // remove start bit from command
@@ -111,8 +111,8 @@ static inline void mbc1_set_bank_addrs(gb_mmu_t *mmu, uint8_t bank1_size) {
         mmu->eram_bank_addr = 0;
     }
 
-    uint8_t current_rom_bankn = (mbc->mbc1.bank_hi << bank1_size) | mbc->mbc1.bank_lo;
-    current_rom_bankn &= mmu->rom_banks - 1;
+    uint8_t current_rom_bankn  = (mbc->mbc1.bank_hi << bank1_size) | mbc->mbc1.bank_lo;
+    current_rom_bankn         &= mmu->rom_banks - 1;
 
     mmu->rom_bankn_addr = (current_rom_bankn - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
 }
@@ -130,13 +130,13 @@ void mbc_write_registers(gb_t *gb, uint16_t address, uint8_t data) {
             mbc->eram_enabled = mmu->eram_banks > 0 && (data & 0x0F) == 0x0A;
             break;
         case 0x2000:
-            data &= 0x1F;
-            mbc->mbc1.bank_lo = data == 0x00 ? 0x01 : data; // BANK1 can't be 0
+            data              &= 0x1F;
+            mbc->mbc1.bank_lo  = data == 0x00 ? 0x01 : data; // BANK1 can't be 0
             mbc1_set_bank_addrs(mmu, 5);
             break;
         case 0x4000:
-            data &= 0x03;
-            mbc->mbc1.bank_hi = data;
+            data              &= 0x03;
+            mbc->mbc1.bank_hi  = data;
             mbc1_set_bank_addrs(mmu, 5);
             break;
         case 0x6000:
@@ -151,14 +151,14 @@ void mbc_write_registers(gb_t *gb, uint16_t address, uint8_t data) {
             mbc->eram_enabled = mmu->eram_banks > 0 && (data & 0x0F) == 0x0A;
             break;
         case 0x2000:
-            data &= 0x1F;
-            mbc->mbc1.bank_lo = data == 0x00 ? 0x01 : data; // BANK1 can't be 0
-            mbc->mbc1.bank_lo &= 0x0F;                      // MBC1M discards bit 4 of BANK1 register
+            data              &= 0x1F;
+            mbc->mbc1.bank_lo  = data == 0x00 ? 0x01 : data; // BANK1 can't be 0
+            mbc->mbc1.bank_lo &= 0x0F;                       // MBC1M discards bit 4 of BANK1 register
             mbc1_set_bank_addrs(mmu, 4);
             break;
         case 0x4000:
-            data &= 0x03;
-            mbc->mbc1.bank_hi = data;
+            data              &= 0x03;
+            mbc->mbc1.bank_hi  = data;
             mbc1_set_bank_addrs(mmu, 4);
             break;
         case 0x6000:
@@ -174,10 +174,10 @@ void mbc_write_registers(gb_t *gb, uint16_t address, uint8_t data) {
         if (!CHECK_BIT(address, 8)) {
             mbc->eram_enabled = (data & 0x0F) == 0x0A;
         } else {
-            data &= 0x0F;
-            mbc->mbc2.rom_bank = data == 0x00 ? 0x01 : data;                // BANK1 can't be 0
-            mbc->mbc2.rom_bank &= mmu->rom_banks - 1;                       // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
-            mmu->rom_bankn_addr = (mbc->mbc2.rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
+            data                &= 0x0F;
+            mbc->mbc2.rom_bank   = data == 0x00 ? 0x01 : data;               // BANK1 can't be 0
+            mbc->mbc2.rom_bank  &= mmu->rom_banks - 1;                       // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
+            mmu->rom_bankn_addr  = (mbc->mbc2.rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
         }
         break;
     case MBC3:
@@ -191,17 +191,17 @@ void mbc_write_registers(gb_t *gb, uint16_t address, uint8_t data) {
         case 0x2000:
             mbc->mbc3.rom_bank = mbc->type == MBC30 ? data : data & 0x7F;
             if (mbc->mbc3.rom_bank == 0x00)
-                mbc->mbc3.rom_bank = 0x01;                                  // 0x00 not allowed
-            mbc->mbc3.rom_bank &= mmu->rom_banks - 1;                       // in this case, equivalent to mbc->mbc3.rom_bank %= rom_banks but avoid division by 0
-            mmu->rom_bankn_addr = (mbc->mbc3.rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
+                mbc->mbc3.rom_bank = 0x01;                                   // 0x00 not allowed
+            mbc->mbc3.rom_bank  &= mmu->rom_banks - 1;                       // in this case, equivalent to mbc->mbc3.rom_bank %= rom_banks but avoid division by 0
+            mmu->rom_bankn_addr  = (mbc->mbc3.rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
             break;
         case 0x4000:;
             uint8_t max_ram_bank = mbc->type == MBC30 ? 0x07 : 0x03;
             if (data <= max_ram_bank) {
-                mbc->mbc3.eram_bank = data;
-                mbc->mbc3.eram_bank &= mmu->eram_banks - 1; // in this case, equivalent to mbc->mbc3.eram_bank %= eram_banks but avoid division by 0
-                mmu->eram_bank_addr  = mbc->mbc3.eram_bank * ERAM_BANK_SIZE;
-                mbc->mbc3.rtc_mapped = 0;
+                mbc->mbc3.eram_bank   = data;
+                mbc->mbc3.eram_bank  &= mmu->eram_banks - 1; // in this case, equivalent to mbc->mbc3.eram_bank %= eram_banks but avoid division by 0
+                mmu->eram_bank_addr   = mbc->mbc3.eram_bank * ERAM_BANK_SIZE;
+                mbc->mbc3.rtc_mapped  = 0;
             } else if (mmu->has_rtc && data >= 0x08 && data <= 0x0C) {
                 mbc->mbc3.rtc.reg    = data;
                 mbc->mbc3.rtc_mapped = 1;
@@ -226,24 +226,24 @@ void mbc_write_registers(gb_t *gb, uint16_t address, uint8_t data) {
             mbc->eram_enabled = data == 0x0A;
             break;
         case 0x2000: {
-            mbc->mbc5.rom_bank_lo     = data;
-            uint16_t current_rom_bank = (mbc->mbc5.rom_bank_hi << 8) | mbc->mbc5.rom_bank_lo;
-            current_rom_bank &= mmu->rom_banks - 1;                       // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
-            mmu->rom_bankn_addr = (current_rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
+            mbc->mbc5.rom_bank_lo      = data;
+            uint16_t current_rom_bank  = (mbc->mbc5.rom_bank_hi << 8) | mbc->mbc5.rom_bank_lo;
+            current_rom_bank          &= mmu->rom_banks - 1;                     // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
+            mmu->rom_bankn_addr        = (current_rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
             break;
         }
         case 0x3000: {
-            mbc->mbc5.rom_bank_hi     = data;
-            uint16_t current_rom_bank = (mbc->mbc5.rom_bank_hi << 8) | mbc->mbc5.rom_bank_lo;
-            current_rom_bank &= mmu->rom_banks - 1;                       // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
-            mmu->rom_bankn_addr = (current_rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
+            mbc->mbc5.rom_bank_hi      = data;
+            uint16_t current_rom_bank  = (mbc->mbc5.rom_bank_hi << 8) | mbc->mbc5.rom_bank_lo;
+            current_rom_bank          &= mmu->rom_banks - 1;                     // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
+            mmu->rom_bankn_addr        = (current_rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
             break;
         }
         case 0x4000:
         case 0x5000:
-            mbc->mbc5.eram_bank = data & 0x0F;
+            mbc->mbc5.eram_bank  = data & 0x0F;
             mbc->mbc5.eram_bank &= mmu->eram_banks - 1; // in this case, equivalent to mbc->mbc5.eram_bank %= eram_banks but avoid division by 0
-            mmu->eram_bank_addr = mbc->mbc5.eram_bank * ERAM_BANK_SIZE;
+            mmu->eram_bank_addr  = mbc->mbc5.eram_bank * ERAM_BANK_SIZE;
             break;
         }
         break;
@@ -253,9 +253,9 @@ void mbc_write_registers(gb_t *gb, uint16_t address, uint8_t data) {
             mbc->eram_enabled = data == 0x0A;
             break;
         case 0x2000:
-            mbc->mbc7.rom_bank = data;
-            mbc->mbc7.rom_bank &= mmu->rom_banks - 1;                       // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
-            mmu->rom_bankn_addr = (mbc->mbc7.rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
+            mbc->mbc7.rom_bank   = data;
+            mbc->mbc7.rom_bank  &= mmu->rom_banks - 1;                       // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
+            mmu->rom_bankn_addr  = (mbc->mbc7.rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
             break;
         case 0x4000:
             mbc->mbc7.eram_enabled2 = data == 0x40;
@@ -269,14 +269,14 @@ void mbc_write_registers(gb_t *gb, uint16_t address, uint8_t data) {
             mbc->eram_enabled = !mbc->huc1.ir_mode;
             break;
         case 0x2000:
-            mbc->huc1.rom_bank = data;
-            mbc->huc1.rom_bank &= mmu->rom_banks - 1;                       // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
-            mmu->rom_bankn_addr = (mbc->huc1.rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
+            mbc->huc1.rom_bank   = data;
+            mbc->huc1.rom_bank  &= mmu->rom_banks - 1;                       // in this case, equivalent to current_rom_bank %= rom_banks but avoid division by 0
+            mmu->rom_bankn_addr  = (mbc->huc1.rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
             break;
         case 0x4000:
-            mbc->huc1.eram_bank = data;
+            mbc->huc1.eram_bank  = data;
             mbc->huc1.eram_bank &= mmu->eram_banks - 1; // in this case, equivalent to mbc->huc1.eram_bank %= eram_banks but avoid division by 0
-            mmu->eram_bank_addr = mbc->huc1.eram_bank * ERAM_BANK_SIZE;
+            mmu->eram_bank_addr  = mbc->huc1.eram_bank * ERAM_BANK_SIZE;
             break;
         }
         break;
@@ -286,9 +286,9 @@ void mbc_write_registers(gb_t *gb, uint16_t address, uint8_t data) {
             mbc->eram_enabled = (data & 0x0F) == 0x0A; // ERAM reads are always enabled: this only enable/disable ERAM writes
             break;
         case 0x2000:
-            mbc->camera.rom_bank = data & 0x3F;
-            mbc->camera.rom_bank &= mmu->rom_banks - 1;                       // in this case, equivalent to mbc->camera.rom_bank %= rom_banks but avoid division by 0
-            mmu->rom_bankn_addr = (mbc->camera.rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
+            mbc->camera.rom_bank  = data & 0x3F;
+            mbc->camera.rom_bank &= mmu->rom_banks - 1;                         // in this case, equivalent to mbc->camera.rom_bank %= rom_banks but avoid division by 0
+            mmu->rom_bankn_addr   = (mbc->camera.rom_bank - 1) * ROM_BANK_SIZE; // -1 to add the -ROM_BANK_SIZE offset
             break;
         case 0x4000:;
             mbc->camera.cam_regs_enabled = CHECK_BIT(data, 4);

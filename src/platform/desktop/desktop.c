@@ -27,6 +27,7 @@
 static bool     keycode_filter(unsigned int keyval);
 static bool     load_cartridge(void);
 static gboolean loop_func(gpointer user_data);
+static void     on_link_disconnected(void);
 
 // clang-format off
 static const config_t default_config = {
@@ -65,7 +66,9 @@ static const config_t default_config = {
         [GBMULATOR_JOYPAD_R]      = GDK_KEY_KP_5,
         [GBMULATOR_JOYPAD_L]      = GDK_KEY_KP_4,
     },
-    .keycode_filter = keycode_filter
+    .keycode_filter = keycode_filter,
+
+    .on_link_disconnected = on_link_disconnected
 };
 // clang-format on
 
@@ -125,9 +128,9 @@ static GtkAdjustment  *printer_scroll_adj;
 static GtkFileDialog  *open_rom_dialog, *save_printer_image_dialog;
 static guint           loop_source = 0;
 
-static bool     printer_window_allowed_to_close = FALSE;
-static gboolean printer_save_dialog_resume_loop = FALSE;
-static gboolean link_is_server                  = TRUE;
+static bool printer_window_allowed_to_close = false;
+static bool printer_save_dialog_resume_loop = false;
+static bool link_is_server                  = true;
 // static double   accel_x, accel_y;
 
 static GCancellable *link_task_cancellable;
@@ -138,6 +141,7 @@ static void show_link_emu_dialog(GSimpleAction *action, GVariant *parameter, gpo
 static void show_printer_window(GSimpleAction *action, GVariant *parameter, gpointer app);
 static void ask_restart_emulator(GSimpleAction *action, GVariant *parameter, gpointer app);
 static void toggle_pause(GSimpleAction *action, GVariant *parameter, gpointer app);
+static void set_link_gui_actions(bool enabled, bool link_is_gb);
 
 static bool keycode_filter(unsigned int keyval) {
     switch (keyval) {
@@ -243,14 +247,18 @@ static int gamepad_button_name_parser(const char *button_name) {
     return 0;
 }
 
-void start_loop(void) {
+static void start_loop(void) {
     if (loop_source > 0 || link_task)
         return;
+
     app_set_pause(false);
-    loop_source = g_timeout_add(1000 / 60, G_SOURCE_FUNC(loop_func), NULL);
+
+    uint32_t fps = app_get_fps();
+    if (fps > 0)
+        loop_source = g_timeout_add(1000 / fps, G_SOURCE_FUNC(loop_func), NULL);
 }
 
-void stop_loop(void) {
+static void stop_loop(void) {
     if (loop_source == 0 || link_task)
         return;
     app_set_pause(true);
@@ -285,12 +293,14 @@ static inline gboolean loop_func(gpointer user_data) {
     app_run_frame();
 
     gtk_gl_area_queue_render(GTK_GL_AREA(emu_gl_area));
+    gtk_gl_area_queue_render(GTK_GL_AREA(printer_gl_area));
 
     return G_SOURCE_CONTINUE;
 }
 
 static void on_emu_realize(GtkGLArea *area, gpointer user_data) {
     gtk_gl_area_make_current(area);
+
     if (gtk_gl_area_get_error(area) != NULL) {
         eprintf("Unknown error\n");
         return;
@@ -307,16 +317,22 @@ static void on_emu_unrealize(GtkGLArea *area, gpointer user_data) {
 }
 
 static gboolean on_emu_render(GtkGLArea *area, GdkGLContext *context, gpointer user_data) {
+    gtk_gl_area_make_current(area);
+
     app_render();
+
     return TRUE;
 }
 
-void on_emu_resize(GtkGLArea *area, gint width, gint height, gpointer user_data) {
-    app_set_size(width, height);
+static void on_emu_resize(GtkGLArea *area, gint width, gint height, gpointer user_data) {
+    gtk_gl_area_make_current(area);
+
+    app_set_viewport_size(width, height);
 }
 
 static void on_printer_realize(GtkGLArea *area, gpointer user_data) {
     gtk_gl_area_make_current(area);
+
     if (gtk_gl_area_get_error(area) != NULL) {
         eprintf("Unknown error\n");
         return;
@@ -324,23 +340,26 @@ static void on_printer_realize(GtkGLArea *area, gpointer user_data) {
 }
 
 static gboolean on_printer_render(GtkGLArea *area, GdkGLContext *context, gpointer user_data) {
+    gtk_gl_area_make_current(area);
     app_printer_render();
     return TRUE;
 }
 
 static gboolean on_printer_resize(GtkGLArea *area, GdkGLContext *context) {
+    gtk_gl_area_make_current(area);
+
     double adj_upper = gtk_adjustment_get_upper(GTK_ADJUSTMENT(printer_scroll_adj));
     gtk_adjustment_set_value(GTK_ADJUSTMENT(printer_scroll_adj), adj_upper);
+
     return TRUE;
 }
 
-static void printer_new_line_cb(size_t current_height, size_t total_height) {
+static void printer_new_line_cb(size_t current_height) {
     gtk_widget_set_size_request(GTK_WIDGET(printer_gl_area), GB_SCREEN_WIDTH * 2, current_height * 2);
 
-    if (current_height == 0 || current_height >= total_height) {
-        gtk_widget_set_sensitive(GTK_WIDGET(printer_save_btn), current_height >= total_height);
-        gtk_widget_set_sensitive(GTK_WIDGET(printer_clear_btn), current_height >= total_height);
-    }
+    bool sensitive = current_height % 16 == 0;
+    gtk_widget_set_sensitive(GTK_WIDGET(printer_save_btn), sensitive);
+    gtk_widget_set_sensitive(GTK_WIDGET(printer_clear_btn), sensitive);
 
     gtk_gl_area_queue_render(GTK_GL_AREA(printer_gl_area));
 }
@@ -377,6 +396,9 @@ static void disconnect_emu(GSimpleAction *action, GVariant *parameter, gpointer 
         g_cancellable_cancel(link_task_cancellable);
     else
         app_link_disconnect();
+
+    set_link_gui_actions(true, true);
+    show_toast("Link Cable disconnected");
 }
 
 static void set_link_gui_actions(bool enabled, bool link_is_gb) {
@@ -412,7 +434,12 @@ static void set_link_gui_actions(bool enabled, bool link_is_gb) {
     }
 }
 
-void start_link_thread_cb(GObject *source_object, GAsyncResult *res, gpointer data) {
+static void on_link_disconnected(void) {
+    show_toast("Link Cable disconnected");
+    set_link_gui_actions(true, true);
+}
+
+static void start_link_thread_cb(GObject *source_object, GAsyncResult *res, gpointer data) {
     gtk_revealer_set_reveal_child(GTK_REVEALER(link_spinner_revealer), FALSE);
 
     if (g_task_propagate_boolean(G_TASK(res), NULL)) {
@@ -434,7 +461,7 @@ void start_link_thread_cb(GObject *source_object, GAsyncResult *res, gpointer da
     start_loop();
 }
 
-void start_link_thread(GTask *task, gpointer source_object, gpointer task_data, GCancellable *cancellable) {
+static void start_link_thread(GTask *task, gpointer source_object, gpointer task_data, GCancellable *cancellable) {
     g_task_return_boolean(link_task, app_link_start(link_is_server));
 }
 
@@ -475,12 +502,12 @@ static void show_printer_window(GSimpleAction *action, GVariant *parameter, gpoi
     gtk_window_present(GTK_WINDOW(printer_window));
 }
 
-void on_mouse_pressed(GtkGestureClick *self, gint n_press, gdouble x, gdouble y, gpointer user_data) {
+static void on_mouse_pressed(GtkGestureClick *self, gint n_press, gdouble x, gdouble y, gpointer user_data) {
     is_mouse_pressed = true;
     app_touch_press(0, x, y);
 }
 
-void on_mouse_released(GtkGestureClick *self, gint n_press, gdouble x, gdouble y, gpointer user_data) {
+static void on_mouse_released(GtkGestureClick *self, gint n_press, gdouble x, gdouble y, gpointer user_data) {
     is_mouse_pressed = false;
     app_touch_release(0, x, y);
 }
@@ -632,10 +659,10 @@ static void set_link_port(GtkSpinButton *self, gpointer user_data) {
 static void link_mode_setter_server_toggled(GtkToggleButton *self, gpointer user_data) {
     if (gtk_toggle_button_get_active(self)) {
         gtk_revealer_set_reveal_child(GTK_REVEALER(user_data), FALSE);
-        link_is_server = TRUE;
+        link_is_server = true;
     } else {
         gtk_revealer_set_reveal_child(GTK_REVEALER(user_data), TRUE);
-        link_is_server = FALSE;
+        link_is_server = false;
     }
 }
 
@@ -745,7 +772,7 @@ static void open_btn_clicked(AdwActionRow *self, gpointer user_data) {
 static void printer_save_dialog_cb(GObject *dialog, GAsyncResult *res, gpointer user_data) {
     if (printer_save_dialog_resume_loop) {
         start_loop();
-        printer_save_dialog_resume_loop = FALSE;
+        printer_save_dialog_resume_loop = false;
     }
 
     g_autoptr(GFile) file = gtk_file_dialog_save_finish(GTK_FILE_DIALOG(dialog), res, NULL);
@@ -754,13 +781,7 @@ static void printer_save_dialog_cb(GObject *dialog, GAsyncResult *res, gpointer 
 
     char *file_path = g_file_get_path(file);
 
-    // TODO app_printer_save()
-    // size_t data_len = 0;
-    // uint8_t *data = bmp_encode(&data_len);
-    // if (!data)
-    //     return;
-
-    // write_file(file_path, data, data_len);
+    app_printer_save(file_path);
 
     free(file_path);
 }
@@ -769,14 +790,14 @@ static void printer_save_btn_clicked(AdwActionRow *self, gpointer user_data) {
     if (!save_printer_image_dialog) {
         save_printer_image_dialog = gtk_file_dialog_new();
         gtk_file_dialog_set_title(save_printer_image_dialog, "Pick a ROM file");
-        g_autoptr(GFile) file = g_file_new_for_path("image.xpm");
+        g_autoptr(GFile) file = g_file_new_for_path("image.bmp");
         gtk_file_dialog_set_initial_file(save_printer_image_dialog, file);
 
         g_autoptr(GtkFileFilter) filter = gtk_file_filter_new();
         // add basic extension pattern in case the mime type is not available
-        gtk_file_filter_add_pattern(filter, "*.xpm");
-        gtk_file_filter_add_mime_type(filter, "image/x-xpixmap");
-        gtk_file_filter_set_name(filter, "Image XPM");
+        gtk_file_filter_add_pattern(filter, "*.bmp");
+        gtk_file_filter_add_mime_type(filter, "image/bmp");
+        gtk_file_filter_set_name(filter, "BMP image");
 
         g_autoptr(GListStore) list = g_list_store_new(GTK_TYPE_FILE_FILTER);
         g_list_store_append(list, filter);
@@ -786,7 +807,7 @@ static void printer_save_btn_clicked(AdwActionRow *self, gpointer user_data) {
 
     if (!app_is_paused()) {
         stop_loop();
-        printer_save_dialog_resume_loop = TRUE;
+        printer_save_dialog_resume_loop = true;
     }
     gtk_file_dialog_save(save_printer_image_dialog, GTK_WINDOW(printer_window), NULL, printer_save_dialog_cb, NULL);
 }
@@ -796,7 +817,7 @@ static void clear_printer_gl_area(void) {
         return; // segfault if printer gl area was not realized (printer window not shown at least once before printing)
 
     gtk_gl_area_queue_render(GTK_GL_AREA(printer_gl_area));
-    gtk_widget_set_size_request(GTK_WIDGET(printer_gl_area), GB_SCREEN_WIDTH * 2, GB_SCREEN_HEIGHT * 2);
+    gtk_widget_set_size_request(GTK_WIDGET(printer_gl_area), GB_SCREEN_WIDTH * 2, 1);
 
     gtk_widget_set_sensitive(GTK_WIDGET(printer_save_btn), FALSE);
     gtk_widget_set_sensitive(GTK_WIDGET(printer_clear_btn), FALSE);
@@ -1221,7 +1242,7 @@ static void activate_cb(GtkApplication *app) {
 
     // Drag and drop
     GtkDropTarget *target = gtk_drop_target_new(G_TYPE_INVALID, GDK_ACTION_COPY);
-    gtk_drop_target_set_gtypes(target, (GType[1]) { GDK_TYPE_FILE_LIST }, 1);
+    gtk_drop_target_set_gtypes(target, (GType[1]){ GDK_TYPE_FILE_LIST }, 1);
     g_signal_connect(target, "drop", G_CALLBACK(on_drop), NULL);
     gtk_widget_add_controller(GTK_WIDGET(main_window), GTK_EVENT_CONTROLLER(target));
 
@@ -1253,7 +1274,7 @@ static gint command_line_cb(GtkApplication *app, GApplicationCommandLine *comman
 }
 
 int main(int argc, char **argv) {
-    app = adw_application_new(NULL, G_APPLICATION_HANDLES_COMMAND_LINE);
+    app = adw_application_new(NULL, G_APPLICATION_HANDLES_COMMAND_LINE | G_APPLICATION_NON_UNIQUE);
     g_signal_connect(app, "activate", G_CALLBACK(activate_cb), NULL);
     g_signal_connect(app, "shutdown", G_CALLBACK(shutdown_cb), NULL);
     g_signal_connect(app, "command-line", G_CALLBACK(command_line_cb), NULL);

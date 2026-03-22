@@ -70,7 +70,7 @@ EMSCRIPTEN_KEEPALIVE void set_scale(uint8_t value) {
     viewport_h *= value;
 
     emscripten_set_canvas_element_size("#canvas", viewport_w, viewport_h);
-    app_set_size(viewport_w, viewport_h);
+    app_set_viewport_size(viewport_w, viewport_h);
 }
 
 bool on_keyboard_input(int eventType, const EmscriptenKeyboardEvent *e, void *userData) {

@@ -164,7 +164,7 @@ typedef enum {
 } bus_access_t;
 
 typedef struct {
-    uint8_t  bios[BUS_BIOS_UNUSED - BUS_BIOS];
+    uint8_t *bios;
     uint8_t  ewram[BUS_EWRAM_UNUSED - BUS_EWRAM];
     uint8_t  iwram[BUS_IWRAM_UNUSED - BUS_IWRAM];
     uint16_t io[(BUS_IO_UNUSED - BUS_IO) / sizeof(uint16_t)];
@@ -206,4 +206,6 @@ void _gba_bus_write_word(gba_t *gba, bus_access_t access, uint32_t address, uint
 #define gba_bus_write_half(gba, address, data) _gba_bus_write_half(gba, BUS_ACCESS_N, address, data)
 #define gba_bus_write_word(gba, address, data) _gba_bus_write_word(gba, BUS_ACCESS_N, address, data)
 
-bool gba_bus_reset(gba_t *gba, const uint8_t *rom, size_t rom_size);
+bool gba_bus_validate_rom(const uint8_t *rom, size_t size);
+
+void gba_bus_reset(gba_t *gba);

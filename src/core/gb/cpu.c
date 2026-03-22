@@ -723,7 +723,7 @@ static inline void sra(gb_cpu_t *cpu, uint8_t *reg) {
     ((*reg) & 0x01) ? SET_FLAG(cpu, FLAG_C) : RESET_FLAG(cpu, FLAG_C);
     // shift right
     (*reg) >>= 1;
-    (*reg) |= msb;
+    (*reg)  |= msb;
 
     (*reg) ? RESET_FLAG(cpu, FLAG_Z) : SET_FLAG(cpu, FLAG_Z);
     RESET_FLAG(cpu, FLAG_N | FLAG_H);
@@ -2320,6 +2320,6 @@ SERIALIZED_SIZE_FUNCTION(gb_cpu_t, cpu, SERIALIZED_MEMBERS)
 SERIALIZER_FUNCTION(gb_cpu_t, cpu, SERIALIZED_MEMBERS)
 #undef X
 
-#define X(value) UNSERIALIZE(value);
-UNSERIALIZER_FUNCTION(gb_cpu_t, cpu, SERIALIZED_MEMBERS)
+#define X(value) DESERIALIZE(value);
+DESERIALIZER_FUNCTION(gb_cpu_t, cpu, SERIALIZED_MEMBERS)
 #undef X
