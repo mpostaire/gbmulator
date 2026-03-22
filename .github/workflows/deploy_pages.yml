@@ -41,7 +41,7 @@ jobs:
 
       - name: Install and Build gbmulator web
         run: |
-          make web
+          make PLATFORM=web
 
       - name: Deploy to github pages
         uses: JamesIves/github-pages-deploy-action@v4
