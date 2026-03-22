@@ -354,13 +354,12 @@ static gboolean on_printer_resize(GtkGLArea *area, GdkGLContext *context) {
     return TRUE;
 }
 
-static void printer_new_line_cb(size_t current_height, size_t total_height) {
+static void printer_new_line_cb(size_t current_height) {
     gtk_widget_set_size_request(GTK_WIDGET(printer_gl_area), GB_SCREEN_WIDTH * 2, current_height * 2);
 
-    if (current_height == 0 || current_height >= total_height) {
-        gtk_widget_set_sensitive(GTK_WIDGET(printer_save_btn), current_height >= total_height);
-        gtk_widget_set_sensitive(GTK_WIDGET(printer_clear_btn), current_height >= total_height);
-    }
+    bool sensitive = current_height % 16 == 0;
+    gtk_widget_set_sensitive(GTK_WIDGET(printer_save_btn), sensitive);
+    gtk_widget_set_sensitive(GTK_WIDGET(printer_clear_btn), sensitive);
 
     gtk_gl_area_queue_render(GTK_GL_AREA(printer_gl_area));
 }

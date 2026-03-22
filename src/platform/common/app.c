@@ -659,7 +659,7 @@ static void on_printer_new_frame_cb(uint8_t *pixels) {
     glrenderer_update_screen(app.printer.renderer, pixels);
 
     if (app.printer.on_new_line)
-        app.printer.on_new_line(app.printer.height, app.printer.height);
+        app.printer.on_new_line(app.printer.height);
 }
 
 __attribute_used__ bool app_connect_printer(printer_new_line_cb_t on_new_line) {

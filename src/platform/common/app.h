@@ -4,7 +4,7 @@
 
 #define APP_MAX_SPEED 8.0f
 
-typedef void (*printer_new_line_cb_t)(size_t current_height, size_t total_height);
+typedef void (*printer_new_line_cb_t)(size_t current_height);
 
 void app_init(void);
 
