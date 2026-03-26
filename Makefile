@@ -16,7 +16,7 @@ override CFLAGS += -ggdb -O0
 else ifeq ($(DEBUG),2)
 override CFLAGS += -ggdb -O0 -DDEBUG
 else
-override CFLAGS += -O3 -DNDEBUG -flto -Werror
+override CFLAGS += -O3 -DNDEBUG -flto
 BUILD_TYPE := release
 endif
 
