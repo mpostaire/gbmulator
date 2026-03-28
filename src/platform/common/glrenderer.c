@@ -8,6 +8,7 @@
 
 #define VERTEX_INDICES_OBJ_STRIDE 5
 #define N_VERTEX_PER_OBJ          24
+#define PIXBUF_COUNT              2
 
 static const char *vertex_shader_source =
     "#version 300 es\n"
@@ -51,6 +52,10 @@ struct glrenderer_t {
     GLsizei screen_tex_w;
     GLsizei screen_tex_h;
 
+    uint8_t *pixbufs[PIXBUF_COUNT];
+    uint8_t  writing_pixbuf;
+    uint8_t  rendering_pixbuf;
+
     GLuint vao; // Vertex Array Object
     GLuint vbo; // Vertex Buffer Object
     GLuint ebo; // Element Buffer Object
@@ -77,11 +82,10 @@ struct glrenderer_t {
     GLfloat clear_g;
     GLfloat clear_b;
 
-    bool     resize_screen_requested;
+    bool     resize_screen_tex_requested;
+    uint32_t resize_pixbuf_requests;
     bool     resize_viewport_requested;
     uint32_t update_obj_requests;
-
-    void *update_screen_requested;
 };
 
 static const rect_t btn_atlas_regions[] = {
@@ -168,14 +172,7 @@ static GLuint create_texture(GLsizei width, GLsizei height, const GLvoid *pixels
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    void *placeholder = NULL;
-    if (!pixels)
-        placeholder = calloc(1, width * height * 4);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels ? pixels : placeholder);
-
-    if (placeholder)
-        free(placeholder);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 
     glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -301,13 +298,34 @@ static inline void update_vertices(glrenderer_t *renderer, GLint obj_id, rect_t 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-static void resize_screen(glrenderer_t *renderer) {
+static void resize_screen_tex(glrenderer_t *renderer) {
+    printf("----> RESIZING GL BUFFER <----\n");
+
     glBindTexture(GL_TEXTURE_2D, renderer->screen_tex);
-    // NULL as pixel data: opengl allocates texture but doesn't copy any pixel data
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, renderer->screen_tex_w, renderer->screen_tex_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    renderer->resize_screen_requested = false;
+    renderer->resize_screen_tex_requested = false;
+}
+
+static void resize_pixbufs(glrenderer_t *renderer) {
+    for (uint8_t i = 0; i < PIXBUF_COUNT; i++) {
+        if ((i == renderer->writing_pixbuf) || !(renderer->resize_pixbuf_requests & (1 << i)))
+            continue;
+
+        printf("resizing %d to %dx%d (writing %d)\n", i, renderer->screen_tex_w, renderer->screen_tex_h, renderer->writing_pixbuf);
+
+        size_t   new_size   = renderer->screen_tex_w * renderer->screen_tex_h * 4;
+        uint8_t *new_pixbuf = realloc(renderer->pixbufs[i], new_size);
+        if (new_pixbuf) {
+            renderer->pixbufs[i] = new_pixbuf;
+            memset(renderer->pixbufs[i], 0, new_size);
+        } else {
+            printf("[ERROR] Couldn't allocate pixbuf\n");
+        }
+
+        renderer->resize_pixbuf_requests &= ~(1 << i);
+    }
 }
 
 static void resize_viewport(glrenderer_t *renderer) {
@@ -320,20 +338,31 @@ static void resize_viewport(glrenderer_t *renderer) {
     renderer->resize_viewport_requested = false;
 }
 
+static void resize_screen(glrenderer_t *renderer, GLsizei width, GLsizei height) {
+    if (!renderer || (width == renderer->screen_tex_w && height == renderer->screen_tex_h))
+        return;
+
+    printf("resize request: %dx%d --> %dx%d\n", renderer->screen_tex_w, renderer->screen_tex_h, width, height);
+
+    renderer->resize_pixbuf_requests      = (1 << PIXBUF_COUNT) - 1;
+    renderer->resize_screen_tex_requested = true;
+
+    renderer->screen_tex_w = width;
+    renderer->screen_tex_h = height;
+
+    // we can already resize non writing pixbufs here
+    resize_pixbufs(renderer);
+
+    // resizing screen requires updating viewport to recompute obj coordinates (including screen)
+    glrenderer_resize_viewport(renderer, renderer->viewport_w, renderer->viewport_h);
+}
+
 static void update_objs(glrenderer_t *renderer) {
     for (glrenderer_obj_id_t obj_id = 0; obj_id < GLRENDERER_OBJ_ID_END; obj_id++)
         if (renderer->update_obj_requests & (1 << obj_id))
             update_vertices(renderer, obj_id, &renderer->obj_coords[obj_id]);
 
     renderer->update_obj_requests = 0;
-}
-
-static void update_screen(glrenderer_t *renderer) {
-    glBindTexture(GL_TEXTURE_2D, renderer->screen_tex);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, renderer->screen_tex_w, renderer->screen_tex_h, GL_RGBA, GL_UNSIGNED_BYTE, renderer->update_screen_requested);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    renderer->update_screen_requested = NULL;
 }
 
 glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, uint32_t visible_btns_mask) {
@@ -361,6 +390,14 @@ glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, uint32_t visib
     renderer->screen_tex_h = screen_h;
 
     create_buffers(renderer);
+
+    for (uint8_t i = 0; i < PIXBUF_COUNT; i++) {
+        renderer->pixbufs[i] = malloc(renderer->screen_tex_w * renderer->screen_tex_h * 4);
+        if (!renderer->pixbufs[i]) {
+            printf("[ERROR] Couldn't allocate pixbuf\n");
+            return NULL;
+        }
+    }
 
     if (renderer->visible_btns_mask)
         create_buttons(renderer);
@@ -405,6 +442,9 @@ void glrenderer_quit(glrenderer_t *renderer) {
 
     glDeleteProgram(renderer->shader_program);
 
+    for (uint8_t i = 0; i < PIXBUF_COUNT; i++)
+        free(renderer->pixbufs[i]);
+
     free(renderer);
 }
 
@@ -412,8 +452,11 @@ void glrenderer_render(glrenderer_t *renderer) {
     if (!renderer)
         return;
 
-    if (renderer->resize_screen_requested)
-        resize_screen(renderer);
+    if (renderer->resize_screen_tex_requested)
+        resize_screen_tex(renderer);
+
+    if (renderer->resize_pixbuf_requests)
+        resize_pixbufs(renderer);
 
     if (renderer->resize_viewport_requested)
         resize_viewport(renderer);
@@ -421,20 +464,20 @@ void glrenderer_render(glrenderer_t *renderer) {
     if (renderer->update_obj_requests)
         update_objs(renderer);
 
-    if (renderer->update_screen_requested)
-        update_screen(renderer);
+    // Call to glUseProgram useless as only one program is ever used in the lifespan of a glrenderer_t instance
+    // and it was already called int glrenderer_init()
 
     glClearColor(renderer->clear_r, renderer->clear_g, renderer->clear_b, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-
-    // Call to glUseProgram useless as only one program is ever used in the lifespan of a glrenderer_t instance
-    // and it was already called int glrenderer_init()
 
     glBindVertexArray(renderer->vao);
     glBindBuffer(GL_ARRAY_BUFFER, renderer->vbo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, renderer->ebo);
 
+    printf("rendering %d\n", renderer->rendering_pixbuf);
     glBindTexture(GL_TEXTURE_2D, renderer->screen_tex);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, renderer->screen_tex_w, renderer->screen_tex_h, GL_RGBA, GL_UNSIGNED_BYTE, renderer->pixbufs[renderer->rendering_pixbuf]);
+
     glDrawElements(GL_TRIANGLE_STRIP, VERTEX_INDICES_OBJ_STRIDE, GL_UNSIGNED_SHORT, (GLvoid *) (GLRENDERER_OBJ_ID_SCREEN * VERTEX_INDICES_OBJ_STRIDE * sizeof(*renderer->vertex_indices)));
 
     if (renderer->visible_btns_mask) {
@@ -449,27 +492,35 @@ void glrenderer_render(glrenderer_t *renderer) {
     glBindVertexArray(0);
 }
 
-void glrenderer_update_screen(glrenderer_t *renderer, uint8_t *pixels) {
+uint8_t *glrenderer_swap_buffers(glrenderer_t *renderer, size_t w, size_t h) {
     if (!renderer)
-        return;
+        return NULL;
 
-    // TODO rename on_new_frame cb into request_pixel_buffer and remove on_new_line cb to use request_pixel_buffer instead.
-    // TODO ppu core should ask for a pixel buffer upon its very first cycle (now it always skips first frame)
+    resize_screen(renderer, w, h);
 
-    renderer->update_screen_requested = pixels;
-}
+    renderer->rendering_pixbuf = renderer->writing_pixbuf;
+    renderer->writing_pixbuf   = (renderer->writing_pixbuf + 1) % PIXBUF_COUNT;
 
-void glrenderer_resize_screen(glrenderer_t *renderer, GLsizei width, GLsizei height) {
-    if (!renderer || (width == renderer->screen_tex_w && height == renderer->screen_tex_h))
-        return;
+    if (renderer->resize_pixbuf_requests & (1 << renderer->writing_pixbuf)) {
+        bool found = false;
 
-    renderer->resize_screen_requested = true;
+        for (uint8_t i = 0; i < PIXBUF_COUNT; i++) {
+            if (!(renderer->resize_pixbuf_requests & (1 << i))) {
+                renderer->writing_pixbuf = i;
+                found                    = true;
+                break;
+            }
+        }
 
-    renderer->screen_tex_w = width;
-    renderer->screen_tex_h = height;
+        if (!found) {
+            printf("------------> NO PIXBUF AVAILABLE: RESIZING IN PROGRESS <------------\n");
+            return NULL;
+        }
+    }
 
-    // resizing screen requires updating viewport to recompute obj coordinates (including screen)
-    glrenderer_resize_viewport(renderer, renderer->viewport_w, renderer->viewport_h);
+    printf("writing_pixbuf: %d\n", renderer->writing_pixbuf);
+
+    return renderer->pixbufs[renderer->writing_pixbuf];
 }
 
 glrenderer_obj_id_t glrenderer_get_obj_at_coord(glrenderer_t *renderer, uint32_t x, uint32_t y) {

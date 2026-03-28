@@ -164,12 +164,6 @@ static inline void apply_config(void) {
     app_set_sound(app.config.sound);
 
     app_set_touchscreen_mode(app.config.enable_joypad);
-
-    uint32_t screen_w;
-    uint32_t screen_h;
-    app_get_screen_size(&screen_w, &screen_h);
-
-    glrenderer_resize_screen(app.renderer, screen_w, screen_h);
 }
 
 __attribute_used__ void app_init(void) {
@@ -278,6 +272,8 @@ __attribute_used__ void app_run_frame(void) {
             }
         }
 
+        // TODO test with speed > 1
+        printf("gbmulator_run_steps\n");
         gbmulator_run_steps(app.emu, app.steps_per_frame);
     }
 }
@@ -414,8 +410,8 @@ static bool on_camera_capture_image(uint8_t *pixels) {
     return true;
 }
 
-static void on_new_frame_cb(uint8_t *pixels) {
-    glrenderer_update_screen(app.renderer, pixels);
+static uint8_t *on_pixbuf_request_cb(size_t w, size_t h) {
+    return glrenderer_swap_buffers(app.renderer, w, h);
 }
 
 // TODO renderer buttons scaled smaller when in GBA mode
@@ -433,13 +429,14 @@ __attribute_used__ bool app_load_cartridge(uint8_t *rom, size_t rom_size) {
         .rom_size                = rom_size,
         .mode                    = app.config.mode,
         .on_new_sample           = alrenderer_queue_sample,
-        .on_new_frame            = on_new_frame_cb,
+        .on_pixbuf_request       = on_pixbuf_request_cb,
         .on_camera_capture_image = on_camera_capture_image,
         .apu_speed               = app.config.speed,
         .apu_sampling_rate       = alrenderer_get_sampling_rate(),
         .palette                 = app.config.color_palette
     };
 
+    printf("BEGIN INIT\n");
     gbmulator_t *new_emu = gbmulator_init(&opts);
     if (!new_emu) {
         if (opts.mode == GBMULATOR_MODE_GBA)
@@ -451,6 +448,7 @@ __attribute_used__ bool app_load_cartridge(uint8_t *rom, size_t rom_size) {
         if (!new_emu)
             return false;
     }
+    printf("END INIT\n");
 
     app.config.mode = opts.mode;
     apply_config();
@@ -503,16 +501,7 @@ __attribute_used__ bool app_set_mode(gbmulator_mode_t mode) {
 
     app.config.mode = mode;
 
-    if (!app.emu) {
-        uint32_t screen_w;
-        uint32_t screen_h;
-        app_get_screen_size(&screen_w, &screen_h);
-        glrenderer_resize_screen(app.renderer, screen_w, screen_h);
-
-        return true;
-    }
-
-    return false;
+    return !app.emu;
 }
 
 __attribute_used__ void app_set_speed(float value) {
@@ -645,21 +634,21 @@ __attribute_used__ bool app_set_binding(bool is_gamepad, gbmulator_joypad_t joyp
     return true;
 }
 
-static void on_printer_new_frame_cb(uint8_t *pixels) {
+static uint8_t *on_printer_pixbuf_request_cb(size_t w, size_t h) {
     if (!app.printer.emu || !app.printer.renderer)
-        return;
+        return NULL;
 
     size_t height;
     gbmulator_get_save(app.printer.emu, NULL, &height);
     app.printer.height = height;
 
     glrenderer_resize_viewport(app.printer.renderer, GBPRINTER_IMG_WIDTH * 2, app.printer.height * 2);
-    glrenderer_resize_screen(app.printer.renderer, GBPRINTER_IMG_WIDTH, app.printer.height);
-
-    glrenderer_update_screen(app.printer.renderer, pixels);
+    // glrenderer_resize_screen(app.printer.renderer, GBPRINTER_IMG_WIDTH, app.printer.height);
 
     if (app.printer.on_new_line)
         app.printer.on_new_line(app.printer.height);
+
+    return glrenderer_swap_buffers(app.printer.renderer, w, h);
 }
 
 __attribute_used__ bool app_connect_printer(printer_new_line_cb_t on_new_line) {
@@ -670,8 +659,8 @@ __attribute_used__ bool app_connect_printer(printer_new_line_cb_t on_new_line) {
         todo("disconnect linked emu");
 
     gbmulator_options_t opts = {
-        .mode         = GBMULATOR_MODE_GBPRINTER,
-        .on_new_frame = on_printer_new_frame_cb
+        .mode              = GBMULATOR_MODE_GBPRINTER,
+        .on_pixbuf_request = on_printer_pixbuf_request_cb
     };
     app.printer.emu = gbmulator_init(&opts);
 
@@ -705,7 +694,7 @@ __attribute_used__ bool app_printer_reset(void) {
         return false;
 
     app.printer.height = 1;
-    glrenderer_resize_screen(app.printer.renderer, GBPRINTER_IMG_WIDTH, app.printer.height);
+    // glrenderer_resize_screen(app.printer.renderer, GBPRINTER_IMG_WIDTH, app.printer.height);
 
     gbmulator_reset(app.printer.emu, NULL);
 

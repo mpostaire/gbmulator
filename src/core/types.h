@@ -49,7 +49,7 @@ typedef enum {
     GBMULATOR_JOYPAD_END,
 } gbmulator_joypad_t;
 
-typedef void (*gbmulator_new_frame_cb_t)(uint8_t *pixels);
+typedef uint8_t *(*gbmulator_on_pixbuf_request_cb_t)(size_t w, size_t h);
 typedef void (*gbmulator_new_sample_cb_t)(const gbmulator_apu_sample_t sample, uint32_t *dynamic_sampling_rate);
 typedef void (*gbmulator_accelerometer_request_cb_t)(double *x, double *y);
 typedef bool (*gbmulator_camera_capture_image_cb_t)(uint8_t *image);
@@ -80,7 +80,7 @@ typedef struct {
     float              apu_speed;
     uint32_t           apu_sampling_rate;
 
-    gbmulator_new_frame_cb_t             on_new_frame;             // the function called whenever the ppu has finished rendering a new frame
+    gbmulator_on_pixbuf_request_cb_t     on_pixbuf_request;        // the function called whenever the ppu needs a pixbuf
     gbmulator_new_sample_cb_t            on_new_sample;            // the function called whenever a new audio sample is produced by the apu
     gbmulator_accelerometer_request_cb_t on_accelerometer_request; // the function called whenever the MBC7 latches accelerometer data
     gbmulator_camera_capture_image_cb_t  on_camera_capture_image;  // the function called whenever the CAMERA requests image data
