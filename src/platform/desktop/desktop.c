@@ -345,11 +345,13 @@ static gboolean on_printer_render(GtkGLArea *area, GdkGLContext *context, gpoint
     return TRUE;
 }
 
-static gboolean on_printer_resize(GtkGLArea *area, GdkGLContext *context) {
+static gboolean on_printer_resize(GtkGLArea *area, gint width, gint height, gpointer user_data) {
     gtk_gl_area_make_current(area);
 
     double adj_upper = gtk_adjustment_get_upper(GTK_ADJUSTMENT(printer_scroll_adj));
     gtk_adjustment_set_value(GTK_ADJUSTMENT(printer_scroll_adj), adj_upper);
+
+    app_printer_set_viewport_size(width, height);
 
     return TRUE;
 }

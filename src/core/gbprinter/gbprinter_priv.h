@@ -32,6 +32,8 @@ struct gbprinter_t {
 
     uint8_t bit_shift_counter;
 
+    uint8_t *pixels;
+
     struct {
         uint8_t *data;
         size_t   height;

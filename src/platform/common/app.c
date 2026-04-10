@@ -42,7 +42,6 @@ static struct {
     struct {
         gbmulator_t          *emu;
         glrenderer_t         *renderer;
-        uint32_t              height;
         printer_new_line_cb_t on_new_line;
     } printer;
 
@@ -273,7 +272,6 @@ __attribute_used__ void app_run_frame(void) {
         }
 
         // TODO test with speed > 1
-        printf("gbmulator_run_steps\n");
         gbmulator_run_steps(app.emu, app.steps_per_frame);
     }
 }
@@ -635,18 +633,10 @@ __attribute_used__ bool app_set_binding(bool is_gamepad, gbmulator_joypad_t joyp
 }
 
 static uint8_t *on_printer_pixbuf_request_cb(size_t w, size_t h) {
-    if (!app.printer.emu || !app.printer.renderer)
-        return NULL;
-
-    size_t height;
-    gbmulator_get_save(app.printer.emu, NULL, &height);
-    app.printer.height = height;
-
-    glrenderer_resize_viewport(app.printer.renderer, GBPRINTER_IMG_WIDTH * 2, app.printer.height * 2);
-    // glrenderer_resize_screen(app.printer.renderer, GBPRINTER_IMG_WIDTH, app.printer.height);
+    glrenderer_resize_viewport(app.printer.renderer, w * 2, h * 2);
 
     if (app.printer.on_new_line)
-        app.printer.on_new_line(app.printer.height);
+        app.printer.on_new_line(h);
 
     return glrenderer_swap_buffers(app.printer.renderer, w, h);
 }
@@ -666,8 +656,6 @@ __attribute_used__ bool app_connect_printer(printer_new_line_cb_t on_new_line) {
 
     gbmulator_link_connect(app.emu, app.printer.emu, GBMULATOR_LINK_CABLE);
 
-    app.printer.height = 1;
-
     app.printer.on_new_line = on_new_line;
 
     return true;
@@ -683,18 +671,19 @@ __attribute_used__ void app_printer_disconnect(void) {
 }
 
 __attribute_used__ void app_printer_render(void) {
-    if (app.printer.emu && !app.printer.renderer)
-        app.printer.renderer = glrenderer_init(GBPRINTER_IMG_WIDTH, app.printer.height, 0);
+    if (!app.printer.renderer)
+        app.printer.renderer = glrenderer_init(GBPRINTER_IMG_WIDTH, 1, 0);
 
     glrenderer_render(app.printer.renderer);
+}
+
+__attribute_used__ void app_printer_set_viewport_size(uint32_t viewport_w, uint32_t viewport_h) {
+    glrenderer_resize_viewport(app.printer.renderer, viewport_w, viewport_h);
 }
 
 __attribute_used__ bool app_printer_reset(void) {
     if (!app.printer.renderer)
         return false;
-
-    app.printer.height = 1;
-    // glrenderer_resize_screen(app.printer.renderer, GBPRINTER_IMG_WIDTH, app.printer.height);
 
     gbmulator_reset(app.printer.emu, NULL);
 

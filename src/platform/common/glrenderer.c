@@ -299,8 +299,6 @@ static inline void update_vertices(glrenderer_t *renderer, GLint obj_id, rect_t 
 }
 
 static void resize_screen_tex(glrenderer_t *renderer) {
-    printf("----> RESIZING GL BUFFER <----\n");
-
     glBindTexture(GL_TEXTURE_2D, renderer->screen_tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, renderer->screen_tex_w, renderer->screen_tex_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -317,12 +315,10 @@ static void resize_pixbufs(glrenderer_t *renderer) {
 
         size_t   new_size   = renderer->screen_tex_w * renderer->screen_tex_h * 4;
         uint8_t *new_pixbuf = realloc(renderer->pixbufs[i], new_size);
-        if (new_pixbuf) {
+        if (new_pixbuf)
             renderer->pixbufs[i] = new_pixbuf;
-            memset(renderer->pixbufs[i], 0, new_size);
-        } else {
+        else
             printf("[ERROR] Couldn't allocate pixbuf\n");
-        }
 
         renderer->resize_pixbuf_requests &= ~(1 << i);
     }
@@ -474,7 +470,6 @@ void glrenderer_render(glrenderer_t *renderer) {
     glBindBuffer(GL_ARRAY_BUFFER, renderer->vbo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, renderer->ebo);
 
-    printf("rendering %d\n", renderer->rendering_pixbuf);
     glBindTexture(GL_TEXTURE_2D, renderer->screen_tex);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, renderer->screen_tex_w, renderer->screen_tex_h, GL_RGBA, GL_UNSIGNED_BYTE, renderer->pixbufs[renderer->rendering_pixbuf]);
 
@@ -517,8 +512,6 @@ uint8_t *glrenderer_swap_buffers(glrenderer_t *renderer, size_t w, size_t h) {
             return NULL;
         }
     }
-
-    printf("writing_pixbuf: %d\n", renderer->writing_pixbuf);
 
     return renderer->pixbufs[renderer->writing_pixbuf];
 }

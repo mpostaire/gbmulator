@@ -687,7 +687,6 @@ static inline void hblank_step(gb_t *gb) {
 
         if (gb->base->opts.on_pixbuf_request)
             gb->ppu.pixels = gb->base->opts.on_pixbuf_request(GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-        printf("GB: on_pixbuf_request %p\n", gb->ppu.pixels);
     } else {
         ppu->oam_scan.size = 0;
         set_mode(gb, PPU_MODE_OAM);
@@ -770,7 +769,6 @@ void ppu_disable_lcd(gb_t *gb) {
 
     if (gb->base->opts.on_pixbuf_request)
         gb->ppu.pixels = gb->base->opts.on_pixbuf_request(GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    printf("GB: on_pixbuf_request %p\n", gb->ppu.pixels);
 }
 
 void ppu_update_stat_irq_line(gb_t *gb) {
@@ -844,7 +842,6 @@ void ppu_reset(gb_t *gb) {
 
     if (gb->base->opts.on_pixbuf_request)
         gb->ppu.pixels = gb->base->opts.on_pixbuf_request(GB_SCREEN_WIDTH, GB_SCREEN_HEIGHT);
-    printf("GB: on_pixbuf_request %p\n", gb->ppu.pixels);
 }
 
 #define SERIALIZED_OAM_SCAN      \

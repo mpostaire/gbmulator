@@ -77,6 +77,8 @@ void app_printer_disconnect(void);
 
 void app_printer_render(void);
 
+void app_printer_set_viewport_size(uint32_t viewport_w, uint32_t viewport_h);
+
 bool app_printer_reset(void);
 
 bool app_printer_save(const char *path);

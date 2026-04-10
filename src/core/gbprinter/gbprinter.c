@@ -69,11 +69,16 @@ gbprinter_t *gbprinter_init(gbmulator_t *base) {
         gbprinter_clear_image(printer);
     }
 
+    if (printer->base->opts.on_pixbuf_request) {
+        if (printer->pixels)
+            memcpy(printer->pixels, printer->image.data, GBPRINTER_IMG_WIDTH * printer->image.height * 4);
+        printer->pixels = printer->base->opts.on_pixbuf_request(GBPRINTER_IMG_WIDTH, printer->image.height + 1);
+    }
+
     return printer;
 }
 
 void gbprinter_quit(gbprinter_t *printer) {
-    free(printer->image.data);
     free(printer);
 }
 
@@ -143,8 +148,11 @@ void gbprinter_step(gbprinter_t *printer) {
 
     render_line(printer);
 
-    // if (printer->base->opts.on_new_frame)
-    //     printer->base->opts.on_new_frame(printer->image.data);
+    if (printer->base->opts.on_pixbuf_request) {
+        if (printer->pixels)
+            memcpy(printer->pixels, printer->image.data, GBPRINTER_IMG_WIDTH * printer->image.height * 4);
+        printer->pixels = printer->base->opts.on_pixbuf_request(GBPRINTER_IMG_WIDTH, printer->image.height + 1);
+    }
 
     if (printer->image.height == printer->image.allocated_height)
         printer->status = STATUS_DONE;
@@ -152,14 +160,14 @@ void gbprinter_step(gbprinter_t *printer) {
         printer->printing_line_time_remaining = LINE_PRINTING_TIME;
 }
 
-static inline uint8_t check_ram_len(gbprinter_t *printer) {
+static inline bool check_ram_len(gbprinter_t *printer) {
     if (printer->ram_len >= sizeof(printer->ram)) {
         // not sure about this...
         SET_BIT(printer->status, 4); // bit 4: packet error
         SET_BIT(printer->status, 2); // bit 2: image data full (ram full)
-        return 0;
+        return false;
     }
-    return 1;
+    return true;
 }
 
 static void exec_command(gbprinter_t *printer) {
