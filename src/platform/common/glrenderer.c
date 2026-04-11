@@ -311,8 +311,6 @@ static void resize_pixbufs(glrenderer_t *renderer) {
         if ((i == renderer->writing_pixbuf) || !(renderer->resize_pixbuf_requests & (1 << i)))
             continue;
 
-        printf("resizing %d to %dx%d (writing %d)\n", i, renderer->screen_tex_w, renderer->screen_tex_h, renderer->writing_pixbuf);
-
         size_t   new_size   = renderer->screen_tex_w * renderer->screen_tex_h * 4;
         uint8_t *new_pixbuf = realloc(renderer->pixbufs[i], new_size);
         if (new_pixbuf)
@@ -337,8 +335,6 @@ static void resize_viewport(glrenderer_t *renderer) {
 static void resize_screen(glrenderer_t *renderer, GLsizei width, GLsizei height) {
     if (!renderer || (width == renderer->screen_tex_w && height == renderer->screen_tex_h))
         return;
-
-    printf("resize request: %dx%d --> %dx%d\n", renderer->screen_tex_w, renderer->screen_tex_h, width, height);
 
     renderer->resize_pixbuf_requests      = (1 << PIXBUF_COUNT) - 1;
     renderer->resize_screen_tex_requested = true;
@@ -508,7 +504,7 @@ uint8_t *glrenderer_swap_buffers(glrenderer_t *renderer, size_t w, size_t h) {
         }
 
         if (!found) {
-            printf("------------> NO PIXBUF AVAILABLE: RESIZING IN PROGRESS <------------\n");
+            printf("[ERROR] no pixbuf available: resizing in progress\n");
             return NULL;
         }
     }

@@ -434,7 +434,6 @@ __attribute_used__ bool app_load_cartridge(uint8_t *rom, size_t rom_size) {
         .palette                 = app.config.color_palette
     };
 
-    printf("BEGIN INIT\n");
     gbmulator_t *new_emu = gbmulator_init(&opts);
     if (!new_emu) {
         if (opts.mode == GBMULATOR_MODE_GBA)
@@ -446,7 +445,6 @@ __attribute_used__ bool app_load_cartridge(uint8_t *rom, size_t rom_size) {
         if (!new_emu)
             return false;
     }
-    printf("END INIT\n");
 
     app.config.mode = opts.mode;
     apply_config();

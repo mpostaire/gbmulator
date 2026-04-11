@@ -43,10 +43,9 @@
 void gba_ppu_reset(gba_t *gba) {
     memset(&gba->ppu, 0, sizeof(gba->ppu));
 
-    // TODO do not do this on reset but at first ppu cycle after reset
+    // TODO do not do this on reset but at first ppu cycle after reset (same for gb/ppu)
     if (gba->base->opts.on_pixbuf_request)
         gba->ppu.pixels = gba->base->opts.on_pixbuf_request(GBA_SCREEN_WIDTH, GBA_SCREEN_HEIGHT);
-    printf("GBA: on_pixbuf_request %p\n", gba->ppu.pixels);
 }
 
 static inline uint8_t render_text_tile_8bpp(gba_t *gba, uint32_t tile_base_addr, uint16_t tile_id, uint32_t x, uint32_t y, bool flip_x, bool flip_y) {
@@ -549,7 +548,6 @@ void gba_ppu_step(gba_t *gba) {
 
                 if (gba->base->opts.on_pixbuf_request)
                     gba->ppu.pixels = gba->base->opts.on_pixbuf_request(GBA_SCREEN_WIDTH, GBA_SCREEN_HEIGHT);
-                printf("GBA: on_pixbuf_request %p\n", gba->ppu.pixels);
             }
         }
         break;
