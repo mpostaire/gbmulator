@@ -1499,7 +1499,7 @@ static void exec_opcode(gb_t *gb) {
                     DISABLE_DOUBLE_SPEED(gb);
                 else
                     ENABLE_DOUBLE_SPEED(gb);
-            } eprintf("STOP instruction not fully implemented\n");
+            } eprintf("STOP instruction not fully implemented");
             END_OPCODE;);
     case 0x11: // LD DE, nn (12 cycles)
         GET_OPERAND_16();
@@ -2168,7 +2168,7 @@ static void exec_opcode(gb_t *gb) {
         CLOCK(cpu->registers.pc = 0x0038; END_OPCODE;);
     default:
         CLOCK(
-            eprintf("(invalid) opcode %02X\n", cpu->opcode);
+            eprintf("(invalid) opcode %02X", cpu->opcode);
             cpu->ime     = IME_DISABLED;
             gb->cpu.halt = 1;
             END_OPCODE;);

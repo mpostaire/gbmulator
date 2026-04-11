@@ -113,7 +113,7 @@ int link_connect_to_server(const char *address, const char *port) {
         .ai_socktype = SOCK_STREAM,
         .ai_protocol = IPPROTO_TCP
     };
-    struct addrinfo *res;
+    struct addrinfo *res = NULL;
     int              ret;
     if ((ret = getaddrinfo(address, port, &hints, &res)) != 0) {
         eprintf("getaddrinfo: %s\n", gai_strerror(ret));
@@ -134,6 +134,8 @@ int link_connect_to_server(const char *address, const char *port) {
 
     if (res == NULL) {
         errnoprintf("connect %d", ret);
+        close(server_sfd);
+        server_sfd = -1;
         return -1;
     }
 

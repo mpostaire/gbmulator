@@ -164,7 +164,7 @@ static void parse_cartridge(gb_t *gb) {
         }
     }
 
-    mmu->rom_banks = 2 << rom[0x0148];
+    mmu->rom_banks = ((uint32_t) 2) << MIN(rom[0x0148], 30);
 
     if (has_eram) {
         switch (rom[0x0149]) {
@@ -207,7 +207,7 @@ bool mmu_validate_rom(const uint8_t *rom, size_t size) {
     if (!rom)
         return false;
 
-    size_t rom_banks = 2 << rom[0x0148];
+    size_t rom_banks = ((uint32_t) 2) << MIN(rom[0x0148], 30);
     if (size < rom_banks * ROM_BANK_SIZE)
         return false;
 
