@@ -12,7 +12,7 @@ override CFLAGS +=	-std=gnu23 -I$(SDIR) \
 BUILD_TYPE := debug
 
 ifeq ($(DEBUG),1)
-override CFLAGS += -ggdb -O0
+override CFLAGS += -ggdb -O0 -fsanitize=undefined -fno-sanitize-recover=undefined
 else ifeq ($(DEBUG),2)
 override CFLAGS += -ggdb -O0 -DDEBUG
 else

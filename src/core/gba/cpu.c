@@ -5,13 +5,13 @@
 #define PIPELINE_FETCHING 0
 #define PIPELINE_DECODING 1
 
-#define CPSR_N (1 << 31) // Negative or less than
-#define CPSR_Z (1 << 30) // Zero
-#define CPSR_C (1 << 29) // Carry or borrow or extend
-#define CPSR_V (1 << 28) // Overflow
-#define CPSR_I (1 << 7)  // IRQ disable
-#define CPSR_F (1 << 6)  // FIQ disable
-#define CPSR_T (1 << 5)  // State bit
+#define CPSR_N (((uint32_t) 1) << 31) // Negative or less than
+#define CPSR_Z (((uint32_t) 1) << 30) // Zero
+#define CPSR_C (((uint32_t) 1) << 29) // Carry or borrow or extend
+#define CPSR_V (((uint32_t) 1) << 28) // Overflow
+#define CPSR_I (((uint32_t) 1) << 7)  // IRQ disable
+#define CPSR_F (((uint32_t) 1) << 6)  // FIQ disable
+#define CPSR_T (((uint32_t) 1) << 5)  // State bit
 
 #define CPSR_MODE_USR 0b10000 // User (usr): The normal ARM program execution state
 #define CPSR_MODE_FIQ 0b10001 // FIQ (fiq): Designed to support a data transfer or channel process
@@ -447,7 +447,7 @@ static uint32_t shift_offset(gba_cpu_t *cpu, uint8_t type, uint32_t offset, uint
         if (amount == 0 && i) {
             // RRX
             *c        = GET_BIT(offset_64, 0);
-            offset_64 = (offset_64 >> 1) | (old_c << 31);
+            offset_64 = (offset_64 >> 1) | ((uint32_t) old_c << 31);
             amount    = 1;
         } else {
             if (amount > 0) {
@@ -479,10 +479,11 @@ static bool data_processing_begin(gba_t *gba, uint32_t instr, uint8_t *rd, uint3
     if (i) {
         *c = CPSR_CHECK_FLAG(&gba->cpu, CPSR_C);
 
-        uint32_t amount = (*op2 & 0xF00) >> 7;
+        uint32_t amount = (*op2 & 0xF00) >> 7; // do not shift by 8 because the amount is multiplied by 2
         uint32_t imm    = (*op2 & 0x0FF);
-        *op2            = ROR(imm, amount);
-        *c              = amount == 0 ? *c : GET_BIT(*op2, 31);
+
+        *op2 = amount == 0 ? imm : ROR(imm, amount);
+        *c   = amount == 0 ? *c : GET_BIT(*op2, 31);
     } else {
         uint8_t  rm         = *op2 & 0x00F;
         uint16_t shift      = (*op2 & 0xFF0) >> 4;
@@ -719,8 +720,9 @@ static bool msr_handler(gba_t *gba, uint32_t instr) {
 
     uint32_t op;
     if (i) {
-        uint8_t rotate = ((instr >> 8) & 0x0F) << 1;
-        op             = ROR(instr & 0xFF, rotate);
+        uint8_t amount = ((instr >> 8) & 0x0F) << 1;
+        op             = instr & 0xFF;
+        op             = amount == 0 ? op : ROR(op, amount);
     } else {
         uint8_t rm = instr & 0x0F;
         op         = gba->cpu.regs[rm];
@@ -1241,7 +1243,7 @@ static bool swp_handler(gba_t *gba, uint32_t instr) {
         data = gba_bus_read_word(gba, gba->cpu.regs[rn]);
 
         uint8_t amount = (gba->cpu.regs[rn] & 0x03) << 3;
-        data           = ROR(data, amount);
+        data           = amount == 0 ? data : ROR(data, amount);
         gba_bus_write_word(gba, gba->cpu.regs[rn], gba->cpu.regs[rm]);
     }
 
@@ -1386,7 +1388,7 @@ static bool ldrh_reg_handler(gba_t *gba, uint32_t instr) {
     case 0b01:
         data   = gba_bus_read_half(gba, addr);
         amount = (addr & 0x01) << 3;
-        data   = ROR(data, amount);
+        data   = amount == 0 ? data : ROR(data, amount);
         break;
     case 0b10:
         data = (int8_t) gba_bus_read_byte(gba, addr);
@@ -1394,7 +1396,7 @@ static bool ldrh_reg_handler(gba_t *gba, uint32_t instr) {
     case 0b11:
         data   = (int16_t) gba_bus_read_half(gba, addr);
         amount = (addr & 0x01) << 3;
-        data   = (int16_t) ROR(data, amount);
+        data   = (int16_t) (amount == 0 ? data : ROR(data, amount));
         break;
     case 0b00:
     default:
@@ -1447,7 +1449,7 @@ static bool ldrh_imm_handler(gba_t *gba, uint32_t instr) {
     case 0b01:
         data   = gba_bus_read_half(gba, addr);
         amount = (addr & 0x01) << 3;
-        data   = ROR(data, amount);
+        data   = amount == 0 ? data : ROR(data, amount);
         break;
     case 0b10:
         data = (int8_t) gba_bus_read_byte(gba, addr);
@@ -1455,7 +1457,7 @@ static bool ldrh_imm_handler(gba_t *gba, uint32_t instr) {
     case 0b11:
         data   = (int16_t) gba_bus_read_half(gba, addr);
         amount = (addr & 0x01) << 3;
-        data   = (int16_t) ROR(data, amount);
+        data   = (int16_t) (amount == 0 ? data : ROR(data, amount));
         break;
     case 0b00:
     default:
@@ -1579,7 +1581,7 @@ static bool ldr_handler(gba_t *gba, uint32_t instr) {
     } else {
         data           = gba_bus_read_word(gba, addr);
         uint8_t amount = (addr & 0x03) << 3;
-        data           = ROR(data, amount);
+        data           = amount == 0 ? data : ROR(data, amount);
     }
 
     if (!p)
@@ -2241,7 +2243,7 @@ static bool thumb_ldr_reg_handler(gba_t *gba, uint32_t instr) {
     } else {
         uint32_t data     = gba_bus_read_word(gba, addr);
         uint8_t  amount   = (addr & 0x03) << 3;
-        gba->cpu.regs[rd] = ROR(data, amount);
+        gba->cpu.regs[rd] = amount == 0 ? data : ROR(data, amount);
     }
 
     return true;
@@ -2278,7 +2280,7 @@ static bool thumb_ldrh_reg_handler(gba_t *gba, uint32_t instr) {
     case 0b01:
         data   = gba_bus_read_half(gba, addr);
         amount = (addr & 0x01) << 3;
-        data   = ROR(data, amount);
+        data   = amount == 0 ? data : ROR(data, amount);
         break;
     case 0b10:
         data = (int8_t) gba_bus_read_byte(gba, addr);
@@ -2286,7 +2288,7 @@ static bool thumb_ldrh_reg_handler(gba_t *gba, uint32_t instr) {
     case 0b11:
         data   = (int16_t) gba_bus_read_half(gba, addr);
         amount = (addr & 0x01) << 3;
-        data   = (int16_t) ROR(data, amount);
+        data   = (int16_t) (amount == 0 ? data : ROR(data, amount));
         break;
     case 0b00:
     default:
@@ -2330,7 +2332,7 @@ static bool thumb_ldrh_imm_handler(gba_t *gba, uint32_t instr) {
         uint32_t addr     = gba->cpu.regs[rb] + (offset5 << 2);
         gba->cpu.regs[rd] = gba_bus_read_word(gba, addr);
         uint8_t amount    = (addr & 0x03) << 3;
-        gba->cpu.regs[rd] = ROR(gba->cpu.regs[rd], amount);
+        gba->cpu.regs[rd] = amount == 0 ? gba->cpu.regs[rd] : ROR(gba->cpu.regs[rd], amount);
     }
 
     return true;
@@ -2358,7 +2360,7 @@ static bool thumb_ldrh_handler(gba_t *gba, uint32_t instr) {
     uint32_t addr     = gba->cpu.regs[rb] + offset5;
     gba->cpu.regs[rd] = gba_bus_read_half(gba, addr);
     uint8_t amount    = (addr & 0x01) << 3;
-    gba->cpu.regs[rd] = ROR(gba->cpu.regs[rd], amount);
+    gba->cpu.regs[rd] = amount == 0 ? gba->cpu.regs[rd] : ROR(gba->cpu.regs[rd], amount);
 
     return true;
 }
@@ -2383,7 +2385,7 @@ static bool thumb_ldr_sp_handler(gba_t *gba, uint32_t instr) {
     uint32_t addr     = gba->cpu.regs[REG_SP] + offset;
     gba->cpu.regs[rd] = gba_bus_read_word(gba, addr);
     uint8_t amount    = (addr & 0x03) << 3;
-    gba->cpu.regs[rd] = ROR(gba->cpu.regs[rd], amount);
+    gba->cpu.regs[rd] = amount == 0 ? gba->cpu.regs[rd] : ROR(gba->cpu.regs[rd], amount);
 
     return true;
 }

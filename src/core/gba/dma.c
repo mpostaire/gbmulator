@@ -188,11 +188,11 @@ void gba_dma_step(gba_t *gba) {
         if (channel->src < BUS_EWRAM) {
             data = gba->dma.data_read_latch;
         } else {
-            data                     = _gba_bus_read_half(gba, channel->bus_access, channel->src);
-            gba->dma.data_read_latch = (data << 16) | data;
+            data                     = gba_bus_read(gba, BUS_ACCESS_SIZE(sizeof(data)) | channel->bus_access, channel->src);
+            gba->dma.data_read_latch = (((uint32_t) data) << 16) | data; // TODO this is same as bus.read_data_latch?
         }
 
-        _gba_bus_write_half(gba, channel->bus_access, channel->dst, data);
+        gba_bus_write(gba, BUS_ACCESS_SIZE(sizeof(data)) | channel->bus_access, channel->dst, data);
 
         printf("[DMA%u]     0x%08X = 0x%04X (0x%08X)\n", channel_index, channel->dst, data, channel->src);
     } else {
@@ -200,11 +200,11 @@ void gba_dma_step(gba_t *gba) {
         if (channel->src < BUS_EWRAM) {
             data = gba->dma.data_read_latch;
         } else {
-            data                     = _gba_bus_read_word(gba, channel->bus_access, channel->src);
+            data                     = gba_bus_read(gba, BUS_ACCESS_SIZE(sizeof(data)) | channel->bus_access, channel->src);
             gba->dma.data_read_latch = data;
         }
 
-        _gba_bus_write_word(gba, channel->bus_access, channel->dst, data);
+        gba_bus_write(gba, BUS_ACCESS_SIZE(sizeof(data)) | channel->bus_access, channel->dst, data);
 
         printf("[DMA%u]     0x%08X = 0x%08X (0x%08X)\n", channel_index, channel->dst, data, channel->src);
     }

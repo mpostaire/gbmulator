@@ -2,9 +2,7 @@
 
 #include "gba_priv.h"
 
-#define BUS_ACCESS_READ    (0 << 1)
-#define BUS_ACCESS_WRITE   (1 << 1)
-#define BUS_ACCESS_SIZE(x) (((x - 1) & 0x03) << 2)
+#define BUS_ACCESS_GET_SIZE(mode) ((((mode) >> 2) & 0x03) + 1)
 
 // mGBA debug registers
 #define MGBA_REG_DEBUG_ENABLE 0x4FFF780
@@ -44,6 +42,20 @@ static void gba_parse_cartridge(gba_t *gba) {
     // short_title[2] = '\0';
 
     // TODO multiboot entries
+}
+
+static inline uint32_t read32(uint8_t *base) {
+    uint32_t data;
+    memcpy(&data, base, sizeof(data));
+    return data;
+}
+
+static inline void write16(uint8_t *base, uint16_t data) {
+    memcpy(base, &data, sizeof(data));
+}
+
+static inline void write32(uint8_t *base, uint32_t data) {
+    memcpy(base, &data, sizeof(data));
 }
 
 static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
@@ -770,6 +782,8 @@ static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
         break;
     }
 
+    if (address >= sizeof(gba->bus.io) / sizeof(*gba->bus.io))
+        return; // TODO IO address mirror?
     CHANGE_BITS(gba->bus.io[address], mask, data);
 }
 
@@ -780,26 +794,26 @@ static uint32_t unused_read(gba_t *gba, uint8_t mode, uint32_t address) {
 static uint32_t bios_read(gba_t *gba, uint8_t mode, uint32_t address) {
     if (gba->cpu.regs[REG_PC] >= BUS_BIOS_UNUSED)
         return gba->bus.last_fetched_bios_instr;
-    return *((uint32_t *) &gba->bus.bios[address - BUS_BIOS]);
+    return read32(&gba->bus.bios[address - BUS_BIOS]);
 }
 
 static uint32_t ewram_read(gba_t *gba, uint8_t mode, uint32_t address) {
-    return *((uint32_t *) &gba->bus.ewram[(address - BUS_EWRAM) % (BUS_EWRAM_UNUSED - BUS_EWRAM)]);
+    return read32(&gba->bus.ewram[(address - BUS_EWRAM) % (BUS_EWRAM_UNUSED - BUS_EWRAM)]);
 }
 
 static uint32_t iwram_read(gba_t *gba, uint8_t mode, uint32_t address) {
-    return *((uint32_t *) &gba->bus.iwram[(address - BUS_IWRAM) % (BUS_IWRAM_UNUSED - BUS_IWRAM)]);
+    return read32(&gba->bus.iwram[(address - BUS_IWRAM) % (BUS_IWRAM_UNUSED - BUS_IWRAM)]);
 }
 
 static uint32_t io_read(gba_t *gba, uint8_t mode, uint32_t address) {
-    uint8_t size = ((mode >> 2) & 0x03) + 1;
+    uint8_t size = BUS_ACCESS_GET_SIZE(mode);
 
     address -= BUS_IO;
     uint32_t data;
 
     data = io_regs_read(gba, address);
     if (size == 4)
-        data |= io_regs_read(gba, address + 2) << 16;
+        data |= ((uint32_t) io_regs_read(gba, address + 2)) << 16;
 
     switch (address + BUS_IO) {
     case MGBA_REG_DEBUG_ENABLE:
@@ -813,7 +827,7 @@ static uint32_t io_read(gba_t *gba, uint8_t mode, uint32_t address) {
 }
 
 static uint32_t pram_read(gba_t *gba, uint8_t mode, uint32_t address) {
-    return *((uint32_t *) &gba->bus.pram[(address - BUS_PRAM) % (BUS_PRAM_UNUSED - BUS_PRAM)]);
+    return read32(&gba->bus.pram[(address - BUS_PRAM) % (BUS_PRAM_UNUSED - BUS_PRAM)]);
 }
 
 static uint32_t vram_read(gba_t *gba, uint8_t mode, uint32_t address) {
@@ -824,20 +838,20 @@ static uint32_t vram_read(gba_t *gba, uint8_t mode, uint32_t address) {
 
     uint32_t data;
     if (address >= vram_upper_bound && address >= 0x18000)
-        data = *((uint32_t *) &bus->vram[address % 0x8000]);
+        data = read32(&bus->vram[address % 0x8000]);
     else
-        data = *((uint32_t *) &bus->vram[address % 0x20000]);
+        data = read32(&bus->vram[address % 0x20000]);
 
     return data;
 }
 
 static uint32_t oam_read(gba_t *gba, uint8_t mode, uint32_t address) {
-    return *((uint32_t *) &gba->bus.oam[(address - BUS_OAM_UNUSED) % (BUS_OAM_UNUSED - BUS_OAM)]);
+    return read32(&gba->bus.oam[(address - BUS_OAM_UNUSED) % (BUS_OAM_UNUSED - BUS_OAM)]);
 }
 
 static uint32_t rom_read(gba_t *gba, uint8_t mode, uint32_t address) {
     gba_bus_t   *bus    = &gba->bus;
-    uint8_t      size   = ((mode >> 2) & 0x03) + 1;
+    uint8_t      size   = BUS_ACCESS_GET_SIZE(mode);
     bus_access_t access = mode & 0x01;
 
     if (access == BUS_ACCESS_N)
@@ -852,7 +866,7 @@ static uint32_t rom_read(gba_t *gba, uint8_t mode, uint32_t address) {
         data  = (bus->rom_address_latch >> 1) & 0xFFFF;
         data |= (data + 1) << 16;
     } else {
-        data = *((uint32_t *) &bus->rom[bus->rom_address_latch]);
+        data = read32(&bus->rom[bus->rom_address_latch]);
     }
 
     // TODO do writes update the rom_address_latch?
@@ -863,7 +877,7 @@ static uint32_t rom_read(gba_t *gba, uint8_t mode, uint32_t address) {
 
 static uint32_t sram_read(gba_t *gba, uint8_t mode, uint32_t address) {
     gba_bus_t *bus  = &gba->bus;
-    uint8_t    size = ((mode >> 2) & 0x03) + 1;
+    uint8_t    size = BUS_ACCESS_GET_SIZE(mode);
 
     uint32_t data = bus->sram[(address - BUS_SRAM) % (BUS_SRAM_UNUSED - BUS_SRAM)];
     if (size == 2)
@@ -884,40 +898,40 @@ static void bios_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data
 
 static void ewram_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
     gba_bus_t *bus  = &gba->bus;
-    uint8_t    size = ((mode >> 2) & 0x03) + 1;
+    uint8_t    size = BUS_ACCESS_GET_SIZE(mode);
 
     switch (size) {
     case 1:
         bus->ewram[(address - BUS_EWRAM) % (BUS_EWRAM_UNUSED - BUS_EWRAM)] = data;
         break;
     case 2:
-        *((uint16_t *) &bus->ewram[(address - BUS_EWRAM) % (BUS_EWRAM_UNUSED - BUS_EWRAM)]) = data;
+        write16(&bus->ewram[(address - BUS_EWRAM) % (BUS_EWRAM_UNUSED - BUS_EWRAM)], data);
         break;
     case 4:
-        *((uint32_t *) &bus->ewram[(address - BUS_EWRAM) % (BUS_EWRAM_UNUSED - BUS_EWRAM)]) = data;
+        write32(&bus->ewram[(address - BUS_EWRAM) % (BUS_EWRAM_UNUSED - BUS_EWRAM)], data);
         break;
     }
 }
 
 static void iwram_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
     gba_bus_t *bus  = &gba->bus;
-    uint8_t    size = ((mode >> 2) & 0x03) + 1;
+    uint8_t    size = BUS_ACCESS_GET_SIZE(mode);
 
     switch (size) {
     case 1:
         bus->iwram[(address - BUS_IWRAM) % (BUS_IWRAM_UNUSED - BUS_IWRAM)] = data;
         break;
     case 2:
-        *((uint16_t *) &bus->iwram[(address - BUS_IWRAM) % (BUS_IWRAM_UNUSED - BUS_IWRAM)]) = data;
+        write16(&bus->iwram[(address - BUS_IWRAM) % (BUS_IWRAM_UNUSED - BUS_IWRAM)], data);
         break;
     case 4:
-        *((uint32_t *) &bus->iwram[(address - BUS_IWRAM) % (BUS_IWRAM_UNUSED - BUS_IWRAM)]) = data;
+        write32(&bus->iwram[(address - BUS_IWRAM) % (BUS_IWRAM_UNUSED - BUS_IWRAM)], data);
         break;
     }
 }
 
 static void io_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
-    uint8_t size  = ((mode >> 2) & 0x03) + 1;
+    uint8_t size  = BUS_ACCESS_GET_SIZE(mode);
     address      -= BUS_IO;
 
     io_regs_write(gba, address, data);
@@ -942,24 +956,24 @@ static void io_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) 
 
 static void pram_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
     gba_bus_t *bus  = &gba->bus;
-    uint8_t    size = ((mode >> 2) & 0x03) + 1;
+    uint8_t    size = BUS_ACCESS_GET_SIZE(mode);
 
     switch (size) {
     case 1:
     case 2:
         // PRAM bus for writes is 16/32 bits wide --> when writing a byte, we actually write a half with hi nibble
         // mirrored from lo nibble. The caller function has already mirrored the data so we don't have to do it here.
-        *((uint16_t *) &bus->pram[(address - BUS_PRAM) % (BUS_PRAM_UNUSED - BUS_PRAM)]) = data;
+        write16(&bus->pram[(address - BUS_PRAM) % (BUS_PRAM_UNUSED - BUS_PRAM)], data);
         break;
     case 4:
-        *((uint32_t *) &bus->pram[(address - BUS_PRAM) % (BUS_PRAM_UNUSED - BUS_PRAM)]) = data;
+        write32(&bus->pram[(address - BUS_PRAM) % (BUS_PRAM_UNUSED - BUS_PRAM)], data);
         break;
     }
 }
 
 static void vram_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
     gba_bus_t *bus  = &gba->bus;
-    uint8_t    size = ((mode >> 2) & 0x03) + 1;
+    uint8_t    size = BUS_ACCESS_GET_SIZE(mode);
 
     uint32_t vram_upper_bound = PPU_GET_MODE(gba) < 3 ? 0x10000 : 0x14000;
     address                   = (address - (BUS_VRAM_UNUSED + 0x8000)) % 0x20000;
@@ -972,27 +986,27 @@ static void vram_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data
     case 2:
         // VRAM bus for writes is 16/32 bits wide --> when writing a byte, we actually write a half with hi nibble
         // mirrored from lo nibble. The caller function has already mirrored the data so we don't have to do it here.
-        *((uint16_t *) &bus->vram[address % 0x20000]) = data;
+        write16(&bus->vram[address % 0x20000], data);
         break;
     case 4:
-        *((uint32_t *) &bus->vram[address % 0x20000]) = data;
+        write32(&bus->vram[address % 0x20000], data);
         break;
     }
 }
 
 static void oam_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
     gba_bus_t *bus  = &gba->bus;
-    uint8_t    size = ((mode >> 2) & 0x03) + 1;
+    uint8_t    size = BUS_ACCESS_GET_SIZE(mode);
 
     switch (size) {
     case 1:
         // OAM bus for writes is 16/32 bits wide --> byte writes are ignored.
         break;
     case 2:
-        *((uint16_t *) &bus->oam[(address - BUS_OAM_UNUSED) % (BUS_OAM_UNUSED - BUS_OAM)]) = data;
+        write16(&bus->oam[(address - BUS_OAM_UNUSED) % (BUS_OAM_UNUSED - BUS_OAM)], data);
         break;
     case 4:
-        *((uint32_t *) &bus->oam[(address - BUS_OAM_UNUSED) % (BUS_OAM_UNUSED - BUS_OAM)]) = data;
+        write32(&bus->oam[(address - BUS_OAM_UNUSED) % (BUS_OAM_UNUSED - BUS_OAM)], data);
         break;
     }
 }
@@ -1024,57 +1038,57 @@ static bus_accessors_t accessors[16] = {
     [0x0F] = { .read = unused_read, .write = unused_write },
 };
 
-static inline uint32_t bus_read(gba_t *gba, uint8_t mode, uint32_t address) {
+uint32_t gba_bus_read(gba_t *gba, uint8_t mode, uint32_t address) {
     uint32_t address_hi = address >> 24;
     if (address_hi > 0xF)
         address_hi = 0xF;
-    return accessors[address_hi].read(gba, mode, address);
-}
 
-static inline void bus_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
-    uint32_t address_hi = address >> 24;
-    if (address_hi > 0xF)
-        address_hi = 0xF;
-    accessors[address_hi].write(gba, mode, address, data);
-}
+    uint32_t data = accessors[address_hi].read(gba, mode, address);
 
-uint8_t _gba_bus_read_byte(gba_t *gba, bus_access_t access, uint32_t address) {
-    uint32_t data            = bus_read(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_READ | access, ALIGN(address, 1));
-    gba->bus.read_data_latch = (data << 24) | (data << 16) | (data << 8) | data;
+    switch (BUS_ACCESS_GET_SIZE(mode)) {
+    case 1:
+        data &= 0xFF;
+        data  = (data << 24) | (data << 16) | (data << 8) | data;
+        break;
+    case 2:
+        data &= 0xFFFF;
+        data  = (data << 16) | data;
+        break;
+    case 4:
+        break;
+    default:
+        todo();
+        break;
+    }
 
-    return gba->bus.read_data_latch;
-}
-
-uint16_t _gba_bus_read_half(gba_t *gba, bus_access_t access, uint32_t address) {
-    uint32_t data            = bus_read(gba, BUS_ACCESS_SIZE(2) | BUS_ACCESS_READ | access, ALIGN(address, 2));
-    gba->bus.read_data_latch = (data << 16) | data;
-
-    return gba->bus.read_data_latch;
-}
-
-uint32_t _gba_bus_read_word(gba_t *gba, bus_access_t access, uint32_t address) {
-    uint32_t data            = bus_read(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_READ | access, ALIGN(address, 4));
     gba->bus.read_data_latch = data;
 
-    return gba->bus.read_data_latch;
+    return data;
 }
 
-void _gba_bus_write_byte(gba_t *gba, bus_access_t access, uint32_t address, uint8_t data) {
-    gba->bus.write_data_latch = ((uint32_t) data << 24) | ((uint32_t) data << 16) | ((uint32_t) data << 8) | (uint32_t) data;
+void gba_bus_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
+    uint32_t address_hi = address >> 24;
+    if (address_hi > 0xF)
+        address_hi = 0xF;
 
-    bus_write(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_WRITE | access, ALIGN(address, 1), gba->bus.write_data_latch);
-}
+    switch (BUS_ACCESS_GET_SIZE(mode)) {
+    case 1:
+        data                      &= 0xFF;
+        gba->bus.write_data_latch  = (data << 24) | (data << 16) | (data << 8) | data;
+        break;
+    case 2:
+        data                      &= 0xFFFF;
+        gba->bus.write_data_latch  = (data << 16) | data;
+        break;
+    case 4:
+        gba->bus.write_data_latch = data;
+        break;
+    default:
+        todo();
+        break;
+    }
 
-void _gba_bus_write_half(gba_t *gba, bus_access_t access, uint32_t address, uint16_t data) {
-    gba->bus.write_data_latch = ((uint32_t) data << 16) | (uint32_t) data;
-
-    bus_write(gba, BUS_ACCESS_SIZE(2) | BUS_ACCESS_WRITE | access, ALIGN(address, 2), gba->bus.write_data_latch);
-}
-
-void _gba_bus_write_word(gba_t *gba, bus_access_t access, uint32_t address, uint32_t data) {
-    gba->bus.write_data_latch = data;
-
-    bus_write(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_WRITE | access, ALIGN(address, 4), gba->bus.write_data_latch);
+    accessors[address_hi].write(gba, mode, address, gba->bus.write_data_latch);
 }
 
 bool gba_bus_validate_rom(const uint8_t *rom, size_t size) {
