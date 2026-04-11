@@ -113,18 +113,19 @@ int link_connect_to_server(const char *address, const char *port) {
         .ai_socktype = SOCK_STREAM,
         .ai_protocol = IPPROTO_TCP
     };
-    struct addrinfo *res = NULL;
+    struct addrinfo *addrinfo = NULL;
     int              ret;
-    if ((ret = getaddrinfo(address, port, &hints, &res)) != 0) {
+    if ((ret = getaddrinfo(address, port, &hints, &addrinfo)) != 0) {
         eprintf("getaddrinfo: %s\n", gai_strerror(ret));
         return -1;
     }
 
-    for (; res != NULL; res = res->ai_next) {
-        if ((server_sfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) == -1)
+    struct addrinfo *addrinfo_iter = NULL;
+    for (; addrinfo_iter != NULL; addrinfo_iter = addrinfo_iter->ai_next) {
+        if ((server_sfd = socket(addrinfo_iter->ai_family, addrinfo_iter->ai_socktype, addrinfo_iter->ai_protocol)) == -1)
             continue;
 
-        if (connect(server_sfd, res->ai_addr, res->ai_addrlen) == -1) {
+        if (connect(server_sfd, addrinfo_iter->ai_addr, addrinfo_iter->ai_addrlen) == -1) {
             close(server_sfd);
             server_sfd = -1;
         } else {
@@ -132,15 +133,15 @@ int link_connect_to_server(const char *address, const char *port) {
         }
     }
 
-    if (res == NULL) {
+    if (addrinfo_iter == NULL) {
         errnoprintf("connect %d", ret);
         close(server_sfd);
         server_sfd = -1;
         return -1;
     }
 
-    print_connected_to(res->ai_addr);
-    freeaddrinfo(res);
+    print_connected_to(addrinfo->ai_addr);
+    freeaddrinfo(addrinfo);
     return server_sfd;
 }
 
