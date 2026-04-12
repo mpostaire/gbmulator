@@ -415,8 +415,10 @@ static uint8_t *on_pixbuf_request_cb(size_t w, size_t h) {
 // TODO renderer buttons scaled smaller when in GBA mode
 
 __attribute_used__ bool app_load_cartridge(uint8_t *rom, size_t rom_size) {
-    if (!app.renderer)
+    if (!app.renderer) {
+        free(rom);
         return false;
+    }
 
     if (app.rom)
         free(app.rom);
@@ -442,8 +444,10 @@ __attribute_used__ bool app_load_cartridge(uint8_t *rom, size_t rom_size) {
             opts.mode = GBMULATOR_MODE_GBA;
 
         new_emu = gbmulator_init(&opts);
-        if (!new_emu)
+        if (!new_emu) {
+            free(rom);
             return false;
+        }
     }
 
     app.config.mode = opts.mode;
@@ -695,21 +699,28 @@ __attribute_used__ bool app_printer_save(const char *path) {
     size_t printer_heigth = 0;
     gbmulator_get_save(app.printer.emu, NULL, &printer_heigth);
 
+    if (printer_heigth == 0)
+        return false;
+
     bmp_image_t *image = xmalloc(sizeof(*image) + GBPRINTER_IMG_WIDTH * printer_heigth * 4);
     image->w           = GBPRINTER_IMG_WIDTH;
     image->h           = printer_heigth;
 
     gbmulator_get_save(app.printer.emu, image->data, &printer_heigth);
 
+    if (printer_heigth == 0) {
+        free(image);
+        return false;
+    }
+
     size_t   data_len = 0;
     uint8_t *data     = bmp_encode(image, &data_len);
     free(image);
 
-    bool ret = false;
-    if (data && write_file(path, data, data_len)) {
-        ret = true;
+    bool ret = data && write_file(path, data, data_len);
+
+    if (data)
         free(data);
-    }
 
     return ret;
 }
