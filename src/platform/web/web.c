@@ -188,6 +188,9 @@ bool on_touch_input(int eventType, const EmscriptenTouchEvent *e, void *userData
 }
 
 int main(int argc, char **argv) {
+    // Force disable log ANSI escape codes for colors
+    setenv("NO_COLOR", "1", 1);
+
     emscripten_set_window_title(EMULATOR_NAME);
 
     EmscriptenWebGLContextAttributes attr;
@@ -198,12 +201,12 @@ int main(int argc, char **argv) {
 
     EMSCRIPTEN_WEBGL_CONTEXT_HANDLE ctx = emscripten_webgl_create_context("#canvas", &attr);
     if (!ctx) {
-        eprintf("ERROR: Failed to create WebGL context!\n");
+        LOG_ERROR("Failed to create WebGL context!");
         return EXIT_FAILURE;
     }
 
     if (emscripten_webgl_make_context_current(ctx) != EMSCRIPTEN_RESULT_SUCCESS) {
-        eprintf("ERROR: Failed to make WebGL context current!\n");
+        LOG_ERROR("Failed to make WebGL context current!");
         return EXIT_FAILURE;
     }
 

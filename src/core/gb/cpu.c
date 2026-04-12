@@ -1499,7 +1499,7 @@ static void exec_opcode(gb_t *gb) {
                     DISABLE_DOUBLE_SPEED(gb);
                 else
                     ENABLE_DOUBLE_SPEED(gb);
-            } eprintf("STOP instruction not fully implemented");
+            } LOG_WARN("STOP instruction not fully implemented");
             END_OPCODE;);
     case 0x11: // LD DE, nn (12 cycles)
         GET_OPERAND_16();
@@ -2168,7 +2168,7 @@ static void exec_opcode(gb_t *gb) {
         CLOCK(cpu->registers.pc = 0x0038; END_OPCODE;);
     default:
         CLOCK(
-            eprintf("(invalid) opcode %02X", cpu->opcode);
+            LOG_ERROR("(invalid) opcode %02X", cpu->opcode);
             cpu->ime     = IME_DISABLED;
             gb->cpu.halt = 1;
             END_OPCODE;);
@@ -2176,7 +2176,7 @@ static void exec_opcode(gb_t *gb) {
     }
 }
 
-#ifdef DEBUG
+#if _LOG_LVL_VALUE <= LOG_LVL_DEBUG
 static void print_trace(gb_t *gb) {
     gb_cpu_t *cpu = &gb->cpu;
 
@@ -2184,20 +2184,20 @@ static void print_trace(gb_t *gb) {
     uint8_t operand_size = instructions[opcode].operand_size;
 
     if (operand_size == 0) {
-        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x        %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, instructions[opcode].name);
+        LOG_DEBUG("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x        %s", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, instructions[opcode].name);
     } else if (operand_size == 1) {
         char    buf[32];
         char   *instr_name = opcode == 0xCB ? extended_instructions[mmu_read(gb, cpu->registers.pc + 1)].name : instructions[mmu_read(gb, cpu->registers.pc)].name;
         uint8_t operand    = mmu_read(gb, cpu->registers.pc + 1);
         snprintf(buf, sizeof(buf), instr_name, operand);
-        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x     %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, operand, buf);
+        LOG_DEBUG("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x     %s", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, operand, buf);
     } else {
         char     buf[32];
         uint8_t  first_operand  = mmu_read(gb, cpu->registers.pc + 1);
         uint8_t  second_operand = mmu_read(gb, cpu->registers.pc + 2);
         uint16_t both_operands  = first_operand | second_operand << 8;
         snprintf(buf, sizeof(buf), instructions[opcode].name, both_operands);
-        printf("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x %02x  %s\n", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, first_operand, second_operand, buf);
+        LOG_DEBUG("A:%02x F:%c%c%c%c BC:%04x DE:%04x HL:%04x SP:%04x PC:%04x | %02x %02x %02x  %s", cpu->registers.a, CHECK_FLAG(cpu, FLAG_Z) ? 'Z' : '-', CHECK_FLAG(cpu, FLAG_N) ? 'N' : '-', CHECK_FLAG(cpu, FLAG_H) ? 'H' : '-', CHECK_FLAG(cpu, FLAG_C) ? 'C' : '-', cpu->registers.bc, cpu->registers.de, cpu->registers.hl, cpu->registers.sp, cpu->registers.pc, opcode, first_operand, second_operand, buf);
     }
 }
 #endif
@@ -2260,7 +2260,7 @@ void cpu_step(gb_t *gb) {
             break;
         }
 
-#ifdef DEBUG
+#if _LOG_LVL_VALUE <= LOG_LVL_DEBUG
         print_trace(gb);
 #endif
 

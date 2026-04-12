@@ -5,6 +5,7 @@
 
 #include "types.h"
 #include "utils.h"
+#include "log.h"
 
 #include "gb/gb_defs.h"
 #include "gba/gba_defs.h"

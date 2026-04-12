@@ -6,6 +6,8 @@
 #include "glrenderer.h"
 #include "bmp.h"
 
+#include "../../core/log.h"
+
 #define VERTEX_INDICES_OBJ_STRIDE 5
 #define N_VERTEX_PER_OBJ          24
 #define PIXBUF_COUNT              2
@@ -120,7 +122,7 @@ static GLuint compile_shader(GLenum type, const char *source) {
     if (!success) {
         char info_log[512];
         glGetShaderInfoLog(shader, sizeof(info_log), NULL, info_log);
-        printf("%s\n", info_log);
+        LOG_ERROR("%s", info_log);
         return 0;
     }
 
@@ -149,7 +151,7 @@ static GLuint create_shader_program(const char *vertex_shader_source, const char
     if (!success) {
         char info_log[512];
         glGetShaderInfoLog(program, sizeof(info_log), NULL, info_log);
-        printf("%s\n", info_log);
+        LOG_ERROR("%s", info_log);
         return 0;
     }
 
@@ -242,7 +244,7 @@ static void create_buttons(glrenderer_t *renderer) {
         free(atlas_bmp);
     } else {
         renderer->visible_btns_mask = false;
-        printf("[ERROR] Couldn't load btn texture atlas\n");
+        LOG_ERROR("Couldn't load btn texture atlas");
     }
 }
 
@@ -316,7 +318,7 @@ static void resize_pixbufs(glrenderer_t *renderer) {
         if (new_pixbuf)
             renderer->pixbufs[i] = new_pixbuf;
         else
-            printf("[ERROR] Couldn't allocate pixbuf\n");
+            LOG_ERROR("Couldn't allocate pixbuf");
 
         renderer->resize_pixbuf_requests &= ~(1 << i);
     }
@@ -360,7 +362,7 @@ static void update_objs(glrenderer_t *renderer) {
 glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, uint32_t visible_btns_mask) {
     static bool is_first_init = true;
     if (is_first_init) {
-        printf("Renderer: %s\n", glGetString(GL_VERSION));
+        LOG_INFO("Renderer: %s", glGetString(GL_VERSION));
         is_first_init = false;
     }
 
@@ -386,7 +388,7 @@ glrenderer_t *glrenderer_init(GLsizei screen_w, GLsizei screen_h, uint32_t visib
     for (uint8_t i = 0; i < PIXBUF_COUNT; i++) {
         renderer->pixbufs[i] = malloc(renderer->screen_tex_w * renderer->screen_tex_h * 4);
         if (!renderer->pixbufs[i]) {
-            printf("[ERROR] Couldn't allocate pixbuf\n");
+            LOG_ERROR("Couldn't allocate pixbuf");
             return NULL;
         }
     }
@@ -504,7 +506,7 @@ uint8_t *glrenderer_swap_buffers(glrenderer_t *renderer, size_t w, size_t h) {
         }
 
         if (!found) {
-            printf("[ERROR] no pixbuf available: resizing in progress\n");
+            LOG_WARN("no pixbuf available: resizing in progress");
             return NULL;
         }
     }

@@ -65,322 +65,322 @@ static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
     switch (address) {
     // LCD I/O Registers
     case IO_DISPCNT:
-        LOG_DEBUG("IO_DISPCNT\n");
+        LOG_DEBUG("IO_DISPCNT");
         break;
     case IO_GREENSWAP:
-        LOG_DEBUG("IO_GREENSWAP\n");
+        LOG_DEBUG("IO_GREENSWAP");
         break;
     case IO_DISPSTAT:
-        LOG_DEBUG("IO_DISPSTAT\n");
+        LOG_DEBUG("IO_DISPSTAT");
         break;
     case IO_VCOUNT:
-        LOG_DEBUG("IO_VCOUNT\n");
+        LOG_DEBUG("IO_VCOUNT");
         break;
     case IO_BG0CNT:
-        LOG_DEBUG("IO_BG0CNT\n");
+        LOG_DEBUG("IO_BG0CNT");
         break;
     case IO_BG1CNT:
-        LOG_DEBUG("IO_BG1CNT\n");
+        LOG_DEBUG("IO_BG1CNT");
         break;
     case IO_BG2CNT:
-        LOG_DEBUG("IO_BG2CNT\n");
+        LOG_DEBUG("IO_BG2CNT");
         break;
     case IO_BG3CNT:
-        LOG_DEBUG("IO_BG3CNT\n");
+        LOG_DEBUG("IO_BG3CNT");
         break;
     case IO_BG0HOFS:
-        LOG_DEBUG("IO_BG0HOFS\n");
+        LOG_DEBUG("IO_BG0HOFS");
         return gba->bus.read_data_latch;
     case IO_BG0VOFS:
-        LOG_DEBUG("IO_BG0VOFS\n");
+        LOG_DEBUG("IO_BG0VOFS");
         return gba->bus.read_data_latch;
     case IO_BG1HOFS:
-        LOG_DEBUG("IO_BG1HOFS\n");
+        LOG_DEBUG("IO_BG1HOFS");
         return gba->bus.read_data_latch;
     case IO_BG1VOFS:
-        LOG_DEBUG("IO_BG1VOFS\n");
+        LOG_DEBUG("IO_BG1VOFS");
         return gba->bus.read_data_latch;
     case IO_BG2HOFS:
-        LOG_DEBUG("IO_BG2HOFS\n");
+        LOG_DEBUG("IO_BG2HOFS");
         return gba->bus.read_data_latch;
     case IO_BG2VOFS:
-        LOG_DEBUG("IO_BG2VOFS\n");
+        LOG_DEBUG("IO_BG2VOFS");
         return gba->bus.read_data_latch;
     case IO_BG3HOFS:
-        LOG_DEBUG("IO_BG3HOFS\n");
+        LOG_DEBUG("IO_BG3HOFS");
         return gba->bus.read_data_latch;
     case IO_BG3VOFS:
-        LOG_DEBUG("IO_BG3VOFS\n");
+        LOG_DEBUG("IO_BG3VOFS");
         return gba->bus.read_data_latch;
     case IO_BG2PA:
-        LOG_DEBUG("IO_BG2PA\n");
+        LOG_DEBUG("IO_BG2PA");
         return gba->bus.read_data_latch;
     case IO_BG2PB:
-        LOG_DEBUG("IO_BG2PB\n");
+        LOG_DEBUG("IO_BG2PB");
         return gba->bus.read_data_latch;
     case IO_BG2PC:
-        LOG_DEBUG("IO_BG2PC\n");
+        LOG_DEBUG("IO_BG2PC");
         return gba->bus.read_data_latch;
     case IO_BG2PD:
-        LOG_DEBUG("IO_BG2PD\n");
+        LOG_DEBUG("IO_BG2PD");
         return gba->bus.read_data_latch;
     case IO_BG2X ... IO_BG2X + 1:
-        LOG_DEBUG("IO_BG2X\n");
+        LOG_DEBUG("IO_BG2X");
         return gba->bus.read_data_latch;
     case IO_BG2Y ... IO_BG2Y + 1:
-        LOG_DEBUG("IO_BG2Y\n");
+        LOG_DEBUG("IO_BG2Y");
         return gba->bus.read_data_latch;
     case IO_BG3PA:
-        LOG_DEBUG("IO_BG3PA\n");
+        LOG_DEBUG("IO_BG3PA");
         return gba->bus.read_data_latch;
     case IO_BG3PB:
-        LOG_DEBUG("IO_BG3PB\n");
+        LOG_DEBUG("IO_BG3PB");
         return gba->bus.read_data_latch;
     case IO_BG3PC:
-        LOG_DEBUG("IO_BG3PC\n");
+        LOG_DEBUG("IO_BG3PC");
         return gba->bus.read_data_latch;
     case IO_BG3PD:
-        LOG_DEBUG("IO_BG3PD\n");
+        LOG_DEBUG("IO_BG3PD");
         return gba->bus.read_data_latch;
     case IO_BG3X ... IO_BG3X + 1:
-        LOG_DEBUG("IO_BG3X\n");
+        LOG_DEBUG("IO_BG3X");
         return gba->bus.read_data_latch;
     case IO_BG3Y ... IO_BG3Y + 1:
-        LOG_DEBUG("IO_BG3Y\n");
+        LOG_DEBUG("IO_BG3Y");
         return gba->bus.read_data_latch;
     case IO_WIN0H:
-        LOG_DEBUG("IO_WIN0H\n");
+        LOG_DEBUG("IO_WIN0H");
         return gba->bus.read_data_latch;
     case IO_WIN1H:
-        LOG_DEBUG("IO_WIN1H\n");
+        LOG_DEBUG("IO_WIN1H");
         return gba->bus.read_data_latch;
     case IO_WIN0V:
-        LOG_DEBUG("IO_WIN0V\n");
+        LOG_DEBUG("IO_WIN0V");
         return gba->bus.read_data_latch;
     case IO_WIN1V:
-        LOG_DEBUG("IO_WIN1V\n");
+        LOG_DEBUG("IO_WIN1V");
         return gba->bus.read_data_latch;
     case IO_WININ:
-        LOG_DEBUG("IO_WININ\n");
+        LOG_DEBUG("IO_WININ");
         break;
     case IO_WINOUT:
-        LOG_DEBUG("IO_WINOUT\n");
+        LOG_DEBUG("IO_WINOUT");
         break;
     case IO_MOSAIC:
-        LOG_DEBUG("IO_MOSAIC\n");
+        LOG_DEBUG("IO_MOSAIC");
         return gba->bus.read_data_latch;
     case IO_BLDCNT:
-        LOG_DEBUG("IO_BLDCNT\n");
+        LOG_DEBUG("IO_BLDCNT");
         break;
     case IO_BLDALPHA:
-        LOG_DEBUG("IO_BLDALPHA\n");
+        LOG_DEBUG("IO_BLDALPHA");
         break;
     case IO_BLDY:
-        LOG_DEBUG("IO_BLDY\n");
+        LOG_DEBUG("IO_BLDY");
         return gba->bus.read_data_latch;
 
     // Sound Registers
     case IO_SOUND1CNT_L:
-        LOG_DEBUG("IO_SOUND1CNT_L\n");
+        LOG_DEBUG("IO_SOUND1CNT_L");
         break;
     case IO_SOUND1CNT_H:
-        LOG_DEBUG("IO_SOUND1CNT_H\n");
+        LOG_DEBUG("IO_SOUND1CNT_H");
         break;
     case IO_SOUND1CNT_X:
-        LOG_DEBUG("IO_SOUND1CNT_X\n");
+        LOG_DEBUG("IO_SOUND1CNT_X");
         break;
     case IO_SOUND1CNT_X + 1:
         return 0;
     case IO_SOUND2CNT_L:
-        LOG_DEBUG("IO_SOUND2CNT_L\n");
+        LOG_DEBUG("IO_SOUND2CNT_L");
         break;
     case IO_SOUND2CNT_L + 1:
         return 0;
     case IO_SOUND2CNT_H:
-        LOG_DEBUG("IO_SOUND2CNT_H\n");
+        LOG_DEBUG("IO_SOUND2CNT_H");
         break;
     case IO_SOUND2CNT_H + 1:
         return 0;
     case IO_SOUND3CNT_L:
-        LOG_DEBUG("IO_SOUND3CNT_L\n");
+        LOG_DEBUG("IO_SOUND3CNT_L");
         break;
     case IO_SOUND3CNT_H:
-        LOG_DEBUG("IO_SOUND3CNT_H\n");
+        LOG_DEBUG("IO_SOUND3CNT_H");
         break;
     case IO_SOUND3CNT_X:
-        LOG_DEBUG("IO_SOUND3CNT_X\n");
+        LOG_DEBUG("IO_SOUND3CNT_X");
         break;
     case IO_SOUND3CNT_X + 1:
         return 0;
     case IO_SOUND4CNT_L:
-        LOG_DEBUG("IO_SOUND4CNT_L\n");
+        LOG_DEBUG("IO_SOUND4CNT_L");
         break;
     case IO_SOUND4CNT_L + 1:
         return 0;
     case IO_SOUND4CNT_H:
-        LOG_DEBUG("IO_SOUND4CNT_H\n");
+        LOG_DEBUG("IO_SOUND4CNT_H");
         break;
     case IO_SOUND4CNT_H + 1:
         return 0;
     case IO_SOUNDCNT_L:
-        LOG_DEBUG("IO_SOUNDCNT_L\n");
+        LOG_DEBUG("IO_SOUNDCNT_L");
         break;
     case IO_SOUNDCNT_H:
-        LOG_DEBUG("IO_SOUNDCNT_H\n");
+        LOG_DEBUG("IO_SOUNDCNT_H");
         break;
     case IO_SOUNDCNT_X:
-        LOG_DEBUG("IO_SOUNDCNT_X\n");
+        LOG_DEBUG("IO_SOUNDCNT_X");
         break;
     case IO_SOUNDCNT_X + 1:
         return 0;
     case IO_SOUNDBIAS:
-        LOG_DEBUG("IO_SOUNDBIAS\n");
+        LOG_DEBUG("IO_SOUNDBIAS");
         break;
     case IO_SOUNDBIAS + 1:
         return 0;
     case IO_WAVE_RAM ... IO_WAVE_RAM + 7:
-        LOG_DEBUG("IO_WAVE_RAM\n");
+        LOG_DEBUG("IO_WAVE_RAM");
         break;
     case IO_FIFO_A ... IO_FIFO_A + 1:
-        LOG_DEBUG("IO_FIFO_A\n");
+        LOG_DEBUG("IO_FIFO_A");
         return gba->bus.read_data_latch;
     case IO_FIFO_B ... IO_FIFO_B + 1:
-        LOG_DEBUG("IO_FIFO_B\n");
+        LOG_DEBUG("IO_FIFO_B");
         return gba->bus.read_data_latch;
 
     // DMA Transfer Channels
     case IO_DMA0SAD ... IO_DMA0SAD + 1:
-        LOG_DEBUG("IO_DMA0SAD\n");
+        LOG_DEBUG("IO_DMA0SAD");
         return gba->bus.read_data_latch;
     case IO_DMA0DAD ... IO_DMA0DAD + 1:
-        LOG_DEBUG("IO_DMA0DAD\n");
+        LOG_DEBUG("IO_DMA0DAD");
         return gba->bus.read_data_latch;
     case IO_DMA0CNT_L:
-        LOG_DEBUG("IO_DMA0CNT_L\n");
+        LOG_DEBUG("IO_DMA0CNT_L");
         return 0;
     case IO_DMA0CNT_H:
-        LOG_DEBUG("IO_DMA0CNT_H\n");
+        LOG_DEBUG("IO_DMA0CNT_H");
         mask = 0xF7E0;
         break;
     case IO_DMA1SAD ... IO_DMA1SAD + 1:
-        LOG_DEBUG("IO_DMA1SAD\n");
+        LOG_DEBUG("IO_DMA1SAD");
         return gba->bus.read_data_latch;
     case IO_DMA1DAD ... IO_DMA1DAD + 1:
-        LOG_DEBUG("IO_DMA1DAD\n");
+        LOG_DEBUG("IO_DMA1DAD");
         return gba->bus.read_data_latch;
     case IO_DMA1CNT_L:
-        LOG_DEBUG("IO_DMA1CNT_L\n");
+        LOG_DEBUG("IO_DMA1CNT_L");
         return 0;
     case IO_DMA1CNT_H:
-        LOG_DEBUG("IO_DMA1CNT_H\n");
+        LOG_DEBUG("IO_DMA1CNT_H");
         mask = 0xF7E0;
         break;
     case IO_DMA2SAD ... IO_DMA2SAD + 1:
-        LOG_DEBUG("IO_DMA2SAD\n");
+        LOG_DEBUG("IO_DMA2SAD");
         return gba->bus.read_data_latch;
     case IO_DMA2DAD ... IO_DMA2DAD + 1:
-        LOG_DEBUG("IO_DMA2DAD\n");
+        LOG_DEBUG("IO_DMA2DAD");
         return gba->bus.read_data_latch;
     case IO_DMA2CNT_L:
-        LOG_DEBUG("IO_DMA2CNT_L\n");
+        LOG_DEBUG("IO_DMA2CNT_L");
         return 0;
     case IO_DMA2CNT_H:
-        LOG_DEBUG("IO_DMA2CNT_H\n");
+        LOG_DEBUG("IO_DMA2CNT_H");
         mask = 0xF7E0;
         break;
     case IO_DMA3SAD ... IO_DMA3SAD + 1:
-        LOG_DEBUG("IO_DMA3SAD\n");
+        LOG_DEBUG("IO_DMA3SAD");
         return gba->bus.read_data_latch;
     case IO_DMA3DAD ... IO_DMA3DAD + 1:
-        LOG_DEBUG("IO_DMA3DAD\n");
+        LOG_DEBUG("IO_DMA3DAD");
         return gba->bus.read_data_latch;
     case IO_DMA3CNT_L:
-        LOG_DEBUG("IO_DMA3CNT_L\n");
+        LOG_DEBUG("IO_DMA3CNT_L");
         return 0;
     case IO_DMA3CNT_H:
-        LOG_DEBUG("IO_DMA3CNT_H\n");
+        LOG_DEBUG("IO_DMA3CNT_H");
         mask = 0xFFE0;
         break;
 
     // Timer Registers
     case IO_TM0CNT_L:
-        LOG_DEBUG("IO_TM0CNT_L\n");
+        LOG_DEBUG("IO_TM0CNT_L");
         break;
     case IO_TM0CNT_H:
-        LOG_DEBUG("IO_TM0CNT_H\n");
+        LOG_DEBUG("IO_TM0CNT_H");
         break;
     case IO_TM1CNT_L:
-        LOG_DEBUG("IO_TM1CNT_L\n");
+        LOG_DEBUG("IO_TM1CNT_L");
         break;
     case IO_TM1CNT_H:
-        LOG_DEBUG("IO_TM1CNT_H\n");
+        LOG_DEBUG("IO_TM1CNT_H");
         break;
     case IO_TM2CNT_L:
-        LOG_DEBUG("IO_TM2CNT_L\n");
+        LOG_DEBUG("IO_TM2CNT_L");
         break;
     case IO_TM2CNT_H:
-        LOG_DEBUG("IO_TM2CNT_H\n");
+        LOG_DEBUG("IO_TM2CNT_H");
         break;
     case IO_TM3CNT_L:
-        LOG_DEBUG("IO_TM3CNT_L\n");
+        LOG_DEBUG("IO_TM3CNT_L");
         break;
     case IO_TM3CNT_H:
-        LOG_DEBUG("IO_TM3CNT_H\n");
+        LOG_DEBUG("IO_TM3CNT_H");
         break;
 
     // Serial Communication (1)
     // case IO_SIODATA32 ... IO_SIODATA32 + 1:
-    //     LOG_DEBUG("IO_SIODATA32\n");
+    //     LOG_DEBUG("IO_SIODATA32");
     //     break;
     case IO_SIOMULTI0:
-        LOG_DEBUG("IO_SIOMULTI0\n");
+        LOG_DEBUG("IO_SIOMULTI0");
         break;
     case IO_SIOMULTI1:
-        LOG_DEBUG("IO_SIOMULTI1\n");
+        LOG_DEBUG("IO_SIOMULTI1");
         break;
     case IO_SIOMULTI2:
-        LOG_DEBUG("IO_SIOMULTI2\n");
+        LOG_DEBUG("IO_SIOMULTI2");
         break;
     case IO_SIOMULTI3:
-        LOG_DEBUG("IO_SIOMULTI3\n");
+        LOG_DEBUG("IO_SIOMULTI3");
         break;
     case IO_SIOCNT:
-        LOG_DEBUG("IO_SIOCNT\n");
+        LOG_DEBUG("IO_SIOCNT");
         break;
     case IO_SIOMLT_SEND:
-        LOG_DEBUG("IO_SIOMLT_SEND\n");
+        LOG_DEBUG("IO_SIOMLT_SEND");
         break;
     // case IO_SIODATA8:
-    //     LOG_DEBUG("IO_SIODATA8\n");
+    //     LOG_DEBUG("IO_SIODATA8");
     //     break;
 
     // Keypad Input
     case IO_KEYINPUT:
-        LOG_DEBUG("IO_KEYINPUT\n");
+        LOG_DEBUG("IO_KEYINPUT");
         break;
     case IO_KEYCNT:
-        LOG_DEBUG("IO_KEYCNT\n");
+        LOG_DEBUG("IO_KEYCNT");
         break;
 
     // Serial Communication (2)
     case IO_RCNT:
-        LOG_DEBUG("IO_RCNT\n");
+        LOG_DEBUG("IO_RCNT");
         break;
     case IO_IR:
         return 0;
     case IO_JOYCNT:
-        LOG_DEBUG("IO_JOYCNT\n");
+        LOG_DEBUG("IO_JOYCNT");
         break;
     case IO_JOYCNT + 1:
         return 0;
     case IO_JOY_RECV ... IO_JOY_RECV + 1:
-        LOG_DEBUG("IO_JOY_RECV\n");
+        LOG_DEBUG("IO_JOY_RECV");
         break;
     case IO_JOY_TRANS ... IO_JOY_TRANS + 1:
-        LOG_DEBUG("IO_JOY_TRANS\n");
+        LOG_DEBUG("IO_JOY_TRANS");
         break;
     case IO_JOYSTAT:
-        LOG_DEBUG("IO_JOYSTAT\n");
+        LOG_DEBUG("IO_JOYSTAT");
         break;
     case IO_JOYSTAT + 1:
         return 0;
@@ -388,25 +388,25 @@ static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
     // Interrupt, Waitstate, and Power-Down Control
     case IO_IE:
         mask = 0x3FFF;
-        LOG_DEBUG("IO_IE\n");
+        LOG_DEBUG("IO_IE");
         break;
     case IO_IF:
         mask = 0x3FFF;
-        LOG_DEBUG("IO_IF\n");
+        LOG_DEBUG("IO_IF");
         break;
     case IO_WAITCNT:
-        LOG_DEBUG("IO_WAITCNT\n");
+        LOG_DEBUG("IO_WAITCNT");
         break;
     case IO_WAITCNT + 1:
         return 0;
     case IO_IME:
         mask = 0x0001;
-        LOG_DEBUG("IO_IME\n");
+        LOG_DEBUG("IO_IME");
         break;
     case IO_IME + 1:
         return 0;
     case IO_POSTFLG_HALTCNT:
-        LOG_DEBUG("IO_POSTFLG_HALTCNT\n");
+        LOG_DEBUG("IO_POSTFLG_HALTCNT");
         break;
     case IO_POSTFLG_HALTCNT + 1:
         return 0;
@@ -425,357 +425,357 @@ static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
     switch (address) {
     // LCD I/O Registers
     case IO_DISPCNT:
-        LOG_DEBUG("IO_DISPCNT 0x%04X\n", data);
+        LOG_DEBUG("IO_DISPCNT 0x%04X", data);
         break;
     case IO_GREENSWAP:
-        LOG_DEBUG("IO_GREENSWAP 0x%04X\n", data);
+        LOG_DEBUG("IO_GREENSWAP 0x%04X", data);
         break;
     case IO_DISPSTAT:
         mask = 0xFFF8;
-        LOG_DEBUG("IO_DISPSTAT 0x%04X\n", data);
+        LOG_DEBUG("IO_DISPSTAT 0x%04X", data);
         break;
     case IO_VCOUNT:
         mask = 0x0000;
-        LOG_DEBUG("IO_VCOUNT 0x%04X\n", data);
+        LOG_DEBUG("IO_VCOUNT 0x%04X", data);
         break;
     case IO_BG0CNT:
         mask = 0xDFFF;
-        LOG_DEBUG("IO_BG0CNT 0x%04X\n", data);
+        LOG_DEBUG("IO_BG0CNT 0x%04X", data);
         break;
     case IO_BG1CNT:
         mask = 0xDFFF;
-        LOG_DEBUG("IO_BG1CNT 0x%04X\n", data);
+        LOG_DEBUG("IO_BG1CNT 0x%04X", data);
         break;
     case IO_BG2CNT:
-        LOG_DEBUG("IO_BG2CNT 0x%04X\n", data);
+        LOG_DEBUG("IO_BG2CNT 0x%04X", data);
         break;
     case IO_BG3CNT:
-        LOG_DEBUG("IO_BG3CNT 0x%04X\n", data);
+        LOG_DEBUG("IO_BG3CNT 0x%04X", data);
         break;
     case IO_BG0HOFS:
         mask = 0x03FF;
-        LOG_DEBUG("IO_BG0HOFS 0x%04X\n", data);
+        LOG_DEBUG("IO_BG0HOFS 0x%04X", data);
         break;
     case IO_BG0VOFS:
         mask = 0x03FF;
-        LOG_DEBUG("IO_BG0VOFS 0x%04X\n", data);
+        LOG_DEBUG("IO_BG0VOFS 0x%04X", data);
         break;
     case IO_BG1HOFS:
         mask = 0x03FF;
-        LOG_DEBUG("IO_BG1HOFS 0x%04X\n", data);
+        LOG_DEBUG("IO_BG1HOFS 0x%04X", data);
         break;
     case IO_BG1VOFS:
         mask = 0x03FF;
-        LOG_DEBUG("IO_BG1VOFS 0x%04X\n", data);
+        LOG_DEBUG("IO_BG1VOFS 0x%04X", data);
         break;
     case IO_BG2HOFS:
         mask = 0x03FF;
-        LOG_DEBUG("IO_BG2HOFS 0x%04X\n", data);
+        LOG_DEBUG("IO_BG2HOFS 0x%04X", data);
         break;
     case IO_BG2VOFS:
         mask = 0x03FF;
-        LOG_DEBUG("IO_BG2VOFS 0x%04X\n", data);
+        LOG_DEBUG("IO_BG2VOFS 0x%04X", data);
         break;
     case IO_BG3HOFS:
         mask = 0x03FF;
-        LOG_DEBUG("IO_BG3HOFS 0x%04X\n", data);
+        LOG_DEBUG("IO_BG3HOFS 0x%04X", data);
         break;
     case IO_BG3VOFS:
         mask = 0x03FF;
-        LOG_DEBUG("IO_BG3VOFS 0x%04X\n", data);
+        LOG_DEBUG("IO_BG3VOFS 0x%04X", data);
         break;
     case IO_BG2PA:
-        LOG_DEBUG("IO_BG2PA 0x%04X\n", data);
+        LOG_DEBUG("IO_BG2PA 0x%04X", data);
         break;
     case IO_BG2PB:
-        LOG_DEBUG("IO_BG2PB 0x%04X\n", data);
+        LOG_DEBUG("IO_BG2PB 0x%04X", data);
         break;
     case IO_BG2PC:
-        LOG_DEBUG("IO_BG2PC 0x%04X\n", data);
+        LOG_DEBUG("IO_BG2PC 0x%04X", data);
         break;
     case IO_BG2PD:
-        LOG_DEBUG("IO_BG2PD 0x%04X\n", data);
+        LOG_DEBUG("IO_BG2PD 0x%04X", data);
         break;
     case IO_BG2X ... IO_BG2X + 1:
-        LOG_DEBUG("IO_BG2X 0x%04X\n", data);
+        LOG_DEBUG("IO_BG2X 0x%04X", data);
         break;
     case IO_BG2Y ... IO_BG2Y + 1:
-        LOG_DEBUG("IO_BG2Y 0x%04X\n", data);
+        LOG_DEBUG("IO_BG2Y 0x%04X", data);
         break;
     case IO_BG3PA:
-        LOG_DEBUG("IO_BG3PA 0x%04X\n", data);
+        LOG_DEBUG("IO_BG3PA 0x%04X", data);
         break;
     case IO_BG3PB:
-        LOG_DEBUG("IO_BG3PB 0x%04X\n", data);
+        LOG_DEBUG("IO_BG3PB 0x%04X", data);
         break;
     case IO_BG3PC:
-        LOG_DEBUG("IO_BG3PC 0x%04X\n", data);
+        LOG_DEBUG("IO_BG3PC 0x%04X", data);
         break;
     case IO_BG3PD:
-        LOG_DEBUG("IO_BG3PD 0x%04X\n", data);
+        LOG_DEBUG("IO_BG3PD 0x%04X", data);
         break;
     case IO_BG3X ... IO_BG3X + 1:
-        LOG_DEBUG("IO_BG3X 0x%04X\n", data);
+        LOG_DEBUG("IO_BG3X 0x%04X", data);
         break;
     case IO_BG3Y ... IO_BG3Y + 1:
-        LOG_DEBUG("IO_BG3Y 0x%04X\n", data);
+        LOG_DEBUG("IO_BG3Y 0x%04X", data);
         break;
     case IO_WIN0H:
-        LOG_DEBUG("IO_WIN0H 0x%04X\n", data);
+        LOG_DEBUG("IO_WIN0H 0x%04X", data);
         break;
     case IO_WIN1H:
-        LOG_DEBUG("IO_WIN1H 0x%04X\n", data);
+        LOG_DEBUG("IO_WIN1H 0x%04X", data);
         break;
     case IO_WIN0V:
-        LOG_DEBUG("IO_WIN0V 0x%04X\n", data);
+        LOG_DEBUG("IO_WIN0V 0x%04X", data);
         break;
     case IO_WIN1V:
-        LOG_DEBUG("IO_WIN1V 0x%04X\n", data);
+        LOG_DEBUG("IO_WIN1V 0x%04X", data);
         break;
     case IO_WININ:
         mask = 0x3F3F;
-        LOG_DEBUG("IO_WININ 0x%04X\n", data);
+        LOG_DEBUG("IO_WININ 0x%04X", data);
         break;
     case IO_WINOUT:
         mask = 0x3F3F;
-        LOG_DEBUG("IO_WINOUT 0x%04X\n", data);
+        LOG_DEBUG("IO_WINOUT 0x%04X", data);
         break;
     case IO_MOSAIC:
-        LOG_DEBUG("IO_MOSAIC 0x%04X\n", data);
+        LOG_DEBUG("IO_MOSAIC 0x%04X", data);
         break;
     case IO_BLDCNT:
         mask = 0x3FFF;
-        LOG_DEBUG("IO_BLDCNT 0x%04X\n", data);
+        LOG_DEBUG("IO_BLDCNT 0x%04X", data);
         break;
     case IO_BLDALPHA:
         mask = 0x1F1F;
-        LOG_DEBUG("IO_BLDALPHA 0x%04X\n", data);
+        LOG_DEBUG("IO_BLDALPHA 0x%04X", data);
         break;
     case IO_BLDY:
-        LOG_DEBUG("IO_BLDY 0x%04X\n", data);
+        LOG_DEBUG("IO_BLDY 0x%04X", data);
         break;
 
     // Sound Registers
     case IO_SOUND1CNT_L:
         mask = 0x007F;
-        LOG_DEBUG("IO_SOUND1CNT_L 0x%04X\n", data);
+        LOG_DEBUG("IO_SOUND1CNT_L 0x%04X", data);
         break;
     case IO_SOUND1CNT_H:
         mask = 0xFFC0;
-        LOG_DEBUG("IO_SOUND1CNT_H 0x%04X\n", data);
+        LOG_DEBUG("IO_SOUND1CNT_H 0x%04X", data);
         break;
     case IO_SOUND1CNT_X:
         mask = 0x4000;
-        LOG_DEBUG("IO_SOUND1CNT_X 0x%04X\n", data);
+        LOG_DEBUG("IO_SOUND1CNT_X 0x%04X", data);
         break;
     case IO_SOUND2CNT_L:
         mask = 0xFFC0;
-        LOG_DEBUG("IO_SOUND2CNT_L 0x%04X\n", data);
+        LOG_DEBUG("IO_SOUND2CNT_L 0x%04X", data);
         break;
     case IO_SOUND2CNT_H:
         mask = 0x4000;
-        LOG_DEBUG("IO_SOUND2CNT_H 0x%04X\n", data);
+        LOG_DEBUG("IO_SOUND2CNT_H 0x%04X", data);
         break;
     case IO_SOUND3CNT_L:
         mask = 0x00E0;
-        LOG_DEBUG("IO_SOUND3CNT_L 0x%04X\n", data);
+        LOG_DEBUG("IO_SOUND3CNT_L 0x%04X", data);
         break;
     case IO_SOUND3CNT_H:
         mask = 0xE000;
-        LOG_DEBUG("IO_SOUND3CNT_H 0x%04X\n", data);
+        LOG_DEBUG("IO_SOUND3CNT_H 0x%04X", data);
         break;
     case IO_SOUND3CNT_X:
         mask = 0x4000;
-        LOG_DEBUG("IO_SOUND3CNT_X 0x%04X\n", data);
+        LOG_DEBUG("IO_SOUND3CNT_X 0x%04X", data);
         break;
     case IO_SOUND4CNT_L:
         mask = 0xFF00;
-        LOG_DEBUG("IO_SOUND4CNT_L 0x%04X\n", data);
+        LOG_DEBUG("IO_SOUND4CNT_L 0x%04X", data);
         break;
     case IO_SOUND4CNT_H:
         mask = 0x40FF;
-        LOG_DEBUG("IO_SOUND4CNT_H 0x%04X\n", data);
+        LOG_DEBUG("IO_SOUND4CNT_H 0x%04X", data);
         break;
     case IO_SOUNDCNT_L:
         mask = 0xFF77;
-        LOG_DEBUG("IO_SOUNDCNT_L 0x%04X\n", data);
+        LOG_DEBUG("IO_SOUNDCNT_L 0x%04X", data);
         break;
     case IO_SOUNDCNT_H:
         mask = 0x770F;
-        LOG_DEBUG("IO_SOUNDCNT_H 0x%04X\n", data);
+        LOG_DEBUG("IO_SOUNDCNT_H 0x%04X", data);
         break;
     case IO_SOUNDCNT_X:
         mask = 0x0080;
-        LOG_DEBUG("IO_SOUNDCNT_X 0x%04X\n", data);
+        LOG_DEBUG("IO_SOUNDCNT_X 0x%04X", data);
         break;
     case IO_SOUNDBIAS:
-        LOG_DEBUG("IO_SOUNDBIAS 0x%04X\n", data);
+        LOG_DEBUG("IO_SOUNDBIAS 0x%04X", data);
         break;
     case IO_WAVE_RAM ... IO_WAVE_RAM + 7:
-        LOG_DEBUG("IO_WAVE_RAM 0x%04X\n", data);
+        LOG_DEBUG("IO_WAVE_RAM 0x%04X", data);
         break;
     case IO_FIFO_A ... IO_FIFO_A + 1:
-        LOG_DEBUG("IO_FIFO_A 0x%04X\n", data);
+        LOG_DEBUG("IO_FIFO_A 0x%04X", data);
         break;
     case IO_FIFO_B ... IO_FIFO_B + 1:
-        LOG_DEBUG("IO_FIFO_B 0x%04X\n", data);
+        LOG_DEBUG("IO_FIFO_B 0x%04X", data);
         break;
 
     // DMA Transfer Channels
     case IO_DMA0SAD ... IO_DMA0SAD + 1:
-        LOG_DEBUG("IO_DMA0SAD 0x%04X\n", data);
+        LOG_DEBUG("IO_DMA0SAD 0x%04X", data);
         break;
     case IO_DMA0DAD ... IO_DMA0DAD + 1:
-        LOG_DEBUG("IO_DMA0DAD 0x%04X\n", data);
+        LOG_DEBUG("IO_DMA0DAD 0x%04X", data);
         break;
     case IO_DMA0CNT_L:
-        LOG_DEBUG("IO_DMA0CNT_L 0x%04X\n", data);
+        LOG_DEBUG("IO_DMA0CNT_L 0x%04X", data);
         break;
     case IO_DMA0CNT_H:
-        LOG_DEBUG("IO_DMA0CNT_H 0x%04X\n", data);
+        LOG_DEBUG("IO_DMA0CNT_H 0x%04X", data);
         break;
     case IO_DMA1SAD ... IO_DMA1SAD + 1:
-        LOG_DEBUG("IO_DMA1SAD 0x%04X\n", data);
+        LOG_DEBUG("IO_DMA1SAD 0x%04X", data);
         break;
     case IO_DMA1DAD ... IO_DMA1DAD + 1:
-        LOG_DEBUG("IO_DMA1DAD 0x%04X\n", data);
+        LOG_DEBUG("IO_DMA1DAD 0x%04X", data);
         break;
     case IO_DMA1CNT_L:
-        LOG_DEBUG("IO_DMA1CNT_L 0x%04X\n", data);
+        LOG_DEBUG("IO_DMA1CNT_L 0x%04X", data);
         break;
     case IO_DMA1CNT_H:
-        LOG_DEBUG("IO_DMA1CNT_H 0x%04X\n", data);
+        LOG_DEBUG("IO_DMA1CNT_H 0x%04X", data);
         break;
     case IO_DMA2SAD ... IO_DMA2SAD + 1:
-        LOG_DEBUG("IO_DMA2SAD 0x%04X\n", data);
+        LOG_DEBUG("IO_DMA2SAD 0x%04X", data);
         break;
     case IO_DMA2DAD ... IO_DMA2DAD + 1:
-        LOG_DEBUG("IO_DMA2DAD 0x%04X\n", data);
+        LOG_DEBUG("IO_DMA2DAD 0x%04X", data);
         break;
     case IO_DMA2CNT_L:
-        LOG_DEBUG("IO_DMA2CNT_L 0x%04X\n", data);
+        LOG_DEBUG("IO_DMA2CNT_L 0x%04X", data);
         break;
     case IO_DMA2CNT_H:
-        LOG_DEBUG("IO_DMA2CNT_H 0x%04X\n", data);
+        LOG_DEBUG("IO_DMA2CNT_H 0x%04X", data);
         break;
     case IO_DMA3SAD ... IO_DMA3SAD + 1:
-        LOG_DEBUG("IO_DMA3SAD 0x%04X\n", data);
+        LOG_DEBUG("IO_DMA3SAD 0x%04X", data);
         break;
     case IO_DMA3DAD ... IO_DMA3DAD + 1:
-        LOG_DEBUG("IO_DMA3DAD 0x%04X\n", data);
+        LOG_DEBUG("IO_DMA3DAD 0x%04X", data);
         break;
     case IO_DMA3CNT_L:
-        LOG_DEBUG("IO_DMA3CNT_L 0x%04X\n", data);
+        LOG_DEBUG("IO_DMA3CNT_L 0x%04X", data);
         break;
     case IO_DMA3CNT_H:
-        LOG_DEBUG("IO_DMA3CNT_H 0x%04X\n", data);
+        LOG_DEBUG("IO_DMA3CNT_H 0x%04X", data);
         break;
 
     // Timer Registers
     case IO_TM0CNT_L:
-        LOG_DEBUG("IO_TM0CNT_L 0x%04X\n", data);
+        LOG_DEBUG("IO_TM0CNT_L 0x%04X", data);
         gba->tmr.instance[0].reload = data;
         break;
     case IO_TM0CNT_H:
-        LOG_DEBUG("IO_TM0CNT_H 0x%04X\n", data);
+        LOG_DEBUG("IO_TM0CNT_H 0x%04X", data);
         gba_tmr_set(gba, data, 0);
         break;
     case IO_TM1CNT_L:
-        LOG_DEBUG("IO_TM1CNT_L 0x%04X\n", data);
+        LOG_DEBUG("IO_TM1CNT_L 0x%04X", data);
         gba->tmr.instance[1].reload = data;
         break;
     case IO_TM1CNT_H:
-        LOG_DEBUG("IO_TM1CNT_H 0x%04X\n", data);
+        LOG_DEBUG("IO_TM1CNT_H 0x%04X", data);
         gba_tmr_set(gba, data, 1);
         break;
     case IO_TM2CNT_L:
-        LOG_DEBUG("IO_TM2CNT_L 0x%04X\n", data);
+        LOG_DEBUG("IO_TM2CNT_L 0x%04X", data);
         gba->tmr.instance[2].reload = data;
         break;
     case IO_TM2CNT_H:
-        LOG_DEBUG("IO_TM2CNT_H 0x%04X\n", data);
+        LOG_DEBUG("IO_TM2CNT_H 0x%04X", data);
         gba_tmr_set(gba, data, 2);
         break;
     case IO_TM3CNT_L:
-        LOG_DEBUG("IO_TM3CNT_L 0x%04X\n", data);
+        LOG_DEBUG("IO_TM3CNT_L 0x%04X", data);
         gba->tmr.instance[3].reload = data;
         break;
     case IO_TM3CNT_H:
-        LOG_DEBUG("IO_TM3CNT_H 0x%04X\n", data);
+        LOG_DEBUG("IO_TM3CNT_H 0x%04X", data);
         gba_tmr_set(gba, data, 3);
         break;
 
     // Serial Communication (1)
     // case IO_SIODATA32 ... IO_SIODATA32 + 1:
-    //     LOG_DEBUG("IO_SIODATA32 0x%04X\n", data);
+    //     LOG_DEBUG("IO_SIODATA32 0x%04X", data);
     //     break;
     case IO_SIOMULTI0:
-        LOG_DEBUG("IO_SIOMULTI0 0x%04X\n", data);
+        LOG_DEBUG("IO_SIOMULTI0 0x%04X", data);
         break;
     case IO_SIOMULTI1:
-        LOG_DEBUG("IO_SIOMULTI1 0x%04X\n", data);
+        LOG_DEBUG("IO_SIOMULTI1 0x%04X", data);
         break;
     case IO_SIOMULTI2:
-        LOG_DEBUG("IO_SIOMULTI2 0x%04X\n", data);
+        LOG_DEBUG("IO_SIOMULTI2 0x%04X", data);
         break;
     case IO_SIOMULTI3:
-        LOG_DEBUG("IO_SIOMULTI3 0x%04X\n", data);
+        LOG_DEBUG("IO_SIOMULTI3 0x%04X", data);
         break;
     case IO_SIOCNT:
-        LOG_DEBUG("IO_SIOCNT 0x%04X\n", data);
+        LOG_DEBUG("IO_SIOCNT 0x%04X", data);
         break;
     case IO_SIOMLT_SEND:
-        LOG_DEBUG("IO_SIOMLT_SEND 0x%04X\n", data);
+        LOG_DEBUG("IO_SIOMLT_SEND 0x%04X", data);
         break;
     // case IO_SIODATA8:
-    //     LOG_DEBUG("IO_SIODATA8 0x%04X\n", data);
+    //     LOG_DEBUG("IO_SIODATA8 0x%04X", data);
     //     break;
 
     // Keypad Input
     case IO_KEYINPUT:
-        LOG_DEBUG("IO_KEYINPUT 0x%04X\n", data);
+        LOG_DEBUG("IO_KEYINPUT 0x%04X", data);
         break;
     case IO_KEYCNT:
-        LOG_DEBUG("IO_KEYCNT 0x%04X\n", data);
+        LOG_DEBUG("IO_KEYCNT 0x%04X", data);
         break;
 
     // Serial Communication (2)
     case IO_RCNT:
-        LOG_DEBUG("IO_RCNT 0x%04X\n", data);
+        LOG_DEBUG("IO_RCNT 0x%04X", data);
         break;
     // case IO_IR:
-    //     LOG_DEBUG("IO_IR 0x%04X\n", data);
+    //     LOG_DEBUG("IO_IR 0x%04X", data);
     //     break;
     case IO_JOYCNT:
-        LOG_DEBUG("IO_JOYCNT 0x%04X\n", data);
+        LOG_DEBUG("IO_JOYCNT 0x%04X", data);
         break;
     case IO_JOY_RECV ... IO_JOY_RECV + 1:
-        LOG_DEBUG("IO_JOY_RECV 0x%04X\n", data);
+        LOG_DEBUG("IO_JOY_RECV 0x%04X", data);
         break;
     case IO_JOY_TRANS ... IO_JOY_TRANS + 1:
-        LOG_DEBUG("IO_JOY_TRANS 0x%04X\n", data);
+        LOG_DEBUG("IO_JOY_TRANS 0x%04X", data);
         break;
     case IO_JOYSTAT:
-        LOG_DEBUG("IO_JOYSTAT 0x%04X\n", data);
+        LOG_DEBUG("IO_JOYSTAT 0x%04X", data);
         break;
 
     // Interrupt, Waitstate, and Power-Down Control
     case IO_IE:
-        LOG_DEBUG("IO_IE 0x%04X\n", data);
+        LOG_DEBUG("IO_IE 0x%04X", data);
         break;
     case IO_IF:
-        LOG_DEBUG("IO_IF 0x%04X\n", data);
+        LOG_DEBUG("IO_IF 0x%04X", data);
         data = gba->bus.io[address] & ~data;
         break;
     case IO_WAITCNT:
-        LOG_DEBUG("IO_WAITCNT 0x%04X\n", data);
+        LOG_DEBUG("IO_WAITCNT 0x%04X", data);
         break;
     case IO_IME:
         mask = 0x0001;
-        LOG_DEBUG("IO_IME 0x%04X\n", data);
+        LOG_DEBUG("IO_IME 0x%04X", data);
         break;
     case IO_POSTFLG_HALTCNT:
-        LOG_DEBUG("IO_POSTFLG_HALTCNT 0x%04X\n", data);
+        LOG_DEBUG("IO_POSTFLG_HALTCNT 0x%04X", data);
         break;
 
     default:
@@ -943,8 +943,21 @@ static void io_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) 
         memcpy(&gba->bus.mgba_logstr[address + BUS_IO - MGBA_REG_DEBUG_STRING], &data, size);
         break;
     case MGBA_REG_DEBUG_FLAGS:
-        if (gba->bus.mgba_logs_enabled)
-            printf("[mGBA LOG] %.256s\n", gba->bus.mgba_logstr);
+        if (!gba->bus.mgba_logs_enabled)
+            break;
+
+        uint8_t offset = 0;
+        for (uint32_t i = 0; i < sizeof(gba->bus.mgba_logstr); i++) {
+            char c = gba->bus.mgba_logstr[i];
+            if (c == '\n' || c == '\0') {
+                LOG_INFO("[mGBA LOG] %.*s", i - offset, &gba->bus.mgba_logstr[offset]);
+                offset = i + 1;
+
+                if (c == '\0')
+                    break;
+            }
+        }
+
         break;
     case MGBA_REG_DEBUG_ENABLE:
         gba->bus.mgba_logs_enabled = (data & 0xFFFF) == MGBA_LOG_ENABLE_REQ_MAGIC;
@@ -1107,10 +1120,10 @@ bool gba_bus_validate_rom(const uint8_t *rom, size_t size) {
     //     case 'R':
     //     case 'U':
     //     case 'V':
-    //         eprintf("game type '%c' is not implemented yet", game_type);
+    //         LOG_ERROR("game type '%c' is not implemented yet", game_type);
     //         return false;
     //     default:
-    //         eprintf("invalid game type: %c", game_type);
+    //         LOG_ERROR("invalid game type: %c", game_type);
     //         return false;
     // }
 
@@ -1131,7 +1144,7 @@ bool gba_bus_validate_rom(const uint8_t *rom, size_t size) {
     checksum -= 0x19;
 
     // if (rom[0xBD] != checksum) {
-    //     eprintf("Invalid cartridge header checksum");
+    //     LOG_ERROR("Invalid cartridge header checksum");
     //     return false;
     // }
 

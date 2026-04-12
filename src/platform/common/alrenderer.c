@@ -49,14 +49,14 @@ ALboolean alrenderer_init(ALuint sampling_freq) {
     // Ouverture du device
     alr.device = alcOpenDevice(NULL);
     if (!alr.device) {
-        eprintf("Error opening audio device\n");
+        LOG_ERROR("Error opening audio device");
         return AL_FALSE;
     }
 
     // Création du contexte
     alr.context = alcCreateContext(alr.device, NULL);
     if (!alr.context) {
-        eprintf("Error creating audio context\n");
+        LOG_ERROR("Error creating audio context");
         return AL_FALSE;
     }
 
@@ -69,12 +69,12 @@ ALboolean alrenderer_init(ALuint sampling_freq) {
     } else {
         alcGetIntegerv(alr.device, ALC_FREQUENCY, 1, &alr.sampling_rate);
         if (AL_ERROR()) {
-            eprintf("Error getting device sampling rate\n");
+            LOG_ERROR("Error getting device sampling rate");
             return AL_FALSE;
         }
     }
 
-    // printf("OpenAL version %s\n", alGetString(AL_VERSION));
+    // LOG_INFO("OpenAL version %s", alGetString(AL_VERSION));
 
     alGenSources(1, &alr.source);
     init_buffers();
@@ -163,7 +163,7 @@ static inline uint32_t dynamic_rate_control(void) {
     int    sample_rate = alr.sampling_rate * (1.0 - CLAMP(diff, -1.0, 1.0) * (DRC_MAX_FREQ_DIFF));
 
     // double fill_level = queue_size / (double) (N_SAMPLES * N_BUFFERS);
-    // printf("fill_level=%lf dynamic_frequency=%d (sampling_rate=%d) DRC_TARGET_QUEUE_SIZE=%d queue_size=%d ewma_queue_size=%d\n",
+    // LOG_DEBUG("fill_level=%lf dynamic_frequency=%d (sampling_rate=%d) DRC_TARGET_QUEUE_SIZE=%d queue_size=%d ewma_queue_size=%d",
     //         fill_level, (ALsizei) sample_rate, sampling_rate, DRC_TARGET_QUEUE_SIZE, queue_size, ewma_queue_size);
 
     return sample_rate;
@@ -179,7 +179,7 @@ void alrenderer_queue_sample(const gbmulator_apu_sample_t sample, uint32_t *dyna
     ALint processed;
     alGetSourcei(alr.source, AL_BUFFERS_PROCESSED, &processed);
     if (AL_ERROR()) {
-        eprintf("Error checking source state\n");
+        LOG_ERROR("Error checking source state");
         return;
     }
 
@@ -189,14 +189,14 @@ void alrenderer_queue_sample(const gbmulator_apu_sample_t sample, uint32_t *dyna
     ALuint recycled_buffer;
     alSourceUnqueueBuffers(alr.source, 1, &recycled_buffer);
     if (AL_ERROR()) {
-        eprintf("Error unqueueing buffer\n");
+        LOG_ERROR("Error unqueueing buffer");
         return;
     }
 
     alBufferData(recycled_buffer, AL_FORMAT_STEREO16, alr.samples, sizeof(alr.samples), alr.sampling_rate);
     alSourceQueueBuffers(alr.source, 1, &recycled_buffer);
     if (AL_ERROR()) {
-        eprintf("Error buffering data\n");
+        LOG_ERROR("Error buffering data");
         return;
     }
 
@@ -206,7 +206,7 @@ void alrenderer_queue_sample(const gbmulator_apu_sample_t sample, uint32_t *dyna
     ALint state;
     alGetSourcei(alr.source, AL_SOURCE_STATE, &state);
     if (AL_ERROR()) {
-        eprintf("Error getting source state\n");
+        LOG_ERROR("Error getting source state");
         return;
     }
 
@@ -216,7 +216,7 @@ void alrenderer_queue_sample(const gbmulator_apu_sample_t sample, uint32_t *dyna
         ALint queued;
         alGetSourcei(alr.source, AL_BUFFERS_QUEUED, &queued);
         if (AL_ERROR()) {
-            eprintf("Error getting queued buffers\n");
+            LOG_ERROR("Error getting queued buffers");
             return;
         } else if (queued == 0) {
             return;
@@ -224,7 +224,7 @@ void alrenderer_queue_sample(const gbmulator_apu_sample_t sample, uint32_t *dyna
 
         alSourcePlay(alr.source);
         if (AL_ERROR()) {
-            eprintf("Error restarting playback\n");
+            LOG_ERROR("Error restarting playback");
             return;
         }
     }

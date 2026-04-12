@@ -135,22 +135,22 @@ void gb_print_status(gb_t *gb) {
     if (licensee)
         snprintf(str_buf, 30, " by %s", licensee);
 
-    printf("[%s] Playing %s (v%d)%s\n",
-           gb->base->opts.mode == GBMULATOR_MODE_GBC ? "CGB" : "DMG",
-           gb->rom_title,
-           gb->base->opts.rom[0x014C],
-           licensee ? str_buf : "");
+    LOG_INFO("[%s] Playing %s (v%d)%s",
+             gb->base->opts.mode == GBMULATOR_MODE_GBC ? "CGB" : "DMG",
+             gb->rom_title,
+             gb->base->opts.rom[0x014C],
+             licensee ? str_buf : "");
 
     if (mmu->eram_banks > 0)
         snprintf(str_buf, 17, " + %d RAM banks", mmu->eram_banks);
 
-    printf("Cartridge using %s with %d ROM banks%s%s%s%s\n",
-           mbc_names[mmu->mbc.type],
-           mmu->rom_banks,
-           mmu->eram_banks > 0 ? str_buf : "",
-           mmu->has_battery ? " + BATTERY" : "",
-           mmu->has_rtc ? " + RTC" : "",
-           mmu->has_rumble ? " + RUMBLE" : "");
+    LOG_INFO("Cartridge using %s with %d ROM banks%s%s%s%s",
+             mbc_names[mmu->mbc.type],
+             mmu->rom_banks,
+             mmu->eram_banks > 0 ? str_buf : "",
+             mmu->has_battery ? " + BATTERY" : "",
+             mmu->has_rtc ? " + RTC" : "",
+             mmu->has_rumble ? " + RUMBLE" : "");
 }
 
 uint8_t gb_link_shift_bit(gb_t *gb, uint8_t in_bit) {
@@ -250,29 +250,29 @@ void gb_get_save(gb_t *gb, uint8_t *data, size_t *length) {
 bool gb_load_save(gb_t *gb, uint8_t *data, size_t length) {
     if (gb->mmu.mbc.type == MBC7) {
         if (length != sizeof(gb->mmu.mbc.mbc7.eeprom.data))
-            return 0;
+            return false;
         memcpy(gb->mmu.mbc.mbc7.eeprom.data, data, length);
-        return 1;
+        return true;
     }
 
     // don't load save if the cartridge has no battery or there is no rtc and no eram banks
     if (!gb->mmu.has_battery || (!gb->mmu.has_rtc && gb->mmu.eram_banks == 0))
-        return 0;
+        return false;
 
     size_t eram_len = gb->mmu.eram_banks * ERAM_BANK_SIZE;
     if (length < eram_len || length == 0)
-        return 0;
+        return false;
 
     if (eram_len > 0)
         memcpy(gb->mmu.eram, data, eram_len);
 
     if (!gb->mmu.has_rtc)
-        return 1;
+        return true;
 
     size_t rtc_len = length - eram_len;
     if (rtc_len != 44 && rtc_len != 48) {
-        eprintf("Invalid rtc format\n");
-        return 1;
+        LOG_WARN("Invalid rtc format");
+        return true;
     }
 
     // get saved rtc registers and timestamp
@@ -316,7 +316,7 @@ bool gb_load_save(gb_t *gb, uint8_t *data, size_t length) {
 
     gb->mmu.mbc.mbc3.rtc.s = rtc_registers_time;
 
-    return 1;
+    return true;
 }
 
 void gb_get_savestate(gb_t *gb, uint8_t *data, size_t *length) {
@@ -351,7 +351,7 @@ bool gb_load_savestate(gb_t *gb, uint8_t *data, size_t length) {
     expected_data_len        += mmu_serialized_length(gb);
 
     if (length != expected_data_len) {
-        eprintf("invalid savestate data length (expected: %zu; got: %zu)\n", expected_data_len, length);
+        LOG_ERROR("invalid savestate data length (expected: %zu; got: %zu)", expected_data_len, length);
         return false;
     }
 

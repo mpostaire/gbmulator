@@ -76,7 +76,7 @@ void gba_print_status(gba_t *gba) {
         language_str = "Unknown";
     }
 
-    printf("Playing %s (v%d) by %s (language: %s)\n", *gba->rom_title ? gba->rom_title : "Unknown", version, maker_buf, language_str);
+    LOG_INFO("Playing %s (v%d) by %s (language: %s)", *gba->rom_title ? gba->rom_title : "Unknown", version, maker_buf, language_str);
 }
 
 char *gba_get_rom_title(gba_t *gba) {

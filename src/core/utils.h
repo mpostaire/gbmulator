@@ -3,8 +3,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 #include <time.h>
+
+#include "log.h"
 
 #ifdef __GNUC__
 #define UNUSED __attribute__((unused))
@@ -37,20 +38,11 @@
 #define XSTRINGIFY(x) #x
 #define STRINGIFY(x)  XSTRINGIFY(x)
 
-#define eprintf(format, ...)     fprintf(stderr, "[ERROR] %s:%d - %s() - " format "\n", __FILE__, __LINE__, __func__, ##__VA_ARGS__)
-#define errnoprintf(format, ...) eprintf(format ": %s", ##__VA_ARGS__, strerror(errno));
-
-#define todo(format, ...)               \
-    do {                                \
-        eprintf(format, ##__VA_ARGS__); \
-        exit(42);                       \
+#define todo(format, ...)                           \
+    do {                                            \
+        LOG_ERROR("TODO - " format, ##__VA_ARGS__); \
+        exit(42);                                   \
     } while (0)
-
-#ifdef DEBUG
-#define LOG_DEBUG(...) fprintf(stderr, __VA_ARGS__)
-#else
-#define LOG_DEBUG(...)
-#endif
 
 #if __has_include(<stdbit.h>)
 #include <stdbit.h>

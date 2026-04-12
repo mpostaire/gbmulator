@@ -456,7 +456,7 @@ static inline uint8_t read_io_register(gb_t *gb, uint8_t io_reg_addr) {
     case 0x78 ... 0x7F:
         return 0xFF;
     default:
-        eprintf("invalid read at 0xFF%02X", io_reg_addr);
+        LOG_ERROR("invalid read at 0xFF%02X", io_reg_addr);
         exit(EXIT_FAILURE);
     }
 }
@@ -761,9 +761,9 @@ static inline void write_io_register(gb_t *gb, uint8_t io_reg_addr, uint8_t data
         mmu->hdma.initializing = 1;
 
         // if (mmu->hdma.type) // HBLANK DMA (HDMA)
-        //     printf("HDMA size=%d (%d blocs), vram bank=%d, wram bank n=%d, src=%x, dest=%x\n", (mmu->io_registers[io_reg_addr] + 1) * 0x10, mmu->io_registers[io_reg_addr] + 1, GBC_CURRENT_VRAM_BANK(mmu), GBC_CURRENT_WRAM_BANK(mmu), mmu->hdma.src_address, mmu->hdma.dest_address);
+        //     LOG_INFO("HDMA size=%d (%d blocs), vram bank=%d, wram bank n=%d, src=%x, dest=%x", (mmu->io_registers[io_reg_addr] + 1) * 0x10, mmu->io_registers[io_reg_addr] + 1, GBC_CURRENT_VRAM_BANK(mmu), GBC_CURRENT_WRAM_BANK(mmu), mmu->hdma.src_address, mmu->hdma.dest_address);
         // else // General purpose DMA (GDMA)
-        //     printf("GDMA size=%d (%d blocs), vram bank=%d, wram bank n=%d, src=%x, dest=%x\n", (mmu->io_registers[io_reg_addr] + 1) * 0x10, mmu->io_registers[io_reg_addr] + 1, GBC_CURRENT_VRAM_BANK(mmu), GBC_CURRENT_WRAM_BANK(mmu), mmu->hdma.src_address, mmu->hdma.dest_address);
+        //     LOG_INFO("GDMA size=%d (%d blocs), vram bank=%d, wram bank n=%d, src=%x, dest=%x", (mmu->io_registers[io_reg_addr] + 1) * 0x10, mmu->io_registers[io_reg_addr] + 1, GBC_CURRENT_VRAM_BANK(mmu), GBC_CURRENT_WRAM_BANK(mmu), mmu->hdma.src_address, mmu->hdma.dest_address);
         break;
     case IO_RP:
         mmu->io_registers[io_reg_addr] = gb->cgb_mode_enabled ? data & 0xC1 : 0xFF;
@@ -779,7 +779,7 @@ static inline void write_io_register(gb_t *gb, uint8_t io_reg_addr, uint8_t data
         if (gb->ppu.mode != PPU_MODE_DRAWING) {
             uint8_t cram_address       = mmu->io_registers[IO_BGPI] & 0x3F;
             mmu->cram_bg[cram_address] = data;
-            // printf("write %d in cram_bg %d\n", data, cram_address);
+            // LOG_INFO("write %d in cram_bg %d", data, cram_address);
         }
 
         // increment BGPI address if auto increment (bit.7) of BGPI is set
@@ -802,7 +802,7 @@ static inline void write_io_register(gb_t *gb, uint8_t io_reg_addr, uint8_t data
         if (gb->ppu.mode != PPU_MODE_DRAWING) {
             uint8_t cram_address        = mmu->io_registers[IO_OBPI] & 0x3F;
             mmu->cram_obj[cram_address] = data;
-            // printf("write %d in cram_obj %d\n", data, cram_address);
+            // LOG_INFO("write %d in cram_obj %d", data, cram_address);
         }
 
         // increment OBPI address if auto increment (bit.7) of OBPI is set
@@ -903,7 +903,7 @@ uint8_t mmu_read_io_src(gb_t *gb, uint16_t address, gb_io_source_t io_src) {
 
         return mmu->ie;
     default:
-        eprintf("invalid cpu read at address 0x%X", address);
+        LOG_ERROR("invalid cpu read at address 0x%X", address);
         exit(EXIT_FAILURE);
     }
 }
@@ -959,7 +959,7 @@ void mmu_write_io_src(gb_t *gb, uint16_t address, uint8_t data, gb_io_source_t i
         }
         break;
     default:
-        eprintf("invalid write of 0x%02X at address 0x%X", data, address);
+        LOG_ERROR("invalid write of 0x%02X at address 0x%X", data, address);
         exit(EXIT_FAILURE);
     }
 }

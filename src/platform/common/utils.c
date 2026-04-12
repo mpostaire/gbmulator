@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <errno.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
@@ -11,12 +12,12 @@
 
 static long fsize(FILE *f) {
     if (fseek(f, 0, SEEK_END) < 0) {
-        errnoprintf("fseek");
+        LOG_ERROR("fseek: %s", strerror(errno));
         return -1;
     }
     long len = ftell(f);
     if (len < 0) {
-        errnoprintf("ftell");
+        LOG_ERROR("ftell: %s", strerror(errno));
         return -1;
     }
     fseek(f, 0, SEEK_SET);
@@ -28,7 +29,7 @@ int dir_exists(const char *directory_path) {
     if (dir == NULL) {
         if (errno == ENOENT)
             return 0;
-        errnoprintf("opendir");
+        LOG_ERROR("opendir: %s", strerror(errno));
         exit(EXIT_FAILURE);
     }
     closedir(dir);
@@ -47,7 +48,7 @@ bool mkdirp(const char *directory_path) {
         if (*p == '/') {
             *p = 0;
             if (mkdir(buf, S_IRWXU | S_IRGRP | S_IROTH) && errno != EEXIST) {
-                errnoprintf("mkdir");
+                LOG_ERROR("mkdir: %s", strerror(errno));
                 return false;
             }
             *p = '/';
@@ -55,7 +56,7 @@ bool mkdirp(const char *directory_path) {
     }
 
     if (mkdir(buf, S_IRWXU | S_IRGRP | S_IROTH) && errno != EEXIST) {
-        errnoprintf("mkdir");
+        LOG_ERROR("mkdir: %s", strerror(errno));
         return false;
     }
 
@@ -90,7 +91,7 @@ uint8_t *read_file_f(FILE *f, size_t *len) {
     uint8_t *buf = xmalloc(*len);
 
     if (!fread(buf, *len, 1, f)) {
-        eprintf("fread()");
+        LOG_ERROR("fread()");
         fclose(f);
         free(buf);
         return NULL;
@@ -107,7 +108,7 @@ uint8_t *read_file(const char *path, size_t *len) {
 
     FILE *f = fopen(path, "rb");
     if (!f) {
-        errnoprintf("fopen(%s)", path);
+        LOG_WARN("fopen(%s): %s", path, strerror(errno));
         return NULL;
     }
 
@@ -123,12 +124,12 @@ bool write_file(const char *path, const uint8_t *data, size_t len) {
 
     FILE *f = fopen(path, "wb");
     if (!f) {
-        errnoprintf("open(%s)", path);
+        LOG_WARN("open(%s): %s", path, strerror(errno));
         return false;
     }
 
     if (!fwrite(data, len, 1, f)) {
-        errnoprintf("fwrite(%s)", path);
+        LOG_ERROR("fwrite(%s): %s", path, strerror(errno));
         fclose(f);
         return false;
     }
@@ -203,7 +204,7 @@ uint8_t *read_rom(const char *path, size_t *rom_size) {
         (strncmp(dot, ".gb", MAX(strlen(dot), sizeof(".gb"))) &&
          strncmp(dot, ".gbc", MAX(strlen(dot), sizeof(".gbc"))) &&
          strncmp(dot, ".gba", MAX(strlen(dot), sizeof(".gba"))))) {
-        eprintf("%s: wrong file extension (expected .gb, .gbc or .gba)\n", path);
+        LOG_ERROR("%s: wrong file extension (expected .gb, .gbc or .gba)", path);
         return NULL;
     }
 

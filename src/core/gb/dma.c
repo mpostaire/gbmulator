@@ -9,7 +9,7 @@ static inline uint8_t gdma_hdma_copy_step(gb_t *gb) {
         uint8_t data = mmu_read_io_src(gb, mmu->hdma.src_address++, IO_SRC_GDMA_HDMA);
         mmu_write_io_src(gb, mmu->hdma.dest_address++, data, IO_SRC_GDMA_HDMA);
 
-        // printf("copy %x from %x to %x\n", data, mmu->hdma.src_address - 1, mmu->hdma.dest_address - 1);
+        // LOG_INFO("copy %x from %x to %x", data, mmu->hdma.src_address - 1, mmu->hdma.dest_address - 1);
 
         if (mmu->hdma.dest_address >= MMU_ERAM) { // vram overflow stops prematurely the transfer
             mmu->hdma.progress = 0;

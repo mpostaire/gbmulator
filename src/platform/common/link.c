@@ -31,7 +31,7 @@ static void print_connected_to(struct sockaddr *addr) {
         inet_ntop(addr->sa_family, &((struct sockaddr_in6 *) addr)->sin6_addr, buf, sizeof(buf));
         port = ((struct sockaddr_in6 *) addr)->sin6_port;
     }
-    printf("Link cable connected to %s on port %d\n", buf, ntohs(port));
+    LOG_INFO("Link cable connected to %s on port %d", buf, ntohs(port));
 }
 
 void link_cancel(void) {
@@ -47,7 +47,7 @@ int link_start_server(const char *port) {
     struct addrinfo *res;
     int              ret;
     if ((ret = getaddrinfo(NULL, port, &hints, &res)) != 0) {
-        eprintf("getaddrinfo: %s\n", gai_strerror(ret));
+        LOG_ERROR("getaddrinfo: %s", gai_strerror(ret));
         return -1;
     }
 
@@ -56,13 +56,13 @@ int link_start_server(const char *port) {
     struct addrinfo *ai = res;
     for (; ai != NULL; ai = ai->ai_next) {
         if ((server_sfd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol)) == -1) {
-            errnoprintf("socket");
+            LOG_DEBUG("socket: %s", strerror(errno));
             continue;
         }
 
         int yes = 1;
         if (setsockopt(server_sfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
-            errnoprintf("setsockopt");
+            LOG_ERROR("setsockopt: %s", strerror(errno));
             close(server_sfd);
             server_sfd = -1;
             return -1;
@@ -78,20 +78,20 @@ int link_start_server(const char *port) {
     }
 
     if (ai == NULL) {
-        errnoprintf("bind");
+        LOG_ERROR("bind: %s", strerror(errno));
         return -1;
     }
 
     freeaddrinfo(res);
 
     if (listen(server_sfd, 1) == -1) {
-        errnoprintf("listen");
+        LOG_ERROR("listen: %s", strerror(errno));
         close(server_sfd);
         server_sfd = -1;
         return -1;
     }
 
-    printf("Link server waiting for client on port %s...\n", port);
+    LOG_INFO("Link server waiting for client on port %s...", port);
 
     // wait for a client connection
     struct sockaddr_in6 client_addr;
@@ -116,7 +116,7 @@ int link_connect_to_server(const char *address, const char *port) {
     struct addrinfo *addrinfo = NULL;
     int              ret;
     if ((ret = getaddrinfo(address, port, &hints, &addrinfo)) != 0) {
-        eprintf("getaddrinfo: %s\n", gai_strerror(ret));
+        LOG_ERROR("getaddrinfo: %s", gai_strerror(ret));
         return -1;
     }
 
@@ -134,7 +134,7 @@ int link_connect_to_server(const char *address, const char *port) {
     }
 
     if (addrinfo_iter == NULL) {
-        errnoprintf("connect %d", ret);
+        LOG_ERROR("connect: %s", strerror(errno));
         close(server_sfd);
         server_sfd = -1;
         return -1;
@@ -177,7 +177,7 @@ static int exchange_info(int sfd, gbmulator_t *emu, gbmulator_mode_t *mode, bool
     receive(sfd, pkt, 4, 0);
 
     if (pkt[0] != PKT_INFO) {
-        eprintf("received packet type %d but expected %d (ignored)\n", pkt[0], PKT_INFO);
+        LOG_WARN("received packet type %d but expected %d (ignored)", pkt[0], PKT_INFO);
         return -1;
     }
 
@@ -190,7 +190,7 @@ static int exchange_info(int sfd, gbmulator_t *emu, gbmulator_mode_t *mode, bool
     if (received_checksum == checksum) {
         return 1;
     } else {
-        printf("checksum mismatch ('%x' != '%x'): exchanging ROMs\n", checksum, received_checksum);
+        LOG_ERROR("checksum mismatch ('%x' != '%x'): exchanging ROMs", checksum, received_checksum);
         return 0;
     }
 }
@@ -216,7 +216,7 @@ static bool exchange_rom(int sfd, gbmulator_t *emu, uint8_t **other_rom, size_t 
     receive(sfd, pkt_header, 9, 0);
 
     if (pkt_header[0] != PKT_ROM) {
-        eprintf("received packet type %d but expected %d (ignored)\n", pkt_header[0], PKT_ROM);
+        LOG_WARN("received packet type %d but expected %d (ignored)", pkt_header[0], PKT_ROM);
         return false;
     }
 
@@ -251,7 +251,7 @@ static bool exchange_savestate(int sfd, gbmulator_t *emu, uint8_t **savestate_da
     receive(sfd, pkt_header, 9, 0);
 
     if (pkt_header[0] != PKT_STATE) {
-        eprintf("received packet type %d but expected %d (ignored)\n", pkt_header[0], PKT_STATE);
+        LOG_WARN("received packet type %d but expected %d (ignored)", pkt_header[0], PKT_STATE);
         return false;
     }
 
@@ -297,7 +297,7 @@ bool link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
     if (opts.rom) {
         *linked_emu = gbmulator_init(&opts);
         if (!*linked_emu) {
-            eprintf("received invalid or corrupted PKT_ROM\n");
+            LOG_ERROR("received invalid or corrupted PKT_ROM");
             free(opts.rom);
             close(sfd);
             return false;
@@ -313,7 +313,7 @@ bool link_init_transfer(int sfd, gbmulator_t *emu, gbmulator_t **linked_emu) {
     free(savestate_data);
 
     if (!is_savestate_loaded) {
-        eprintf("received invalid or corrupted savestate\n");
+        LOG_ERROR("received invalid or corrupted savestate");
         close(sfd);
         gbmulator_quit(*linked_emu);
         *linked_emu = NULL;
@@ -341,11 +341,11 @@ bool link_exchange_joypad(int sfd, gbmulator_t *emu, gbmulator_t *linked_emu) {
 
     do {
         if (!receive(sfd, buf, sizeof(buf), 0)) {
-            printf("Link cable disconnected\n");
+            LOG_INFO("Link cable disconnected");
             return false;
         }
         if (buf[0] != PKT_JOYPAD)
-            eprintf("received packet type %d but expected %d (ignored)\n", buf[0], PKT_JOYPAD);
+            LOG_WARN("received packet type %d but expected %d (ignored)", buf[0], PKT_JOYPAD);
     } while (buf[0] != PKT_JOYPAD);
 
     gbmulator_set_joypad_state(linked_emu, (buf[2] << 8) | buf[1]);

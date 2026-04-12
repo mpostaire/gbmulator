@@ -146,7 +146,7 @@ static inline void check_dma_requests(gba_t *gba) {
             [DMA_START_HBLANK]      = "HBLANK",
             [DMA_START_SPECIAL]     = "SPECIAL"
         };
-        printf("[DMA%u] START %s src=0x%08X (%d) dst=0x%08X (%d) cnt=%u sz=%u repeat=%u\n", i, starts[GET_DMA_START(gba, i)], channel->src, channel->src_increment, channel->dst, channel->dst_increment, channel->count, channel->is_half ? 2 : 4, IS_DMA_REPEAT(gba, i));
+        LOG_INFO("[DMA%u] START %s src=0x%08X (%d) dst=0x%08X (%d) cnt=%u sz=%u repeat=%u", i, starts[GET_DMA_START(gba, i)], channel->src, channel->src_increment, channel->dst, channel->dst_increment, channel->count, channel->is_half ? 2 : 4, IS_DMA_REPEAT(gba, i));
     }
 }
 
@@ -194,7 +194,7 @@ void gba_dma_step(gba_t *gba) {
 
         gba_bus_write(gba, BUS_ACCESS_SIZE(sizeof(data)) | channel->bus_access, channel->dst, data);
 
-        printf("[DMA%u]     0x%08X = 0x%04X (0x%08X)\n", channel_index, channel->dst, data, channel->src);
+        LOG_INFO("[DMA%u]     0x%08X = 0x%04X (0x%08X)", channel_index, channel->dst, data, channel->src);
     } else {
         uint32_t data;
         if (channel->src < BUS_EWRAM) {
@@ -206,7 +206,7 @@ void gba_dma_step(gba_t *gba) {
 
         gba_bus_write(gba, BUS_ACCESS_SIZE(sizeof(data)) | channel->bus_access, channel->dst, data);
 
-        printf("[DMA%u]     0x%08X = 0x%08X (0x%08X)\n", channel_index, channel->dst, data, channel->src);
+        LOG_INFO("[DMA%u]     0x%08X = 0x%08X (0x%08X)", channel_index, channel->dst, data, channel->src);
     }
 
     channel->bus_access = BUS_ACCESS_S;
@@ -221,7 +221,7 @@ void gba_dma_step(gba_t *gba) {
 
         RESET_BIT(gba->dma.active_channels, channel_index);
         DISABLE_DMA(gba, channel_index);
-        printf("[DMA%u] END\n", channel_index);
+        LOG_INFO("[DMA%u] END", channel_index);
     }
 }
 

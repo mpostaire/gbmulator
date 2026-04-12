@@ -42,8 +42,8 @@ static void gstreamer_error_cb(GstBus *bus, GstMessage *msg, gpointer userdata) 
     gchar  *debug_info;
 
     gst_message_parse_error(msg, &err, &debug_info);
-    eprintf("Error received from element %s: %s\n", GST_OBJECT_NAME(msg->src), err->message);
-    eprintf("Debugging information: %s\n", debug_info ? debug_info : "none");
+    LOG_ERROR("Error received from element %s: %s", GST_OBJECT_NAME(msg->src), err->message);
+    LOG_ERROR("Debugging information: %s", debug_info ? debug_info : "none");
     g_clear_error(&err);
     g_free(debug_info);
 }
@@ -67,9 +67,9 @@ gboolean camera_find_devices(void) {
 
     GstDeviceMonitor *monitor = gst_device_monitor_new();
     if (!gst_device_monitor_add_filter(monitor, "Video/Source", NULL))
-        eprintf("couldn't create filter, trying anyway\n");
+        LOG_WARN("couldn't create filter, trying anyway");
     if (!gst_device_monitor_start(monitor)) {
-        eprintf("camera monitor couldn't start\n");
+        LOG_ERROR("camera monitor couldn't start");
         return FALSE;
     }
 
@@ -136,7 +136,7 @@ gboolean camera_init(gchar *device_path) {
     GstElement *sink            = gst_element_factory_make("appsink", "app-sink");
 
     if (!pipeline || !src || !videoconvert || !videoscale || !capsfilter || !sink) {
-        eprintf("Failed creating gstreamer pipeline\n");
+        LOG_ERROR("Failed creating gstreamer pipeline");
         return FALSE;
     }
 
@@ -144,7 +144,7 @@ gboolean camera_init(gchar *device_path) {
 
     gst_bin_add_many(GST_BIN(pipeline), src, videoconvert, aspectratiocrop, videoscale, capsfilter, sink, NULL);
     if (!gst_element_link_many(src, videoconvert, aspectratiocrop, videoscale, capsfilter, sink, NULL)) {
-        eprintf("Failed linking elements to the gstreamer source\n");
+        LOG_ERROR("Failed linking elements to the gstreamer source");
         return FALSE;
     }
 

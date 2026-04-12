@@ -149,7 +149,7 @@ static inline uint8_t cgb_get_bg_win_tile_attributes(gb_t *gb) {
         tile_id_address = 0x9800 | (GET_BIT(mmu->io_registers[IO_LCDC], 6) << 10) | (((ppu->wly / 8) & 0x1F) << 5) | ((ppu->pixel_fetcher.x / 8) & 0x1F);
         break;
     default:
-        eprintf("this function can't be used for objs");
+        LOG_ERROR("this function can't be used for objs");
         exit(EXIT_FAILURE);
         break;
     }
@@ -608,7 +608,7 @@ static inline void drawing_step(gb_t *gb) {
 
     if (ppu->lcd_x >= GB_SCREEN_WIDTH) {
         // if (mmu->io_registers[IO_LY] == 0) {
-        //     printf("%d in [172, 289]?\n", ppu->cycles - 80);
+        //     LOG_INFO("%d in [172, 289]?", ppu->cycles - 80);
         // }
         // the new position is outside the screen, this scanline is done: go into HBLANK mode
         ppu->lcd_x = 0;

@@ -302,7 +302,7 @@ static void on_emu_realize(GtkGLArea *area, gpointer user_data) {
     gtk_gl_area_make_current(area);
 
     if (gtk_gl_area_get_error(area) != NULL) {
-        eprintf("Unknown error\n");
+        LOG_ERROR("Unknown error");
         return;
     }
 
@@ -334,7 +334,7 @@ static void on_printer_realize(GtkGLArea *area, gpointer user_data) {
     gtk_gl_area_make_current(area);
 
     if (gtk_gl_area_get_error(area) != NULL) {
-        eprintf("Unknown error\n");
+        LOG_ERROR("Unknown error");
         return;
     }
 }
@@ -519,7 +519,7 @@ static gboolean on_mouse_motion(GtkEventControllerMotion *self, gdouble x, gdoub
     // y = CLAMP(y / 2, 0, GB_SCREEN_HEIGHT);
     // accel_x = (x - 80) / -80.0;
     // accel_y = (y - 72) / -72.0;
-    // printf("(%lf, %lf) accel_x=%lf accel_y=%lf\n", x, y, accel_x, accel_y);
+    // LOG_INFO("(%lf, %lf) accel_x=%lf accel_y=%lf", x, y, accel_x, accel_y);
 
     if (is_mouse_pressed)
         app_touch_move(0, x, y);
@@ -972,11 +972,11 @@ static void gamepad_button_release_event_cb(ManetteDevice *emitter, ManetteEvent
 }
 
 static void gamepad_disconnected_cb(ManetteDevice *device, gpointer user_data) {
-    printf("%s: disconnected\n", manette_device_get_name(device));
+    LOG_INFO("%s: disconnected", manette_device_get_name(device));
 }
 
 static void gamepad_connected_cb(ManetteMonitor *self, ManetteDevice *device, gpointer user_data) {
-    printf("%s: connected\n", manette_device_get_name(device));
+    LOG_INFO("%s: connected", manette_device_get_name(device));
 
     g_signal_connect_object(G_OBJECT(device), "disconnected", (GCallback) gamepad_disconnected_cb, NULL, 0);
     g_signal_connect_object(G_OBJECT(device), "button-press-event", (GCallback) gamepad_button_press_event_cb, NULL, 0);

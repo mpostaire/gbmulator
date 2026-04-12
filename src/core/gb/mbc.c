@@ -310,16 +310,16 @@ uint8_t mbc_read_eram(gb_t *gb, uint16_t address) {
 
         switch (address & 0x00F0) {
         case 0x0020 /* 0xAx2x */:
-            // printf("read accel x low: 0x%02X\n", mbc->mbc7.accelerometer.latched_x & 0xFF);
+            // LOG_INFO("read accel x low: 0x%02X", mbc->mbc7.accelerometer.latched_x & 0xFF);
             return mbc->mbc7.accelerometer.latched_x; // accelerometer x low (read only)
         case 0x0030 /* 0xAx3x */:
-            // printf("read accel x high: 0x%02X\n", mbc->mbc7.accelerometer.latched_x >> 8);
+            // LOG_INFO("read accel x high: 0x%02X", mbc->mbc7.accelerometer.latched_x >> 8);
             return mbc->mbc7.accelerometer.latched_x >> 8; // accelerometer x high (read only)
         case 0x0040 /* 0xAx4x */:
-            // printf("read accel y low: 0x%02X\n", mbc->mbc7.accelerometer.latched_y & 0xFF);
+            // LOG_INFO("read accel y low: 0x%02X", mbc->mbc7.accelerometer.latched_y & 0xFF);
             return mbc->mbc7.accelerometer.latched_y; // accelerometer y low (read only)
         case 0x0050 /* 0xAx5x */:
-            // printf("read accel y high: 0x%02X\n", mbc->mbc7.accelerometer.latched_y >> 8);
+            // LOG_INFO("read accel y high: 0x%02X", mbc->mbc7.accelerometer.latched_y >> 8);
             return mbc->mbc7.accelerometer.latched_y >> 8; // accelerometer y high (read only)
         case 0x0060 /* 0xAx6x */:
             return 0x00; // unused (always reads 0x00)

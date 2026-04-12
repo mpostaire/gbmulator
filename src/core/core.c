@@ -134,11 +134,11 @@ static void rewind_pop(gbmulator_t *emu) {
     if (!emu)
         return;
 
-    // eprintf("rewind pop");
+    // LOG_DEBUG("rewind pop");
     // if (emu->rewind_stack.len == 0)
     //     return;
 
-    // eprintf("gb_load_savestate pop %ld", emu->rewind_stack.head);
+    // LOG_DEBUG("gb_load_savestate pop %ld", emu->rewind_stack.head);
     // emu->load_savestate(emu->impl, &emu->rewind_stack.states[emu->rewind_stack.head * emu->rewind_stack.state_size], emu->rewind_stack.state_size);
 
     // emu->rewind_stack.head = emu->rewind_stack.head == 0 ? (N_REWIND_STATES - 1) : emu->rewind_stack.head - 1;
@@ -232,23 +232,23 @@ bool gbmulator_load_savestate(gbmulator_t *emu, uint8_t *data, size_t length) {
     gbmulator_savestate_t *savestate = (gbmulator_savestate_t *) data;
 
     if (length <= sizeof(gbmulator_savestate_t)) {
-        eprintf("invalid savestate length (%zu)\n", length);
+        LOG_ERROR("invalid savestate length (%zu)\n", length);
         return false;
     }
 
     if (strncmp(savestate->identifier, SAVESTATE_STRING, sizeof(SAVESTATE_STRING))) {
-        eprintf("invalid format %s\n", savestate->identifier);
+        LOG_ERROR("invalid format %s\n", savestate->identifier);
         return false;
     }
 
     const char *rom_title = gbmulator_get_rom_title(emu);
     if (!rom_title) {
-        eprintf("could not get rom title %s\n", savestate->identifier);
+        LOG_ERROR("could not get rom title %s\n", savestate->identifier);
         return false;
     }
 
     if (strncmp(savestate->rom_title, rom_title, sizeof(savestate->rom_title))) {
-        eprintf("rom title mismatch (expected: '%.16s'; got: '%.16s')", rom_title, savestate->rom_title);
+        LOG_ERROR("rom title mismatch (expected: '%.16s'; got: '%.16s')", rom_title, savestate->rom_title);
         return false;
     }
 

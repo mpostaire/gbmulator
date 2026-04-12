@@ -1,23 +1,20 @@
-PLATFORM  ?= desktop
-DEBUG     ?= 0
-ROOT_ODIR ?= build
+PLATFORM	?= desktop
+BUILD_TYPE	?= release
+ROOT_ODIR	?= build
 
 SDIR := src
 
 CC				:=	gcc
 override CFLAGS +=	-std=gnu23 -I$(SDIR) \
-					-DVERSION=$(shell git rev-parse --short HEAD) \
+					-DVERSION=$(shell git rev-parse --short HEAD) -DBUILD_TYPE_$(BUILD_TYPE) \
 					-Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers
 
-BUILD_TYPE := debug
-
-ifeq ($(DEBUG),1)
+ifeq ($(BUILD_TYPE),debug)
 override CFLAGS += -ggdb -O0 -fsanitize=undefined -fno-sanitize-recover=undefined
-else ifeq ($(DEBUG),2)
-override CFLAGS += -ggdb -O0 -DDEBUG
-else
+else ifeq ($(BUILD_TYPE),release)
 override CFLAGS += -O3 -DNDEBUG -flto
-BUILD_TYPE := release
+else
+$(error BUILD_TYPE='$(BUILD_TYPE)' is invalid. Choose one of [debug, release])
 endif
 
 ODIR := $(ROOT_ODIR)/$(BUILD_TYPE)/$(PLATFORM)
