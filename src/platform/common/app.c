@@ -706,9 +706,10 @@ __attribute_used__ bool app_printer_save(const char *path) {
     image->w           = GBPRINTER_IMG_WIDTH;
     image->h           = printer_heigth;
 
-    gbmulator_get_save(app.printer.emu, image->data, &printer_heigth);
+    size_t new_printer_heigth = 0;
+    gbmulator_get_save(app.printer.emu, image->data, &new_printer_heigth);
 
-    if (printer_heigth == 0) {
+    if (printer_heigth == 0 || printer_heigth != new_printer_heigth) {
         free(image);
         return false;
     }
