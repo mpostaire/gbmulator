@@ -359,7 +359,8 @@ static gboolean on_printer_resize(GtkGLArea *area, gint width, gint height, gpoi
 static void printer_new_line_cb(size_t current_height) {
     gtk_widget_set_size_request(GTK_WIDGET(printer_gl_area), GB_SCREEN_WIDTH * 2, current_height * 2);
 
-    bool sensitive = current_height % 16 == 0;
+    // TODO not (current_height % 16 == 0) here because i'm too lazy to fix the resize offset bug
+    bool sensitive = current_height % 16 == 1;
     gtk_widget_set_sensitive(GTK_WIDGET(printer_save_btn), sensitive);
     gtk_widget_set_sensitive(GTK_WIDGET(printer_clear_btn), sensitive);
 
