@@ -1,7 +1,38 @@
 #pragma once
 
+#include <stdio.h>
+#include <time.h>
+
 #include "../../core/core.h"
 #include "../common/config.h"
+
+/**
+ * Measure elapsed time of code fragment.
+ * @param elapsed_s Variable to put elapsed time (in seconds).
+ * @param code Code fragment to measure.
+ */
+#define PERF_GET(elapsed_s, code)                                              \
+    do {                                                                       \
+        struct timespec start, end;                                            \
+        clock_gettime(CLOCK_MONOTONIC, &start);                                \
+        do {                                                                   \
+            code                                                               \
+        } while (0);                                                           \
+        clock_gettime(CLOCK_MONOTONIC, &end);                                  \
+        elapsed_s = (end.tv_sec - start.tv_sec) +                              \
+                    (end.tv_nsec - start.tv_nsec) / ((typeof(elapsed_s)) 1e9); \
+    } while (0)
+
+/**
+ * Measure and log elapsed time of code fragment.
+ * @param code Code fragment to measure.
+ */
+#define PERF_LOG(code)                                            \
+    do {                                                          \
+        double elapsed_s;                                         \
+        PERF_GET(elapsed_s, code);                                \
+        _LOG_IMPL(LOG_LVL_INFO, "I", "elapsed: %.9fs", elapsed_s) \
+    } while (0)
 
 /**
  * @returns 1 if directory_path is a directory, 0 otherwise.

@@ -17,9 +17,11 @@
 #define MAX_TOUCHES 32
 
 static struct {
-    bool          is_paused;
-    bool          is_rewinding;
-    uint32_t      steps_per_frame;
+    bool     is_paused;
+    bool     is_rewinding;
+    float    target_spf;  // target steps per frame
+    uint32_t current_spf; // current steps per frame
+
     glrenderer_t *renderer;
     gbmulator_t  *emu;
     config_t      config;
@@ -60,16 +62,20 @@ static void set_steps_per_frame(void) {
     switch (app.config.mode) {
     case GBMULATOR_MODE_GB:
     case GBMULATOR_MODE_GBC:
-        app.steps_per_frame = GB_CPU_STEPS_PER_FRAME * speed;
+        app.target_spf = GB_CPU_STEPS_PER_FRAME * speed;
         break;
     case GBMULATOR_MODE_GBA:
-        app.steps_per_frame = GBA_CPU_STEPS_PER_FRAME * speed;
+        app.target_spf = GBA_CPU_STEPS_PER_FRAME * speed;
         break;
     case GBMULATOR_MODE_GBPRINTER:
     default:
-        app.steps_per_frame = 0;
+        app.target_spf = 0;
         break;
     }
+
+    // run fast first frame to avoid long GUI freeze on startup/speed change/load cartridge
+    // the following frames will then auto adjust to choose the best spf
+    app.current_spf = app.target_spf / 100.0f;
 }
 
 static gbmulator_joypad_t app_keycode_to_joypad(unsigned int keycode) {
@@ -252,6 +258,46 @@ __attribute_used__ void app_reset(void) {
     alrenderer_clear_queue();
 }
 
+static void run_frame_linked(void) {
+    // TODO async or timeout link_exchange_joypad to avoid blocking the gui
+    if (!link_exchange_joypad(app.link.sfd, app.emu, app.link.emu)) {
+        app_link_disconnect();
+        set_steps_per_frame();
+        if (app.config.on_link_disconnected)
+            app.config.on_link_disconnected();
+    }
+
+    gbmulator_run_steps(app.emu, app.current_spf);
+}
+
+static void run_frame(void) {
+    /* clang-format off */
+    float elapsed;
+    PERF_GET(elapsed,
+        gbmulator_run_steps(app.emu, app.current_spf);
+    );
+    /* clang-format on */
+
+    // TODO 1 / 60 should be given by platform?
+    // max of 90% of the time budget goes to the emulation, 10% to the GUI
+    static const float time_budget_s = (1.0f / 60.0f) * 0.90f;
+    float              ratio         = time_budget_s / elapsed;
+
+    // auto adjust spf to fit the time budget
+    app.current_spf *= ratio;
+
+    // prevent app.current_spf to go higher than target speed
+    app.current_spf = MIN((uint32_t) app.target_spf, app.current_spf);
+
+    // LOG_INFO(
+    //     "[x%f] elapsed: %.9fs - ratio: %.9f - spf: %d",
+    //     app.current_spf / (app.config.mode == GBMULATOR_MODE_GBA ? GBA_CPU_STEPS_PER_FRAME : GB_CPU_STEPS_PER_FRAME),
+    //     elapsed,
+    //     ratio,
+    //     app.current_spf
+    // );
+}
+
 __attribute_used__ void app_run_frame(void) {
     if (app.is_paused)
         return;
@@ -261,18 +307,10 @@ __attribute_used__ void app_run_frame(void) {
     } else {
         gbmulator_set_joypad_state(app.emu, app.input.joypad_state);
 
-        // TODO async or timeout link_exchange_joypad to avoid blocking the gui
-        if (app.link.emu) {
-            if (!link_exchange_joypad(app.link.sfd, app.emu, app.link.emu)) {
-                app_link_disconnect();
-                set_steps_per_frame();
-                if (app.config.on_link_disconnected)
-                    app.config.on_link_disconnected();
-            }
-        }
-
-        // TODO test with speed > 1
-        gbmulator_run_steps(app.emu, app.steps_per_frame);
+        if (app.link.emu)
+            run_frame_linked();
+        else
+            run_frame();
     }
 }
 
