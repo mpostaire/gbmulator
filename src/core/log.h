@@ -13,18 +13,21 @@
 #define LOG_LVL_INFO  1
 #define LOG_LVL_WARN  2
 #define LOG_LVL_ERROR 3
+#define LOG_LVL_QUIET 4
 
 // map log values to internal log values
 #define _LOG_LVL_IMPL_0 LOG_LVL_DEBUG
 #define _LOG_LVL_IMPL_1 LOG_LVL_INFO
 #define _LOG_LVL_IMPL_2 LOG_LVL_WARN
 #define _LOG_LVL_IMPL_3 LOG_LVL_ERROR
+#define _LOG_LVL_IMPL_4 LOG_LVL_QUIET
 
 // map log names to internal log values
 #define _LOG_LVL_IMPL_debug LOG_LVL_DEBUG
 #define _LOG_LVL_IMPL_info  LOG_LVL_INFO
 #define _LOG_LVL_IMPL_warn  LOG_LVL_WARN
 #define _LOG_LVL_IMPL_error LOG_LVL_ERROR
+#define _LOG_LVL_IMPL_quiet LOG_LVL_QUIET
 
 // helpers
 #define _LOG_CONCAT_IMPL(a, b) a##b
@@ -82,25 +85,25 @@
 #if _LOG_LVL_VALUE <= LOG_LVL_DEBUG
 #define LOG_DEBUG(fmt, ...) _LOG_IMPL(LOG_LVL_DEBUG, "D", fmt, ##__VA_ARGS__)
 #else
-#define LOG_DEBUG(fmt, ...)
+#define LOG_DEBUG(fmt, ...) ((void) 0)
 #endif
 
 #if _LOG_LVL_VALUE <= LOG_LVL_INFO
 #define LOG_INFO(fmt, ...) _LOG_IMPL(LOG_LVL_INFO, "I", fmt, ##__VA_ARGS__)
 #else
-#define LOG_INFO(fmt, ...)
+#define LOG_INFO(fmt, ...) ((void) 0)
 #endif
 
 #if _LOG_LVL_VALUE <= LOG_LVL_WARN
 #define LOG_WARN(fmt, ...) _LOG_FULL_IMPL(LOG_LVL_WARN, "W", fmt, ##__VA_ARGS__)
 #else
-#define LOG_WARN(fmt, ...)
+#define LOG_WARN(fmt, ...) ((void) 0)
 #endif
 
 #if _LOG_LVL_VALUE <= LOG_LVL_ERROR
 #define LOG_ERROR(fmt, ...) _LOG_FULL_IMPL(LOG_LVL_ERROR, "E", fmt, ##__VA_ARGS__)
 #else
-#define LOG_ERROR(fmt, ...)
+#define LOG_ERROR(fmt, ...) ((void) 0)
 #endif
 
 static inline int _log_is_colored(void) {
