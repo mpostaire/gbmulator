@@ -2,7 +2,8 @@
 
 #include "gba.h"
 
-#define BUS_ACCESS_SIZE(x) (((x - 1) & 0x03) << 2)
+#define BUS_ACCESS_SIZE(x)          (((x - 1) & 0x03) << 2)
+#define BUS_ACCESS_GET_SIZE(access) ((uint32_t) ((((access) >> 2) & 0x03) + 1))
 
 #define IO_ADDR(addr) (addr >> 1)
 
@@ -161,9 +162,9 @@ typedef enum {
 } gba_io_reg_map_t;
 
 typedef enum {
-    BUS_ACCESS_N, // Non-sequential bus access
-    BUS_ACCESS_S  // Sequential bus access
-} bus_access_t;
+    BUS_ACCESS_TYPE_N, // Non-sequential bus access
+    BUS_ACCESS_TYPE_S  // Sequential bus access
+} bus_access_type_t;
 
 typedef struct {
     uint8_t *bios;
@@ -193,27 +194,27 @@ uint32_t gba_bus_read(gba_t *gba, uint8_t mode, uint32_t address);
 void gba_bus_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data);
 
 static inline uint8_t gba_bus_read_byte(gba_t *gba, uint32_t address) {
-    return gba_bus_read(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_N, ALIGN(address, 1));
+    return gba_bus_read(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_TYPE_N, ALIGN(address, 1));
 }
 
 static inline uint16_t gba_bus_read_half(gba_t *gba, uint32_t address) {
-    return gba_bus_read(gba, BUS_ACCESS_SIZE(2) | BUS_ACCESS_N, ALIGN(address, 2));
+    return gba_bus_read(gba, BUS_ACCESS_SIZE(2) | BUS_ACCESS_TYPE_N, ALIGN(address, 2));
 }
 
 static inline uint32_t gba_bus_read_word(gba_t *gba, uint32_t address) {
-    return gba_bus_read(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_N, ALIGN(address, 4));
+    return gba_bus_read(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_TYPE_N, ALIGN(address, 4));
 }
 
 static inline void gba_bus_write_byte(gba_t *gba, uint32_t address, uint8_t data) {
-    gba_bus_write(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_N, ALIGN(address, 1), data);
+    gba_bus_write(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_TYPE_N, ALIGN(address, 1), data);
 }
 
 static inline void gba_bus_write_half(gba_t *gba, uint32_t address, uint16_t data) {
-    gba_bus_write(gba, BUS_ACCESS_SIZE(2) | BUS_ACCESS_N, ALIGN(address, 2), data);
+    gba_bus_write(gba, BUS_ACCESS_SIZE(2) | BUS_ACCESS_TYPE_N, ALIGN(address, 2), data);
 }
 
 static inline void gba_bus_write_word(gba_t *gba, uint32_t address, uint32_t data) {
-    gba_bus_write(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_N, ALIGN(address, 4), data);
+    gba_bus_write(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_TYPE_N, ALIGN(address, 4), data);
 }
 
 bool gba_bus_validate_rom(const uint8_t *rom, size_t size);

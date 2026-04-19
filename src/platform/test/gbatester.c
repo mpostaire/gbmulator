@@ -53,54 +53,20 @@ static size_t                next_transaction  = 0;
 static size_t                transactions_size = 0;
 static gba_bus_transaction_t transactions[64];
 
-uint8_t __wrap__gba_bus_read_byte(UNUSED gba_t *gba, int mode, uint32_t address) {
+uint8_t __wrap_gba_bus_read(UNUSED gba_t *gba, uint8_t mode, uint32_t address) {
     bool is_same_addr                      = address == transactions[next_transaction].addr;
     bool is_read                           = transactions[next_transaction].kind != GBA_BUS_TRANSACTION_KIND_WRITE;
-    bool is_same_size                      = transactions[next_transaction].size == 1;
+    bool is_same_size                      = transactions[next_transaction].size == BUS_ACCESS_GET_SIZE(mode);
     transactions[next_transaction].is_done = is_same_addr && is_read && is_same_size;
 
     return transactions[next_transaction++].data;
 }
 
-uint16_t __wrap__gba_bus_read_half(UNUSED gba_t *gba, int mode, uint32_t address) {
-    bool is_same_addr                      = address == transactions[next_transaction].addr;
-    bool is_read                           = transactions[next_transaction].kind != GBA_BUS_TRANSACTION_KIND_WRITE;
-    bool is_same_size                      = transactions[next_transaction].size == 2;
-    transactions[next_transaction].is_done = is_same_addr && is_read && is_same_size;
-
-    return transactions[next_transaction++].data;
-}
-
-uint32_t __wrap__gba_bus_read_word(UNUSED gba_t *gba, int mode, uint32_t address) {
-    bool is_same_addr                      = address == transactions[next_transaction].addr;
-    bool is_read                           = transactions[next_transaction].kind != GBA_BUS_TRANSACTION_KIND_WRITE;
-    bool is_same_size                      = transactions[next_transaction].size == 4;
-    transactions[next_transaction].is_done = is_same_addr && is_read && is_same_size;
-
-    return transactions[next_transaction++].data;
-}
-
-void __wrap__gba_bus_write_byte(UNUSED gba_t *gba, int mode, uint32_t address, uint8_t data) {
+void __wrap_gba_bus_write(UNUSED gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
     bool is_same_addr                        = address == transactions[next_transaction].addr;
     bool is_same_data                        = data == transactions[next_transaction].data;
     bool is_write                            = transactions[next_transaction].kind == GBA_BUS_TRANSACTION_KIND_WRITE;
-    bool is_same_size                        = transactions[next_transaction].size == 1;
-    transactions[next_transaction++].is_done = is_same_addr && is_same_data && is_write && is_same_size;
-}
-
-void __wrap__gba_bus_write_half(UNUSED gba_t *gba, int mode, uint32_t address, uint16_t data) {
-    bool is_same_addr                        = address == transactions[next_transaction].addr;
-    bool is_same_data                        = data == transactions[next_transaction].data;
-    bool is_write                            = transactions[next_transaction].kind == GBA_BUS_TRANSACTION_KIND_WRITE;
-    bool is_same_size                        = transactions[next_transaction].size == 2;
-    transactions[next_transaction++].is_done = is_same_addr && is_same_data && is_write && is_same_size;
-}
-
-void __wrap__gba_bus_write_word(UNUSED gba_t *gba, int mode, uint32_t address, uint32_t data) {
-    bool is_same_addr                        = address == transactions[next_transaction].addr;
-    bool is_same_data                        = data == transactions[next_transaction].data;
-    bool is_write                            = transactions[next_transaction].kind == GBA_BUS_TRANSACTION_KIND_WRITE;
-    bool is_same_size                        = transactions[next_transaction].size == 4;
+    bool is_same_size                        = transactions[next_transaction].size == BUS_ACCESS_GET_SIZE(mode);
     transactions[next_transaction++].is_done = is_same_addr && is_same_data && is_write && is_same_size;
 }
 

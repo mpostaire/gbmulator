@@ -138,7 +138,7 @@ static inline void check_dma_requests(gba_t *gba) {
             break;
         }
 
-        channel->bus_access = BUS_ACCESS_N;
+        channel->bus_access = BUS_ACCESS_TYPE_N;
 
         static const char *starts[] = {
             [DMA_START_IMMEDIATELY] = "IMMEDIATELY",
@@ -209,7 +209,7 @@ void gba_dma_step(gba_t *gba) {
         LOG_INFO("[DMA%u]     0x%08X = 0x%08X (0x%08X)", channel_index, channel->dst, data, channel->src);
     }
 
-    channel->bus_access = BUS_ACCESS_S;
+    channel->bus_access = BUS_ACCESS_TYPE_S;
 
     channel->src += channel->src_increment;
     channel->dst += channel->dst_increment;

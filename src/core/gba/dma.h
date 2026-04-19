@@ -12,7 +12,7 @@ typedef struct {
     int8_t   src_increment;
     int8_t   dst_increment;
 
-    bus_access_t bus_access;
+    bus_access_type_t bus_access;
 } gba_dma_channel_t;
 
 typedef struct {
