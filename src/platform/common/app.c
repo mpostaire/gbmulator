@@ -181,7 +181,7 @@ __attribute_used__ void app_init(void) {
 
     app_set_pause(true);
 
-    app.input.joypad_state = 0xFF;
+    app.input.joypad_state = 0xFFFF;
 
     uint32_t screen_w;
     uint32_t screen_h;
