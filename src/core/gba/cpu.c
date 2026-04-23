@@ -315,6 +315,19 @@ static inline void service_interrupt(gba_t *gba, uint32_t vector) {
     flush_pipeline(gba);
 }
 
+static inline void sbc(gba_cpu_t *cpu, uint8_t rd, uint32_t op1, uint32_t op2, bool s) {
+    uint64_t tmp  = !CPSR_CHECK_FLAG(cpu, CPSR_C);
+    uint64_t res  = op1 - op2 - tmp;
+    cpu->regs[rd] = res;
+
+    if (s) {
+        tmp = (uint64_t) op2 + tmp;
+        set_flags_nz_32(cpu, res);
+        CPSR_CHANGE_FLAG(cpu, CPSR_C, tmp <= op1);
+        CPSR_CHANGE_FLAG(cpu, CPSR_V, ((op1 ^ tmp) & (op1 ^ res)) >> 31);
+    }
+}
+
 static inline void stm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, bool w) {
     int8_t transfer_size = stdc_count_ones(rlist) * 4;
     if (rlist == 0) {
@@ -773,6 +786,9 @@ static bool mrs_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu.regs[rd] = ps ? gba->cpu.spsr[regs_mode_hashes[CPSR_GET_MODE(&gba->cpu) & 0x0F]] : gba->cpu.cpsr;
 
+    if (rd == REG_PC)
+        flush_pipeline(gba);
+
     return true;
 }
 
@@ -939,12 +955,7 @@ static bool sbc_handler(gba_t *gba, uint32_t instr) {
 
     LOG_DEBUG("(0x%08X) SBC%s%s %s, %s, 0x%X", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], reg_names[(instr & 0x000F0000) >> 16], op2);
 
-    bool     tmp      = !((bool) CPSR_CHECK_FLAG(&gba->cpu, CPSR_C));
-    uint64_t res      = op1 - op2 - tmp;
-    gba->cpu.regs[rd] = res;
-
-    if (s)
-        SBC_SET_FLAGS(&gba->cpu, res, op1, (uint64_t) op2 + (uint64_t) tmp);
+    sbc(&gba->cpu, rd, op1, op2, s);
 
     if (rd == REG_PC) {
         if (s) {
@@ -971,12 +982,7 @@ static bool rsc_handler(gba_t *gba, uint32_t instr) {
 
     LOG_DEBUG("(0x%08X) RSC%s%s %s, %s, 0x%X", instr, cond_names[ARM_INSTR_GET_COND(instr)], CHECK_BIT(instr, 20) ? "S" : "", reg_names[rd], reg_names[(instr & 0x000F0000) >> 16], op2);
 
-    bool     tmp      = !((bool) CPSR_CHECK_FLAG(&gba->cpu, CPSR_C));
-    uint64_t res      = op2 - op1 - tmp;
-    gba->cpu.regs[rd] = res;
-
-    if (s)
-        SBC_SET_FLAGS(&gba->cpu, res, op2, (uint64_t) op1 + (uint64_t) tmp);
+    sbc(&gba->cpu, rd, op2, op1, s);
 
     if (rd == REG_PC) {
         if (s) {
@@ -2020,9 +2026,7 @@ static bool thumb_alu_ops_handler(gba_t *gba, uint32_t instr) {
         LOG_DEBUG("(0x%04X) ADC %s, %s", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b0110:
-        res = gba->cpu.regs[rd] - gba->cpu.regs[rs] - !((bool) CPSR_CHECK_FLAG(&gba->cpu, CPSR_C));
-        SBC_SET_FLAGS(&gba->cpu, res, (uint64_t) gba->cpu.regs[rd], (uint64_t) gba->cpu.regs[rs] + ((bool) CPSR_CHECK_FLAG(&gba->cpu, CPSR_C)));
-        gba->cpu.regs[rd] = res;
+        sbc(&gba->cpu, rd, gba->cpu.regs[rd], gba->cpu.regs[rs], true);
         LOG_DEBUG("(0x%04X) SBC %s, %s", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b0111:
