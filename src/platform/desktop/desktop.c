@@ -14,10 +14,14 @@
 #define VERSION ""
 #endif
 
+#ifndef COPYRIGHT_YEAR
+#define COPYRIGHT_YEAR "2026"
+#endif
+
 #define APP_NAME           EMULATOR_NAME
 #define APP_ICON           "gbmulator"
 #define APP_VERSION        STRINGIFY(VERSION)
-#define APP_COPYRIGHT_YEAR "2025"
+#define APP_COPYRIGHT_YEAR STRINGIFY(COPYRIGHT_YEAR)
 
 // #define XPM_WHITE " "
 // #define XPM_LIGHT_GRAY "."

@@ -8,6 +8,8 @@ BIN := $(ODIR)/$(BINNAME)
 override CFLAGS += $(shell pkg-config --cflags gtk4 libadwaita-1 manette-0.2 opengl openal gstreamer-1.0) -fanalyzer
 override LDLIBS += $(shell pkg-config --libs gtk4 libadwaita-1 manette-0.2 opengl openal gstreamer-1.0)
 
+override CFLAGS += -DCOPYRIGHT_YEAR=$(shell date +%Y)
+
 $(UI_RESOURCES).c: $(SDIR)/platform/$(PLATFORM)/ui/$(BINNAME).gresource.xml $(wildcard $(SDIR)/platform/$(PLATFORM)/ui/*.ui)
 	glib-compile-resources $< --target=$@ --generate-source --sourcedir=$(SDIR)/platform/$(PLATFORM)
 

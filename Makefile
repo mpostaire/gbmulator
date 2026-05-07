@@ -6,7 +6,8 @@ SDIR := src
 
 CC				:=	gcc
 override CFLAGS +=	-std=gnu23 -I$(SDIR) \
-					-DVERSION=$(shell git rev-parse --short HEAD) -DBUILD_TYPE_$(BUILD_TYPE) \
+					-DBUILD_TYPE_$(BUILD_TYPE) \
+					-DVERSION=$(shell git rev-parse --abbrev-ref HEAD)-$(shell git describe --always --tags --dirty) \
 					-Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers
 
 ifeq ($(BUILD_TYPE),debug)
