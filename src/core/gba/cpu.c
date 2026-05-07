@@ -157,6 +157,54 @@ static handler_t handlers[];
 static uint8_t arm_handlers[1 << 12];
 static uint8_t thumb_handlers[1 << 8];
 
+// TODO in general, read and implement section 'ARM CPU Memory Alignments' from gbatek
+// TODO do the bus address aligns in gba_cpu or gba_bus functions? this is done in gba_bus for now
+static inline uint32_t read_u8(gba_t *gba, uint32_t address) {
+    return gba_bus_read_byte(gba, address);
+}
+
+static inline void write_u8(gba_t *gba, uint32_t address, uint16_t data) {
+    gba_bus_write_byte(gba, address, data);
+}
+
+static inline uint32_t read_i8(gba_t *gba, uint32_t address) {
+    return (int8_t) gba_bus_read_byte(gba, address);
+}
+
+static inline uint32_t read_u16(gba_t *gba, uint32_t address) {
+    uint32_t data = gba_bus_read_half(gba, address);
+
+    if (address & 1)
+        data = ROR(data, 8);
+
+    return data;
+}
+
+static inline void write_u16(gba_t *gba, uint32_t address, uint16_t data) {
+    gba_bus_write_half(gba, address, data);
+}
+
+static inline uint32_t read_i16(gba_t *gba, uint32_t address) {
+    // sign extend with an explicit cast before returning as uint32_t
+    if (address & 1)
+        return (int8_t) gba_bus_read_byte(gba, address);
+    else
+        return (int16_t) gba_bus_read_half(gba, address);
+}
+
+static inline uint32_t read_u32(gba_t *gba, uint32_t address) {
+    uint32_t data = gba_bus_read_word(gba, address);
+
+    if (address & 3)
+        data = ROR(data, (address & 3) * 8);
+
+    return data;
+}
+
+static inline void write_u32(gba_t *gba, uint32_t address, uint32_t data) {
+    gba_bus_write_word(gba, address, data);
+}
+
 static inline void set_flags_nz_32(gba_cpu_t *cpu, uint32_t res) {
     CPSR_CHANGE_FLAG(cpu, CPSR_N, res >> 31);
     CPSR_CHANGE_FLAG(cpu, CPSR_Z, res == 0);
@@ -436,9 +484,9 @@ static inline void stm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, b
 
         if (i == REG_PC) {
             uint8_t pc_increment = CPSR_CHECK_FLAG(&gba->cpu, CPSR_T) ? 2 : 4;
-            gba_bus_write_word(gba, dest_addr, gba->cpu.regs[i] + pc_increment);
+            write_u32(gba, dest_addr, gba->cpu.regs[i] + pc_increment);
         } else {
-            gba_bus_write_word(gba, dest_addr, gba->cpu.regs[i]);
+            write_u32(gba, dest_addr, gba->cpu.regs[i]);
         }
 
         if (!(p))
@@ -495,9 +543,10 @@ static inline bool ldm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, b
 }
 
 static bool not_implemented_handler(UNUSED gba_t *gba, uint32_t instr) {
-    int instr_size = CPSR_CHECK_FLAG(&gba->cpu, CPSR_T) ? 2 : 4;
-    LOG_ERROR("not implemented instruction: 0x%0*X (0b%0*b)", instr_size * 2, instr, instr_size * 8, instr);
+    uint32_t instr_size = CPSR_CHECK_FLAG(&gba->cpu, CPSR_T) ? 2 : 4;
+    LOG_WARN("not implemented instruction: 0x%0*X (0b%0*b)", instr_size * 2, instr, instr_size * 8, instr);
 
+    // TODO some undefined instructions do not trigger undefined instruction interrupt: check ARM7TDMI datasheet
     service_interrupt(gba, VECTOR_UNDEFINED_INSTR);
 
     return false;
@@ -809,9 +858,6 @@ static bool mrs_handler(gba_t *gba, uint32_t instr) {
     LOG_DEBUG("(0x%08X) MRS%s %s,%cPSR_fc", instr, cond_names[ARM_INSTR_GET_COND(instr)], reg_names[rd], ps ? 'S' : 'C');
 
     gba->cpu.regs[rd] = ps ? gba->cpu.spsr[regs_mode_hashes[CPSR_GET_MODE(&gba->cpu) & 0x0F]] : gba->cpu.cpsr;
-
-    if (rd == REG_PC)
-        flush_pipeline(gba);
 
     return true;
 }
@@ -1182,14 +1228,11 @@ static bool swp_handler(gba_t *gba, uint32_t instr) {
 
     uint32_t data;
     if (b) {
-        data = gba_bus_read_byte(gba, gba->cpu.regs[rn]);
-        gba_bus_write_byte(gba, gba->cpu.regs[rn], gba->cpu.regs[rm]);
+        data = read_u8(gba, gba->cpu.regs[rn]);
+        write_u8(gba, gba->cpu.regs[rn], gba->cpu.regs[rm]);
     } else {
-        data = gba_bus_read_word(gba, gba->cpu.regs[rn]);
-
-        uint8_t amount = (gba->cpu.regs[rn] & 0x03) << 3;
-        data           = amount == 0 ? data : ROR(data, amount);
-        gba_bus_write_word(gba, gba->cpu.regs[rn], gba->cpu.regs[rm]);
+        data = read_u32(gba, gba->cpu.regs[rn]);
+        write_u32(gba, gba->cpu.regs[rn], gba->cpu.regs[rm]);
     }
 
     gba->cpu.regs[rd] = data;
@@ -1230,7 +1273,7 @@ static bool strh_reg_handler(gba_t *gba, uint32_t instr) {
 
     switch ((s << 1) | h) {
     case 0b01:
-        gba_bus_write_half(gba, addr, data);
+        write_u16(gba, addr, data);
         break;
     case 0b10:
     case 0b11:
@@ -1242,14 +1285,8 @@ static bool strh_reg_handler(gba_t *gba, uint32_t instr) {
     if (!p)
         addr += offset;
 
-    if (w || !p) {
+    if (w || !p)
         gba->cpu.regs[rn] = addr;
-        if (rn == REG_PC) {
-            gba->cpu.regs[rn] += 4;
-            flush_pipeline(gba);
-            return false;
-        }
-    }
 
     return true;
 }
@@ -1281,7 +1318,7 @@ static bool strh_imm_handler(gba_t *gba, uint32_t instr) {
 
     switch ((s << 1) | h) {
     case 0b01:
-        gba_bus_write_half(gba, addr, data);
+        write_u16(gba, addr, data);
         break;
     case 0b10:
     case 0b11:
@@ -1293,14 +1330,8 @@ static bool strh_imm_handler(gba_t *gba, uint32_t instr) {
     if (!p)
         addr += offset;
 
-    if (w || !p) {
+    if (w || !p)
         gba->cpu.regs[rn] = addr;
-        if (rn == REG_PC) {
-            gba->cpu.regs[rn] += 4;
-            flush_pipeline(gba);
-            return false;
-        }
-    }
 
     return true;
 }
@@ -1331,17 +1362,13 @@ static bool ldrh_reg_handler(gba_t *gba, uint32_t instr) {
     uint32_t data;
     switch ((s << 1) | h) {
     case 0b01:
-        data   = gba_bus_read_half(gba, addr);
-        amount = (addr & 0x01) << 3;
-        data   = amount == 0 ? data : ROR(data, amount);
+        data = read_u16(gba, addr);
         break;
     case 0b10:
-        data = (int8_t) gba_bus_read_byte(gba, addr);
+        data = read_i8(gba, addr);
         break;
     case 0b11:
-        data   = (int16_t) gba_bus_read_half(gba, addr);
-        amount = (addr & 0x01) << 3;
-        data   = (int16_t) (amount == 0 ? data : ROR(data, amount));
+        data = read_i16(gba, addr);
         break;
     case 0b00:
     default:
@@ -1351,15 +1378,12 @@ static bool ldrh_reg_handler(gba_t *gba, uint32_t instr) {
     if (!p)
         addr += offset;
 
-    if (w || !p) {
+    if (w || !p)
         gba->cpu.regs[rn] = addr;
-        if (rn == REG_PC)
-            gba->cpu.regs[rn] += 4;
-    }
 
     gba->cpu.regs[rd] = data;
 
-    if (rd == REG_PC || rn == REG_PC) {
+    if (rd == REG_PC) {
         flush_pipeline(gba);
         return false;
     }
@@ -1392,17 +1416,13 @@ static bool ldrh_imm_handler(gba_t *gba, uint32_t instr) {
     uint32_t data;
     switch ((s << 1) | h) {
     case 0b01:
-        data   = gba_bus_read_half(gba, addr);
-        amount = (addr & 0x01) << 3;
-        data   = amount == 0 ? data : ROR(data, amount);
+        data = read_u16(gba, addr);
         break;
     case 0b10:
-        data = (int8_t) gba_bus_read_byte(gba, addr);
+        data = read_i8(gba, addr);
         break;
     case 0b11:
-        data   = (int16_t) gba_bus_read_half(gba, addr);
-        amount = (addr & 0x01) << 3;
-        data   = (int16_t) (amount == 0 ? data : ROR(data, amount));
+        data = read_i16(gba, addr);
         break;
     case 0b00:
     default:
@@ -1412,15 +1432,12 @@ static bool ldrh_imm_handler(gba_t *gba, uint32_t instr) {
     if (!p)
         addr += offset;
 
-    if (w || !p) {
+    if (w || !p)
         gba->cpu.regs[rn] = addr;
-        if (rn == REG_PC)
-            gba->cpu.regs[rn] += 4;
-    }
 
     gba->cpu.regs[rd] = data;
 
-    if (rd == REG_PC /*|| rn == REG_PC*/) {
+    if (rd == REG_PC) {
         flush_pipeline(gba);
         return false;
     }
@@ -1467,21 +1484,15 @@ static bool str_handler(gba_t *gba, uint32_t instr) {
         data += 4;
 
     if (b)
-        gba_bus_write_byte(gba, addr, data);
+        write_u8(gba, addr, data);
     else
-        gba_bus_write_word(gba, addr, data);
+        write_u32(gba, addr, data);
 
     if (!p)
         addr += offset;
 
-    if (w || !p) {
+    if (w || !p)
         gba->cpu.regs[rn] = addr;
-        if (rn == REG_PC) {
-            gba->cpu.regs[rn] += 4;
-            flush_pipeline(gba);
-            return false;
-        }
-    }
 
     return true;
 }
@@ -1521,26 +1532,20 @@ static bool ldr_handler(gba_t *gba, uint32_t instr) {
     LOG_DEBUG("(0x%08X) LDR%s%s%s %s,[%s%s,#%s0x%X%s", instr, cond_names[ARM_INSTR_GET_COND(instr)], b ? "B" : "", w ? "T" : "", reg_names[rd], reg_names[rn], p ? "" : "]", u ? "" : "-", u ? offset : -offset, p ? "]" : "");
 
     uint32_t data;
-    if (b) {
-        data = gba_bus_read_byte(gba, addr);
-    } else {
-        data           = gba_bus_read_word(gba, addr);
-        uint8_t amount = (addr & 0x03) << 3;
-        data           = amount == 0 ? data : ROR(data, amount);
-    }
+    if (b)
+        data = read_u8(gba, addr);
+    else
+        data = read_u32(gba, addr);
 
     if (!p)
         addr += offset;
 
-    if (w || !p) {
+    if (w || !p)
         gba->cpu.regs[rn] = addr;
-        if (rn == REG_PC)
-            gba->cpu.regs[rn] += 4;
-    }
 
     gba->cpu.regs[rd] = data;
 
-    if (rd == REG_PC /*|| rn == REG_PC*/) {
+    if (rd == REG_PC) {
         flush_pipeline(gba);
         return false;
     }
@@ -1715,14 +1720,14 @@ void gba_cpu_step(gba_t *gba) {
               CPSR_CHECK_FLAG(cpu, CPSR_T) ? 'T' : '-');
     /* clang-format on */
 
-    int      pc_increment_shift;
+    uint32_t pc_increment_shift;
     uint32_t fetched_instr;
     if (CPSR_CHECK_FLAG(&gba->cpu, CPSR_T)) {
         pc_increment_shift = 1;
-        fetched_instr      = gba_bus_read_half(gba, cpu->regs[REG_PC]);
+        fetched_instr      = read_u16(gba, cpu->regs[REG_PC]);
     } else {
         pc_increment_shift = 2;
-        fetched_instr      = gba_bus_read_word(gba, cpu->regs[REG_PC]);
+        fetched_instr      = read_u32(gba, cpu->regs[REG_PC]);
     }
 
     if (cpu->regs[REG_PC] < BUS_BIOS_UNUSED)
@@ -2127,9 +2132,9 @@ static bool thumb_pc_relative_ldr_handler(gba_t *gba, uint32_t instr) {
     uint32_t word8 = (instr & 0xFF) << 2;
     uint8_t  rd    = (instr >> 8) & 0x07;
 
-    uint32_t addr = ((gba->cpu.regs[REG_PC]) & ~2) + word8;
+    uint32_t addr = (gba->cpu.regs[REG_PC] & ~2) + word8;
 
-    gba->cpu.regs[rd] = gba_bus_read_word(gba, addr);
+    gba->cpu.regs[rd] = read_u32(gba, addr);
 
     LOG_DEBUG("(0x%04X) LDR %s, Lxx_#0x%08X", instr, reg_names[rd], addr);
 
@@ -2145,12 +2150,10 @@ static bool thumb_str_reg_handler(gba_t *gba, uint32_t instr) {
 
     LOG_DEBUG("(0x%04X) STR%s %s, [%s, %s]", instr, b ? "B" : "", reg_names[rd], reg_names[rb], reg_names[ro]);
 
-    uint32_t addr = gba->cpu.regs[rb] + gba->cpu.regs[ro];
-
     if (b)
-        gba_bus_write_byte(gba, addr, gba->cpu.regs[rd]);
+        write_u8(gba, gba->cpu.regs[rb] + gba->cpu.regs[ro], gba->cpu.regs[rd]);
     else
-        gba_bus_write_word(gba, addr, gba->cpu.regs[rd]);
+        write_u32(gba, gba->cpu.regs[rb] + gba->cpu.regs[ro], gba->cpu.regs[rd]);
 
     return true;
 }
@@ -2164,15 +2167,10 @@ static bool thumb_ldr_reg_handler(gba_t *gba, uint32_t instr) {
 
     LOG_DEBUG("(0x%04X) LDR%s %s, [%s, %s]", instr, b ? "B" : "", reg_names[rd], reg_names[rb], reg_names[ro]);
 
-    uint32_t addr = gba->cpu.regs[rb] + gba->cpu.regs[ro];
-
-    if (b) {
-        gba->cpu.regs[rd] = gba_bus_read_byte(gba, addr);
-    } else {
-        uint32_t data     = gba_bus_read_word(gba, addr);
-        uint8_t  amount   = (addr & 0x03) << 3;
-        gba->cpu.regs[rd] = amount == 0 ? data : ROR(data, amount);
-    }
+    if (b)
+        gba->cpu.regs[rd] = read_u8(gba, gba->cpu.regs[rb] + gba->cpu.regs[ro]);
+    else
+        gba->cpu.regs[rd] = read_u32(gba, gba->cpu.regs[rb] + gba->cpu.regs[ro]);
 
     return true;
 }
@@ -2184,8 +2182,7 @@ static bool thumb_strh_reg_handler(gba_t *gba, uint32_t instr) {
 
     LOG_DEBUG("(0x%04X) STRH %s, [%s, %s]", instr, reg_names[rd], reg_names[rb], reg_names[ro]);
 
-    uint32_t addr = gba->cpu.regs[rb] + gba->cpu.regs[ro];
-    gba_bus_write_half(gba, addr, gba->cpu.regs[rd]);
+    write_u16(gba, gba->cpu.regs[rb] + gba->cpu.regs[ro], gba->cpu.regs[rd]);
 
     return true;
 }
@@ -2202,28 +2199,21 @@ static bool thumb_ldrh_reg_handler(gba_t *gba, uint32_t instr) {
 
     uint32_t addr = gba->cpu.regs[rb] + gba->cpu.regs[ro];
 
-    uint8_t  amount;
-    uint32_t data;
+    uint8_t amount;
     switch ((s << 1) | h) {
     case 0b01:
-        data   = gba_bus_read_half(gba, addr);
-        amount = (addr & 0x01) << 3;
-        data   = amount == 0 ? data : ROR(data, amount);
+        gba->cpu.regs[rd] = read_u16(gba, addr);
         break;
     case 0b10:
-        data = (int8_t) gba_bus_read_byte(gba, addr);
+        gba->cpu.regs[rd] = read_i8(gba, addr);
         break;
     case 0b11:
-        data   = (int16_t) gba_bus_read_half(gba, addr);
-        amount = (addr & 0x01) << 3;
-        data   = (int16_t) (amount == 0 ? data : ROR(data, amount));
+        gba->cpu.regs[rd] = read_i16(gba, addr);
         break;
     case 0b00:
     default:
         todo();
     }
-
-    gba->cpu.regs[rd] = data;
 
     return true;
 }
@@ -2238,9 +2228,9 @@ static bool thumb_strh_imm_handler(gba_t *gba, uint32_t instr) {
     LOG_DEBUG("(0x%04X) STR%s %s, [%s, #0x%04X]", instr, b ? "B" : "", reg_names[rd], reg_names[rb], b ? offset5 : offset5 << 2);
 
     if (b)
-        gba_bus_write_byte(gba, gba->cpu.regs[rb] + offset5, gba->cpu.regs[rd]);
+        write_u8(gba, gba->cpu.regs[rb] + offset5, gba->cpu.regs[rd]);
     else
-        gba_bus_write_word(gba, gba->cpu.regs[rb] + (offset5 << 2), gba->cpu.regs[rd]);
+        write_u32(gba, gba->cpu.regs[rb] + (offset5 << 2), gba->cpu.regs[rd]);
 
     return true;
 }
@@ -2254,14 +2244,10 @@ static bool thumb_ldrh_imm_handler(gba_t *gba, uint32_t instr) {
 
     LOG_DEBUG("(0x%04X) LDR%s %s, [%s, #0x%04X]", instr, b ? "B" : "", reg_names[rd], reg_names[rb], b ? offset5 : offset5 << 2);
 
-    if (b) {
-        gba->cpu.regs[rd] = gba_bus_read_byte(gba, gba->cpu.regs[rb] + offset5);
-    } else {
-        uint32_t addr     = gba->cpu.regs[rb] + (offset5 << 2);
-        gba->cpu.regs[rd] = gba_bus_read_word(gba, addr);
-        uint8_t amount    = (addr & 0x03) << 3;
-        gba->cpu.regs[rd] = amount == 0 ? gba->cpu.regs[rd] : ROR(gba->cpu.regs[rd], amount);
-    }
+    if (b)
+        gba->cpu.regs[rd] = read_u8(gba, gba->cpu.regs[rb] + offset5);
+    else
+        gba->cpu.regs[rd] = read_u32(gba, gba->cpu.regs[rb] + (offset5 << 2));
 
     return true;
 }
@@ -2273,7 +2259,7 @@ static bool thumb_strh_handler(gba_t *gba, uint32_t instr) {
 
     LOG_DEBUG("(0x%04X) STRH %s, [%s, #0x%02X]", instr, reg_names[rd], reg_names[rb], offset5);
 
-    gba_bus_write_half(gba, gba->cpu.regs[rb] + offset5, gba->cpu.regs[rd]);
+    write_u16(gba, gba->cpu.regs[rb] + offset5, gba->cpu.regs[rd]);
 
     return true;
 }
@@ -2285,10 +2271,7 @@ static bool thumb_ldrh_handler(gba_t *gba, uint32_t instr) {
 
     LOG_DEBUG("(0x%04X) LDRH %s, [%s, #0x%02X]", instr, reg_names[rd], reg_names[rb], offset5);
 
-    uint32_t addr     = gba->cpu.regs[rb] + offset5;
-    gba->cpu.regs[rd] = gba_bus_read_half(gba, addr);
-    uint8_t amount    = (addr & 0x01) << 3;
-    gba->cpu.regs[rd] = amount == 0 ? gba->cpu.regs[rd] : ROR(gba->cpu.regs[rd], amount);
+    gba->cpu.regs[rd] = read_u16(gba, gba->cpu.regs[rb] + offset5);
 
     return true;
 }
@@ -2299,7 +2282,7 @@ static bool thumb_str_sp_handler(gba_t *gba, uint32_t instr) {
 
     LOG_DEBUG("(0x%04X) STR %s, [%s, #0x%04X]", instr, reg_names[rd], reg_names[REG_SP], offset);
 
-    gba_bus_write_word(gba, gba->cpu.regs[REG_SP] + offset, gba->cpu.regs[rd]);
+    write_u32(gba, gba->cpu.regs[REG_SP] + offset, gba->cpu.regs[rd]);
 
     return true;
 }
@@ -2310,10 +2293,7 @@ static bool thumb_ldr_sp_handler(gba_t *gba, uint32_t instr) {
 
     LOG_DEBUG("(0x%04X) LDR %s, [%s, #0x%04X]", instr, reg_names[rd], reg_names[REG_SP], offset);
 
-    uint32_t addr     = gba->cpu.regs[REG_SP] + offset;
-    gba->cpu.regs[rd] = gba_bus_read_word(gba, addr);
-    uint8_t amount    = (addr & 0x03) << 3;
-    gba->cpu.regs[rd] = amount == 0 ? gba->cpu.regs[rd] : ROR(gba->cpu.regs[rd], amount);
+    gba->cpu.regs[rd] = read_u32(gba, gba->cpu.regs[REG_SP] + offset);
 
     return true;
 }
@@ -2638,7 +2618,7 @@ decoder_rule_t thumb_decoder_rules[] = {
     { "1111****________", HANDLER_ID(thumb_bl_handler)              }, // Long branch with link
 };
 
-uint8_t get_handler(uint32_t instr, decoder_rule_t *decoder_rules, size_t decoder_rules_size) {
+static uint8_t get_handler(uint32_t instr, decoder_rule_t *decoder_rules, size_t decoder_rules_size) {
     size_t rule_size = strnlen(decoder_rules[0].match_string, sizeof(decoder_rules[0].match_string));
 
     for (size_t i = 0; i < decoder_rules_size; i++) {

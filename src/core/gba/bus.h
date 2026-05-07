@@ -194,27 +194,27 @@ uint32_t gba_bus_read(gba_t *gba, uint8_t mode, uint32_t address);
 void gba_bus_write(gba_t *gba, uint8_t mode, uint32_t address, uint32_t data);
 
 static inline uint8_t gba_bus_read_byte(gba_t *gba, uint32_t address) {
-    return gba_bus_read(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_TYPE_N, ALIGN(address, 1));
+    return gba_bus_read(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_TYPE_N, address);
 }
 
 static inline uint16_t gba_bus_read_half(gba_t *gba, uint32_t address) {
-    return gba_bus_read(gba, BUS_ACCESS_SIZE(2) | BUS_ACCESS_TYPE_N, ALIGN(address, 2));
+    return gba_bus_read(gba, BUS_ACCESS_SIZE(2) | BUS_ACCESS_TYPE_N, address);
 }
 
 static inline uint32_t gba_bus_read_word(gba_t *gba, uint32_t address) {
-    return gba_bus_read(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_TYPE_N, ALIGN(address, 4));
+    return gba_bus_read(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_TYPE_N, address);
 }
 
 static inline void gba_bus_write_byte(gba_t *gba, uint32_t address, uint8_t data) {
-    gba_bus_write(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_TYPE_N, ALIGN(address, 1), data);
+    gba_bus_write(gba, BUS_ACCESS_SIZE(1) | BUS_ACCESS_TYPE_N, address, data);
 }
 
 static inline void gba_bus_write_half(gba_t *gba, uint32_t address, uint16_t data) {
-    gba_bus_write(gba, BUS_ACCESS_SIZE(2) | BUS_ACCESS_TYPE_N, ALIGN(address, 2), data);
+    gba_bus_write(gba, BUS_ACCESS_SIZE(2) | BUS_ACCESS_TYPE_N, address, data);
 }
 
 static inline void gba_bus_write_word(gba_t *gba, uint32_t address, uint32_t data) {
-    gba_bus_write(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_TYPE_N, ALIGN(address, 4), data);
+    gba_bus_write(gba, BUS_ACCESS_SIZE(4) | BUS_ACCESS_TYPE_N, address, data);
 }
 
 bool gba_bus_validate_rom(const uint8_t *rom, size_t size);

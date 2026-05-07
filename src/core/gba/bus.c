@@ -857,7 +857,7 @@ static uint32_t rom_read(gba_t *gba, uint8_t access, uint32_t address) {
 
     uint32_t data;
 
-    if (bus->rom_address_latch > bus->rom_size) {
+    if (bus->rom_address_latch >= bus->rom_size) {
         // Reading from GamePak ROM when no Cartridge is inserted (or address beyond cartridge capacity)
         // Because Gamepak uses the same signal-lines for both 16bit data and for lower 16bit halfword address, the
         // entire gamepak ROM area is effectively filled by incrementing 16bit values (Address/2 AND FFFFh).
