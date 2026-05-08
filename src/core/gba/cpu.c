@@ -157,8 +157,6 @@ static handler_t handlers[];
 static uint8_t arm_handlers[1 << 12];
 static uint8_t thumb_handlers[1 << 8];
 
-// TODO in general, read and implement section 'ARM CPU Memory Alignments' from gbatek
-// TODO do the bus address aligns in gba_cpu or gba_bus functions? this is done in gba_bus for now
 static inline uint32_t read_u8(gba_t *gba, uint32_t address) {
     return gba_bus_read_byte(gba, address);
 }
@@ -172,7 +170,7 @@ static inline uint32_t read_i8(gba_t *gba, uint32_t address) {
 }
 
 static inline uint32_t read_u16(gba_t *gba, uint32_t address) {
-    uint32_t data = gba_bus_read_half(gba, address);
+    uint32_t data = gba_bus_read_half(gba, ALIGN(address, 2));
 
     if (address & 1)
         data = ROR(data, 8);
@@ -181,7 +179,7 @@ static inline uint32_t read_u16(gba_t *gba, uint32_t address) {
 }
 
 static inline void write_u16(gba_t *gba, uint32_t address, uint16_t data) {
-    gba_bus_write_half(gba, address, data);
+    gba_bus_write_half(gba, ALIGN(address, 2), data);
 }
 
 static inline uint32_t read_i16(gba_t *gba, uint32_t address) {
@@ -189,11 +187,11 @@ static inline uint32_t read_i16(gba_t *gba, uint32_t address) {
     if (address & 1)
         return (int8_t) gba_bus_read_byte(gba, address);
     else
-        return (int16_t) gba_bus_read_half(gba, address);
+        return (int16_t) gba_bus_read_half(gba, ALIGN(address, 2));
 }
 
 static inline uint32_t read_u32(gba_t *gba, uint32_t address) {
-    uint32_t data = gba_bus_read_word(gba, address);
+    uint32_t data = gba_bus_read_word(gba, ALIGN(address, 4));
 
     if (address & 3)
         data = ROR(data, (address & 3) * 8);
@@ -202,7 +200,7 @@ static inline uint32_t read_u32(gba_t *gba, uint32_t address) {
 }
 
 static inline void write_u32(gba_t *gba, uint32_t address, uint32_t data) {
-    gba_bus_write_word(gba, address, data);
+    gba_bus_write_word(gba, ALIGN(address, 4), data);
 }
 
 static inline void set_flags_nz_32(gba_cpu_t *cpu, uint32_t res) {
@@ -528,9 +526,9 @@ static inline bool ldm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, b
 
         if (i == REG_PC) {
             uint8_t align    = CPSR_CHECK_FLAG(&gba->cpu, CPSR_T) ? 2 : 4;
-            gba->cpu.regs[i] = ALIGN(gba_bus_read_word(gba, dest_addr), align);
+            gba->cpu.regs[i] = ALIGN(gba_bus_read_word(gba, ALIGN(dest_addr, 4)), align);
         } else {
-            gba->cpu.regs[i] = gba_bus_read_word(gba, dest_addr);
+            gba->cpu.regs[i] = gba_bus_read_word(gba, ALIGN(dest_addr, 4));
         }
 
         if (!p)

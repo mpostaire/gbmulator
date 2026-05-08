@@ -17,8 +17,8 @@
 #define MGBA_LOG_DEBUG 4
 
 typedef struct {
-    uint32_t (*read)(gba_t *gba, uint8_t access, uint32_t address);
-    void (*write)(gba_t *gba, uint8_t access, uint32_t address, uint32_t data);
+    uint32_t (*read)(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address);
+    void (*write)(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data);
 } bus_accessors_t;
 
 // clang-format off
@@ -785,31 +785,28 @@ static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
     CHANGE_BITS(gba->bus.io[address], mask, data);
 }
 
-static uint32_t unused_read(gba_t *gba, uint8_t access, uint32_t address) {
+static uint32_t unused_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
     return gba->bus.read_data_latch; // TODO
 }
 
-static uint32_t bios_read(gba_t *gba, uint8_t access, uint32_t address) {
+static uint32_t bios_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
     if (gba->cpu.regs[REG_PC] >= BUS_BIOS_UNUSED)
         return gba->bus.last_fetched_bios_instr;
     return read32(&gba->bus.bios[address - BUS_BIOS]);
 }
 
-static uint32_t ewram_read(gba_t *gba, uint8_t access, uint32_t address) {
+static uint32_t ewram_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
     return read32(&gba->bus.ewram[(address - BUS_EWRAM) % (BUS_EWRAM_UNUSED - BUS_EWRAM)]);
 }
 
-static uint32_t iwram_read(gba_t *gba, uint8_t access, uint32_t address) {
+static uint32_t iwram_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
     return read32(&gba->bus.iwram[(address - BUS_IWRAM) % (BUS_IWRAM_UNUSED - BUS_IWRAM)]);
 }
 
-static uint32_t io_read(gba_t *gba, uint8_t access, uint32_t address) {
-    uint8_t size = BUS_ACCESS_GET_SIZE(access);
-
+static uint32_t io_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
     address -= BUS_IO;
-    uint32_t data;
 
-    data = io_regs_read(gba, address);
+    uint32_t data = io_regs_read(gba, address);
     if (size == 4)
         data |= ((uint32_t) io_regs_read(gba, address + 2)) << 16;
 
@@ -824,11 +821,11 @@ static uint32_t io_read(gba_t *gba, uint8_t access, uint32_t address) {
     return data;
 }
 
-static uint32_t pram_read(gba_t *gba, uint8_t access, uint32_t address) {
+static uint32_t pram_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
     return read32(&gba->bus.pram[(address - BUS_PRAM) % (BUS_PRAM_UNUSED - BUS_PRAM)]);
 }
 
-static uint32_t vram_read(gba_t *gba, uint8_t access, uint32_t address) {
+static uint32_t vram_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
     gba_bus_t *bus = &gba->bus;
 
     uint32_t vram_upper_bound = PPU_GET_MODE(gba) < 3 ? 0x10000 : 0x14000;
@@ -843,13 +840,12 @@ static uint32_t vram_read(gba_t *gba, uint8_t access, uint32_t address) {
     return data;
 }
 
-static uint32_t oam_read(gba_t *gba, uint8_t access, uint32_t address) {
+static uint32_t oam_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
     return read32(&gba->bus.oam[(address - BUS_OAM_UNUSED) % (BUS_OAM_UNUSED - BUS_OAM)]);
 }
 
-static uint32_t rom_read(gba_t *gba, uint8_t access, uint32_t address) {
+static uint32_t rom_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
     gba_bus_t        *bus         = &gba->bus;
-    uint8_t           size        = BUS_ACCESS_GET_SIZE(access);
     bus_access_type_t access_type = access & 0x01;
 
     if (access_type == BUS_ACCESS_TYPE_N)
@@ -873,9 +869,8 @@ static uint32_t rom_read(gba_t *gba, uint8_t access, uint32_t address) {
     return data;
 }
 
-static uint32_t sram_read(gba_t *gba, uint8_t access, uint32_t address) {
-    gba_bus_t *bus  = &gba->bus;
-    uint8_t    size = BUS_ACCESS_GET_SIZE(access);
+static uint32_t sram_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
+    gba_bus_t *bus = &gba->bus;
 
     uint32_t data = bus->sram[(address - BUS_SRAM) % (BUS_SRAM_UNUSED - BUS_SRAM)];
     if (size == 2)
@@ -886,17 +881,16 @@ static uint32_t sram_read(gba_t *gba, uint8_t access, uint32_t address) {
     return data;
 }
 
-static void unused_write(gba_t *gba, uint8_t access, uint32_t address, uint32_t data) {
+static void unused_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
     // do nothing
 }
 
-static void bios_write(gba_t *gba, uint8_t access, uint32_t address, uint32_t data) {
+static void bios_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
     // do nothing
 }
 
-static void ewram_write(gba_t *gba, uint8_t access, uint32_t address, uint32_t data) {
-    gba_bus_t *bus  = &gba->bus;
-    uint8_t    size = BUS_ACCESS_GET_SIZE(access);
+static void ewram_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
+    gba_bus_t *bus = &gba->bus;
 
     switch (size) {
     case 1:
@@ -911,9 +905,8 @@ static void ewram_write(gba_t *gba, uint8_t access, uint32_t address, uint32_t d
     }
 }
 
-static void iwram_write(gba_t *gba, uint8_t access, uint32_t address, uint32_t data) {
-    gba_bus_t *bus  = &gba->bus;
-    uint8_t    size = BUS_ACCESS_GET_SIZE(access);
+static void iwram_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
+    gba_bus_t *bus = &gba->bus;
 
     switch (size) {
     case 1:
@@ -928,9 +921,8 @@ static void iwram_write(gba_t *gba, uint8_t access, uint32_t address, uint32_t d
     }
 }
 
-static void io_write(gba_t *gba, uint8_t access, uint32_t address, uint32_t data) {
-    uint8_t size  = BUS_ACCESS_GET_SIZE(access);
-    address      -= BUS_IO;
+static void io_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
+    address -= BUS_IO;
 
     io_regs_write(gba, address, data);
     if (size == 4)
@@ -965,9 +957,8 @@ static void io_write(gba_t *gba, uint8_t access, uint32_t address, uint32_t data
     }
 }
 
-static void pram_write(gba_t *gba, uint8_t access, uint32_t address, uint32_t data) {
-    gba_bus_t *bus  = &gba->bus;
-    uint8_t    size = BUS_ACCESS_GET_SIZE(access);
+static void pram_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
+    gba_bus_t *bus = &gba->bus;
 
     switch (size) {
     case 1:
@@ -982,9 +973,8 @@ static void pram_write(gba_t *gba, uint8_t access, uint32_t address, uint32_t da
     }
 }
 
-static void vram_write(gba_t *gba, uint8_t access, uint32_t address, uint32_t data) {
-    gba_bus_t *bus  = &gba->bus;
-    uint8_t    size = BUS_ACCESS_GET_SIZE(access);
+static void vram_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
+    gba_bus_t *bus = &gba->bus;
 
     uint32_t vram_upper_bound = PPU_GET_MODE(gba) < 3 ? 0x10000 : 0x14000;
     address                   = (address - (BUS_VRAM_UNUSED + 0x8000)) % 0x20000;
@@ -1005,9 +995,8 @@ static void vram_write(gba_t *gba, uint8_t access, uint32_t address, uint32_t da
     }
 }
 
-static void oam_write(gba_t *gba, uint8_t access, uint32_t address, uint32_t data) {
-    gba_bus_t *bus  = &gba->bus;
-    uint8_t    size = BUS_ACCESS_GET_SIZE(access);
+static void oam_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
+    gba_bus_t *bus = &gba->bus;
 
     switch (size) {
     case 1:
@@ -1022,11 +1011,11 @@ static void oam_write(gba_t *gba, uint8_t access, uint32_t address, uint32_t dat
     }
 }
 
-static void rom_write(gba_t *gba, uint8_t access, uint32_t address, uint32_t data) {
+static void rom_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
     // do nothing
 }
 
-static void sram_write(gba_t *gba, uint8_t access, uint32_t address, uint32_t data) {
+static void sram_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
     gba->bus.sram[(address - BUS_SRAM) % (BUS_SRAM_UNUSED - BUS_SRAM)] = data;
 }
 
@@ -1049,14 +1038,14 @@ static bus_accessors_t accessors[16] = {
     [0x0F] = { .read = unused_read, .write = unused_write },
 };
 
-uint32_t gba_bus_read(gba_t *gba, uint8_t access, uint32_t address) {
+uint32_t gba_bus_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
     uint32_t address_hi = address >> 24;
     if (address_hi > 0xF)
         address_hi = 0xF;
 
-    uint32_t data = accessors[address_hi].read(gba, access, address);
+    uint32_t data = accessors[address_hi].read(gba, size, access, address);
 
-    switch (BUS_ACCESS_GET_SIZE(access)) {
+    switch (size) {
     case 1:
         data &= 0xFF;
         data  = (data << 24) | (data << 16) | (data << 8) | data;
@@ -1077,12 +1066,12 @@ uint32_t gba_bus_read(gba_t *gba, uint8_t access, uint32_t address) {
     return data;
 }
 
-void gba_bus_write(gba_t *gba, uint8_t access, uint32_t address, uint32_t data) {
+void gba_bus_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
     uint32_t address_hi = address >> 24;
     if (address_hi > 0xF)
         address_hi = 0xF;
 
-    switch (BUS_ACCESS_GET_SIZE(access)) {
+    switch (size) {
     case 1:
         data                      &= 0xFF;
         gba->bus.write_data_latch  = (data << 24) | (data << 16) | (data << 8) | data;
@@ -1099,7 +1088,7 @@ void gba_bus_write(gba_t *gba, uint8_t access, uint32_t address, uint32_t data) 
         break;
     }
 
-    accessors[address_hi].write(gba, access, address, gba->bus.write_data_latch);
+    accessors[address_hi].write(gba, size, access, address, gba->bus.write_data_latch);
 }
 
 bool gba_bus_validate_rom(const uint8_t *rom, size_t size) {

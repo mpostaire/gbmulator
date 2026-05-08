@@ -45,30 +45,30 @@ static size_t                next_transaction  = 0;
 static size_t                transactions_size = 0;
 static gba_bus_transaction_t transactions[64];
 
-uint8_t __wrap_gba_bus_read(UNUSED gba_t *gba, uint8_t mode, uint32_t address) {
+uint8_t __wrap_gba_bus_read(UNUSED gba_t *gba, uint8_t size, UNUSED bus_access_type_t access, uint32_t address) {
     bool is_same_addr                      = address == transactions[next_transaction].addr;
     bool is_read                           = transactions[next_transaction].kind != GBA_BUS_TRANSACTION_KIND_WRITE;
-    bool is_same_size                      = transactions[next_transaction].size == BUS_ACCESS_GET_SIZE(mode);
+    bool is_same_size                      = transactions[next_transaction].size == size;
     transactions[next_transaction].is_done = is_same_addr && is_read && is_same_size;
 
     if (next_transaction >= transactions_size) {
-        printf("transaction[%zu]: expected nothing, got read of size %u @ 0x%08X\n", next_transaction, transactions[next_transaction].size, transactions[next_transaction].addr, BUS_ACCESS_GET_SIZE(mode), address);
+        printf("transaction[%zu]: expected nothing, got read of size %u @ 0x%08X\n", next_transaction, transactions[next_transaction].size, transactions[next_transaction].addr, size, address);
     } else if (!transactions[next_transaction].is_done) {
         if (is_read) {
-            printf("transaction[%zu]: expected read of size %u @ 0x%08X, got read of size %u @ 0x%08X\n", next_transaction, transactions[next_transaction].size, transactions[next_transaction].addr, BUS_ACCESS_GET_SIZE(mode), address);
+            printf("transaction[%zu]: expected read of size %u @ 0x%08X, got read of size %u @ 0x%08X\n", next_transaction, transactions[next_transaction].size, transactions[next_transaction].addr, size, address);
         } else {
-            printf("transaction[%zu]: expected write, got read of size %u @ 0x%08X\n\n", next_transaction, BUS_ACCESS_GET_SIZE(mode), address);
+            printf("transaction[%zu]: expected write, got read of size %u @ 0x%08X\n\n", next_transaction, size, address);
         }
     }
 
     return transactions[next_transaction++].data;
 }
 
-void __wrap_gba_bus_write(UNUSED gba_t *gba, uint8_t mode, uint32_t address, uint32_t data) {
+void __wrap_gba_bus_write(UNUSED gba_t *gba, uint8_t size, UNUSED bus_access_type_t access, uint32_t address, uint32_t data) {
     bool is_same_addr                        = address == transactions[next_transaction].addr;
     bool is_same_data                        = data == transactions[next_transaction].data;
     bool is_write                            = transactions[next_transaction].kind == GBA_BUS_TRANSACTION_KIND_WRITE;
-    bool is_same_size                        = transactions[next_transaction].size == BUS_ACCESS_GET_SIZE(mode);
+    bool is_same_size                        = transactions[next_transaction].size == size;
     transactions[next_transaction++].is_done = is_same_addr && is_same_data && is_write && is_same_size;
 
     if (next_transaction >= transactions_size) {
