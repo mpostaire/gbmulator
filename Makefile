@@ -4,10 +4,14 @@ ROOT_ODIR	?= build
 
 SDIR := src
 
+VERSION			:= $(shell git rev-parse --abbrev-ref HEAD)-$(shell git describe --always --tags --dirty)
+COPYRIGHT_YEAR	:= $(shell date +%Y)
+
 CC				:=	gcc
 override CFLAGS +=	-std=gnu23 -I$(SDIR) \
 					-DBUILD_TYPE_$(BUILD_TYPE) \
-					-DVERSION=$(shell git rev-parse --abbrev-ref HEAD)-$(shell git describe --always --tags --dirty) \
+					-DVERSION=$(VERSION) \
+					-DCOPYRIGHT_YEAR=$(COPYRIGHT_YEAR) \
 					-Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers
 
 ifeq ($(BUILD_TYPE),debug)
@@ -42,7 +46,13 @@ $(ODIR)/%.o: $(SDIR)/%.c
 -include $(OBJ:.o=.d)
 
 test:
-	$(MAKE) PLATFORM=test _test
+# 	$(MAKE) PLATFORM=test BUILD_TYPE=debug CFLAGS+=--coverage _test
+# 	$(MAKE) PLATFORM=test BUILD_TYPE=debug "CFLAGS+=-DLOG_LEVEL=debug" _test
+	$(MAKE) PLATFORM=test BUILD_TYPE=debug "CFLAGS+=-DLOG_LEVEL=warn" _test
+# 	$(MAKE) PLATFORM=test BUILD_TYPE=debug "CFLAGS+=--coverage -DLOG_LEVEL=warn" _test
+# 	rm -rf coverage
+# 	mkdir coverage
+# 	gcovr --gcov-ignore-parse-errors=all --html-nested=coverage/coverage.html
 
 check: $(SDIR)
 	cppcheck --enable=all --check-level=exhaustive --suppress=missingIncludeSystem -i $(SDIR)/platform/android -i $(SDIR)/platform/desktop/resources.c $(SDIR)
