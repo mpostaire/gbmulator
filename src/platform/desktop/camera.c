@@ -74,6 +74,10 @@ gboolean camera_find_devices(void) {
     }
 
     devices_len = 0;
+    if (devices_paths) {
+        free(devices_paths);
+        devices_paths = NULL;
+    }
 
     GList *devices = gst_device_monitor_get_devices(monitor);
     for (GList *iter = devices; iter != NULL; iter = g_list_next(iter)) {
@@ -173,6 +177,11 @@ void camera_quit(void) {
     if (camera_data) {
         free(camera_data);
         camera_data = NULL;
+    }
+
+    if (devices_paths) {
+        free(devices_paths);
+        devices_paths = NULL;
     }
 
     if (pipeline) {
