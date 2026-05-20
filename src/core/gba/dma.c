@@ -186,7 +186,10 @@ void gba_dma_step(gba_t *gba) {
     if (channel->is_half) {
         uint16_t data;
         if (channel->src < BUS_EWRAM) {
-            data = gba->dma.data_read_latch;
+            if (channel->dst & 2)
+                data = gba->dma.data_read_latch >> 16;
+            else
+                data = gba->dma.data_read_latch;
         } else {
             data                     = gba_bus_read(gba, sizeof(data), channel->bus_access, ALIGN(channel->src, sizeof(data)));
             gba->dma.data_read_latch = (((uint32_t) data) << 16) | data; // TODO this is same as bus.read_data_latch?

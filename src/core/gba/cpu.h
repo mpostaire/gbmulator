@@ -2,6 +2,9 @@
 
 #include "gba.h"
 
+#define PIPELINE_FETCHING 0
+#define PIPELINE_DECODING 1
+
 #define REG_SP 13 // Stack Pointer
 #define REG_LR 14 // Link Register
 #define REG_PC 15 // Program Counter
@@ -22,6 +25,16 @@
 #define IRQ_GAMEPAK 13 // Game Pak (external IRQ source)
 
 #define CPU_REQUEST_INTERRUPT(gba, irq) SET_BIT((gba)->bus.io[IO_IF], irq)
+
+#define CPSR_N (((uint32_t) 1) << 31) // Negative or less than
+#define CPSR_Z (((uint32_t) 1) << 30) // Zero
+#define CPSR_C (((uint32_t) 1) << 29) // Carry or borrow or extend
+#define CPSR_V (((uint32_t) 1) << 28) // Overflow
+#define CPSR_I (((uint32_t) 1) << 7)  // IRQ disable
+#define CPSR_F (((uint32_t) 1) << 6)  // FIQ disable
+#define CPSR_T (((uint32_t) 1) << 5)  // State bit
+
+#define CPSR_CHECK_FLAG(cpu, flag) ((cpu)->cpsr & (flag))
 
 typedef struct {
     uint32_t regs[16];
