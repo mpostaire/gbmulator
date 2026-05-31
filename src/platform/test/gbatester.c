@@ -46,13 +46,13 @@ static size_t                transactions_size = 0;
 static gba_bus_transaction_t transactions[64];
 
 uint8_t __wrap_gba_bus_read(UNUSED gba_t *gba, uint8_t size, UNUSED bus_access_type_t access, uint32_t address) {
-    bool is_same_addr                      = address == transactions[next_transaction].addr;
+    bool is_same_addr                      = ALIGN(address, size) == ALIGN(transactions[next_transaction].addr, size);
     bool is_read                           = transactions[next_transaction].kind != GBA_BUS_TRANSACTION_KIND_WRITE;
     bool is_same_size                      = transactions[next_transaction].size == size;
     transactions[next_transaction].is_done = is_same_addr && is_read && is_same_size;
 
     if (next_transaction >= transactions_size) {
-        printf("transaction[%zu]: expected nothing, got read of size %u @ 0x%08X\n", next_transaction, transactions[next_transaction].size, transactions[next_transaction].addr, size, address);
+        printf("transaction[%zu]: expected nothing, got read of size %u @ 0x%08X\n", next_transaction, size, address);
     } else if (!transactions[next_transaction].is_done) {
         if (is_read) {
             printf("transaction[%zu]: expected read of size %u @ 0x%08X, got read of size %u @ 0x%08X\n", next_transaction, transactions[next_transaction].size, transactions[next_transaction].addr, size, address);
@@ -65,11 +65,11 @@ uint8_t __wrap_gba_bus_read(UNUSED gba_t *gba, uint8_t size, UNUSED bus_access_t
 }
 
 void __wrap_gba_bus_write(UNUSED gba_t *gba, uint8_t size, UNUSED bus_access_type_t access, uint32_t address, uint32_t data) {
-    bool is_same_addr                        = address == transactions[next_transaction].addr;
-    bool is_same_data                        = data == transactions[next_transaction].data;
-    bool is_write                            = transactions[next_transaction].kind == GBA_BUS_TRANSACTION_KIND_WRITE;
-    bool is_same_size                        = transactions[next_transaction].size == size;
-    transactions[next_transaction++].is_done = is_same_addr && is_same_data && is_write && is_same_size;
+    bool is_same_addr                      = ALIGN(address, size) == ALIGN(transactions[next_transaction].addr, size);
+    bool is_same_data                      = data == transactions[next_transaction].data;
+    bool is_write                          = transactions[next_transaction].kind == GBA_BUS_TRANSACTION_KIND_WRITE;
+    bool is_same_size                      = transactions[next_transaction].size == size;
+    transactions[next_transaction].is_done = is_same_addr && is_same_data && is_write && is_same_size;
 
     if (next_transaction >= transactions_size) {
         printf("transaction[%zu]: expected nothing, got [0x%08X]=0x%08X\n", next_transaction, transactions[next_transaction].addr, address);
@@ -80,6 +80,8 @@ void __wrap_gba_bus_write(UNUSED gba_t *gba, uint8_t size, UNUSED bus_access_typ
             printf("transaction[%zu] is not a write\n", next_transaction - 1);
         }
     }
+
+    next_transaction++;
 }
 
 static bool cpu_reg_equals(uint8_t reg, uint32_t expected, uint32_t got, uint32_t tested_opcode, bool is_arm_str_ldr, bool is_arm_mull_mlal_mul_mla) {
@@ -148,9 +150,9 @@ static bool cpu_equals(gba_cpu_t *expected, gba_cpu_t *got, uint32_t tested_opco
     // TODO CPSR_V, CPSR_C, CPSR_N flag for multiplication instructions ignored for now
     uint32_t cpsr_mask = 0xFFFFFFFF;
     if (is_arm_mull_mlal_mul_mla)
-        cpsr_mask = ~((1 << 28) | (1 << 29));
+        cpsr_mask = ~((1u << 28u) | (1u << 29u));
     if (is_thumb_mul)
-        cpsr_mask = ~((1 << 31) | (1 << 28) | (1 << 29));
+        cpsr_mask = ~((1u << 31u) | (1u << 28u) | (1u << 29u));
 
     if ((expected->cpsr & cpsr_mask) != (got->cpsr & cpsr_mask)) {
         success = false;
@@ -327,7 +329,13 @@ static bool gba_cpu_tester_run(const char *path) {
         // ----> understand exactly when/where spsr is written
 
         if (!cpu_equals(&expected->cpu, &init->cpu, opcode, is_arm_str_ldr, is_arm_mull_mlal_mul_mla)) {
-            printf("❌ CPU state mismatch (%u)!\n", i);
+            printf("CPU state mismatch (%u)!\n", i);
+            errors++;
+            break;
+        }
+
+        if (!check_transactions()) {
+            printf("transaction mismatch (%u)!\n", i);
             errors++;
             break;
         }
@@ -352,7 +360,7 @@ int gbatester_main(int argc, char **argv) {
         "ARM7TDMI/v1/arm_data_proc_immediate.json.bin",       // OK
         "ARM7TDMI/v1/arm_data_proc_immediate_shift.json.bin", // OK
         "ARM7TDMI/v1/arm_data_proc_register_shift.json.bin",  // OK
-        "ARM7TDMI/v1/arm_ldm_stm.json.bin",                   // 0
+        "ARM7TDMI/v1/arm_ldm_stm.json.bin",                   // OK
         "ARM7TDMI/v1/arm_ldrh_strh.json.bin",                 // OK
         "ARM7TDMI/v1/arm_ldrsb_ldrsh.json.bin",               // OK
         "ARM7TDMI/v1/arm_ldr_str_immediate_offset.json.bin",  // OK
