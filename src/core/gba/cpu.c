@@ -1747,7 +1747,7 @@ void gba_cpu_step(gba_t *gba) {
     if (gba->dma.active_channels)
         return;
 
-    if (gba->bus.io[IO_IME] && !CPSR_CHECK_FLAG(cpu, CPSR_I) && (gba->bus.io[IO_IE] & gba->bus.io[IO_IF])) {
+    if (CHECK_BIT(gba->bus.io[IO_IME], 0) && !CPSR_CHECK_FLAG(cpu, CPSR_I) && (gba->bus.io[IO_IE] & gba->bus.io[IO_IF])) {
         LOG_DEBUG("IRQ: %x", gba->bus.io[IO_IE] & gba->bus.io[IO_IF]);
         service_interrupt(gba, VECTOR_IRQ);
     }
@@ -2704,15 +2704,10 @@ void gba_cpu_reset(gba_t *gba) {
 
     // TODO reg values after bios boot, remove to boot from bios directly
     CPSR_SET_MODE(&gba->cpu, CPSR_MODE_SYS);
-    CPSR_CHANGE_FLAG(&gba->cpu, CPSR_I, 0);
-    CPSR_CHANGE_FLAG(&gba->cpu, CPSR_F, 0);
     gba->cpu.banked_regs_13_14[regs_mode_hashes[CPSR_MODE_SVC & 0x0F]][0] = 0x03007FE0;
     gba->cpu.banked_regs_13_14[regs_mode_hashes[CPSR_MODE_IRQ & 0x0F]][0] = 0x03007FA0;
-    gba->cpu.regs[13]                                                     = 0x03007F00;
-    // gba->cpu.regs[14] = 0x08000000;
-    gba->cpu.regs[REG_PC] = 0x08000000;
-    // gba->cpu.cpsr = 0x0000001F;
-    // gba->cpu.spsr[regs_mode_hashes[CPSR_GET_MODE(&gba->cpu) & 0x0F]] = 0x00000010;
+    gba->cpu.regs[REG_SP]                                                 = 0x03007F00;
+    gba->cpu.regs[REG_PC]                                                 = 0x08000000;
 
     flush_pipeline(gba);
 
