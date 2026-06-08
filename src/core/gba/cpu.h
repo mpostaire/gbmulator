@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gba.h"
+#include "bus.h"
 
 #define PIPELINE_FETCHING 0
 #define PIPELINE_DECODING 1
@@ -45,8 +46,8 @@ typedef struct {
     uint32_t cpsr; // current program status register
     uint32_t spsr[7];
 
-    uint32_t pipeline[2]; // array of instructions (because it is a 3 stage pipeline, we just need to remember 2 instructions)
-    uint8_t  pipeline_flush_cycles;
+    uint32_t          pipeline[2]; // array of instructions (because it is a 3 stage pipeline, we just need to remember 2 instructions)
+    bus_access_type_t pipeline_access_type;
 } gba_cpu_t;
 
 void gba_cpu_step(gba_t *gba);

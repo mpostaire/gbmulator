@@ -160,10 +160,14 @@ typedef enum {
 
 typedef enum {
     BUS_ACCESS_TYPE_N, // Non-sequential bus access
-    BUS_ACCESS_TYPE_S  // Sequential bus access
+    BUS_ACCESS_TYPE_S, // Sequential bus access
+    BUS_ACCESS_TYPE_END
 } bus_access_type_t;
 
 typedef struct {
+    uint8_t timings_8_16[16][BUS_ACCESS_TYPE_END];
+    uint8_t timings_32[16][BUS_ACCESS_TYPE_END];
+
     uint8_t *bios;
     uint8_t  ewram[BUS_EWRAM_UNUSED - BUS_EWRAM];
     uint8_t  iwram[BUS_IWRAM_UNUSED - BUS_IWRAM];
@@ -213,6 +217,10 @@ static inline void gba_bus_write_half(gba_t *gba, uint32_t address, uint16_t dat
 static inline void gba_bus_write_word(gba_t *gba, uint32_t address, uint32_t data) {
     gba_bus_write(gba, 4, BUS_ACCESS_TYPE_N, address, data);
 }
+
+void gba_bus_step_peripherals(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address);
+
+void gba_bus_idle(gba_t *gba);
 
 bool gba_bus_validate_rom(const uint8_t *rom, size_t size);
 

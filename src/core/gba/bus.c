@@ -60,6 +60,44 @@ static inline void write_u32(uint8_t *base, uint32_t data) {
     memcpy(base, &data, sizeof(data));
 }
 
+// TODO The GBA forcefully uses non-sequential timing at the beginning of each 128K-block of gamepak ROM, eg. "LDMIA [801fff8h],r0-r7" will have non-sequential timing at 8020000h.
+static void update_timings(gba_bus_t *bus) {
+    static const uint8_t waitcnt_timings_n_lut[]     = { 4 + 1, 3 + 1, 2 + 1, 8 + 1 };
+    static const uint8_t waitcnt_timings_s_lut[3][2] = {
+        { 2 + 1, 1 + 1 },
+        { 4 + 1, 1 + 1 },
+        { 8 + 1, 1 + 1 }
+    };
+
+    const uint16_t waitcnt = bus->io[IO_WAITCNT];
+
+    // ROM waitstates regions 0/1/2
+    for (uint8_t i = 0; i < 3; i++) {
+        static const uint8_t regions_lut[] = { 0x8, 0xA, 0xC };
+
+        for (uint8_t j = 0; j < 2; j++) {
+            uint8_t region = regions_lut[i] + j;
+
+            bus->timings_8_16[region][BUS_ACCESS_TYPE_N] = waitcnt_timings_n_lut[(waitcnt >> 2) & 0x3];
+            bus->timings_8_16[region][BUS_ACCESS_TYPE_S] = waitcnt_timings_s_lut[i][(waitcnt >> 4) & 0x1];
+
+            bus->timings_32[region][BUS_ACCESS_TYPE_N] = bus->timings_8_16[region][BUS_ACCESS_TYPE_N] + bus->timings_8_16[region][BUS_ACCESS_TYPE_S];
+            bus->timings_32[region][BUS_ACCESS_TYPE_S] = bus->timings_8_16[region][BUS_ACCESS_TYPE_S] + bus->timings_8_16[region][BUS_ACCESS_TYPE_S];
+        }
+    }
+
+    // SRAM waitstates
+    for (uint8_t j = 0; j < 2; j++) {
+        uint8_t region = 0xE + j;
+
+        bus->timings_8_16[region][BUS_ACCESS_TYPE_N] = waitcnt_timings_n_lut[waitcnt & 0x3];
+        bus->timings_8_16[region][BUS_ACCESS_TYPE_S] = waitcnt_timings_n_lut[waitcnt & 0x3];
+
+        bus->timings_32[region][BUS_ACCESS_TYPE_N] = waitcnt_timings_n_lut[waitcnt & 0x3];
+        bus->timings_32[region][BUS_ACCESS_TYPE_S] = waitcnt_timings_n_lut[waitcnt & 0x3];
+    }
+}
+
 static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
     uint32_t mask   = 0xFFFF;
     address       >>= 1;
@@ -771,6 +809,11 @@ static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
         break;
     case IO_WAITCNT:
         LOG_DEBUG("IO_WAITCNT 0x%04X", data);
+
+        update_timings(&gba->bus);
+
+        if (CHECK_BIT(data, 14))
+            todo("ENABLE/DISABLE ROM instruction prefetch buffer");
         break;
     case IO_IME:
         mask = 0x0001;
@@ -1086,6 +1129,33 @@ static bus_accessors_t accessors[16] = {
     [0x0F] = { .read = sram_read,     .write = sram_write     },
 };
 
+void gba_bus_step_peripherals(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
+    uint32_t region = address >> 24;
+    if (region > 0x0F)
+        region = 0x0F;
+
+    uint8_t cycles = 0;
+
+    if (size == 4)
+        cycles = gba->bus.timings_32[region][access];
+    else
+        cycles = gba->bus.timings_8_16[region][access];
+
+    gba->cycles += cycles;
+
+    for (uint8_t i = 0; i < cycles; i++) {
+        gba_ppu_step(gba);
+        gba_tmr_step(gba);
+    }
+}
+
+void gba_bus_idle(gba_t *gba) {
+    gba->cycles++;
+
+    gba_ppu_step(gba);
+    gba_tmr_step(gba);
+}
+
 uint32_t gba_bus_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
     uint32_t address_hi = address >> 24;
     if (address_hi > 0xF)
@@ -1202,4 +1272,25 @@ void gba_bus_reset(gba_t *gba) {
     gba->bus.rom_size        = gba->base->opts.rom_size;
     gba->bus.bios            = gba_bios;
     gba->bus.io[IO_KEYINPUT] = 0x03FF;
+
+    memset(gba->bus.timings_8_16, 1, sizeof(gba->bus.timings_8_16));
+    memset(gba->bus.timings_32, 1, sizeof(gba->bus.timings_32));
+
+    // EWRAM 16-bits
+    gba->bus.timings_8_16[0x2][BUS_ACCESS_TYPE_S] = 3;
+    gba->bus.timings_8_16[0x2][BUS_ACCESS_TYPE_N] = 3;
+
+    // EWRAM 32-bits
+    gba->bus.timings_32[0x2][BUS_ACCESS_TYPE_S] = 6;
+    gba->bus.timings_32[0x2][BUS_ACCESS_TYPE_N] = 6;
+
+    // VRAM 32-bits
+    gba->bus.timings_32[0x5][BUS_ACCESS_TYPE_S] = 2;
+    gba->bus.timings_32[0x5][BUS_ACCESS_TYPE_N] = 2;
+
+    // PRAM 32-bits
+    gba->bus.timings_32[0x6][BUS_ACCESS_TYPE_S] = 2;
+    gba->bus.timings_32[0x6][BUS_ACCESS_TYPE_N] = 2;
+
+    update_timings(&gba->bus);
 }

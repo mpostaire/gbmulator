@@ -185,6 +185,8 @@ void gba_dma_step(gba_t *gba) {
 
     if (channel->is_half) {
         uint16_t data;
+
+        gba_bus_step_peripherals(gba, sizeof(data), channel->bus_access, channel->src);
         if (channel->src < BUS_EWRAM) {
             if (channel->dst & 2)
                 data = gba->dma.data_read_latch >> 16;
@@ -195,11 +197,14 @@ void gba_dma_step(gba_t *gba) {
             gba->dma.data_read_latch = (((uint32_t) data) << 16) | data; // TODO this is same as bus.read_data_latch?
         }
 
+        gba_bus_step_peripherals(gba, sizeof(data), channel->bus_access, channel->src);
         gba_bus_write(gba, sizeof(data), channel->bus_access, ALIGN(channel->dst, sizeof(data)), data);
 
         // LOG_INFO("[DMA%u]     0x%08X = 0x%04X (0x%08X)", channel_index, channel->dst, data, channel->src);
     } else {
         uint32_t data;
+
+        gba_bus_step_peripherals(gba, sizeof(data), channel->bus_access, channel->src);
         if (channel->src < BUS_EWRAM) {
             data = gba->dma.data_read_latch;
         } else {
@@ -207,6 +212,7 @@ void gba_dma_step(gba_t *gba) {
             gba->dma.data_read_latch = data;
         }
 
+        gba_bus_step_peripherals(gba, sizeof(data), channel->bus_access, channel->src);
         gba_bus_write(gba, sizeof(data), channel->bus_access, ALIGN(channel->dst, sizeof(data)), data);
 
         // LOG_INFO("[DMA%u]     0x%08X = 0x%08X (0x%08X)", channel_index, channel->dst, data, channel->src);

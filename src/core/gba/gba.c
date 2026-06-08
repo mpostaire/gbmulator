@@ -9,9 +9,8 @@ static const char *makers[] = {
 };
 
 void gba_step(gba_t *gba) {
-    gba_cpu_step(gba);
-    gba_ppu_step(gba);
-    gba_tmr_step(gba);
+    if (!gba->dma.active_channels)
+        gba_cpu_step(gba);
     gba_dma_step(gba);
 }
 

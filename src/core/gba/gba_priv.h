@@ -14,6 +14,8 @@ struct gba_t {
 
     char rom_title[13]; // title is max 12 chars
 
+    uint64_t cycles;
+
     gba_cpu_t cpu;
     gba_bus_t bus;
     gba_ppu_t ppu;
