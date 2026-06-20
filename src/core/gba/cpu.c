@@ -338,6 +338,8 @@ static char *_msr_op_to_str(uint32_t instr, uint8_t op, bool i, char *buf, size_
 
 // TODO flushing in arm or thumb mode is the same alignment?
 static inline void arm_flush_pipeline(gba_t *gba) {
+    gba->cpu.regs[REG_PC] = ALIGN(gba->cpu.regs[REG_PC], 2);
+
     gba->cpu.pipeline_access_type         = BUS_ACCESS_TYPE_N;
     gba->cpu.pipeline[PIPELINE_DECODING]  = read_u32(gba, gba->cpu.pipeline_access_type, gba->cpu.regs[REG_PC]);
     gba->cpu.regs[REG_PC]                += 4;
@@ -351,6 +353,8 @@ static inline void arm_flush_pipeline(gba_t *gba) {
 
 // TODO flushing in arm or thumb mode is the same alignment?
 static inline void thumb_flush_pipeline(gba_t *gba) {
+    gba->cpu.regs[REG_PC] = ALIGN(gba->cpu.regs[REG_PC], 2);
+
     gba->cpu.pipeline_access_type         = BUS_ACCESS_TYPE_N;
     gba->cpu.pipeline[PIPELINE_DECODING]  = read_u16(gba, gba->cpu.pipeline_access_type, gba->cpu.regs[REG_PC]);
     gba->cpu.regs[REG_PC]                += 2;
@@ -534,8 +538,6 @@ static inline void sbc(gba_cpu_t *cpu, uint8_t rd, uint32_t op1, uint32_t op2, b
 
 // TODO thumb ldm/stm should use their own as they don't have to do all the p/u/s/w checks
 static inline void stm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, bool s, bool w) {
-    gba->cpu.pipeline_access_type = BUS_ACCESS_TYPE_N;
-
     int8_t transfer_size = stdc_count_ones(rlist) * 4;
     if (rlist == 0) {
         SET_BIT(rlist, REG_PC);
@@ -591,8 +593,6 @@ static inline void stm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, b
 
 // TODO thumb ldm/stm should use their own as they don't have to do all the p/u/s/w checks
 static inline bool ldm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, bool s, bool w) {
-    gba->cpu.pipeline_access_type = BUS_ACCESS_TYPE_N;
-
     int8_t transfer_size = stdc_count_ones(rlist) * 4;
     if (rlist == 0) {
         SET_BIT(rlist, REG_PC);
@@ -889,12 +889,10 @@ static bool bx_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu.regs[REG_PC] = pc_dest;
 
-    if (CPSR_CHECK_FLAG(&gba->cpu, CPSR_T)) {
-        gba->cpu.regs[REG_PC] = ALIGN(gba->cpu.regs[REG_PC], 2);
+    if (CPSR_CHECK_FLAG(&gba->cpu, CPSR_T))
         thumb_flush_pipeline(gba);
-    } else {
+    else
         arm_flush_pipeline(gba);
-    }
 
     return false;
 }
@@ -1825,19 +1823,6 @@ void gba_cpu_step(gba_t *gba) {
         service_interrupt(gba, VECTOR_IRQ);
     }
 
-    /* clang-format off */
-    LOG_DEBUG("--------");
-    LOG_DEBUG("[PC=0x%08X] [COND=%c%c%c%c %c%c%c]",
-              cpu->regs[REG_PC],
-              CPSR_CHECK_FLAG(cpu, CPSR_N) ? 'N' : '-',
-              CPSR_CHECK_FLAG(cpu, CPSR_Z) ? 'Z' : '-',
-              CPSR_CHECK_FLAG(cpu, CPSR_C) ? 'C' : '-',
-              CPSR_CHECK_FLAG(cpu, CPSR_V) ? 'V' : '-',
-              CPSR_CHECK_FLAG(cpu, CPSR_I) ? 'I' : '-',
-              CPSR_CHECK_FLAG(cpu, CPSR_F) ? 'F' : '-',
-              CPSR_CHECK_FLAG(cpu, CPSR_T) ? 'T' : '-');
-    /* clang-format on */
-
     uint32_t pc_increment_shift;
     uint32_t fetched_instr;
     if (CPSR_CHECK_FLAG(&gba->cpu, CPSR_T)) {
@@ -2210,12 +2195,10 @@ static bool thumb_bx_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu.regs[REG_PC] = pc_dest;
 
-    if (CPSR_CHECK_FLAG(&gba->cpu, CPSR_T)) {
-        gba->cpu.regs[REG_PC] = ALIGN(gba->cpu.regs[REG_PC], 2);
+    if (CPSR_CHECK_FLAG(&gba->cpu, CPSR_T))
         thumb_flush_pipeline(gba);
-    } else {
+    else
         arm_flush_pipeline(gba);
-    }
 
     return false;
 }
