@@ -78,11 +78,13 @@ static void update_timings(gba_bus_t *bus) {
         for (uint8_t j = 0; j < 2; j++) {
             uint8_t region = regions_lut[i] + j;
 
-            bus->timings_8_16[region][BUS_ACCESS_TYPE_N] = waitcnt_timings_n_lut[(waitcnt >> 2) & 0x3];
-            bus->timings_8_16[region][BUS_ACCESS_TYPE_S] = waitcnt_timings_s_lut[i][(waitcnt >> 4) & 0x1];
+            // 8/16-bits timings
+            bus->timings[0][region][BUS_ACCESS_TYPE_N] = waitcnt_timings_n_lut[(waitcnt >> 2) & 0x3];
+            bus->timings[0][region][BUS_ACCESS_TYPE_S] = waitcnt_timings_s_lut[i][(waitcnt >> 4) & 0x1];
 
-            bus->timings_32[region][BUS_ACCESS_TYPE_N] = bus->timings_8_16[region][BUS_ACCESS_TYPE_N] + bus->timings_8_16[region][BUS_ACCESS_TYPE_S];
-            bus->timings_32[region][BUS_ACCESS_TYPE_S] = bus->timings_8_16[region][BUS_ACCESS_TYPE_S] + bus->timings_8_16[region][BUS_ACCESS_TYPE_S];
+            // 32-bits timings
+            bus->timings[1][region][BUS_ACCESS_TYPE_N] = bus->timings[0][region][BUS_ACCESS_TYPE_N] + bus->timings[0][region][BUS_ACCESS_TYPE_S];
+            bus->timings[1][region][BUS_ACCESS_TYPE_S] = bus->timings[0][region][BUS_ACCESS_TYPE_S] + bus->timings[0][region][BUS_ACCESS_TYPE_S];
         }
     }
 
@@ -90,11 +92,13 @@ static void update_timings(gba_bus_t *bus) {
     for (uint8_t j = 0; j < 2; j++) {
         uint8_t region = 0xE + j;
 
-        bus->timings_8_16[region][BUS_ACCESS_TYPE_N] = waitcnt_timings_n_lut[waitcnt & 0x3];
-        bus->timings_8_16[region][BUS_ACCESS_TYPE_S] = waitcnt_timings_n_lut[waitcnt & 0x3];
+        // 8/16-bits timings
+        bus->timings[0][region][BUS_ACCESS_TYPE_N] = waitcnt_timings_n_lut[waitcnt & 0x3];
+        bus->timings[0][region][BUS_ACCESS_TYPE_S] = waitcnt_timings_n_lut[waitcnt & 0x3];
 
-        bus->timings_32[region][BUS_ACCESS_TYPE_N] = waitcnt_timings_n_lut[waitcnt & 0x3];
-        bus->timings_32[region][BUS_ACCESS_TYPE_S] = waitcnt_timings_n_lut[waitcnt & 0x3];
+        // 32-bits timings
+        bus->timings[1][region][BUS_ACCESS_TYPE_N] = waitcnt_timings_n_lut[waitcnt & 0x3];
+        bus->timings[1][region][BUS_ACCESS_TYPE_S] = waitcnt_timings_n_lut[waitcnt & 0x3];
     }
 }
 
@@ -1130,36 +1134,41 @@ static bus_accessors_t accessors[16] = {
 };
 
 void gba_bus_step_peripherals(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
-    uint32_t region = address >> 24;
-    if (region > 0x0F)
-        region = 0x0F;
+    uint32_t region = (address >> 24) & 0x0F;
 
-    uint8_t cycles = 0;
+    uint32_t cycles = gba->bus.timings[size >> 2][region][access];
 
-    if (size == 4)
-        cycles = gba->bus.timings_32[region][access];
-    else
-        cycles = gba->bus.timings_8_16[region][access];
+    uint64_t instr_cycles = gba->cycles; // TODO is this true????
 
-    gba->cycles += cycles;
-
-    for (uint8_t i = 0; i < cycles; i++) {
+    for (uint32_t i = 0; i < cycles; i++) {
         gba_ppu_step(gba);
         gba_tmr_step(gba);
+
+        // gba->bus.ppu_*_accessed should be set to ppu internal cycle counter? or maybe instruction cycle access? or both?
+        // because gba.cycles changes every iteration...
+        // ---> maybe draw diagrams or something to visualise
+        if (region == 0x05 && gba->bus.ppu_pram_accessed == instr_cycles)
+            cycles++;
+        else if (region == 0x06 && gba->bus.ppu_vram_accessed == instr_cycles)
+            cycles++;
+        else if (region == 0x07 && gba->bus.ppu_oam_accessed == instr_cycles)
+            cycles++;
+
+        gba->cycles++;
     }
 }
 
 void gba_bus_idle(gba_t *gba) {
-    gba->cycles++;
-
     gba_ppu_step(gba);
     gba_tmr_step(gba);
+
+    gba->cycles++;
 }
 
 uint32_t gba_bus_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
-    uint32_t address_hi = address >> 24;
-    if (address_hi > 0xF)
-        address_hi = 0xF;
+    uint32_t address_hi = (address >> 24) & 0x0F;
+
+    // step_peripherals(gba, size, access, address);
 
     uint32_t data = accessors[address_hi].read(gba, size, access, address);
 
@@ -1188,6 +1197,8 @@ void gba_bus_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t 
     uint32_t address_hi = address >> 24;
     if (address_hi > 0xF)
         address_hi = 0xF;
+
+    // step_peripherals(gba, size, access, address);
 
     switch (size) {
     case 1:
@@ -1273,24 +1284,27 @@ void gba_bus_reset(gba_t *gba) {
     gba->bus.bios            = gba_bios;
     gba->bus.io[IO_KEYINPUT] = 0x03FF;
 
-    memset(gba->bus.timings_8_16, 1, sizeof(gba->bus.timings_8_16));
-    memset(gba->bus.timings_32, 1, sizeof(gba->bus.timings_32));
+    memset(gba->bus.timings, 1, sizeof(gba->bus.timings));
 
     // EWRAM 16-bits
-    gba->bus.timings_8_16[0x2][BUS_ACCESS_TYPE_S] = 3;
-    gba->bus.timings_8_16[0x2][BUS_ACCESS_TYPE_N] = 3;
+    gba->bus.timings[0][0x2][BUS_ACCESS_TYPE_S] = 3;
+    gba->bus.timings[0][0x2][BUS_ACCESS_TYPE_N] = 3;
 
     // EWRAM 32-bits
-    gba->bus.timings_32[0x2][BUS_ACCESS_TYPE_S] = 6;
-    gba->bus.timings_32[0x2][BUS_ACCESS_TYPE_N] = 6;
+    gba->bus.timings[1][0x2][BUS_ACCESS_TYPE_S] = 6;
+    gba->bus.timings[1][0x2][BUS_ACCESS_TYPE_N] = 6;
 
     // VRAM 32-bits
-    gba->bus.timings_32[0x5][BUS_ACCESS_TYPE_S] = 2;
-    gba->bus.timings_32[0x5][BUS_ACCESS_TYPE_N] = 2;
+    gba->bus.timings[1][0x5][BUS_ACCESS_TYPE_S] = 2;
+    gba->bus.timings[1][0x5][BUS_ACCESS_TYPE_N] = 2;
 
     // PRAM 32-bits
-    gba->bus.timings_32[0x6][BUS_ACCESS_TYPE_S] = 2;
-    gba->bus.timings_32[0x6][BUS_ACCESS_TYPE_N] = 2;
+    gba->bus.timings[1][0x6][BUS_ACCESS_TYPE_S] = 2;
+    gba->bus.timings[1][0x6][BUS_ACCESS_TYPE_N] = 2;
 
     update_timings(&gba->bus);
+
+    gba->bus.ppu_pram_accessed = 0xFFFFFFFFFFFFFFFF;
+    gba->bus.ppu_vram_accessed = 0xFFFFFFFFFFFFFFFF;
+    gba->bus.ppu_oam_accessed  = 0xFFFFFFFFFFFFFFFF;
 }

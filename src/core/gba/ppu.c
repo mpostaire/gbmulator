@@ -40,6 +40,29 @@
         SET_PIXEL_RGB((gba), (x), (y), r, g, b); \
     } while (0)
 
+// TODO replace these with direct PRAM/VRAM/OAM reads, avoiding bus accessor function lookup
+static inline uint8_t read_u8(gba_t *gba, uint32_t address) {
+    if (address & 0x0F000000 == 0x05000000)
+        gba->bus.ppu_pram_accessed = gba->cycles;
+    else if (address & 0x0F000000 == 0x06000000)
+        gba->bus.ppu_vram_accessed = gba->cycles;
+    else if (address & 0x0F000000 == 0x07000000)
+        gba->bus.ppu_oam_accessed = gba->cycles;
+
+    return gba_bus_read_byte(gba, address);
+}
+
+static inline uint16_t read_u16(gba_t *gba, uint32_t address) {
+    if (address & 0x0F000000 == 0x05000000)
+        gba->bus.ppu_pram_accessed = gba->cycles;
+    else if (address & 0x0F000000 == 0x06000000)
+        gba->bus.ppu_vram_accessed = gba->cycles;
+    else if (address & 0x0F000000 == 0x07000000)
+        gba->bus.ppu_oam_accessed = gba->cycles;
+
+    return gba_bus_read_half(gba, address);
+}
+
 void gba_ppu_reset(gba_t *gba) {
     memset(&gba->ppu, 0, sizeof(gba->ppu));
 
@@ -65,7 +88,7 @@ static inline uint8_t render_text_tile_8bpp(gba_t *gba, uint32_t tile_base_addr,
     if (tile_base_addr < VRAM_OBJ_BASE_ADDR && char_data_addr >= VRAM_OBJ_BASE_ADDR)
         return 0;
 
-    return gba_bus_read_byte(gba, char_data_addr);
+    return read_u8(gba, char_data_addr);
 }
 
 static inline uint8_t render_text_tile_4bpp(gba_t *gba, uint32_t tile_base_addr, uint16_t tile_id, uint32_t x, uint32_t y, bool flip_x, bool flip_y) {
@@ -85,7 +108,7 @@ static inline uint8_t render_text_tile_4bpp(gba_t *gba, uint32_t tile_base_addr,
     if (tile_base_addr < VRAM_OBJ_BASE_ADDR && char_data_addr >= VRAM_OBJ_BASE_ADDR)
         return 0;
 
-    uint8_t char_data = gba_bus_read_byte(gba, char_data_addr);
+    uint8_t char_data = read_u8(gba, char_data_addr);
 
     if (tile_x % 2)
         char_data >>= 4;
@@ -161,7 +184,7 @@ static inline void draw_text_bg(gba_t *gba, uint8_t bg, uint32_t x, uint32_t y) 
 
     uint32_t sbe_addr_offset  = (base_y / 8) * 32 + (base_x / 8); // y * 32 because a screenblock can fit 32x32 sbe
     sbe_addr_offset          *= 2;
-    uint16_t sbe              = gba_bus_read_half(gba, sbe_base + sbe_addr_offset);
+    uint16_t sbe              = read_u16(gba, sbe_base + sbe_addr_offset);
 
     uint16_t tile_id = sbe & 0x03FF;
     bool     flip_x  = CHECK_BIT(sbe, 10);
@@ -233,7 +256,7 @@ static inline void draw_obj(gba_t *gba, int32_t y) {
         return;
     }
 
-    uint16_t attr2 = gba_bus_read_half(gba, BUS_OAM + (ppu->obj_id * OAM_ENTRY_SIZE) + 4);
+    uint16_t attr2 = read_u16(gba, BUS_OAM + (ppu->obj_id * OAM_ENTRY_SIZE) + 4);
 
     uint16_t base_tile_id = attr2 & 0x03FF;
     uint8_t  priority     = (attr2 >> 10) & 0x03;
@@ -339,9 +362,9 @@ static inline void draw_bg_mode3(gba_t *gba) {
         uint32_t pixel_base_addr   = BUS_VRAM;
         uint32_t pixel_addr_offset = (y << 1) * GBA_SCREEN_WIDTH + (x << 1);
 
-        ppu->line_layers[2][x] = gba_bus_read_half(gba, pixel_base_addr + pixel_addr_offset);
+        ppu->line_layers[2][x] = read_u16(gba, pixel_base_addr + pixel_addr_offset);
     } else {
-        ppu->line_layers[2][x] = gba_bus_read_half(gba, BUS_PRAM);
+        ppu->line_layers[2][x] = read_u16(gba, BUS_PRAM);
     }
 }
 
@@ -362,7 +385,7 @@ static inline void draw_bg_mode4(gba_t *gba) {
         uint32_t pixel_base_addr   = BUS_VRAM + (PPU_GET_FRAME(gba) * 0xA000);
         uint32_t pixel_addr_offset = y * GBA_SCREEN_WIDTH + x;
 
-        ppu->line_layers[2][x] = gba_bus_read_byte(gba, pixel_base_addr + pixel_addr_offset);
+        ppu->line_layers[2][x] = read_u8(gba, pixel_base_addr + pixel_addr_offset);
     } else {
         ppu->line_layers[2][x] = 0;
     }
@@ -385,9 +408,9 @@ static inline void draw_bg_mode5(gba_t *gba) {
         uint32_t pixel_base_addr   = BUS_VRAM + (PPU_GET_FRAME(gba) * 0xA000);
         uint32_t pixel_addr_offset = (y << 1) * 160 + (x << 1);
 
-        ppu->line_layers[2][x] = gba_bus_read_half(gba, pixel_base_addr + pixel_addr_offset);
+        ppu->line_layers[2][x] = read_u16(gba, pixel_base_addr + pixel_addr_offset);
     } else {
-        ppu->line_layers[2][x] = gba_bus_read_half(gba, BUS_PRAM);
+        ppu->line_layers[2][x] = read_u16(gba, BUS_PRAM);
     }
 }
 
@@ -407,7 +430,7 @@ static inline void compositing(gba_t *gba) {
 
     uint8_t mode = PPU_GET_MODE(gba);
 
-    uint16_t color = gba_bus_read_half(gba, BUS_PRAM); // backdrop color
+    uint16_t color = read_u16(gba, BUS_PRAM); // backdrop color
 
     for (uint8_t i = 0; i < 4; i++) {
         bool bg_enabled = CHECK_BIT(gba->bus.io[IO_DISPCNT], i + 8);
@@ -423,7 +446,7 @@ static inline void compositing(gba_t *gba) {
             if (palette_index != 0) {
                 if (palette_bank)
                     palette_index |= palette_bank << 4;
-                color = gba_bus_read_half(gba, BUS_PRAM + (palette_index << 1));
+                color = read_u16(gba, BUS_PRAM + (palette_index << 1));
             }
         }
     }
@@ -440,7 +463,7 @@ static inline void compositing(gba_t *gba) {
         if (palette_index != 0) {
             if (palette_bank)
                 palette_index |= palette_bank << 4;
-            color = gba_bus_read_half(gba, (BUS_PRAM + 0x0200) + (palette_index << 1));
+            color = read_u16(gba, (BUS_PRAM + 0x0200) + (palette_index << 1));
         }
     }
 

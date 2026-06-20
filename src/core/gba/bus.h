@@ -165,8 +165,7 @@ typedef enum {
 } bus_access_type_t;
 
 typedef struct {
-    uint8_t timings_8_16[16][BUS_ACCESS_TYPE_END];
-    uint8_t timings_32[16][BUS_ACCESS_TYPE_END];
+    uint8_t timings[2][16][BUS_ACCESS_TYPE_END];
 
     uint8_t *bios;
     uint8_t  ewram[BUS_EWRAM_UNUSED - BUS_EWRAM];
@@ -185,6 +184,10 @@ typedef struct {
     uint32_t rom_address_latch;
 
     size_t rom_size;
+
+    uint64_t ppu_pram_accessed;
+    uint64_t ppu_vram_accessed;
+    uint64_t ppu_oam_accessed;
 
     bool    mgba_logs_enabled;
     uint8_t mgba_logstr[0x100];
