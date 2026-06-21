@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <inttypes.h>
 
 #ifndef LOG_LEVEL
 #define LOG_LEVEL info
@@ -47,39 +48,21 @@
                                                                           : "")
 
 // log with file, line and function information
-#define _LOG_FULL_IMPL(lvl, lvl_str, fmt, ...)                               \
-    do {                                                                     \
-        if (_log_is_colored()) {                                             \
-            fprintf(stderr, "%s[%s] %s:%d:%s(): " fmt _LOG_COLOR_RESET "\n", \
-                    _LOG_COLOR(lvl),                                         \
-                    lvl_str,                                                 \
-                    __FILE__,                                                \
-                    __LINE__,                                                \
-                    __func__,                                                \
-                    ##__VA_ARGS__);                                          \
-        } else {                                                             \
-            fprintf(stderr, "[%s] %s:%d:%s(): " fmt "\n",                    \
-                    lvl_str,                                                 \
-                    __FILE__,                                                \
-                    __LINE__,                                                \
-                    __func__,                                                \
-                    ##__VA_ARGS__);                                          \
-        }                                                                    \
+#define _LOG_FULL_IMPL(lvl, lvl_str, fmt, ...)                                                                                                                \
+    do {                                                                                                                                                      \
+        if (_log_is_colored())                                                                                                                                \
+            fprintf(stderr, "%s[%s] %s:%" PRIu32 ":%s(): " fmt _LOG_COLOR_RESET "\n", _LOG_COLOR(lvl), lvl_str, __FILE__, __LINE__, __func__, ##__VA_ARGS__); \
+        else                                                                                                                                                  \
+            fprintf(stderr, "[%s] %s:%" PRIu32 ":%s(): " fmt "\n", lvl_str, __FILE__, __LINE__, __func__, ##__VA_ARGS__);                                     \
     } while (0)
 
 // log message only
-#define _LOG_IMPL(lvl, lvl_str, fmt, ...)                        \
-    do {                                                         \
-        if (_log_is_colored()) {                                 \
-            fprintf(stderr, "%s[%s] " fmt _LOG_COLOR_RESET "\n", \
-                    _LOG_COLOR(lvl),                             \
-                    lvl_str,                                     \
-                    ##__VA_ARGS__);                              \
-        } else {                                                 \
-            fprintf(stderr, "[%s] " fmt "\n",                    \
-                    lvl_str,                                     \
-                    ##__VA_ARGS__);                              \
-        }                                                        \
+#define _LOG_IMPL(lvl, lvl_str, fmt, ...)                                                                  \
+    do {                                                                                                   \
+        if (_log_is_colored())                                                                             \
+            fprintf(stderr, "%s[%s] " fmt _LOG_COLOR_RESET "\n", _LOG_COLOR(lvl), lvl_str, ##__VA_ARGS__); \
+        else                                                                                               \
+            fprintf(stderr, "[%s] " fmt "\n", lvl_str, ##__VA_ARGS__);                                     \
     } while (0)
 
 #if _LOG_LVL_VALUE <= LOG_LVL_DEBUG
