@@ -52,7 +52,7 @@ void gba_tmr_set(gba_t *gba, uint16_t data, uint8_t channel) {
         gba->tmr.instance[channel].cycle = 0;
         IO_TMxCNT_L(gba, channel)        = gba->tmr.instance[channel].reload;
 
-        for (uint8_t i = channel + 1; IS_TM_COUNTUP(gba, i) && i < GBA_TMR_COUNT; i++)
+        for (uint8_t i = channel + 1; i < GBA_TMR_COUNT && IS_TM_COUNTUP(gba, i); i++)
             IO_TMxCNT_L(gba, i) = gba->tmr.instance[i].reload;
     } else if (is_enable_falling) {
         gba->tmr.instance[channel].cycle = 0;
