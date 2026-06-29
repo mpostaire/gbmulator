@@ -47,26 +47,12 @@
 #if __has_include(<stdbit.h>)
 #include <stdbit.h>
 #else
-static inline unsigned int stdc_count_ones_impl(unsigned long long v) {
-    unsigned int count = 0;
-    for (uint8_t i = 0; i < sizeof(v) * 8; i++) {
-        if (v & 1)
-            count++;
-        v >>= 1;
-    }
-    return count;
+static inline uint8_t stdc_count_ones_impl(uint32_t v) {
+    return __builtin_popcount(v);
 }
 
-static inline unsigned int stdc_first_trailing_one_impl(unsigned long long v) {
-    unsigned int idx = 0;
-    while ((v & 1) == 0) {
-        v >>= 1;
-        idx++;
-
-        if (idx > sizeof(v) * 8)
-            return 0;
-    }
-    return idx + 1;
+static inline uint8_t stdc_first_trailing_one_impl(uint32_t v) {
+    return v == 0 ? 0 : 1 + __builtin_ctz(v);
 }
 
 #define stdc_count_ones         stdc_count_ones_impl
