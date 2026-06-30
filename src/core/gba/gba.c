@@ -4,6 +4,15 @@
 #include "gba_priv.h"
 #include "../core_priv.h"
 
+static const sched_cb_t sched_callbacks[GBA_SCHED_EVENT_END] = {
+    [GBA_SCHED_EVENT_PPU_ENTER_HDRAW]   = (sched_cb_t) gba_ppu_enter_hdraw,
+    [GBA_SCHED_EVENT_PPU_ENTER_VHBLANK] = (sched_cb_t) gba_ppu_enter_vhblank,
+    [GBA_SCHED_EVENT_TMR0_OVERFLOW]     = (sched_cb_t) gba_tmr0_overflow,
+    [GBA_SCHED_EVENT_TMR1_OVERFLOW]     = (sched_cb_t) gba_tmr1_overflow,
+    [GBA_SCHED_EVENT_TMR2_OVERFLOW]     = (sched_cb_t) gba_tmr2_overflow,
+    [GBA_SCHED_EVENT_TMR3_OVERFLOW]     = (sched_cb_t) gba_tmr3_overflow,
+};
+
 static const char *makers[] = {
     [0x01] = "Nintendo"
 };
@@ -23,6 +32,8 @@ gba_t *gba_init(gbmulator_t *base) {
         gba       = xcalloc(1, sizeof(*gba));
         gba->base = base;
     }
+
+    sched_init(&gba->sched, sched_callbacks);
 
     gba_bus_reset(gba);
     gba_cpu_reset(gba);

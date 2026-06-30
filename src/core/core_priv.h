@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core.h"
+#include "sched.h"
 
 typedef void *(*init_func_t)(gbmulator_t *base);
 typedef void (*quit_func_t)(void *impl);

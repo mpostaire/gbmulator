@@ -349,27 +349,35 @@ static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
     // Timer Registers
     case IO_TM0CNT_L:
         LOG_DEBUG("IO_TM0CNT_L");
+        gba_tmr_sync(gba);
         break;
     case IO_TM0CNT_H:
         LOG_DEBUG("IO_TM0CNT_H");
+        gba_tmr_sync(gba);
         break;
     case IO_TM1CNT_L:
         LOG_DEBUG("IO_TM1CNT_L");
+        gba_tmr_sync(gba);
         break;
     case IO_TM1CNT_H:
         LOG_DEBUG("IO_TM1CNT_H");
+        gba_tmr_sync(gba);
         break;
     case IO_TM2CNT_L:
         LOG_DEBUG("IO_TM2CNT_L");
+        gba_tmr_sync(gba);
         break;
     case IO_TM2CNT_H:
         LOG_DEBUG("IO_TM2CNT_H");
+        gba_tmr_sync(gba);
         break;
     case IO_TM3CNT_L:
         LOG_DEBUG("IO_TM3CNT_L");
+        gba_tmr_sync(gba);
         break;
     case IO_TM3CNT_H:
         LOG_DEBUG("IO_TM3CNT_H");
+        gba_tmr_sync(gba);
         break;
 
     // Serial Communication (1)
@@ -718,6 +726,7 @@ static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
     // Timer Registers
     case IO_TM0CNT_L:
         LOG_DEBUG("IO_TM0CNT_L 0x%04X", data);
+        gba_tmr_sync(gba);
         gba->tmr.instance[0].reload = data;
         break;
     case IO_TM0CNT_H:
@@ -726,6 +735,7 @@ static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
         break;
     case IO_TM1CNT_L:
         LOG_DEBUG("IO_TM1CNT_L 0x%04X", data);
+        gba_tmr_sync(gba);
         gba->tmr.instance[1].reload = data;
         break;
     case IO_TM1CNT_H:
@@ -734,6 +744,7 @@ static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
         break;
     case IO_TM2CNT_L:
         LOG_DEBUG("IO_TM2CNT_L 0x%04X", data);
+        gba_tmr_sync(gba);
         gba->tmr.instance[2].reload = data;
         break;
     case IO_TM2CNT_H:
@@ -742,6 +753,7 @@ static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
         break;
     case IO_TM3CNT_L:
         LOG_DEBUG("IO_TM3CNT_L 0x%04X", data);
+        gba_tmr_sync(gba);
         gba->tmr.instance[3].reload = data;
         break;
     case IO_TM3CNT_H:
@@ -868,6 +880,8 @@ static uint32_t iwram_read(gba_t *gba, uint8_t size, bus_access_type_t access, u
 }
 
 static uint32_t io_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
+    gba_ppu_sync(gba); // TODO only call this when PPU IO registers are addressed
+
     address -= BUS_IO;
 
     uint32_t data = io_regs_read(gba, address);
@@ -886,10 +900,14 @@ static uint32_t io_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint
 }
 
 static uint32_t pram_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
+    gba_ppu_sync(gba);
+
     return read_u32(&gba->bus.pram[(address - BUS_PRAM) % (BUS_PRAM_UNUSED - BUS_PRAM)]);
 }
 
 static uint32_t vram_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
+    gba_ppu_sync(gba);
+
     gba_bus_t *bus = &gba->bus;
 
     uint32_t vram_upper_bound = PPU_GET_MODE(gba) < 3 ? 0x10000 : 0x14000;
@@ -905,6 +923,8 @@ static uint32_t vram_read(gba_t *gba, uint8_t size, bus_access_type_t access, ui
 }
 
 static uint32_t oam_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
+    gba_ppu_sync(gba);
+
     return read_u32(&gba->bus.oam[(address - BUS_OAM_UNUSED) % (BUS_OAM_UNUSED - BUS_OAM)]);
 }
 
@@ -993,6 +1013,8 @@ static void iwram_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint
 }
 
 static void io_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
+    gba_ppu_sync(gba); // TODO only call this when PPU IO registers are addressed
+
     address -= BUS_IO;
 
     io_regs_write(gba, address, data);
@@ -1029,6 +1051,8 @@ static void io_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_
 }
 
 static void pram_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
+    gba_ppu_sync(gba);
+
     gba_bus_t *bus = &gba->bus;
 
     switch (size) {
@@ -1045,6 +1069,8 @@ static void pram_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint3
 }
 
 static void vram_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
+    gba_ppu_sync(gba);
+
     gba_bus_t *bus = &gba->bus;
 
     uint32_t vram_upper_bound = PPU_GET_MODE(gba) < 3 ? 0x10000 : 0x14000;
@@ -1081,6 +1107,8 @@ static void vram_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint3
 }
 
 static void oam_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
+    gba_ppu_sync(gba);
+
     gba_bus_t *bus = &gba->bus;
 
     switch (size) {
@@ -1133,42 +1161,27 @@ static bus_accessors_t accessors[16] = {
     [0x0F] = { .read = sram_read,     .write = sram_write     },
 };
 
-void gba_bus_step_peripherals(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
+static inline bool is_vram_delayed(gba_t *gba, uint32_t region, uint64_t instr_cycles) {
+    return (region == 0x05 && gba->bus.ppu_pram_accessed == instr_cycles) || (region == 0x06 && gba->bus.ppu_vram_accessed == instr_cycles) || (region == 0x07 && gba->bus.ppu_oam_accessed == instr_cycles);
+}
+
+static inline void sync_peripherals(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
     uint32_t region = (address >> 24) & 0x0F;
 
     uint32_t cycles = gba->bus.timings[size >> 2][region][access];
 
-    uint64_t instr_cycles = gba->cycles; // TODO is this true????
+    uint64_t instr_cycles = gba->sched.cycle; // TODO is this accurate?
 
-    for (uint32_t i = 0; i < cycles; i++) {
-        gba_ppu_step(gba);
-        gba_tmr_step(gba);
+    sched_run(&gba->sched, cycles);
 
-        // gba->bus.ppu_*_accessed should be set to ppu internal cycle counter? or maybe instruction cycle access? or both?
-        // because gba.cycles changes every iteration...
-        // ---> maybe draw diagrams or something to visualise
-        if (region == 0x05 && gba->bus.ppu_pram_accessed == instr_cycles)
-            cycles++;
-        else if (region == 0x06 && gba->bus.ppu_vram_accessed == instr_cycles)
-            cycles++;
-        else if (region == 0x07 && gba->bus.ppu_oam_accessed == instr_cycles)
-            cycles++;
-
-        gba->cycles++;
-    }
-}
-
-void gba_bus_idle(gba_t *gba) {
-    gba_ppu_step(gba);
-    gba_tmr_step(gba);
-
-    gba->cycles++;
+    while (is_vram_delayed(gba, region, gba->sched.cycle))
+        sched_run(&gba->sched, 1);
 }
 
 uint32_t gba_bus_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
     uint32_t address_hi = (address >> 24) & 0x0F;
 
-    // step_peripherals(gba, size, access, address);
+    sync_peripherals(gba, size, access, address);
 
     uint32_t data = accessors[address_hi].read(gba, size, access, address);
 
@@ -1198,7 +1211,7 @@ void gba_bus_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t 
     if (address_hi > 0xF)
         address_hi = 0xF;
 
-    // step_peripherals(gba, size, access, address);
+    sync_peripherals(gba, size, access, address);
 
     switch (size) {
     case 1:

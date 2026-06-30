@@ -221,10 +221,6 @@ static inline void gba_bus_write_word(gba_t *gba, uint32_t address, uint32_t dat
     gba_bus_write(gba, 4, BUS_ACCESS_TYPE_N, address, data);
 }
 
-void gba_bus_step_peripherals(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address);
-
-void gba_bus_idle(gba_t *gba);
-
 bool gba_bus_validate_rom(const uint8_t *rom, size_t size);
 
 void gba_bus_reset(gba_t *gba);

@@ -10,22 +10,30 @@
 #define REG_LR 14 // Link Register
 #define REG_PC 15 // Program Counter
 
-#define IRQ_VBLANK  0  // LCD V-Blank
-#define IRQ_HBLANK  1  // LCD H-Blank
-#define IRQ_VCOUNT  2  // LCD V-Counter Match
-#define IRQ_TIMER0  3  // Timer 0 Overflow
-#define IRQ_TIMER1  4  // Timer 1 Overflow
-#define IRQ_TIMER2  5  // Timer 2 Overflow
-#define IRQ_TIMER3  6  // Timer 3 Overflow
-#define IRQ_SERIAL  7  // Serial Communication
-#define IRQ_DMA0    8  // DMA 0
-#define IRQ_DMA1    9  // DMA 1
-#define IRQ_DMA2    10 // DMA 2
-#define IRQ_DMA3    11 // DMA 3
-#define IRQ_KEYPAD  12 // Keypad
-#define IRQ_GAMEPAK 13 // Game Pak (external IRQ source)
+typedef enum {
+    GBA_IRQ_VBLANK  = 0,  // LCD V-Blank
+    GBA_IRQ_HBLANK  = 1,  // LCD H-Blank
+    GBA_IRQ_VCOUNT  = 2,  // LCD V-Counter Match
+    GBA_IRQ_TIMER0  = 3,  // Timer 0 Overflow
+    GBA_IRQ_TIMER1  = 4,  // Timer 1 Overflow
+    GBA_IRQ_TIMER2  = 5,  // Timer 2 Overflow
+    GBA_IRQ_TIMER3  = 6,  // Timer 3 Overflow
+    GBA_IRQ_SERIAL  = 7,  // Serial Communication
+    GBA_IRQ_DMA0    = 8,  // DMA 0
+    GBA_IRQ_DMA1    = 9,  // DMA 1
+    GBA_IRQ_DMA2    = 10, // DMA 2
+    GBA_IRQ_DMA3    = 11, // DMA 3
+    GBA_IRQ_KEYPAD  = 12, // Keypad
+    GBA_IRQ_GAMEPAK = 13, // Game Pak (external IRQ source)
+    GBA_IRQ_END
+} gba_irq_t;
 
-#define CPU_REQUEST_INTERRUPT(gba, irq) SET_BIT((gba)->bus.io[IO_IF], irq)
+#define CPU_REQUEST_INTERRUPT(gba, irq)                 \
+    do {                                                \
+        assert(irq < GBA_IRQ_END);                      \
+        LOG_DEBUG("[CPU] IRQ triggered: %" PRIu8, irq); \
+        SET_BIT((gba)->bus.io[IO_IF], irq);             \
+    } while (0)
 
 #define CPSR_N (((uint32_t) 1) << 31) // Negative or less than
 #define CPSR_Z (((uint32_t) 1) << 30) // Zero

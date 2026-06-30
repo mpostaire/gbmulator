@@ -159,7 +159,6 @@ static uint8_t thumb_handlers[1 << 8];
 static inline uint32_t read_u8(gba_t *gba, bus_access_type_t access, uint32_t address) {
     gba->cpu.pipeline_access_type = BUS_ACCESS_TYPE_N;
 
-    gba_bus_step_peripherals(gba, 1, access, address);
     return gba_bus_read_byte(gba, address);
 }
 
@@ -167,20 +166,16 @@ static inline void write_u8(gba_t *gba, bus_access_type_t access, uint32_t addre
     gba->cpu.pipeline_access_type = BUS_ACCESS_TYPE_N;
 
     gba_bus_write_byte(gba, address, data);
-    gba_bus_step_peripherals(gba, 1, access, address);
 }
 
 static inline uint32_t read_i8(gba_t *gba, bus_access_type_t access, uint32_t address) {
     gba->cpu.pipeline_access_type = BUS_ACCESS_TYPE_N;
 
-    gba_bus_step_peripherals(gba, 1, access, address);
     return (int8_t) gba_bus_read_byte(gba, address);
 }
 
 static inline uint32_t read_u16(gba_t *gba, bus_access_type_t access, uint32_t address) {
     gba->cpu.pipeline_access_type = BUS_ACCESS_TYPE_N;
-
-    gba_bus_step_peripherals(gba, 2, access, address);
 
     uint32_t data;
 
@@ -198,8 +193,6 @@ static inline uint32_t read_u16(gba_t *gba, bus_access_type_t access, uint32_t a
 static inline void write_u16(gba_t *gba, bus_access_type_t access, uint32_t address, uint16_t data) {
     gba->cpu.pipeline_access_type = BUS_ACCESS_TYPE_N;
 
-    gba_bus_step_peripherals(gba, 2, access, address);
-
     if (!IS_ADDRESS_IN_SRAM(address))
         address = ALIGN(address, 2);
 
@@ -208,8 +201,6 @@ static inline void write_u16(gba_t *gba, bus_access_type_t access, uint32_t addr
 
 static inline uint32_t read_i16(gba_t *gba, bus_access_type_t access, uint32_t address) {
     gba->cpu.pipeline_access_type = BUS_ACCESS_TYPE_N;
-
-    gba_bus_step_peripherals(gba, 2, access, address);
 
     uint32_t data;
 
@@ -226,8 +217,6 @@ static inline uint32_t read_i16(gba_t *gba, bus_access_type_t access, uint32_t a
 
 static inline uint32_t read_u32_no_rotate(gba_t *gba, bus_access_type_t access, uint32_t address) {
     gba->cpu.pipeline_access_type = BUS_ACCESS_TYPE_N;
-
-    gba_bus_step_peripherals(gba, 4, access, address);
 
     if (!IS_ADDRESS_IN_SRAM(address))
         address = ALIGN(address, 4);
@@ -247,18 +236,30 @@ static inline uint32_t read_u32(gba_t *gba, bus_access_type_t access, uint32_t a
 static inline void write_u32(gba_t *gba, bus_access_type_t access, uint32_t address, uint32_t data) {
     gba->cpu.pipeline_access_type = BUS_ACCESS_TYPE_N;
 
-    gba_bus_step_peripherals(gba, 4, access, address);
-
     if (!IS_ADDRESS_IN_SRAM(address))
         address = ALIGN(address, 4);
 
     gba_bus_write_word(gba, address, data);
 }
 
-static inline void idle(gba_t *gba) {
+static inline void idle(gba_t *gba, uint64_t cycles) {
     gba->cpu.pipeline_access_type = BUS_ACCESS_TYPE_N;
 
-    gba_bus_idle(gba);
+    sched_run(&gba->sched, cycles);
+}
+
+static inline void idle_multiplication(gba_t *gba, uint32_t multiplier, uint64_t additional_cycles, bool is_signed) {
+    uint64_t cycles  = 1;
+    multiplier      &= 0xFFFFFF00;
+    if (multiplier && (!is_signed || (multiplier != 0xFFFFFF00)))
+        cycles++;
+    multiplier &= 0xFFFF0000;
+    if (multiplier && (!is_signed || (multiplier != 0xFFFF0000)))
+        cycles++;
+    multiplier &= 0xFF000000;
+    if (multiplier && (!is_signed || (multiplier != 0xFF000000)))
+        cycles++;
+    idle(gba, cycles + additional_cycles);
 }
 
 static inline void set_flags_nz_32(gba_cpu_t *cpu, uint32_t res) {
@@ -593,12 +594,12 @@ static inline void stm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, b
 
 // TODO thumb ldm/stm should use their own as they don't have to do all the p/u/s/w checks
 static inline bool ldm(gba_t *gba, uint8_t rb, uint16_t rlist, bool p, bool u, bool s, bool w) {
-    int8_t transfer_size = stdc_count_ones(rlist) * 4;
+    uint8_t transfer_size = stdc_count_ones(rlist) * 4;
     if (rlist == 0) {
         SET_BIT(rlist, REG_PC);
         transfer_size = 64;
     } else {
-        idle(gba);
+        idle(gba, 1);
     }
 
     uint32_t dest_addr = gba->cpu.regs[rb];
@@ -754,7 +755,7 @@ static bool data_processing_begin(gba_t *gba, uint32_t instr, uint8_t *rd, uint3
             if (rn == REG_PC)
                 *op1 += 4;
 
-            idle(gba);
+            idle(gba, 1);
         }
 
         *op2 = shift_offset(&gba->cpu, shift_type, offset, amount, i, c);
@@ -773,6 +774,7 @@ static bool mul_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu.regs[REG_PC] += 4;
 
+    idle_multiplication(gba, gba->cpu.regs[rs], 0, true);
     gba->cpu.regs[rd] = gba->cpu.regs[rm] * gba->cpu.regs[rs];
 
     if (s)
@@ -797,6 +799,7 @@ static bool mla_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu.regs[REG_PC] += 4;
 
+    idle_multiplication(gba, gba->cpu.regs[rs], 1, true);
     gba->cpu.regs[rd] = (gba->cpu.regs[rm] * gba->cpu.regs[rs]) + gba->cpu.regs[rn];
 
     if (s)
@@ -821,6 +824,8 @@ static bool mull_handler(gba_t *gba, uint32_t instr) {
     LOG_DEBUG("(0x%08X) %cMULL%s%s %s,%s,%s,%s", instr, u ? 'S' : 'U', cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rdlo], reg_names[rdhi], reg_names[rm], reg_names[rs]);
 
     gba->cpu.regs[REG_PC] += 4;
+
+    idle_multiplication(gba, gba->cpu.regs[rs], 1, u);
 
     uint64_t res;
     if (u)
@@ -853,6 +858,8 @@ static bool mlal_handler(gba_t *gba, uint32_t instr) {
     LOG_DEBUG("(0x%08X) %cMLAL%s%s %s,%s,%s,%s", instr, u ? 'S' : 'U', cond_names[ARM_INSTR_GET_COND(instr)], s ? "S" : "", reg_names[rdlo], reg_names[rdhi], reg_names[rm], reg_names[rs]);
 
     gba->cpu.regs[REG_PC] += 4;
+
+    idle_multiplication(gba, gba->cpu.regs[rs], 2, u);
 
     uint64_t res;
     uint64_t acc = ((uint64_t) gba->cpu.regs[rdhi] << 32) | gba->cpu.regs[rdlo];
@@ -1372,7 +1379,7 @@ static bool swp_handler(gba_t *gba, uint32_t instr) {
         write_u32(gba, BUS_ACCESS_TYPE_N, gba->cpu.regs[rn], gba->cpu.regs[rm]);
     }
 
-    idle(gba);
+    idle(gba, 1);
 
     gba->cpu.regs[rd] = data;
 
@@ -1682,7 +1689,7 @@ static bool ldr_handler(gba_t *gba, uint32_t instr) {
     if (w || !p)
         gba->cpu.regs[rn] = addr;
 
-    idle(gba);
+    idle(gba, 1);
 
     gba->cpu.regs[rd] = data;
 
@@ -2039,21 +2046,21 @@ static bool thumb_alu_ops_handler(gba_t *gba, uint32_t instr) {
         LOG_DEBUG("(0x%04X) EOR %s, %s", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b0010:
-        idle(gba);
+        idle(gba, 1);
         gba->cpu.regs[rd] = shift_offset(&gba->cpu, 0b00, gba->cpu.regs[rd], gba->cpu.regs[rs] & 0xFF, false, &c);
         set_flags_nz_32(&gba->cpu, gba->cpu.regs[rd]);
         CPSR_CHANGE_FLAG(&gba->cpu, CPSR_C, c);
         LOG_DEBUG("(0x%04X) LSL %s, %s", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b0011:
-        idle(gba);
+        idle(gba, 1);
         gba->cpu.regs[rd] = shift_offset(&gba->cpu, 0b01, gba->cpu.regs[rd], gba->cpu.regs[rs] & 0xFF, false, &c);
         set_flags_nz_32(&gba->cpu, gba->cpu.regs[rd]);
         CPSR_CHANGE_FLAG(&gba->cpu, CPSR_C, c);
         LOG_DEBUG("(0x%04X) LSR %s, %s", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b0100:
-        idle(gba);
+        idle(gba, 1);
         gba->cpu.regs[rd] = shift_offset(&gba->cpu, 0b10, gba->cpu.regs[rd], gba->cpu.regs[rs] & 0xFF, false, &c);
         set_flags_nz_32(&gba->cpu, gba->cpu.regs[rd]);
         CPSR_CHANGE_FLAG(&gba->cpu, CPSR_C, c);
@@ -2069,7 +2076,7 @@ static bool thumb_alu_ops_handler(gba_t *gba, uint32_t instr) {
         break;
     case 0b0111:
         gba->cpu.regs[rd] = shift_offset(&gba->cpu, 0b11, gba->cpu.regs[rd], gba->cpu.regs[rs] & 0xFF, false, &c);
-        idle(gba);
+        idle(gba, 1);
         set_flags_nz_32(&gba->cpu, gba->cpu.regs[rd]);
         CPSR_CHANGE_FLAG(&gba->cpu, CPSR_C, c);
         LOG_DEBUG("(0x%04X) ROR %s, %s", instr, reg_names[rd], reg_names[rs]);
@@ -2097,6 +2104,7 @@ static bool thumb_alu_ops_handler(gba_t *gba, uint32_t instr) {
         LOG_DEBUG("(0x%04X) ORR %s, %s", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b1101:
+        idle_multiplication(gba, gba->cpu.regs[rs], 0, true);
         gba->cpu.regs[rd] *= gba->cpu.regs[rs];
         set_flags_nz_32(&gba->cpu, gba->cpu.regs[rd]);
         LOG_DEBUG("(0x%04X) MUL %s, %s", instr, reg_names[rd], reg_names[rs]);
@@ -2213,7 +2221,7 @@ static bool thumb_pc_relative_ldr_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu.regs[rd] = read_u32(gba, BUS_ACCESS_TYPE_N, addr);
 
-    idle(gba);
+    idle(gba, 1);
 
     return true;
 }
@@ -2249,7 +2257,7 @@ static bool thumb_ldr_reg_handler(gba_t *gba, uint32_t instr) {
     else
         gba->cpu.regs[rd] = read_u32(gba, BUS_ACCESS_TYPE_N, gba->cpu.regs[rb] + gba->cpu.regs[ro]);
 
-    idle(gba);
+    idle(gba, 1);
 
     return true;
 }
@@ -2294,7 +2302,7 @@ static bool thumb_ldrh_reg_handler(gba_t *gba, uint32_t instr) {
         todo();
     }
 
-    idle(gba);
+    idle(gba, 1);
 
     return true;
 }
@@ -2330,7 +2338,7 @@ static bool thumb_ldrh_imm_handler(gba_t *gba, uint32_t instr) {
     else
         gba->cpu.regs[rd] = read_u32(gba, BUS_ACCESS_TYPE_N, gba->cpu.regs[rb] + (offset5 << 2));
 
-    idle(gba);
+    idle(gba, 1);
 
     return true;
 }
@@ -2356,7 +2364,7 @@ static bool thumb_ldrh_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu.regs[rd] = read_u16(gba, BUS_ACCESS_TYPE_N, gba->cpu.regs[rb] + offset5);
 
-    idle(gba);
+    idle(gba, 1);
 
     return true;
 }
@@ -2380,7 +2388,7 @@ static bool thumb_ldr_sp_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu.regs[rd] = read_u32(gba, BUS_ACCESS_TYPE_N, gba->cpu.regs[REG_SP] + offset);
 
-    idle(gba);
+    idle(gba, 1);
 
     return true;
 }
