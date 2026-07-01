@@ -12,7 +12,7 @@
 #include "../core_priv.h"
 
 typedef enum {
-    GBA_SCHED_EVENT_PPU_ENTER_HDRAW,
+    GBA_SCHED_EVENT_PPU_ENTER_VHDRAW,  // same event for HDRAW in VDRAW and VBLANK periods (start of scanline)
     GBA_SCHED_EVENT_PPU_ENTER_VHBLANK, // same event for HBLANK in VDRAW and VBLANK periods
 
     GBA_SCHED_EVENT_TMR0_OVERFLOW, // non-cascading TMR0 event

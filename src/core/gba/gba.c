@@ -5,7 +5,7 @@
 #include "../core_priv.h"
 
 static const sched_cb_t sched_callbacks[GBA_SCHED_EVENT_END] = {
-    [GBA_SCHED_EVENT_PPU_ENTER_HDRAW]   = (sched_cb_t) gba_ppu_enter_hdraw,
+    [GBA_SCHED_EVENT_PPU_ENTER_VHDRAW]  = (sched_cb_t) gba_ppu_enter_vhdraw,
     [GBA_SCHED_EVENT_PPU_ENTER_VHBLANK] = (sched_cb_t) gba_ppu_enter_vhblank,
     [GBA_SCHED_EVENT_TMR0_OVERFLOW]     = (sched_cb_t) gba_tmr0_overflow,
     [GBA_SCHED_EVENT_TMR1_OVERFLOW]     = (sched_cb_t) gba_tmr1_overflow,

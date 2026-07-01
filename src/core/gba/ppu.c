@@ -23,12 +23,12 @@
 
 #define VRAM_OBJ_BASE_ADDR (4 * 0x4000)
 
-#define DISPSTAT_W 0
-#define DISPSTAT_G 1
+#define DISPSTAT_W 0 // in VBLANK
+#define DISPSTAT_G 1 // in HBLANK
 #define DISPSTAT_Z 2 // VCOUNT == DISPCNT >> 8
-#define DISPSTAT_V 3
-#define DISPSTAT_H 4
-#define DISPSTAT_Y 5
+#define DISPSTAT_V 3 // VBLANK IRQ enabled
+#define DISPSTAT_H 4 // HBLANK IRQ enabled
+#define DISPSTAT_Y 5 // VCOUNT == DISPCNT >> 8 IRQ enabled
 
 static inline void set_pixel_rgb(gba_t *gba, uint32_t x, uint32_t y, uint8_t r, uint8_t g, uint8_t b) {
     if (!gba->ppu.pixels)
@@ -101,11 +101,8 @@ void gba_ppu_reset(gba_t *gba) {
     SET_BIT(gba->bus.io[IO_DISPSTAT], DISPSTAT_W);
     SET_BIT(gba->bus.io[IO_DISPSTAT], DISPSTAT_G);
 
-    // HBLANK start (in VDRAW or VBLANK periods) is always periodic
     gba_sched_add(gba, GBA_SCHED_EVENT_PPU_ENTER_VHBLANK, SCANLINE_DURATION + 1, SCANLINE_DURATION);
-
-    // HDRAW start is only periodic during VDRAW: it is paused in VBLANK
-    gba_sched_add(gba, GBA_SCHED_EVENT_PPU_ENTER_HDRAW, HBLANK_DURATION, SCANLINE_DURATION);
+    gba_sched_add(gba, GBA_SCHED_EVENT_PPU_ENTER_VHDRAW, HBLANK_DURATION, SCANLINE_DURATION);
 
     gba->ppu.scanline_cycles = HDRAW_DURATION;
 }
@@ -518,54 +515,69 @@ void gba_ppu_sync(gba_t *gba) {
 
     // LOG_WARN("ppu sync %" PRIu64, gba->sched.cycle - gba->ppu.last_sync_cycle);
 
+    assert(gba->sched.cycle - gba->ppu.last_sync_cycle < SCANLINE_DURATION);
+
     for (; gba->ppu.last_sync_cycle < gba->sched.cycle; gba->ppu.last_sync_cycle++) {
-        ppu->scanline_cycles++; // TODO at the start or end of this func?
+        ppu->scanline_cycles++; // TODO at the start or end of this func? --> move into gba_ppu_enter_vhdraw (start of scanline)
         if (ppu->scanline_cycles >= SCANLINE_DURATION)
             ppu->scanline_cycles = 0;
 
+        // switch (PPU_GET_MODE(gba)) {
+        // case 0:
+        // case 2:
+        //     if (gba->bus.io[IO_VCOUNT] == GBA_SCREEN_HEIGHT + VBLANK_HEIGHT - 1)
+        //         draw_obj(gba, 0);
+        //     else
+        //         draw_obj(gba, gba->bus.io[IO_VCOUNT] + 1);
+        //     break;
+        // default:
+        //     break;
+        // }
+
         bool is_hdraw = (gba->bus.io[IO_DISPSTAT] & 0x03) == 0x00;
-        if (is_hdraw) {
-            switch (PPU_GET_MODE(gba)) {
-            case 0:
-                draw_bg_mode0(gba);
-                break;
-            case 1:
-                draw_bg_mode1(gba);
-                break;
-            case 2:
-                draw_bg_mode2(gba);
-                break;
-            case 3:
-                draw_bg_mode3(gba);
-                break;
-            case 4:
-                draw_bg_mode4(gba);
-                break;
-            case 5:
-                draw_bg_mode5(gba);
-                break;
-            default:
-                break;
-            }
+        if (!is_hdraw)
+            continue;
 
-            if (CHECK_BIT(gba->bus.io[IO_GREENSWAP], 0))
-                todo("green swap");
-
-            // TODO composite step
-            compositing(gba);
-
-            // TODO  Although the drawing time is only 960 cycles (240*4), the H-Blank flag is "0" for a total of 1006 cycles.
-            // --> 1006 - 960 == 46 --> this 46 offset is the composite offset?
-            // so we enter hblank really at 1006 cycles not 960
-
-            // if (gba->ppu.scanline_cycles >= HDRAW_DURATION) {
-            //     // gba->ppu.period = GBA_PPU_PERIOD_HBLANK;
-            //     SET_BIT(gba->bus.io[IO_DISPSTAT], DISPSTAT_G);
-
-            //     if (CHECK_BIT(gba->bus.io[IO_DISPSTAT], 4))
-            //         CPU_REQUEST_INTERRUPT(gba, GBA_IRQ_HBLANK);
-            // }
+        switch (PPU_GET_MODE(gba)) {
+        case 0:
+            draw_bg_mode0(gba);
+            break;
+        case 1:
+            draw_bg_mode1(gba);
+            break;
+        case 2:
+            draw_bg_mode2(gba);
+            break;
+        case 3:
+            draw_bg_mode3(gba);
+            break;
+        case 4:
+            draw_bg_mode4(gba);
+            break;
+        case 5:
+            draw_bg_mode5(gba);
+            break;
+        default:
+            break;
         }
+
+        if (CHECK_BIT(gba->bus.io[IO_GREENSWAP], 0))
+            todo("green swap");
+
+        // TODO composite step
+        compositing(gba);
+
+        // TODO  Although the drawing time is only 960 cycles (240*4), the H-Blank flag is "0" for a total of 1006 cycles.
+        // --> 1006 - 960 == 46 --> this 46 offset is the composite offset?
+        // so we enter hblank really at 1006 cycles not 960
+
+        // if (gba->ppu.scanline_cycles >= HDRAW_DURATION) {
+        //     // gba->ppu.period = GBA_PPU_PERIOD_HBLANK;
+        //     SET_BIT(gba->bus.io[IO_DISPSTAT], DISPSTAT_G);
+
+        //     if (CHECK_BIT(gba->bus.io[IO_DISPSTAT], DISPSTAT_H))
+        //         CPU_REQUEST_INTERRUPT(gba, GBA_IRQ_HBLANK);
+        // }
     }
 }
 
@@ -581,55 +593,42 @@ static inline void set_vcount(gba_t *gba, uint16_t value) {
 
     if (gba->bus.io[IO_VCOUNT] == GBA_SCREEN_HEIGHT)
         SET_BIT(gba->bus.io[IO_DISPSTAT], DISPSTAT_W);
-    else if (gba->bus.io[IO_VCOUNT] == GBA_SCREEN_HEIGHT + VBLANK_HEIGHT)
+    else if (gba->bus.io[IO_VCOUNT] == 0)
         RESET_BIT(gba->bus.io[IO_DISPSTAT], DISPSTAT_W);
 }
 
-void gba_ppu_enter_hdraw(gba_t *gba) {
+void gba_ppu_enter_vhdraw(gba_t *gba) {
     gba_ppu_sync(gba);
 
-    // LOG_INFO("gba_ppu_enter_hdraw\t\t%" PRIu64 "(vcount=%" PRIu16 ")", gba->sched.cycle, gba->bus.io[IO_VCOUNT]);
+    LOG_DEBUG("gba_ppu_enter_vhdraw\t%" PRIu64 " (vcount=%" PRIu16 ")", gba->sched.cycle, gba->bus.io[IO_VCOUNT]);
+
+    RESET_BIT(gba->bus.io[IO_DISPSTAT], DISPSTAT_G);
 
     if (gba->bus.io[IO_VCOUNT] < GBA_SCREEN_HEIGHT)
-        RESET_BIT(gba->bus.io[IO_DISPSTAT], DISPSTAT_G);
-
-    set_vcount(gba, gba->bus.io[IO_VCOUNT] + 1);
-
-    // // rendering objs after vcount increment to emulate obj rendering 1 scanline before current one
-    // switch (PPU_GET_MODE(gba)) {
-    // case 0:
-    // case 2:
-    //     if (gba->bus.io[IO_VCOUNT] == GBA_SCREEN_HEIGHT + VBLANK_HEIGHT - 1)
-    //         draw_obj(gba, 0);
-    //     else
-    //         draw_obj(gba, gba->bus.io[IO_VCOUNT] + 1);
-    //     break;
-    // default:
-    //     break;
-    // }
+        set_vcount(gba, gba->bus.io[IO_VCOUNT] + 1);
+    else if (gba->bus.io[IO_VCOUNT] == GBA_SCREEN_HEIGHT + VBLANK_HEIGHT - 1)
+        set_vcount(gba, 0);
+    else
+        set_vcount(gba, gba->bus.io[IO_VCOUNT] + 1);
 }
 
 void gba_ppu_enter_vhblank(gba_t *gba) {
     gba_ppu_sync(gba);
 
-    // LOG_INFO("gba_ppu_enter_vhblank\t%" PRIu64 "(vcount=%" PRIu16 ")", gba->sched.cycle, gba->bus.io[IO_VCOUNT]);
+    LOG_DEBUG("gba_ppu_enter_vhblank\t%" PRIu64 " (vcount=%" PRIu16 ")", gba->sched.cycle, gba->bus.io[IO_VCOUNT]);
+
+    SET_BIT(gba->bus.io[IO_DISPSTAT], DISPSTAT_G);
 
     if (gba->bus.io[IO_VCOUNT] < GBA_SCREEN_HEIGHT) {
         // this is VDRAW HBLANK
-        SET_BIT(gba->bus.io[IO_DISPSTAT], DISPSTAT_G);
-
-        if (CHECK_BIT(gba->bus.io[IO_DISPSTAT], 4))
+        if (CHECK_BIT(gba->bus.io[IO_DISPSTAT], DISPSTAT_H))
             CPU_REQUEST_INTERRUPT(gba, GBA_IRQ_HBLANK);
     } else if (gba->bus.io[IO_VCOUNT] == GBA_SCREEN_HEIGHT) {
         // this is last VDRAW HBLANK before VBLANK
-        RESET_BIT(gba->bus.io[IO_DISPSTAT], DISPSTAT_G);
-
         if (CHECK_BIT(gba->bus.io[IO_DISPSTAT], DISPSTAT_V))
             CPU_REQUEST_INTERRUPT(gba, GBA_IRQ_VBLANK);
-    } else if (gba->bus.io[IO_VCOUNT] >= GBA_SCREEN_HEIGHT + VBLANK_HEIGHT) {
+    } else if (gba->bus.io[IO_VCOUNT] >= GBA_SCREEN_HEIGHT + VBLANK_HEIGHT - 1) {
         // this is last VBLANK HBLANK before HDRAW
-        set_vcount(gba, 0);
-
         if (gba->base->opts.on_pixbuf_request)
             gba->ppu.pixels = gba->base->opts.on_pixbuf_request(GBA_SCREEN_WIDTH, GBA_SCREEN_HEIGHT);
     }

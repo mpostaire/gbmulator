@@ -24,11 +24,9 @@ typedef struct {
     uint8_t *pixels;
 } gba_ppu_t;
 
-void gba_ppu_enter_hdraw(gba_t *gba);
+void gba_ppu_enter_vhdraw(gba_t *gba);
 
 void gba_ppu_enter_vhblank(gba_t *gba);
-
-void gba_ppu_enter_vblank(gba_t *gba);
 
 void gba_ppu_reset(gba_t *gba);
 
