@@ -159,19 +159,19 @@ static uint8_t thumb_handlers[1 << 8];
 static inline uint32_t read_u8(gba_t *gba, bus_access_type_t access, uint32_t address) {
     gba->cpu.pipeline_access_type = BUS_ACCESS_TYPE_N;
 
-    return gba_bus_read_byte(gba, address);
+    return gba_bus_read_byte(gba, access, address);
 }
 
 static inline void write_u8(gba_t *gba, bus_access_type_t access, uint32_t address, uint16_t data) {
     gba->cpu.pipeline_access_type = BUS_ACCESS_TYPE_N;
 
-    gba_bus_write_byte(gba, address, data);
+    gba_bus_write_byte(gba, access, address, data);
 }
 
 static inline uint32_t read_i8(gba_t *gba, bus_access_type_t access, uint32_t address) {
     gba->cpu.pipeline_access_type = BUS_ACCESS_TYPE_N;
 
-    return (int8_t) gba_bus_read_byte(gba, address);
+    return (int8_t) gba_bus_read_byte(gba, access, address);
 }
 
 static inline uint32_t read_u16(gba_t *gba, bus_access_type_t access, uint32_t address) {
@@ -180,9 +180,9 @@ static inline uint32_t read_u16(gba_t *gba, bus_access_type_t access, uint32_t a
     uint32_t data;
 
     if (IS_ADDRESS_IN_SRAM(address))
-        data = gba_bus_read_half(gba, address);
+        data = gba_bus_read_half(gba, access, address);
     else
-        data = gba_bus_read_half(gba, ALIGN(address, 2));
+        data = gba_bus_read_half(gba, access, ALIGN(address, 2));
 
     if (address & 1)
         data = ROR(data, 8);
@@ -196,7 +196,7 @@ static inline void write_u16(gba_t *gba, bus_access_type_t access, uint32_t addr
     if (!IS_ADDRESS_IN_SRAM(address))
         address = ALIGN(address, 2);
 
-    gba_bus_write_half(gba, address, data);
+    gba_bus_write_half(gba, access, address, data);
 }
 
 static inline uint32_t read_i16(gba_t *gba, bus_access_type_t access, uint32_t address) {
@@ -206,11 +206,11 @@ static inline uint32_t read_i16(gba_t *gba, bus_access_type_t access, uint32_t a
 
     // sign extend with an explicit cast before returning as uint32_t
     if (address & 1)
-        data = (int8_t) gba_bus_read_byte(gba, address);
+        data = (int8_t) gba_bus_read_byte(gba, access, address);
     else if (IS_ADDRESS_IN_SRAM(address))
-        data = (int16_t) gba_bus_read_half(gba, address);
+        data = (int16_t) gba_bus_read_half(gba, access, address);
     else
-        data = (int16_t) gba_bus_read_half(gba, ALIGN(address, 2));
+        data = (int16_t) gba_bus_read_half(gba, access, ALIGN(address, 2));
 
     return data;
 }
@@ -221,7 +221,7 @@ static inline uint32_t read_u32_no_rotate(gba_t *gba, bus_access_type_t access, 
     if (!IS_ADDRESS_IN_SRAM(address))
         address = ALIGN(address, 4);
 
-    return gba_bus_read_word(gba, address);
+    return gba_bus_read_word(gba, access, address);
 }
 
 static inline uint32_t read_u32(gba_t *gba, bus_access_type_t access, uint32_t address) {
@@ -239,7 +239,7 @@ static inline void write_u32(gba_t *gba, bus_access_type_t access, uint32_t addr
     if (!IS_ADDRESS_IN_SRAM(address))
         address = ALIGN(address, 4);
 
-    gba_bus_write_word(gba, address, data);
+    gba_bus_write_word(gba, access, address, data);
 }
 
 static inline void idle(gba_t *gba, uint64_t cycles) {

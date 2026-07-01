@@ -197,28 +197,28 @@ uint32_t gba_bus_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32
 
 void gba_bus_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data);
 
-static inline uint8_t gba_bus_read_byte(gba_t *gba, uint32_t address) {
-    return gba_bus_read(gba, 1, BUS_ACCESS_TYPE_N, address);
+static inline uint8_t gba_bus_read_byte(gba_t *gba, bus_access_type_t access, uint32_t address) {
+    return gba_bus_read(gba, 1, access, address);
 }
 
-static inline uint16_t gba_bus_read_half(gba_t *gba, uint32_t address) {
-    return gba_bus_read(gba, 2, BUS_ACCESS_TYPE_N, address);
+static inline uint16_t gba_bus_read_half(gba_t *gba, bus_access_type_t access, uint32_t address) {
+    return gba_bus_read(gba, 2, access, address);
 }
 
-static inline uint32_t gba_bus_read_word(gba_t *gba, uint32_t address) {
-    return gba_bus_read(gba, 4, BUS_ACCESS_TYPE_N, address);
+static inline uint32_t gba_bus_read_word(gba_t *gba, bus_access_type_t access, uint32_t address) {
+    return gba_bus_read(gba, 4, access, address);
 }
 
-static inline void gba_bus_write_byte(gba_t *gba, uint32_t address, uint8_t data) {
-    gba_bus_write(gba, 1, BUS_ACCESS_TYPE_N, address, data);
+static inline void gba_bus_write_byte(gba_t *gba, bus_access_type_t access, uint32_t address, uint8_t data) {
+    gba_bus_write(gba, 1, access, address, data);
 }
 
-static inline void gba_bus_write_half(gba_t *gba, uint32_t address, uint16_t data) {
-    gba_bus_write(gba, 2, BUS_ACCESS_TYPE_N, address, data);
+static inline void gba_bus_write_half(gba_t *gba, bus_access_type_t access, uint32_t address, uint16_t data) {
+    gba_bus_write(gba, 2, access, address, data);
 }
 
-static inline void gba_bus_write_word(gba_t *gba, uint32_t address, uint32_t data) {
-    gba_bus_write(gba, 4, BUS_ACCESS_TYPE_N, address, data);
+static inline void gba_bus_write_word(gba_t *gba, bus_access_type_t access, uint32_t address, uint32_t data) {
+    gba_bus_write(gba, 4, access, address, data);
 }
 
 bool gba_bus_validate_rom(const uint8_t *rom, size_t size);
