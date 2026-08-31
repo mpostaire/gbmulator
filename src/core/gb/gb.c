@@ -22,7 +22,7 @@ const char *mbc_names[] = {
     STRINGIFY(TAMA5)
 };
 
-void gb_step(gb_t *gb) {
+uint64_t gb_step(gb_t *gb) {
     uint8_t double_speed = IS_DOUBLE_SPEED(gb);
     for (int i = double_speed + 1; i; i--) {
         // stop execution of the program while a GDMA or HDMA is active
@@ -42,6 +42,8 @@ void gb_step(gb_t *gb) {
     //      behave in a weird way: https://gbdev.io/pandocs/CGB_Registers.html?highlight=key1#ff4d--key1-cgb-mode-only-prepare-speed-switch
     ppu_step(gb);
     apu_step(gb);
+
+    return 1;
 }
 
 gb_t *gb_init(gbmulator_t *base) {

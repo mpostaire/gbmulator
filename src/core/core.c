@@ -152,9 +152,9 @@ void gbmulator_rewind(gbmulator_t *emu, uint64_t frame) {
         rewind_pop(emu);
 }
 
-void gbmulator_step(gbmulator_t *emu) {
+uint64_t gbmulator_step(gbmulator_t *emu) {
     if (!emu)
-        return;
+        return 0;
 
     if (emu->rewind_stack.states) {
         static size_t step_counter = 0;
@@ -165,7 +165,7 @@ void gbmulator_step(gbmulator_t *emu) {
         }
     }
 
-    emu->step(emu->impl);
+    uint64_t cycles = emu->step(emu->impl);
 
     // Step link cable device
     if (emu->cable.other_device)
@@ -174,18 +174,23 @@ void gbmulator_step(gbmulator_t *emu) {
     // Step IR device only if it isn't also connected via link cable
     if (emu->ir.other_device && emu->ir.other_device != emu->cable.other_device)
         emu->ir.other_device->step(emu->ir.other_device->impl);
+
+    return cycles;
 }
 
-void gbmulator_run_steps(gbmulator_t *emu, uint64_t steps_limit) {
+uint64_t gbmulator_run_steps(gbmulator_t *emu, uint64_t steps_limit) {
     if (!emu)
-        return;
+        return 0;
 
-    for (uint64_t steps_count = 0; steps_count < steps_limit; steps_count++)
-        gbmulator_step(emu);
+    uint64_t cycles = 0;
+    while (cycles < steps_limit)
+        cycles += gbmulator_step(emu);
+
+    return cycles;
 }
 
-void gbmulator_run_frames(gbmulator_t *emu, uint64_t frames_limit) {
-    gbmulator_run_steps(emu, frames_limit * GB_CPU_STEPS_PER_FRAME);
+uint64_t gbmulator_run_frames(gbmulator_t *emu, uint64_t frames_limit) {
+    return gbmulator_run_steps(emu, frames_limit * GB_CPU_STEPS_PER_FRAME);
 }
 
 void gbmulator_get_save(gbmulator_t *emu, uint8_t *data, size_t *length) {

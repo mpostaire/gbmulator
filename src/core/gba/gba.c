@@ -17,10 +17,14 @@ static const char *makers[] = {
     [0x01] = "Nintendo"
 };
 
-void gba_step(gba_t *gba) {
+uint64_t gba_step(gba_t *gba) {
+    uint64_t start = gba->sched.cycle;
+
     if (!gba->dma.active_channels)
         gba_cpu_step(gba);
     gba_dma_step(gba);
+
+    return gba->sched.cycle - start;
 }
 
 gba_t *gba_init(gbmulator_t *base) {

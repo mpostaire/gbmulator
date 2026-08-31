@@ -251,15 +251,20 @@ static int gamepad_button_name_parser(const char *button_name) {
     return 0;
 }
 
-static void start_loop(void) {
+static gint64 next_frame_time;
+static void   start_loop(void) {
     if (loop_source > 0 || link_task)
         return;
 
     app_set_pause(false);
 
-    uint32_t fps = app_get_fps();
-    if (fps > 0)
-        loop_source = g_timeout_add(1000 / fps, G_SOURCE_FUNC(loop_func), NULL);
+    next_frame_time = g_get_monotonic_time();
+
+    loop_source = g_timeout_add(
+        0,
+        G_SOURCE_FUNC(loop_func),
+        NULL
+    );
 }
 
 static void stop_loop(void) {
@@ -293,13 +298,24 @@ static void show_toast(const char *text) {
     adw_toast_set_timeout(toast, 1);
 }
 
-static inline gboolean loop_func(gpointer user_data) {
+static gboolean loop_func(gpointer user_data) {
     app_run_frame();
+
+    next_frame_time += 1'000'000 / app_get_fps();
+
+    gint64 now_us = g_get_monotonic_time();
+
+    gint64 delay_us = next_frame_time - now_us;
+
+    if (delay_us < 0)
+        delay_us = 0;
+
+    loop_source = g_timeout_add(delay_us / 1000, G_SOURCE_FUNC(loop_func), NULL);
 
     gtk_gl_area_queue_render(GTK_GL_AREA(emu_gl_area));
     gtk_gl_area_queue_render(GTK_GL_AREA(printer_gl_area));
 
-    return G_SOURCE_CONTINUE;
+    return G_SOURCE_REMOVE;
 }
 
 static void on_emu_realize(GtkGLArea *area, gpointer user_data) {
@@ -721,17 +737,19 @@ static void show_about(GSimpleAction *action, GVariant *parameter, gpointer app)
         NULL
     };
 
-    adw_show_about_dialog(GTK_WIDGET(gtk_application_get_active_window(GTK_APPLICATION(app))),
-                          "application-name", APP_NAME,
-                          "application-icon", APP_ICON,
-                          "version", APP_VERSION,
-                          "copyright", "© " APP_COPYRIGHT_YEAR " Maxime Postaire",
-                          "issue-url", "https://github.com/mpostaire/gbmulator/issues/new",
-                          "license-type", GTK_LICENSE_MIT_X11,
-                          "developers", developers,
-                          "website", "https://github.com/mpostaire/gbmulator",
-                          "comments", "A Game Boy Color emulator with sound and Link Cable / IR sensor support over tcp.",
-                          NULL);
+    adw_show_about_dialog(
+        GTK_WIDGET(gtk_application_get_active_window(GTK_APPLICATION(app))),
+        "application-name", APP_NAME,
+        "application-icon", APP_ICON,
+        "version", APP_VERSION,
+        "copyright", "© " APP_COPYRIGHT_YEAR " Maxime Postaire",
+        "issue-url", "https://github.com/mpostaire/gbmulator/issues/new",
+        "license-type", GTK_LICENSE_MIT_X11,
+        "developers", developers,
+        "website", "https://github.com/mpostaire/gbmulator",
+        "comments", "A Game Boy Color emulator with sound and Link Cable / IR sensor support over tcp.",
+        NULL
+    );
 }
 
 static void open_rom_dialog_cb(GObject *dialog, GAsyncResult *res, gpointer user_data) {

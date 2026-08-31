@@ -21,11 +21,11 @@ void gbmulator_reset(gbmulator_t *emu, gbmulator_options_t *opts);
 
 void gbmulator_rewind(gbmulator_t *emu, uint64_t frame);
 
-void gbmulator_step(gbmulator_t *emu);
+uint64_t gbmulator_step(gbmulator_t *emu);
 
-void gbmulator_run_steps(gbmulator_t *emu, uint64_t steps_limit);
+uint64_t gbmulator_run_steps(gbmulator_t *emu, uint64_t steps_limit);
 
-void gbmulator_run_frames(gbmulator_t *emu, uint64_t frames_limit);
+uint64_t gbmulator_run_frames(gbmulator_t *emu, uint64_t frames_limit);
 
 void gbmulator_get_save(gbmulator_t *emu, uint8_t *data, size_t *length);
 

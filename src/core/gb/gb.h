@@ -16,7 +16,7 @@ typedef enum {
  * Runs the emulator for one cpu step. If `gb` is linked to another device, it is also run for one step.
  * @returns the amount of cycles the emulator has run for
  */
-void gb_step(gb_t *gb);
+uint64_t gb_step(gb_t *gb);
 
 /**
  * Inits the emulator.

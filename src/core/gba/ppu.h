@@ -13,8 +13,7 @@ typedef enum {
 typedef struct {
     uint64_t last_sync_cycle;
 
-    uint32_t         scanline_cycles;
-    gba_ppu_period_t period; // TODO remove
+    uint32_t scanline_cycle;
 
     uint8_t obj_id;
 

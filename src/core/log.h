@@ -60,9 +60,9 @@
 #define _LOG_IMPL(lvl, lvl_str, fmt, ...)                                                                  \
     do {                                                                                                   \
         if (_log_is_colored())                                                                             \
-            fprintf(stderr, "%s[%s] " fmt _LOG_COLOR_RESET "\n", _LOG_COLOR(lvl), lvl_str, ##__VA_ARGS__); \
+            fprintf(stdout, "%s[%s] " fmt _LOG_COLOR_RESET "\n", _LOG_COLOR(lvl), lvl_str, ##__VA_ARGS__); \
         else                                                                                               \
-            fprintf(stderr, "[%s] " fmt "\n", lvl_str, ##__VA_ARGS__);                                     \
+            fprintf(stdout, "[%s] " fmt "\n", lvl_str, ##__VA_ARGS__);                                     \
     } while (0)
 
 #if _LOG_LVL_VALUE <= LOG_LVL_DEBUG

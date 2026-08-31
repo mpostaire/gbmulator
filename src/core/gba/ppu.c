@@ -6,7 +6,7 @@
 
 #define BG_FETCH_DELAY    31
 #define OBJ_FETCH_DELAY   40
-#define COMPOSITING_DELAY 46
+#define COMPOSITING_DELAY 45
 
 #define PIXEL_DURATION  4
 #define HDRAW_DURATION  1006
@@ -29,6 +29,20 @@
 #define DISPSTAT_V 3 // VBLANK IRQ enabled
 #define DISPSTAT_H 4 // HBLANK IRQ enabled
 #define DISPSTAT_Y 5 // VCOUNT == DISPCNT >> 8 IRQ enabled
+
+#define DISPCNT_C 3  // GBC mode
+#define DISPCNT_A 4  // Bitmap bank
+#define DISPCNT_B 5  // Force processing during HBLANK
+#define DISPCNT_D 6  // 1-D or 2-D objs mapping in VRAM
+#define DISPCNT_F 7  // Force blank
+#define DISPCNT_I 8  // Enable BG0
+#define DISPCNT_J 9  // Enable BG1
+#define DISPCNT_K 10 // Enable BG2
+#define DISPCNT_L 11 // Enable BG3
+#define DISPCNT_S 12 // Enable obj
+#define DISPCNT_U 13 // Enable window 0
+#define DISPCNT_V 14 // Enable window 1
+#define DISPCNT_W 15 // Enable obj windows
 
 static inline void set_pixel_rgb(gba_t *gba, uint32_t x, uint32_t y, uint8_t r, uint8_t g, uint8_t b) {
     if (!gba->ppu.pixels)
@@ -55,7 +69,7 @@ static inline void set_pixel_color(gba_t *gba, uint32_t x, uint32_t y, uint16_t 
 }
 
 static inline uint8_t vram_read_u8(gba_t *gba, uint32_t address) {
-    gba->bus.ppu_vram_accessed = gba->sched.cycle;
+    gba->bus.ppu_vram_accessed = gba->ppu.last_sync_cycle;
     address                    = address % sizeof(gba->bus.vram);
 
     assert(address < sizeof(gba->bus.vram));
@@ -65,7 +79,7 @@ static inline uint8_t vram_read_u8(gba_t *gba, uint32_t address) {
 static inline uint16_t pram_read_u16(gba_t *gba, uint32_t address) {
     address = ALIGN(address, 2);
 
-    gba->bus.ppu_pram_accessed = gba->sched.cycle;
+    gba->bus.ppu_pram_accessed = gba->ppu.last_sync_cycle;
     address                    = address % sizeof(gba->bus.pram);
 
     assert(address < sizeof(gba->bus.pram));
@@ -75,7 +89,7 @@ static inline uint16_t pram_read_u16(gba_t *gba, uint32_t address) {
 static inline uint16_t vram_read_u16(gba_t *gba, uint32_t address) {
     address = ALIGN(address, 2);
 
-    gba->bus.ppu_vram_accessed = gba->sched.cycle;
+    gba->bus.ppu_vram_accessed = gba->ppu.last_sync_cycle;
     address                    = address % sizeof(gba->bus.vram);
 
     assert(address < sizeof(gba->bus.vram));
@@ -85,7 +99,7 @@ static inline uint16_t vram_read_u16(gba_t *gba, uint32_t address) {
 static inline uint16_t oam_read_u16(gba_t *gba, uint32_t address) {
     address = ALIGN(address, 2);
 
-    gba->bus.ppu_oam_accessed = gba->sched.cycle;
+    gba->bus.ppu_oam_accessed = gba->ppu.last_sync_cycle;
     address                   = address % sizeof(gba->bus.oam);
 
     assert(address < sizeof(gba->bus.oam));
@@ -104,7 +118,7 @@ void gba_ppu_reset(gba_t *gba) {
     gba_sched_add(gba, GBA_SCHED_EVENT_PPU_ENTER_VHBLANK, SCANLINE_DURATION + 1, SCANLINE_DURATION);
     gba_sched_add(gba, GBA_SCHED_EVENT_PPU_ENTER_VHDRAW, HBLANK_DURATION, SCANLINE_DURATION);
 
-    gba->ppu.scanline_cycles = HDRAW_DURATION;
+    gba->ppu.scanline_cycle = HDRAW_DURATION;
 }
 
 static inline uint8_t render_text_tile_8bpp(gba_t *gba, uint32_t tile_base_addr, uint16_t tile_id, uint32_t x, uint32_t y, bool flip_x, bool flip_y) {
@@ -248,7 +262,7 @@ static inline void draw_obj(gba_t *gba, int32_t y) {
 #define OBJ_ATTR_FETCH_CYCLES 2
 #define OAM_ENTRY_SIZE        8
 
-    if (ppu->scanline_cycles < OBJ_FETCH_DELAY || (ppu->scanline_cycles % OBJ_ATTR_FETCH_CYCLES) != OBJ_ATTR_FETCH_CYCLES - 1)
+    if (ppu->scanline_cycle < OBJ_FETCH_DELAY || (ppu->scanline_cycle % OBJ_ATTR_FETCH_CYCLES) != OBJ_ATTR_FETCH_CYCLES - 1)
         return;
 
     // TODO obj are fetched the previous scanline. unlike bg, they do not follow the current ppu.x coord, instead they insert at their attribute coord
@@ -299,7 +313,7 @@ static inline void draw_obj(gba_t *gba, int32_t y) {
     uint16_t base_tile_id = attr2 & 0x03FF;
     uint8_t  priority     = (attr2 >> 10) & 0x03;
 
-    bool     is_1d_mapping = CHECK_BIT(gba->bus.io[IO_DISPCNT], 6);
+    bool     is_1d_mapping = CHECK_BIT(gba->bus.io[IO_DISPCNT], DISPCNT_D);
     uint16_t mapping_width = is_1d_mapping ? 8 : 32;
 
     for (int32_t x = MAX(obj_x, 0); x < obj_x + obj_w && x < GBA_SCREEN_WIDTH; x++) { // TODO x/y oob
@@ -333,136 +347,167 @@ static inline void draw_bg_mode0(gba_t *gba) {
     gba_ppu_t *ppu = &gba->ppu;
 
     if (ppu->scanline_cycles < BG_FETCH_DELAY || (ppu->scanline_cycles % PIXEL_DURATION) != PIXEL_DURATION - 1)
+    if (ppu->scanline_cycle < BG_FETCH_DELAY)
         return;
 
-    uint32_t x = (ppu->scanline_cycles - BG_FETCH_DELAY) / PIXEL_DURATION;
+    uint32_t scanline_draw_cycle = ppu->scanline_cycle - BG_FETCH_DELAY;
+
+    uint32_t x = scanline_draw_cycle / PIXEL_DURATION;
     uint32_t y = gba->bus.io[IO_VCOUNT];
 
     if (x >= GBA_SCREEN_WIDTH)
         return;
 
     for (uint8_t bg = 0; bg < 4; bg++)
-        if (CHECK_BIT(gba->bus.io[IO_DISPCNT], bg + 8))
+        if (CHECK_BIT(gba->bus.io[IO_DISPCNT], bg + DISPCNT_I))
             draw_text_bg(gba, bg, x, y);
 }
 
 static inline void draw_bg_mode1(gba_t *gba) {
     gba_ppu_t *ppu = &gba->ppu;
 
-    if (ppu->scanline_cycles < BG_FETCH_DELAY || (ppu->scanline_cycles % PIXEL_DURATION) != PIXEL_DURATION - 1)
+    if (ppu->scanline_cycle < BG_FETCH_DELAY || (ppu->scanline_cycle % PIXEL_DURATION) != PIXEL_DURATION - 1)
         return;
 
-    uint32_t x = (ppu->scanline_cycles - BG_FETCH_DELAY) / PIXEL_DURATION;
+    uint32_t x = (ppu->scanline_cycle - BG_FETCH_DELAY) / PIXEL_DURATION;
     uint32_t y = gba->bus.io[IO_VCOUNT];
 
     if (x >= GBA_SCREEN_WIDTH)
         return;
 
     for (uint8_t bg = 0; bg < 2; bg++)
-        if (CHECK_BIT(gba->bus.io[IO_DISPCNT], bg + 8))
+        if (CHECK_BIT(gba->bus.io[IO_DISPCNT], bg + DISPCNT_I))
             draw_text_bg(gba, bg, x, y);
 
-    if (CHECK_BIT(gba->bus.io[IO_DISPCNT], 10))
+    if (CHECK_BIT(gba->bus.io[IO_DISPCNT], DISPCNT_K))
         draw_affine_bg(gba, 2, x, y);
 }
 
 static inline void draw_bg_mode2(gba_t *gba) {
     gba_ppu_t *ppu = &gba->ppu;
 
-    if (ppu->scanline_cycles < BG_FETCH_DELAY || (ppu->scanline_cycles % PIXEL_DURATION) != PIXEL_DURATION - 1)
+    if (ppu->scanline_cycle < BG_FETCH_DELAY || (ppu->scanline_cycle % PIXEL_DURATION) != PIXEL_DURATION - 1)
         return;
 
-    uint32_t x = (ppu->scanline_cycles - BG_FETCH_DELAY) / PIXEL_DURATION;
+    uint32_t x = (ppu->scanline_cycle - BG_FETCH_DELAY) / PIXEL_DURATION;
     uint32_t y = gba->bus.io[IO_VCOUNT];
 
     if (x >= GBA_SCREEN_WIDTH)
         return;
 
     for (uint8_t bg = 2; bg < 4; bg++)
-        if (CHECK_BIT(gba->bus.io[IO_DISPCNT], bg + 8))
+        if (CHECK_BIT(gba->bus.io[IO_DISPCNT], bg + DISPCNT_I))
             draw_affine_bg(gba, bg, x, y);
 }
 
 static inline void draw_bg_mode3(gba_t *gba) {
-    // TODO BG rendering seems to start only if it is enabled before HDRAW starts: can't do it in middle
-
     gba_ppu_t *ppu = &gba->ppu;
 
-    if (ppu->scanline_cycles < BG_FETCH_DELAY || (ppu->scanline_cycles % PIXEL_DURATION) != PIXEL_DURATION - 1)
+    bool display_bg2 = CHECK_BIT(gba->bus.io[IO_DISPCNT], DISPCNT_K);
+
+    if ((ppu->scanline_cycle < BG_FETCH_DELAY) || (!display_bg2))
         return;
 
-    uint32_t x = (ppu->scanline_cycles - BG_FETCH_DELAY) / PIXEL_DURATION;
+    uint32_t scanline_draw_cycle = ppu->scanline_cycle - BG_FETCH_DELAY;
+
+    if ((scanline_draw_cycle % PIXEL_DURATION) != PIXEL_DURATION - 1)
+        return;
+
+    uint32_t x = scanline_draw_cycle / PIXEL_DURATION;
     uint32_t y = gba->bus.io[IO_VCOUNT];
 
-    if (x >= GBA_SCREEN_WIDTH)
-        return;
+    uint16_t pixel = vram_read_u16(gba, (y * GBA_SCREEN_WIDTH + x) << 1);
 
-    bool display_bg2 = CHECK_BIT(gba->bus.io[IO_DISPCNT], 10);
-    if (display_bg2) {
-        uint32_t pixel_base_addr   = 0;
-        uint32_t pixel_addr_offset = (y << 1) * GBA_SCREEN_WIDTH + (x << 1);
-
-        ppu->line_layers[2][x] = vram_read_u16(gba, pixel_base_addr + pixel_addr_offset);
-    } else {
-        ppu->line_layers[2][x] = pram_read_u16(gba, 0);
-    }
+    if (x < GBA_SCREEN_WIDTH)
+        ppu->line_layers[2][x] = pixel;
 }
 
 static inline void draw_bg_mode4(gba_t *gba) {
     gba_ppu_t *ppu = &gba->ppu;
 
-    if (ppu->scanline_cycles < BG_FETCH_DELAY || (ppu->scanline_cycles % PIXEL_DURATION) != PIXEL_DURATION - 1)
+    bool display_bg2 = CHECK_BIT(gba->bus.io[IO_DISPCNT], DISPCNT_K);
+
+    if ((ppu->scanline_cycle < BG_FETCH_DELAY) || (!display_bg2))
         return;
 
-    uint32_t x = (ppu->scanline_cycles - BG_FETCH_DELAY) / PIXEL_DURATION;
+    uint32_t scanline_draw_cycle = ppu->scanline_cycle - BG_FETCH_DELAY;
+
+    if ((scanline_draw_cycle % PIXEL_DURATION) != PIXEL_DURATION - 1)
+        return;
+
+    uint32_t x = scanline_draw_cycle / PIXEL_DURATION;
     uint32_t y = gba->bus.io[IO_VCOUNT];
 
-    if (x >= GBA_SCREEN_WIDTH)
-        return;
+    uint32_t pixel_base_addr   = PPU_GET_FRAME(gba) * 0xA000;
+    uint32_t pixel_addr_offset = y * GBA_SCREEN_WIDTH + x;
 
-    bool display_bg2 = CHECK_BIT(gba->bus.io[IO_DISPCNT], 10);
-    if (display_bg2) {
-        uint32_t pixel_base_addr   = BUS_VRAM + (PPU_GET_FRAME(gba) * 0xA000);
-        uint32_t pixel_addr_offset = y * GBA_SCREEN_WIDTH + x;
+    uint16_t pixel = vram_read_u8(gba, pixel_base_addr + pixel_addr_offset);
 
-        ppu->line_layers[2][x] = vram_read_u8(gba, pixel_base_addr + pixel_addr_offset);
-    } else {
-        ppu->line_layers[2][x] = 0;
-    }
+    if (x < GBA_SCREEN_WIDTH)
+        ppu->line_layers[2][x] = pixel;
 }
 
 static inline void draw_bg_mode5(gba_t *gba) {
     gba_ppu_t *ppu = &gba->ppu;
 
-    if (ppu->scanline_cycles < BG_FETCH_DELAY || (ppu->scanline_cycles % PIXEL_DURATION) != PIXEL_DURATION - 1)
+    // if (ppu->scanline_cycle < BG_FETCH_DELAY || (ppu->scanline_cycle % PIXEL_DURATION) != PIXEL_DURATION - 1)
+    //     return;
+
+    // uint32_t x = (ppu->scanline_cycle - BG_FETCH_DELAY) / PIXEL_DURATION;
+    // uint32_t y = gba->bus.io[IO_VCOUNT];
+
+    // if (x >= GBA_SCREEN_WIDTH)
+    //     return;
+
+    // bool display_bg2 = CHECK_BIT(gba->bus.io[IO_DISPCNT], 10);
+    // if (display_bg2 || x >= 160 || y >= 128) {
+    //     uint32_t pixel_base_addr   = PPU_GET_FRAME(gba) * 0xA000;
+    //     uint32_t pixel_addr_offset = (y << 1) * 160 + (x << 1);
+
+    //     ppu->line_layers[2][x] = vram_read_u16(gba, pixel_base_addr + pixel_addr_offset);
+    // } else {
+    //     ppu->line_layers[2][x] = pram_read_u16(gba, 0);
+    // }
+
+    bool display_bg2 = CHECK_BIT(gba->bus.io[IO_DISPCNT], DISPCNT_K);
+
+    if ((ppu->scanline_cycle < BG_FETCH_DELAY) || (!display_bg2))
         return;
 
-    uint32_t x = (ppu->scanline_cycles - BG_FETCH_DELAY) / PIXEL_DURATION;
+    uint32_t scanline_draw_cycle = ppu->scanline_cycle - BG_FETCH_DELAY;
+
+    if ((scanline_draw_cycle % PIXEL_DURATION) != PIXEL_DURATION - 1)
+        return;
+
+    uint32_t x = scanline_draw_cycle / PIXEL_DURATION;
     uint32_t y = gba->bus.io[IO_VCOUNT];
 
-    if (x >= GBA_SCREEN_WIDTH)
-        return;
+    uint32_t pixel_base_addr   = PPU_GET_FRAME(gba) * 0xA000;
+    uint32_t pixel_addr_offset = (y * 160 + x) << 1;
 
-    bool display_bg2 = CHECK_BIT(gba->bus.io[IO_DISPCNT], 10);
-    if (display_bg2 || x >= 160 || y >= 128) {
-        uint32_t pixel_base_addr   = PPU_GET_FRAME(gba) * 0xA000;
-        uint32_t pixel_addr_offset = (y << 1) * 160 + (x << 1);
+    uint16_t pixel = vram_read_u16(gba, pixel_base_addr + pixel_addr_offset);
 
-        ppu->line_layers[2][x] = vram_read_u16(gba, pixel_base_addr + pixel_addr_offset);
-    } else {
-        ppu->line_layers[2][x] = pram_read_u16(gba, 0);
+    if (x < GBA_SCREEN_WIDTH) {
+        // if ((x >= 160) || (y >= 128)) {
+        // }
+        ppu->line_layers[2][x] = pixel;
     }
 }
 
 static inline void compositing(gba_t *gba) {
     // TODO priorities, alpha blending, greenswap, palette ram access timings, other bgs than bg2, objs
 
+    if (CHECK_BIT(gba->bus.io[IO_GREENSWAP], 0))
+        todo("green swap");
+
     gba_ppu_t *ppu = &gba->ppu;
 
-    if (ppu->scanline_cycles < COMPOSITING_DELAY || (ppu->scanline_cycles % PIXEL_DURATION) != PIXEL_DURATION - 1)
+    if (ppu->scanline_cycle < COMPOSITING_DELAY)
         return;
 
-    uint32_t x = (ppu->scanline_cycles - COMPOSITING_DELAY) / PIXEL_DURATION;
+    uint32_t scanline_compositing_cycle = ppu->scanline_cycle - COMPOSITING_DELAY;
+
+    uint32_t x = scanline_compositing_cycle / PIXEL_DURATION;
     uint32_t y = gba->bus.io[IO_VCOUNT];
 
     if (x >= GBA_SCREEN_WIDTH)
@@ -470,14 +515,29 @@ static inline void compositing(gba_t *gba) {
 
     uint8_t mode = PPU_GET_MODE(gba);
 
-    uint16_t color = pram_read_u16(gba, 0); // backdrop color
+    // TODO backdrop color
+    // uint16_t color = pram_read_u16(gba, 0);
+    uint16_t color = 0;
+
+    if (mode != 3) {
+        switch (scanline_compositing_cycle & (PIXEL_DURATION - 1)) {
+        case 0: // A
+            pram_read_u16(gba, 0);
+            break;
+        case 2: // B
+            break;
+        default:
+            break;
+        }
+    }
 
     for (uint8_t i = 0; i < 4; i++) {
-        bool bg_enabled = CHECK_BIT(gba->bus.io[IO_DISPCNT], i + 8);
+        bool bg_enabled = CHECK_BIT(gba->bus.io[IO_DISPCNT], i + DISPCNT_I);
         if (!bg_enabled)
             continue;
 
         if (mode == 3 || mode == 5) {
+            // TODO implement no color if bg is disabled
             color = ppu->line_layers[i][x];
         } else {
             uint16_t palette_bank  = ppu->line_layers[i][x] >> 8;
@@ -491,7 +551,7 @@ static inline void compositing(gba_t *gba) {
         }
     }
 
-    bool obj_enabled = CHECK_BIT(gba->bus.io[IO_DISPCNT], 12);
+    bool obj_enabled = CHECK_BIT(gba->bus.io[IO_DISPCNT], DISPCNT_S);
     if (obj_enabled && (mode == 0 || mode == 2)) { // TODO is this mode check accurate?
         uint8_t current_obj_layer = y & 1;
 
@@ -518,10 +578,6 @@ void gba_ppu_sync(gba_t *gba) {
     assert(gba->sched.cycle - gba->ppu.last_sync_cycle < SCANLINE_DURATION);
 
     for (; gba->ppu.last_sync_cycle < gba->sched.cycle; gba->ppu.last_sync_cycle++) {
-        ppu->scanline_cycles++; // TODO at the start or end of this func? --> move into gba_ppu_enter_vhdraw (start of scanline)
-        if (ppu->scanline_cycles >= SCANLINE_DURATION)
-            ppu->scanline_cycles = 0;
-
         // switch (PPU_GET_MODE(gba)) {
         // case 0:
         // case 2:
@@ -534,50 +590,58 @@ void gba_ppu_sync(gba_t *gba) {
         //     break;
         // }
 
-        bool is_hdraw = (gba->bus.io[IO_DISPSTAT] & 0x03) == 0x00;
-        if (!is_hdraw)
-            continue;
+        bool is_vdraw = !CHECK_BIT(gba->bus.io[IO_DISPSTAT], DISPSTAT_W);
+        bool is_hdraw = ppu->scanline_cycle < HDRAW_DURATION;
+        if (is_vdraw && is_hdraw) {
+            // TODO BG rendering seems to start only if it is enabled before HDRAW starts: can't do it in middle
 
-        switch (PPU_GET_MODE(gba)) {
-        case 0:
-            draw_bg_mode0(gba);
-            break;
-        case 1:
-            draw_bg_mode1(gba);
-            break;
-        case 2:
-            draw_bg_mode2(gba);
-            break;
-        case 3:
-            draw_bg_mode3(gba);
-            break;
-        case 4:
-            draw_bg_mode4(gba);
-            break;
-        case 5:
-            draw_bg_mode5(gba);
-            break;
-        default:
-            break;
+            // if (gba->ppu.last_sync_cycle == 0x19c224) {
+            if (gba->ppu.last_sync_cycle == 2735) {
+                int j = 0;
+            }
+
+            switch (PPU_GET_MODE(gba)) {
+            case 0:
+                draw_bg_mode0(gba);
+                break;
+            case 1:
+                draw_bg_mode1(gba);
+                break;
+            case 2:
+                draw_bg_mode2(gba);
+                break;
+            case 3:
+                draw_bg_mode3(gba);
+                break;
+            case 4:
+                draw_bg_mode4(gba);
+                break;
+            case 5:
+                draw_bg_mode5(gba);
+                break;
+            default:
+                break;
+            }
+
+            compositing(gba);
         }
-
-        if (CHECK_BIT(gba->bus.io[IO_GREENSWAP], 0))
-            todo("green swap");
-
-        // TODO composite step
-        compositing(gba);
 
         // TODO  Although the drawing time is only 960 cycles (240*4), the H-Blank flag is "0" for a total of 1006 cycles.
         // --> 1006 - 960 == 46 --> this 46 offset is the composite offset?
         // so we enter hblank really at 1006 cycles not 960
 
-        // if (gba->ppu.scanline_cycles >= HDRAW_DURATION) {
+        // if (gba->ppu.scanline_cycle >= HDRAW_DURATION) {
         //     // gba->ppu.period = GBA_PPU_PERIOD_HBLANK;
         //     SET_BIT(gba->bus.io[IO_DISPSTAT], DISPSTAT_G);
 
         //     if (CHECK_BIT(gba->bus.io[IO_DISPSTAT], DISPSTAT_H))
         //         CPU_REQUEST_INTERRUPT(gba, GBA_IRQ_HBLANK);
         // }
+
+        if (++ppu->scanline_cycle >= SCANLINE_DURATION) {
+            // LOG_INFO("scanline_cycle=0, cycle=%ld, vcount=%d", gba->ppu.last_sync_cycle, gba->bus.io[IO_VCOUNT]);
+            ppu->scanline_cycle = 0;
+        }
     }
 }
 

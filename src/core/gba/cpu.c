@@ -367,6 +367,14 @@ static inline void thumb_flush_pipeline(gba_t *gba) {
     gba->cpu.pipeline_access_type = BUS_ACCESS_TYPE_S;
 }
 
+// TODO flushing in arm or thumb mode is the same alignment?
+static inline void flush_pipeline(gba_t *gba) {
+    if (CPSR_CHECK_FLAG(&gba->cpu, CPSR_T))
+        thumb_flush_pipeline(gba);
+    else
+        arm_flush_pipeline(gba);
+}
+
 static inline void service_interrupt(gba_t *gba, uint32_t vector) {
     uint32_t cpsr_mode = 0;
     uint32_t cpsr_f    = !!CPSR_CHECK_FLAG(&gba->cpu, CPSR_F);
@@ -925,7 +933,8 @@ static bool and_handler(gba_t *gba, uint32_t instr) {
         if (s)
             update_mode(&gba->cpu);
 
-        arm_flush_pipeline(gba);
+        flush_pipeline(gba);
+
         return false;
     }
 
@@ -1025,7 +1034,8 @@ static bool eor_handler(gba_t *gba, uint32_t instr) {
         if (s)
             update_mode(&gba->cpu);
 
-        arm_flush_pipeline(gba);
+        flush_pipeline(gba);
+
         return false;
     }
 
@@ -1048,7 +1058,8 @@ static bool sub_handler(gba_t *gba, uint32_t instr) {
         if (s)
             update_mode(&gba->cpu);
 
-        arm_flush_pipeline(gba);
+        flush_pipeline(gba);
+
         return false;
     }
 
@@ -1071,7 +1082,8 @@ static bool rsb_handler(gba_t *gba, uint32_t instr) {
         if (s)
             update_mode(&gba->cpu);
 
-        arm_flush_pipeline(gba);
+        flush_pipeline(gba);
+
         return false;
     }
 
@@ -1094,7 +1106,8 @@ static bool add_handler(gba_t *gba, uint32_t instr) {
         if (s)
             update_mode(&gba->cpu);
 
-        arm_flush_pipeline(gba);
+        flush_pipeline(gba);
+
         return false;
     }
 
@@ -1117,7 +1130,8 @@ static bool adc_handler(gba_t *gba, uint32_t instr) {
         if (s)
             update_mode(&gba->cpu);
 
-        arm_flush_pipeline(gba);
+        flush_pipeline(gba);
+
         return false;
     }
 
@@ -1140,7 +1154,8 @@ static bool sbc_handler(gba_t *gba, uint32_t instr) {
         if (s)
             update_mode(&gba->cpu);
 
-        arm_flush_pipeline(gba);
+        flush_pipeline(gba);
+
         return false;
     }
 
@@ -1163,7 +1178,8 @@ static bool rsc_handler(gba_t *gba, uint32_t instr) {
         if (s)
             update_mode(&gba->cpu);
 
-        arm_flush_pipeline(gba);
+        flush_pipeline(gba);
+
         return false;
     }
 
@@ -1269,7 +1285,8 @@ static bool orr_handler(gba_t *gba, uint32_t instr) {
         if (s)
             update_mode(&gba->cpu);
 
-        arm_flush_pipeline(gba);
+        flush_pipeline(gba);
+
         return false;
     }
 
@@ -1297,7 +1314,8 @@ static bool mov_handler(gba_t *gba, uint32_t instr) {
         if (s)
             update_mode(&gba->cpu);
 
-        arm_flush_pipeline(gba);
+        flush_pipeline(gba);
+
         return false;
     }
 
@@ -1325,7 +1343,8 @@ static bool bic_handler(gba_t *gba, uint32_t instr) {
         if (s)
             update_mode(&gba->cpu);
 
-        arm_flush_pipeline(gba);
+        flush_pipeline(gba);
+
         return false;
     }
 
@@ -1353,7 +1372,8 @@ static bool mvn_handler(gba_t *gba, uint32_t instr) {
         if (s)
             update_mode(&gba->cpu);
 
-        arm_flush_pipeline(gba);
+        flush_pipeline(gba);
+
         return false;
     }
 
@@ -1529,6 +1549,8 @@ static bool ldrh_reg_handler(gba_t *gba, uint32_t instr) {
 
     gba->cpu.regs[rd] = data;
 
+    idle(gba, 1);
+
     if (rd == REG_PC) {
         arm_flush_pipeline(gba);
         return false;
@@ -1582,6 +1604,8 @@ static bool ldrh_imm_handler(gba_t *gba, uint32_t instr) {
         gba->cpu.regs[rn] = addr;
 
     gba->cpu.regs[rd] = data;
+
+    idle(gba, 1);
 
     if (rd == REG_PC) {
         arm_flush_pipeline(gba);
@@ -2036,90 +2060,90 @@ static bool thumb_alu_ops_handler(gba_t *gba, uint32_t instr) {
 
     switch (op) {
     case 0b0000:
+        LOG_DEBUG("(0x%04X) AND %s, %s", instr, reg_names[rd], reg_names[rs]);
         gba->cpu.regs[rd] &= gba->cpu.regs[rs];
         set_flags_nz_32(&gba->cpu, gba->cpu.regs[rd]);
-        LOG_DEBUG("(0x%04X) AND %s, %s", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b0001:
+        LOG_DEBUG("(0x%04X) EOR %s, %s", instr, reg_names[rd], reg_names[rs]);
         gba->cpu.regs[rd] ^= gba->cpu.regs[rs];
         set_flags_nz_32(&gba->cpu, gba->cpu.regs[rd]);
-        LOG_DEBUG("(0x%04X) EOR %s, %s", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b0010:
+        LOG_DEBUG("(0x%04X) LSL %s, %s", instr, reg_names[rd], reg_names[rs]);
         idle(gba, 1);
         gba->cpu.regs[rd] = shift_offset(&gba->cpu, 0b00, gba->cpu.regs[rd], gba->cpu.regs[rs] & 0xFF, false, &c);
         set_flags_nz_32(&gba->cpu, gba->cpu.regs[rd]);
         CPSR_CHANGE_FLAG(&gba->cpu, CPSR_C, c);
-        LOG_DEBUG("(0x%04X) LSL %s, %s", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b0011:
+        LOG_DEBUG("(0x%04X) LSR %s, %s", instr, reg_names[rd], reg_names[rs]);
         idle(gba, 1);
         gba->cpu.regs[rd] = shift_offset(&gba->cpu, 0b01, gba->cpu.regs[rd], gba->cpu.regs[rs] & 0xFF, false, &c);
         set_flags_nz_32(&gba->cpu, gba->cpu.regs[rd]);
         CPSR_CHANGE_FLAG(&gba->cpu, CPSR_C, c);
-        LOG_DEBUG("(0x%04X) LSR %s, %s", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b0100:
+        LOG_DEBUG("(0x%04X) ASR %s, %s", instr, reg_names[rd], reg_names[rs]);
         idle(gba, 1);
         gba->cpu.regs[rd] = shift_offset(&gba->cpu, 0b10, gba->cpu.regs[rd], gba->cpu.regs[rs] & 0xFF, false, &c);
         set_flags_nz_32(&gba->cpu, gba->cpu.regs[rd]);
         CPSR_CHANGE_FLAG(&gba->cpu, CPSR_C, c);
-        LOG_DEBUG("(0x%04X) ASR %s, %s", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b0101:
-        adc(&gba->cpu, rd, gba->cpu.regs[rd], gba->cpu.regs[rs], true);
         LOG_DEBUG("(0x%04X) ADC %s, %s", instr, reg_names[rd], reg_names[rs]);
+        adc(&gba->cpu, rd, gba->cpu.regs[rd], gba->cpu.regs[rs], true);
         break;
     case 0b0110:
-        sbc(&gba->cpu, rd, gba->cpu.regs[rd], gba->cpu.regs[rs], true);
         LOG_DEBUG("(0x%04X) SBC %s, %s", instr, reg_names[rd], reg_names[rs]);
+        sbc(&gba->cpu, rd, gba->cpu.regs[rd], gba->cpu.regs[rs], true);
         break;
     case 0b0111:
+        LOG_DEBUG("(0x%04X) ROR %s, %s", instr, reg_names[rd], reg_names[rs]);
         gba->cpu.regs[rd] = shift_offset(&gba->cpu, 0b11, gba->cpu.regs[rd], gba->cpu.regs[rs] & 0xFF, false, &c);
         idle(gba, 1);
         set_flags_nz_32(&gba->cpu, gba->cpu.regs[rd]);
         CPSR_CHANGE_FLAG(&gba->cpu, CPSR_C, c);
-        LOG_DEBUG("(0x%04X) ROR %s, %s", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b1000:
+        LOG_DEBUG("(0x%04X) TST %s, %s", instr, reg_names[rd], reg_names[rs]);
         res = gba->cpu.regs[rd] & gba->cpu.regs[rs];
         set_flags_nz_32(&gba->cpu, res);
-        LOG_DEBUG("(0x%04X) TST %s, %s", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b1001:
-        sub(&gba->cpu, rd, 0, gba->cpu.regs[rs], true);
         LOG_DEBUG("(0x%04X) NEG %s, %s", instr, reg_names[rd], reg_names[rs]);
+        sub(&gba->cpu, rd, 0, gba->cpu.regs[rs], true);
         break;
     case 0b1010:
-        cmp(&gba->cpu, gba->cpu.regs[rd], gba->cpu.regs[rs]);
         LOG_DEBUG("(0x%04X) CMP %s, %s", instr, reg_names[rd], reg_names[rs]);
+        cmp(&gba->cpu, gba->cpu.regs[rd], gba->cpu.regs[rs]);
         break;
     case 0b1011:
-        cmn(&gba->cpu, gba->cpu.regs[rd], gba->cpu.regs[rs]);
         LOG_DEBUG("(0x%04X) CMN %s, %s", instr, reg_names[rd], reg_names[rs]);
+        cmn(&gba->cpu, gba->cpu.regs[rd], gba->cpu.regs[rs]);
         break;
     case 0b1100:
+        LOG_DEBUG("(0x%04X) ORR %s, %s", instr, reg_names[rd], reg_names[rs]);
         gba->cpu.regs[rd] |= gba->cpu.regs[rs];
         set_flags_nz_32(&gba->cpu, gba->cpu.regs[rd]);
-        LOG_DEBUG("(0x%04X) ORR %s, %s", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b1101:
-        idle_multiplication(gba, gba->cpu.regs[rs], 0, true);
-        gba->cpu.regs[rd] *= gba->cpu.regs[rs];
-        set_flags_nz_32(&gba->cpu, gba->cpu.regs[rd]);
         LOG_DEBUG("(0x%04X) MUL %s, %s", instr, reg_names[rd], reg_names[rs]);
+        idle_multiplication(gba, gba->cpu.regs[rd], 0, true);
+        gba->cpu.regs[rd] = gba->cpu.regs[rs] * gba->cpu.regs[rd];
+        set_flags_nz_32(&gba->cpu, gba->cpu.regs[rd]);
         // TODO set carry flag
         CPSR_CHANGE_FLAG(&gba->cpu, CPSR_C, 0);
         break;
     case 0b1110:
+        LOG_DEBUG("(0x%04X) BIC %s, %s", instr, reg_names[rd], reg_names[rs]);
         gba->cpu.regs[rd] &= ~gba->cpu.regs[rs];
         set_flags_nz_32(&gba->cpu, gba->cpu.regs[rd]);
-        LOG_DEBUG("(0x%04X) BIC %s, %s", instr, reg_names[rd], reg_names[rs]);
         break;
     case 0b1111:
+        LOG_DEBUG("(0x%04X) MVN %s, %s", instr, reg_names[rd], reg_names[rs]);
         gba->cpu.regs[rd] = ~gba->cpu.regs[rs];
         set_flags_nz_32(&gba->cpu, gba->cpu.regs[rd]);
-        LOG_DEBUG("(0x%04X) MVN %s, %s", instr, reg_names[rd], reg_names[rs]);
         break;
     }
 

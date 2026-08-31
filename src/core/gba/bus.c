@@ -102,9 +102,49 @@ static void update_timings(gba_bus_t *bus) {
     }
 }
 
+static inline bool is_vram_delayed(gba_t *gba, uint32_t region) {
+    uint64_t instr_cycles = gba->sched.cycle - 1;
+    return (region == 0x05 && gba->bus.ppu_pram_accessed == instr_cycles) || (region == 0x06 && gba->bus.ppu_vram_accessed == instr_cycles) || (region == 0x07 && gba->bus.ppu_oam_accessed == instr_cycles);
+}
+
+static inline void ram_sync_ppu(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t region) {
+    assert(region == 0x05 || region == 0x06 || region == 0x07);
+
+    do {
+        sched_run(&gba->sched, 1);
+        gba_ppu_sync(gba);
+    } while (is_vram_delayed(gba, region));
+}
+
+static inline void sync_sched(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
+    // TODO this is most likely wrong because it doesnt take into account ppu accesses in ppu_sync() (only async events)
+    // ---> sync_sched should handle the PRAM/VRAM/OAM differently and sync ppu at the same time as checking if ppu memory was accessed
+
+    uint32_t region = (address >> 24) & 0x0F;
+
+    switch (region) {
+    case 0x05:
+    case 0x06:
+    case 0x07:
+        // this is a special case that is better handled in the PRAM/VRAM/OAM accessors to properly emulate CPU/PPU
+        // concurrent accesses.
+        break;
+    default:
+        uint32_t cycles = gba->bus.timings[size >> 2][region][access];
+        sched_run(&gba->sched, cycles);
+        break;
+    }
+}
+
 static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
     uint32_t mask   = 0xFFFF;
     address       >>= 1;
+
+    switch (address) {
+    case IO_DISPCNT ... IO_BLDY:
+        gba_ppu_sync(gba);
+        break;
+    }
 
     switch (address) {
     // LCD I/O Registers
@@ -473,6 +513,12 @@ static uint16_t io_regs_read(gba_t *gba, uint16_t address) {
 static void io_regs_write(gba_t *gba, uint16_t address, uint16_t data) {
     uint16_t mask   = 0xFFFF;
     address       >>= 1;
+
+    switch (address) {
+    case IO_DISPCNT ... IO_BLDY:
+        gba_ppu_sync(gba);
+        break;
+    }
 
     switch (address) {
     // LCD I/O Registers
@@ -880,8 +926,6 @@ static uint32_t iwram_read(gba_t *gba, uint8_t size, bus_access_type_t access, u
 }
 
 static uint32_t io_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
-    gba_ppu_sync(gba); // TODO only call this when PPU IO registers are addressed
-
     address -= BUS_IO;
 
     uint32_t data = io_regs_read(gba, address);
@@ -900,32 +944,55 @@ static uint32_t io_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint
 }
 
 static uint32_t pram_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
-    gba_ppu_sync(gba);
+    gba_bus_t *bus = &gba->bus;
 
-    return read_u32(&gba->bus.pram[(address - BUS_PRAM) % (BUS_PRAM_UNUSED - BUS_PRAM)]);
+    uint32_t region = (address >> 24) & 0x0F;
+    address         = (address - BUS_PRAM) % (BUS_PRAM_UNUSED - BUS_PRAM);
+
+    switch (size) {
+    case 1:
+    case 2:
+        ram_sync_ppu(gba, size, access, region);
+        // fall through
+    case 4:
+        ram_sync_ppu(gba, size, access, region);
+        break;
+    }
+
+    return read_u32(&bus->pram[address]);
 }
 
 static uint32_t vram_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
-    gba_ppu_sync(gba);
-
     gba_bus_t *bus = &gba->bus;
 
+    uint32_t region = (address >> 24) & 0x0F;
+    address         = (address - (BUS_VRAM_UNUSED + 0x8000)) % 0x20000;
+
     uint32_t vram_upper_bound = PPU_GET_MODE(gba) < 3 ? 0x10000 : 0x14000;
-    address                   = (address - (BUS_VRAM_UNUSED + 0x8000)) % 0x20000;
-
-    uint32_t data;
     if (address >= vram_upper_bound && address >= 0x18000)
-        data = read_u32(&bus->vram[address & ~0x8000]);
+        address &= ~0x8000;
     else
-        data = read_u32(&bus->vram[address % 0x20000]);
+        address %= 0x20000;
 
-    return data;
+    switch (size) {
+    case 1:
+    case 2:
+        ram_sync_ppu(gba, size, access, region);
+        // fall through
+    case 4:
+        ram_sync_ppu(gba, size, access, region);
+        break;
+    }
+
+    return read_u32(&bus->vram[address]);
 }
 
 static uint32_t oam_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
-    gba_ppu_sync(gba);
+    uint32_t region = (address >> 24) & 0x0F;
+    address         = (address - BUS_OAM_UNUSED) % (BUS_OAM_UNUSED - BUS_OAM);
 
-    return read_u32(&gba->bus.oam[(address - BUS_OAM_UNUSED) % (BUS_OAM_UNUSED - BUS_OAM)]);
+    ram_sync_ppu(gba, size, access, region);
+    return read_u32(&gba->bus.oam[address]);
 }
 
 static uint32_t rom_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
@@ -1013,8 +1080,6 @@ static void iwram_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint
 }
 
 static void io_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
-    gba_ppu_sync(gba); // TODO only call this when PPU IO registers are addressed
-
     address -= BUS_IO;
 
     io_regs_write(gba, address, data);
@@ -1051,31 +1116,36 @@ static void io_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_
 }
 
 static void pram_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
-    gba_ppu_sync(gba);
-
     gba_bus_t *bus = &gba->bus;
+
+    uint32_t region = (address >> 24) & 0x0F;
+    address         = (address - BUS_PRAM) % (BUS_PRAM_UNUSED - BUS_PRAM);
 
     switch (size) {
     case 1:
     case 2:
         // PRAM bus for writes is 16/32 bits wide --> when writing a byte, we actually write a half with hi nibble
         // mirrored from lo nibble. The caller function has already mirrored the data so we don't have to do it here.
-        write_u16(&bus->pram[(address - BUS_PRAM) % (BUS_PRAM_UNUSED - BUS_PRAM)], data);
+        ram_sync_ppu(gba, size, access, region);
+        write_u16(&bus->pram[address], data);
         break;
     case 4:
-        write_u32(&bus->pram[(address - BUS_PRAM) % (BUS_PRAM_UNUSED - BUS_PRAM)], data);
+        ram_sync_ppu(gba, size, access, region);
+        write_u16(&bus->pram[address], data);
+
+        ram_sync_ppu(gba, size, access, region);
+        write_u16(&bus->pram[address + 2], data >> 16);
         break;
     }
 }
 
 static void vram_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
-    gba_ppu_sync(gba);
-
     gba_bus_t *bus = &gba->bus;
 
-    uint32_t vram_upper_bound = PPU_GET_MODE(gba) < 3 ? 0x10000 : 0x14000;
-    address                   = (address - (BUS_VRAM_UNUSED + 0x8000)) % 0x20000;
+    uint32_t region = (address >> 24) & 0x0F;
+    address         = (address - (BUS_VRAM_UNUSED + 0x8000)) % 0x20000;
 
+    uint32_t vram_upper_bound = PPU_GET_MODE(gba) < 3 ? 0x10000 : 0x14000;
     if (address >= vram_upper_bound) {
         if (size == 1)
             return;
@@ -1098,28 +1168,36 @@ static void vram_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint3
     case 2:
         // VRAM bus for writes is 16/32 bits wide --> when writing a byte, we actually write a half with hi nibble
         // mirrored from lo nibble. The caller function has already mirrored the data so we don't have to do it here.
+        ram_sync_ppu(gba, size, access, region);
         write_u16(&bus->vram[address], data);
         break;
     case 4:
-        write_u32(&bus->vram[address], data);
+        ram_sync_ppu(gba, size, access, region);
+        write_u16(&bus->vram[address], data);
+
+        ram_sync_ppu(gba, size, access, region);
+        write_u16(&bus->vram[address + 2], data >> 16);
         break;
     }
 }
 
 static void oam_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address, uint32_t data) {
-    gba_ppu_sync(gba);
-
     gba_bus_t *bus = &gba->bus;
+
+    uint32_t region = (address >> 24) & 0x0F;
+    address         = (address - BUS_OAM_UNUSED) % (BUS_OAM_UNUSED - BUS_OAM);
 
     switch (size) {
     case 1:
         // OAM bus for writes is 16/32 bits wide --> byte writes are ignored.
         break;
     case 2:
-        write_u16(&bus->oam[(address - BUS_OAM_UNUSED) % (BUS_OAM_UNUSED - BUS_OAM)], data);
+        ram_sync_ppu(gba, size, access, region);
+        write_u16(&bus->oam[address], data);
         break;
     case 4:
-        write_u32(&bus->oam[(address - BUS_OAM_UNUSED) % (BUS_OAM_UNUSED - BUS_OAM)], data);
+        ram_sync_ppu(gba, size, access, region);
+        write_u32(&bus->oam[address], data);
         break;
     }
 }
@@ -1161,27 +1239,10 @@ static bus_accessors_t accessors[16] = {
     [0x0F] = { .read = sram_read,     .write = sram_write     },
 };
 
-static inline bool is_vram_delayed(gba_t *gba, uint32_t region, uint64_t instr_cycles) {
-    return (region == 0x05 && gba->bus.ppu_pram_accessed == instr_cycles) || (region == 0x06 && gba->bus.ppu_vram_accessed == instr_cycles) || (region == 0x07 && gba->bus.ppu_oam_accessed == instr_cycles);
-}
-
-static inline void sync_peripherals(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
-    uint32_t region = (address >> 24) & 0x0F;
-
-    uint32_t cycles = gba->bus.timings[size >> 2][region][access];
-
-    uint64_t instr_cycles = gba->sched.cycle; // TODO is this accurate?
-
-    sched_run(&gba->sched, cycles);
-
-    while (is_vram_delayed(gba, region, gba->sched.cycle))
-        sched_run(&gba->sched, 1);
-}
-
 uint32_t gba_bus_read(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t address) {
     uint32_t address_hi = (address >> 24) & 0x0F;
 
-    sync_peripherals(gba, size, access, address);
+    sync_sched(gba, size, access, address);
 
     uint32_t data = accessors[address_hi].read(gba, size, access, address);
 
@@ -1211,7 +1272,7 @@ void gba_bus_write(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t 
     if (address_hi > 0xF)
         address_hi = 0xF;
 
-    sync_peripherals(gba, size, access, address);
+    sync_sched(gba, size, access, address);
 
     switch (size) {
     case 1:

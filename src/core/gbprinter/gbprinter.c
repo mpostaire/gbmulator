@@ -138,13 +138,13 @@ static inline void render_line(gbprinter_t *printer) {
     printer->image.height++;
 }
 
-void gbprinter_step(gbprinter_t *printer) {
+uint64_t gbprinter_step(gbprinter_t *printer) {
     if (printer->status != STATUS_PRINTING)
-        return;
+        return 1;
 
     printer->printing_line_time_remaining -= 4;
     if (printer->printing_line_time_remaining > 0)
-        return;
+        return 1;
 
     render_line(printer);
 
@@ -158,6 +158,8 @@ void gbprinter_step(gbprinter_t *printer) {
         printer->status = STATUS_DONE;
     else
         printer->printing_line_time_remaining = LINE_PRINTING_TIME;
+
+    return 1;
 }
 
 static inline bool check_ram_len(gbprinter_t *printer) {

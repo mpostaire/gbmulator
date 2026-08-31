@@ -156,16 +156,17 @@ void gba_dma_step(gba_t *gba) {
     uint8_t channel_index = 0;
 
     if (gba->dma.pending_channels) {
-        switch (gba->ppu.period) {
-        case GBA_PPU_PERIOD_HBLANK:
-            channel_index = stdc_first_trailing_one(gba->dma.pending_channels & 0x0Fu);
-            break;
-        case GBA_PPU_PERIOD_VBLANK:
-            channel_index = stdc_first_trailing_one((gba->dma.pending_channels >> 4u) & 0x0Fu);
-            break;
-        default:
-            break;
-        }
+        // TODO
+        // switch (gba->ppu.period) {
+        // case GBA_PPU_PERIOD_HBLANK:
+        //     channel_index = stdc_first_trailing_one(gba->dma.pending_channels & 0x0Fu);
+        //     break;
+        // case GBA_PPU_PERIOD_VBLANK:
+        //     channel_index = stdc_first_trailing_one((gba->dma.pending_channels >> 4u) & 0x0Fu);
+        //     break;
+        // default:
+        //     break;
+        // }
 
         if (!channel_index)
             return;

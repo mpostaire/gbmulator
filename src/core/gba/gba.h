@@ -4,7 +4,7 @@
 
 typedef struct gba_t gba_t;
 
-void gba_step(gba_t *gba);
+uint64_t gba_step(gba_t *gba);
 
 gba_t *gba_init(gbmulator_t *base);
 

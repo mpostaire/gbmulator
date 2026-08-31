@@ -5,7 +5,7 @@
 
 typedef void *(*init_func_t)(gbmulator_t *base);
 typedef void (*quit_func_t)(void *impl);
-typedef void (*step_func_t)(void *impl);
+typedef uint64_t (*step_func_t)(void *impl);
 typedef void (*get_save_func_t)(void *impl, uint8_t *data, size_t *length);
 typedef bool (*load_save_func_t)(void *impl, uint8_t *data, size_t length);
 typedef void (*get_savestate_func_t)(void *impl, uint8_t *data, size_t *length);
