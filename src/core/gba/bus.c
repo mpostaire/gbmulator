@@ -104,7 +104,18 @@ static void update_timings(gba_bus_t *bus) {
 
 static inline bool is_vram_delayed(gba_t *gba, uint32_t region) {
     uint64_t instr_cycles = gba->sched.cycle - 1;
-    return (region == 0x05 && gba->bus.ppu_pram_accessed == instr_cycles) || (region == 0x06 && gba->bus.ppu_vram_accessed == instr_cycles) || (region == 0x07 && gba->bus.ppu_oam_accessed == instr_cycles);
+
+    switch (region) {
+    case 0x05:
+        return gba->bus.ppu_pram_accessed == instr_cycles;
+    case 0x06:
+        return gba->bus.ppu_vram_accessed == instr_cycles;
+    case 0x07:
+        return gba->bus.ppu_oam_accessed == instr_cycles;
+    default:
+        assert(false);
+        return false;
+    }
 }
 
 static inline void ram_sync_ppu(gba_t *gba, uint8_t size, bus_access_type_t access, uint32_t region) {

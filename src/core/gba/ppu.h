@@ -15,10 +15,17 @@ typedef struct {
 
     uint32_t scanline_cycle;
 
+    struct {
+        uint16_t a;
+        uint16_t b;
+    } composite;
+
     uint8_t obj_id;
 
     uint16_t line_layers[4][GBA_SCREEN_WIDTH];
     uint16_t obj_layers[2][GBA_SCREEN_WIDTH];
+
+    uint8_t fetch_pram[GBA_SCREEN_WIDTH / 8];
 
     uint8_t *pixels;
 } gba_ppu_t;
