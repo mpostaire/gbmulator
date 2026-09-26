@@ -72,7 +72,6 @@ static inline uint8_t vram_read_u8(gba_t *gba, uint32_t address) {
     gba->bus.ppu_vram_accessed = gba->ppu.last_sync_cycle;
 
     assert(address < sizeof(gba->bus.vram));
-    // address                    = address % sizeof(gba->bus.vram);
 
     return gba->bus.vram[address];
 }
@@ -82,7 +81,6 @@ static inline uint16_t pram_read_u16(gba_t *gba, uint32_t address) {
     gba->bus.ppu_pram_accessed = gba->ppu.last_sync_cycle;
 
     assert(address < sizeof(gba->bus.pram));
-    // address                    = address % sizeof(gba->bus.pram);
 
     return (gba->bus.pram[address + 1] << 8) | gba->bus.pram[address];
 }
@@ -92,7 +90,6 @@ static inline uint16_t vram_read_u16(gba_t *gba, uint32_t address) {
     gba->bus.ppu_vram_accessed = gba->ppu.last_sync_cycle;
 
     assert(address < sizeof(gba->bus.vram));
-    // address                    = address % sizeof(gba->bus.vram);
 
     return (gba->bus.vram[address + 1] << 8) | gba->bus.vram[address];
 }
@@ -102,26 +99,8 @@ static inline uint16_t oam_read_u16(gba_t *gba, uint32_t address) {
     gba->bus.ppu_oam_accessed = gba->ppu.last_sync_cycle;
 
     assert(address < sizeof(gba->bus.oam));
-    // address                   = address % sizeof(gba->bus.oam);
 
     return (gba->bus.oam[address + 1] << 8) | gba->bus.oam[address];
-}
-
-static inline void set_fetch_pram(gba_ppu_t *ppu, uint32_t x, uint32_t y, bool enable) {
-    uint8_t fetch_pram_index = x / 8;
-    uint8_t fetch_pram_bit   = x % 8;
-
-    if (enable)
-        SET_BIT(ppu->fetch_pram[fetch_pram_index], fetch_pram_bit);
-    else
-        RESET_BIT(ppu->fetch_pram[fetch_pram_index], fetch_pram_bit);
-}
-
-static inline bool is_fetch_pram(gba_ppu_t *ppu, uint32_t x, uint32_t y) {
-    uint8_t fetch_pram_index = x / 8;
-    uint8_t fetch_pram_bit   = x % 8;
-
-    return CHECK_BIT(ppu->fetch_pram[fetch_pram_index], fetch_pram_bit);
 }
 
 void gba_ppu_reset(gba_t *gba) {
@@ -139,66 +118,11 @@ void gba_ppu_reset(gba_t *gba) {
     gba->ppu.scanline_cycle = HDRAW_DURATION;
 }
 
-static inline uint8_t render_text_tile_8bpp(gba_t *gba, uint32_t tile_base_addr, uint16_t tile_id, uint32_t x, uint32_t y, bool flip_x, bool flip_y) {
-    uint32_t tile_x = x % 8;
-    uint32_t tile_y = y % 8;
-
-    if (flip_x)
-        tile_x = 7 - tile_x;
-    if (flip_y)
-        tile_y = 7 - tile_y;
-
-    uint32_t char_addr_offset  = tile_id * 0x40;
-    char_addr_offset          += (tile_y * 8) + tile_x;
-
-    uint32_t char_data_addr = tile_base_addr + char_addr_offset;
-
-    if (tile_base_addr < VRAM_OBJ_BASE_ADDR && char_data_addr >= VRAM_OBJ_BASE_ADDR)
-        return 0;
-
-    return vram_read_u8(gba, char_data_addr);
-}
-
-static inline uint8_t render_text_tile_4bpp(gba_t *gba, uint32_t tile_base_addr, uint16_t tile_id, uint32_t x, uint32_t y, bool flip_x, bool flip_y) {
-    uint32_t tile_x = x % 8;
-    uint32_t tile_y = y % 8;
-
-    if (flip_x)
-        tile_x = 7 - tile_x;
-    if (flip_y)
-        tile_y = 7 - tile_y;
-
-    uint32_t char_addr_offset  = tile_id * 0x20;
-    char_addr_offset          += (tile_y * 4) + tile_x / 2; // tile_y * 4 and tile_x / 2 because 4bpp
-
-    uint32_t char_data_addr = tile_base_addr + char_addr_offset;
-
-    if (tile_base_addr < VRAM_OBJ_BASE_ADDR && char_data_addr >= VRAM_OBJ_BASE_ADDR)
-        return 0;
-
-    uint8_t char_data = vram_read_u8(gba, char_data_addr);
-
-    if (tile_x % 2)
-        char_data >>= 4;
-    else
-        char_data &= 0x0F;
-
-    uint8_t palette_index_lo = char_data & 0x0F;
-
-    return palette_index_lo;
-}
-
-static inline void draw_text_bg(gba_t *gba, uint8_t bg, uint32_t x, uint32_t y) {
-    gba_ppu_t *ppu = &gba->ppu;
-
+static uint16_t text_fetch_m(gba_t *gba, uint8_t bg, uint32_t x, uint32_t y) {
     uint16_t bgxcnt  = IO_BG0CNT + bg;
-    uint16_t bgxvofs = IO_BG0VOFS + bg;
-    uint16_t bgxhofs = IO_BG0HOFS + bg;
+    uint16_t bgxvofs = IO_BG0VOFS + (bg << 1);
+    uint16_t bgxhofs = IO_BG0HOFS + (bg << 1);
 
-    uint8_t priority          = gba->bus.io[bgxcnt] & 0x03;
-    uint8_t char_base_block   = (gba->bus.io[bgxcnt] >> 2) & 0x03;
-    bool    mosaic            = CHECK_BIT(gba->bus.io[bgxcnt], 6);
-    bool    is_8bpp           = CHECK_BIT(gba->bus.io[bgxcnt], 7);
     uint8_t screen_base_block = (gba->bus.io[bgxcnt] >> 8) & 0x1F;
     uint8_t screen_size       = (gba->bus.io[bgxcnt] >> 14) & 0x03;
 
@@ -243,27 +167,133 @@ static inline void draw_text_bg(gba_t *gba, uint8_t bg, uint32_t x, uint32_t y) 
         }
         break;
     default:
-        todo("this should never happen");
+        assert(false);
         break;
     }
 
-    uint32_t sbe_base  = (screen_base_block + screen_block) * 0x0800;
-    uint32_t char_base = char_base_block * 0x4000;
+    uint32_t sbe_base = (screen_base_block + screen_block) * 0x0800;
 
     uint32_t sbe_addr_offset  = (base_y / 8) * 32 + (base_x / 8); // y * 32 because a screenblock can fit 32x32 sbe
     sbe_addr_offset          *= 2;
-    uint16_t sbe              = vram_read_u16(gba, sbe_base + sbe_addr_offset);
 
-    uint16_t tile_id = sbe & 0x03FF;
-    bool     flip_x  = CHECK_BIT(sbe, 10);
-    bool     flip_y  = CHECK_BIT(sbe, 11);
+    return vram_read_u16(gba, sbe_base + sbe_addr_offset);
+}
+
+static uint16_t text_fetch_t(gba_t *gba, uint8_t bg, uint32_t x, uint32_t y) {
+    gba_ppu_t *ppu = &gba->ppu;
+
+    uint16_t bgxcnt  = IO_BG0CNT + bg;
+    uint16_t bgxvofs = IO_BG0VOFS + (bg << 1);
+
+    uint32_t voffset = gba->bus.io[bgxvofs] & 0x03FF;
+
+    uint8_t  char_base_block = (gba->bus.io[bgxcnt] >> 2) & 0x03;
+    uint32_t char_base       = char_base_block * 0x4000;
+
+    uint16_t tile_id = ppu->bgs[bg].sbe & 0x03FF;
+    bool     flip_x  = CHECK_BIT(ppu->bgs[bg].sbe, 10);
+    bool     flip_y  = CHECK_BIT(ppu->bgs[bg].sbe, 11);
+
+    uint32_t tile_x = x % 8;
+    uint32_t tile_y = (y + voffset) % 8; // TOOD is (y + voffset) bounded by a modulo?
+
+    if (flip_x)
+        tile_x = 7 - tile_x;
+    if (flip_y)
+        tile_y = 7 - tile_y;
+
+    bool is_8bpp = CHECK_BIT(gba->bus.io[IO_BG0CNT + bg], 7);
+
+    uint32_t char_addr_offset  = tile_id << (5 + is_8bpp); // 8bpp: tile_id * 0x40 | 4bpp: tile_id * 0x20
+    char_addr_offset          += tile_y << (2 + is_8bpp);  // 8bpp: tile_y * 8     | 4bpp: tile_y * 4
+    char_addr_offset          += tile_x >> (1 - is_8bpp);  // 8bpp: tile_x / 1     | 4bpp: tile_x / 2
+
+    uint32_t tile_base_addr = char_base;
+    uint32_t char_data_addr = tile_base_addr + char_addr_offset;
+
+    if (tile_base_addr < VRAM_OBJ_BASE_ADDR && char_data_addr >= VRAM_OBJ_BASE_ADDR)
+        return 0;
+
+    return vram_read_u16(gba, char_data_addr);
+}
+
+static void draw_text_bg_push_pixels(gba_t *gba, uint8_t bg, uint16_t pixels) {
+    bool is_8bpp = CHECK_BIT(gba->bus.io[IO_BG0CNT + bg], 7);
+
+    int32_t x = gba->ppu.bgs[bg].x;
 
     if (is_8bpp) {
-        ppu->line_layers[bg][x] = render_text_tile_8bpp(gba, char_base, tile_id, base_x, base_y, flip_x, flip_y);
-    } else { // 4bpp
-        uint8_t palette_bank = (sbe >> 12) & 0x0F;
-        // store palette bank in hi byte of line layer to be used by compositing step later
-        ppu->line_layers[bg][x] = (palette_bank << 8) | render_text_tile_4bpp(gba, char_base, tile_id, base_x, base_y, flip_x, flip_y);
+        if (x >= 0 && x < 240)
+            gba->ppu.bgs[bg].scanline[x] = (pixels >> 0) & 0xFF;
+        x++;
+        if (x >= 0 && x < 240)
+            gba->ppu.bgs[bg].scanline[x] = (pixels >> 8) & 0xFF;
+        x++;
+    } else {
+        uint8_t palette_bank = (gba->ppu.bgs[bg].sbe >> 12) & 0x0F;
+
+        if (x >= 0 && x < 240)
+            gba->ppu.bgs[bg].scanline[x] = (palette_bank << 4) | ((pixels >> 0) & 0x0F);
+        x++;
+        if (x >= 0 && x < 240)
+            gba->ppu.bgs[bg].scanline[x] = (palette_bank << 4) | ((pixels >> 4) & 0x0F);
+        x++;
+        if (x >= 0 && x < 240)
+            gba->ppu.bgs[bg].scanline[x] = (palette_bank << 4) | ((pixels >> 8) & 0x0F);
+        x++;
+        if (x >= 0 && x < 240)
+            gba->ppu.bgs[bg].scanline[x] = (palette_bank << 4) | ((pixels >> 12) & 0x0F);
+        x++;
+    }
+
+    gba->ppu.bgs[bg].x = x;
+}
+
+static void draw_text_bg(gba_t *gba, uint8_t bg, uint32_t cycle, uint32_t x, uint32_t y) {
+    gba_ppu_t *ppu = &gba->ppu;
+
+    uint8_t cycle_type = (cycle - bg) % 32;
+
+    bool is_8bpp = CHECK_BIT(gba->bus.io[IO_BG0CNT + bg], 7);
+    // if 8bpp a step fetches 2 pixels
+    // if 4bpp a step fetches 4 pixels
+
+    if (cycle - bg == 0) {
+        // TODO what happens when bgxhofs changes mid scanline?
+        uint16_t bgxhofs          = IO_BG0HOFS + (bg << 1);
+        uint32_t hoffset          = gba->bus.io[bgxhofs] & 0x03FF;
+        uint32_t discarded_pixels = hoffset % 8;
+
+        ppu->bgs[bg].x = -discarded_pixels;
+    }
+
+    switch (cycle_type) {
+    case 0: // M
+        ppu->bgs[bg].sbe = text_fetch_m(gba, bg, x, y);
+        break;
+
+    case 4: // T0
+        // TODO don't pass x, y to text_fetch_t and text_fetch_m --> pass tile_counter which can goes up to 31
+        //      then in draw_text_bg, take into account x and y offset to properly fill the scanline buffer
+        draw_text_bg_push_pixels(gba, bg, text_fetch_t(gba, bg, x, y));
+        break;
+
+    case 12: // T1
+        if (is_8bpp)
+            draw_text_bg_push_pixels(gba, bg, text_fetch_t(gba, bg, x + 2, y));
+        break;
+
+    case 20: // T2
+        draw_text_bg_push_pixels(gba, bg, text_fetch_t(gba, bg, x + 4, y));
+        break;
+
+    case 28: // T3
+        if (is_8bpp)
+            draw_text_bg_push_pixels(gba, bg, text_fetch_t(gba, bg, x + 6, y));
+        break;
+
+    default:
+        break;
     }
 }
 
@@ -286,7 +316,7 @@ static inline void draw_obj(gba_t *gba, int32_t y) {
     // TODO obj are fetched the previous scanline. unlike bg, they do not follow the current ppu.x coord, instead they insert at their attribute coord
 
     // TODO 32 bit read takes 2 cycles
-    uint32_t address  = ALIGN(ppu->obj_id * OAM_ENTRY_SIZE, 4);
+    uint32_t address  = ALIGN(ppu->obj.id * OAM_ENTRY_SIZE, 4);
     uint32_t attrs01  = oam_read_u16(gba, address);
     attrs01          |= oam_read_u16(gba, address + 2) << 16;
 
@@ -322,11 +352,11 @@ static inline void draw_obj(gba_t *gba, int32_t y) {
     uint8_t obj_h = obj_dims[sh][sz][1];
 
     if (om == 0b10 || y < obj_y || y >= obj_y + obj_h) {
-        ppu->obj_id = (ppu->obj_id + 1) % 128;
+        ppu->obj.id = (ppu->obj.id + 1) % 128;
         return;
     }
 
-    uint16_t attr2 = oam_read_u16(gba, (ppu->obj_id * OAM_ENTRY_SIZE) + 4);
+    uint16_t attr2 = oam_read_u16(gba, (ppu->obj.id * OAM_ENTRY_SIZE) + 4);
 
     uint16_t base_tile_id = attr2 & 0x03FF;
     uint8_t  priority     = (attr2 >> 10) & 0x03;
@@ -349,38 +379,42 @@ static inline void draw_obj(gba_t *gba, int32_t y) {
 
         uint16_t tile_id = base_tile_id + ((tile_y / 8) * mapping_width) + tile_x / 8;
 
-        if (is_8bpp) {
-            ppu->obj_layers[y & 1][x] = render_text_tile_8bpp(gba, VRAM_OBJ_BASE_ADDR, tile_id, x - obj_x, y - obj_y, flip_x, flip_y);
-        } else { // 4bpp
-            uint8_t palette_bank = (attr2 >> 12) & 0x0F;
-            // store palette bank in hi byte of line layer to be used by compositing step later
-            ppu->obj_layers[y & 1][x] = (palette_bank << 8) | render_text_tile_4bpp(gba, VRAM_OBJ_BASE_ADDR, tile_id, x - obj_x, y - obj_y, flip_x, flip_y);
-        }
+        // if (is_8bpp) {
+        //     ppu->obj.scanline_layers[y & 1][x] = render_text_tile_8bpp(gba, VRAM_OBJ_BASE_ADDR, tile_id, x - obj_x, y - obj_y, flip_x, flip_y);
+        // } else { // 4bpp
+        //     uint8_t palette_bank = (attr2 >> 12) & 0x0F;
+        //     // store palette bank in hi byte of line layer to be used by compositing step later
+        //     ppu->obj.scanline_layers[y & 1][x] = (palette_bank << 4) | render_text_tile_4bpp(gba, VRAM_OBJ_BASE_ADDR, tile_id, x - obj_x, y - obj_y, flip_x, flip_y);
+        // }
     }
 
-    ppu->obj_id = (ppu->obj_id + 1) % 128;
+    ppu->obj.id = (ppu->obj.id + 1) % 128;
 }
 
 static inline void draw_bg_mode0(gba_t *gba) {
     gba_ppu_t *ppu = &gba->ppu;
 
-    // if (ppu->scanline_cycles < BG_FETCH_DELAY || (ppu->scanline_cycles % PIXEL_DURATION) != PIXEL_DURATION - 1)
-    if (ppu->scanline_cycle < BG_FETCH_DELAY)
+    uint8_t  bg      = (ppu->scanline_cycle + 1) & 3; // bg index is lower 1 bits of scanline_cycle + 1
+    uint16_t bgxhofs = IO_BG0HOFS + (bg << 1);
+    uint32_t hoffset = gba->bus.io[bgxhofs] & 0x03FF;
+
+    uint32_t bg_fetch_delay = BG_FETCH_DELAY - (PIXEL_DURATION * (hoffset % 8));
+
+    if (ppu->scanline_cycle < bg_fetch_delay)
         return;
 
-    uint32_t scanline_draw_cycle = ppu->scanline_cycle - BG_FETCH_DELAY;
+    uint32_t scanline_draw_cycle = ppu->scanline_cycle - bg_fetch_delay;
 
-    uint32_t x = scanline_draw_cycle / PIXEL_DURATION;
-    uint32_t y = gba->bus.io[IO_VCOUNT];
+    uint32_t pixel_counter = (scanline_draw_cycle / 32) * 8;
+    uint32_t y             = gba->bus.io[IO_VCOUNT];
 
-    if (x >= GBA_SCREEN_WIDTH)
+    if (pixel_counter >= GBA_SCREEN_WIDTH + 8) // +8? allow one more tile? maybe for pixel_counter scroll offset purposes?
         return;
 
-    for (uint8_t bg = 0; bg < 4; bg++)
-        if (CHECK_BIT(gba->bus.io[IO_DISPCNT], bg + DISPCNT_I))
-            draw_text_bg(gba, bg, x, y);
+    if (!CHECK_BIT(gba->bus.io[IO_DISPCNT], bg + DISPCNT_I))
+        return;
 
-    set_fetch_pram(ppu, x, y, true);
+    draw_text_bg(gba, bg, scanline_draw_cycle, pixel_counter, y);
 }
 
 static inline void draw_bg_mode1(gba_t *gba) {
@@ -395,14 +429,13 @@ static inline void draw_bg_mode1(gba_t *gba) {
     if (x >= GBA_SCREEN_WIDTH)
         return;
 
-    for (uint8_t bg = 0; bg < 2; bg++)
-        if (CHECK_BIT(gba->bus.io[IO_DISPCNT], bg + DISPCNT_I))
-            draw_text_bg(gba, bg, x, y);
+    // TODO
+    // for (uint8_t bg = 0; bg < 2; bg++)
+    //     if (CHECK_BIT(gba->bus.io[IO_DISPCNT], bg + DISPCNT_I))
+    //         draw_text_bg(gba, bg, x, y);
 
     if (CHECK_BIT(gba->bus.io[IO_DISPCNT], DISPCNT_K))
         draw_affine_bg(gba, 2, x, y);
-
-    set_fetch_pram(ppu, x, y, true);
 }
 
 static inline void draw_bg_mode2(gba_t *gba) {
@@ -420,8 +453,6 @@ static inline void draw_bg_mode2(gba_t *gba) {
     for (uint8_t bg = 2; bg < 4; bg++)
         if (CHECK_BIT(gba->bus.io[IO_DISPCNT], bg + DISPCNT_I))
             draw_affine_bg(gba, bg, x, y);
-
-    set_fetch_pram(ppu, x, y, true);
 }
 
 static inline void draw_bg_mode3(gba_t *gba) {
@@ -442,10 +473,8 @@ static inline void draw_bg_mode3(gba_t *gba) {
 
     uint16_t pixel = vram_read_u16(gba, (y * GBA_SCREEN_WIDTH + x) << 1);
 
-    if (x < GBA_SCREEN_WIDTH) {
-        ppu->line_layers[2][x] = pixel;
-        set_fetch_pram(ppu, x, y, false);
-    }
+    if (x < GBA_SCREEN_WIDTH)
+        ppu->bgs[2].scanline[x] = pixel;
 }
 
 static inline void draw_bg_mode4(gba_t *gba) {
@@ -469,10 +498,8 @@ static inline void draw_bg_mode4(gba_t *gba) {
 
     uint16_t pixel = vram_read_u8(gba, pixel_base_addr + pixel_addr_offset);
 
-    if (x < GBA_SCREEN_WIDTH) {
-        ppu->line_layers[2][x] = pixel;
-        set_fetch_pram(ppu, x, y, true);
-    }
+    if (x < GBA_SCREEN_WIDTH)
+        ppu->bgs[2].scanline[x] = pixel;
 }
 
 static inline void draw_bg_mode5(gba_t *gba) {
@@ -496,10 +523,8 @@ static inline void draw_bg_mode5(gba_t *gba) {
 
     uint16_t pixel = vram_read_u16(gba, pixel_base_addr + pixel_addr_offset);
 
-    if (x < GBA_SCREEN_WIDTH) {
-        ppu->line_layers[2][x] = pixel;
-        set_fetch_pram(ppu, x, y, (x >= 160) || (y >= 128));
-    }
+    if (x < GBA_SCREEN_WIDTH)
+        ppu->bgs[2].scanline[x] = pixel;
 }
 
 static inline void compositing(gba_t *gba) {
@@ -532,19 +557,26 @@ static inline void compositing(gba_t *gba) {
 
         // no color if bg is disabled
         ppu->composite.a = 0;
+        bool fetch_pram  = true;
 
-        for (uint8_t i = 0; i < sizeof(ppu->line_layers) / sizeof(*ppu->line_layers); i++) {
+        for (uint8_t i = 0; i < sizeof(ppu->bgs) / sizeof(*ppu->bgs); i++) {
             bool bg_enabled = CHECK_BIT(gba->bus.io[IO_DISPCNT], i + DISPCNT_I);
             if (!bg_enabled)
                 continue;
 
             if (mode == 3 || mode == 5) {
-                ppu->composite.a = ppu->line_layers[i][x];
+                if (mode == 3)
+                    fetch_pram = false;
+                else if (mode == 5)
+                    fetch_pram = (x >= 160) || (y >= 128);
+
+                if (!fetch_pram)
+                    ppu->composite.a = ppu->bgs[i].scanline[x];
             } else {
-                uint16_t palette_bank    = ppu->line_layers[i][x];
-                palette_bank           >>= 8;
-                uint16_t palette_index   = ppu->line_layers[i][x];
-                palette_index           &= 0xFF;
+                uint16_t palette_bank    = ppu->bgs[i].scanline[x];
+                palette_bank           >>= 4;
+                uint16_t palette_index   = ppu->bgs[i].scanline[x];
+                palette_index           &= 0x0F;
 
                 if (palette_index != 0) { // TODO why this cond?
                     if (palette_bank)
@@ -554,10 +586,8 @@ static inline void compositing(gba_t *gba) {
             }
         }
 
-        if (!is_fetch_pram(&gba->ppu, x, y))
-            break;
-
-        ppu->composite.a = pram_read_u16(gba, ppu->composite.a);
+        if (fetch_pram)
+            ppu->composite.a = pram_read_u16(gba, ppu->composite.a);
         break;
     case 2: // B
         // TODO alpha blending enabled
@@ -567,6 +597,10 @@ static inline void compositing(gba_t *gba) {
 
         if (!CHECK_BIT(gba->bus.io[IO_DISPCNT], DISPCNT_F)) {
             if (mode == 3 || mode == 4 || mode == 5) {
+                color = ppu->composite.a;
+            } else if (mode == 0) {
+                // ppu->composite.b = pram_read_u16(gba, ppu->composite.a);
+                // color = ppu->composite.b;
                 color = ppu->composite.a;
             }
         }
@@ -602,10 +636,10 @@ static inline void compositing(gba_t *gba) {
     // if (obj_enabled && (mode == 0 || mode == 2)) { // TODO is this mode check accurate?
     //     uint8_t current_obj_layer = y & 1;
 
-    //     uint16_t palette_bank  = ppu->obj_layers[current_obj_layer][x] >> 8;
-    //     uint16_t palette_index = ppu->obj_layers[current_obj_layer][x] & 0x0F;
+    //     uint16_t palette_bank  = ppu->obj.scanline_layers[current_obj_layer][x] >> 8;
+    //     uint16_t palette_index = ppu->obj.scanline_layers[current_obj_layer][x] & 0x0F;
 
-    //     ppu->obj_layers[current_obj_layer][x] = 0;
+    //     ppu->obj.scanline_layers[current_obj_layer][x] = 0;
 
     //     if (palette_index != 0) {
     //         if (palette_bank)
@@ -637,7 +671,7 @@ void gba_ppu_sync(gba_t *gba) {
 
         bool is_vdraw = !CHECK_BIT(gba->bus.io[IO_DISPSTAT], DISPSTAT_W);
         bool is_hdraw = ppu->scanline_cycle < HDRAW_DURATION;
-        if (is_vdraw && is_hdraw) {
+        if (is_vdraw /*&& is_hdraw*/) {
             // TODO BG rendering seems to start only if it is enabled before HDRAW starts: can't do it in middle
 
             switch (PPU_GET_MODE(gba)) {
@@ -651,20 +685,24 @@ void gba_ppu_sync(gba_t *gba) {
                 draw_bg_mode2(gba);
                 break;
             case 3:
-                draw_bg_mode3(gba);
+                if (is_hdraw)
+                    draw_bg_mode3(gba);
                 break;
             case 4:
-                draw_bg_mode4(gba);
+                if (is_hdraw)
+                    draw_bg_mode4(gba);
                 break;
             case 5:
-                draw_bg_mode5(gba);
+                if (is_hdraw)
+                    draw_bg_mode5(gba);
                 break;
             default:
                 assert(false);
                 break;
             }
 
-            compositing(gba);
+            if (is_hdraw)
+                compositing(gba);
         }
 
         // TODO  Although the drawing time is only 960 cycles (240*4), the H-Blank flag is "0" for a total of 1006 cycles.

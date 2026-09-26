@@ -20,12 +20,16 @@ typedef struct {
         uint16_t b;
     } composite;
 
-    uint8_t obj_id;
+    struct {
+        uint16_t sbe;
+        uint8_t  scanline[GBA_SCREEN_WIDTH];
+        int32_t  x;
+    } bgs[4];
 
-    uint16_t line_layers[4][GBA_SCREEN_WIDTH];
-    uint16_t obj_layers[2][GBA_SCREEN_WIDTH];
-
-    uint8_t fetch_pram[GBA_SCREEN_WIDTH / 8];
+    struct {
+        uint8_t id;
+        uint8_t scanline_layers[2][GBA_SCREEN_WIDTH];
+    } obj;
 
     uint8_t *pixels;
 } gba_ppu_t;
