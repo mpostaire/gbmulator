@@ -214,7 +214,16 @@ static uint16_t text_fetch_t(gba_t *gba, uint8_t bg, uint32_t x, uint32_t y) {
     if (tile_base_addr < VRAM_OBJ_BASE_ADDR && char_data_addr >= VRAM_OBJ_BASE_ADDR)
         return 0;
 
-    return vram_read_u16(gba, char_data_addr);
+    uint16_t pixels = vram_read_u16(gba, char_data_addr);
+
+    if (flip_x) {
+        if (is_8bpp)
+            pixels = ((pixels << 8) & 0xFF00) | ((pixels >> 8) & 0x00FF);
+        else
+            pixels = ((pixels << 12) & 0xF000) | ((pixels << 4) & 0x0F00) | ((pixels >> 4) & 0x00F0) | ((pixels >> 12) & 0x000F);
+    }
+
+    return pixels;
 }
 
 static void draw_text_bg_push_pixels(gba_t *gba, uint8_t bg, uint16_t pixels) {
