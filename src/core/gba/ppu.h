@@ -22,7 +22,7 @@ typedef struct {
 
     struct {
         uint16_t sbe;
-        uint8_t  scanline[GBA_SCREEN_WIDTH];
+        uint16_t scanline[GBA_SCREEN_WIDTH];
         int32_t  x;
     } bgs[4];
 
