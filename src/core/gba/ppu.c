@@ -118,10 +118,28 @@ void gba_ppu_reset(gba_t *gba) {
     gba->ppu.scanline_cycle = HDRAW_DURATION;
 }
 
+static inline uint32_t bg_get_hoffset(gba_t *gba, uint8_t bg) {
+    assert(bg < 4);
+
+    uint16_t bgxhofs = IO_BG0HOFS + (bg << 1);
+    return gba->bus.io[bgxhofs] & 0x03FF;
+}
+
+static inline uint32_t bg_get_voffset(gba_t *gba, uint8_t bg) {
+    assert(bg < 4);
+
+    uint16_t bgxvofs = IO_BG0VOFS + (bg << 1);
+    return gba->bus.io[bgxvofs] & 0x03FF;
+}
+
+static inline bool bg_is_enabled(gba_t *gba, uint8_t bg) {
+    assert(bg < 4);
+
+    return CHECK_BIT(gba->bus.io[IO_DISPCNT], bg + DISPCNT_I);
+}
+
 static uint16_t text_fetch_m(gba_t *gba, uint8_t bg, uint32_t x, uint32_t y) {
     uint16_t bgxcnt  = IO_BG0CNT + bg;
-    uint16_t bgxvofs = IO_BG0VOFS + (bg << 1);
-    uint16_t bgxhofs = IO_BG0HOFS + (bg << 1);
 
     uint8_t screen_base_block = (gba->bus.io[bgxcnt] >> 8) & 0x1F;
     uint8_t screen_size       = (gba->bus.io[bgxcnt] >> 14) & 0x03;
@@ -129,8 +147,8 @@ static uint16_t text_fetch_m(gba_t *gba, uint8_t bg, uint32_t x, uint32_t y) {
     uint16_t n_tiles_x = CHECK_BIT(screen_size, 0) ? 64 : 32;
     uint16_t n_tiles_y = CHECK_BIT(screen_size, 1) ? 64 : 32;
 
-    uint32_t voffset = gba->bus.io[bgxvofs] & 0x03FF;
-    uint32_t hoffset = gba->bus.io[bgxhofs] & 0x03FF;
+    uint32_t voffset = bg_get_voffset(gba, bg);
+    uint32_t hoffset = bg_get_hoffset(gba, bg);
 
     uint32_t base_x  = x + hoffset;
     base_x          %= n_tiles_x * 8;
@@ -182,10 +200,9 @@ static uint16_t text_fetch_m(gba_t *gba, uint8_t bg, uint32_t x, uint32_t y) {
 static uint16_t text_fetch_t(gba_t *gba, uint8_t bg, uint32_t x, uint32_t y) {
     gba_ppu_t *ppu = &gba->ppu;
 
-    uint16_t bgxcnt  = IO_BG0CNT + bg;
-    uint16_t bgxvofs = IO_BG0VOFS + (bg << 1);
+    uint16_t bgxcnt = IO_BG0CNT + bg;
 
-    uint32_t voffset = gba->bus.io[bgxvofs] & 0x03FF;
+    uint32_t voffset = bg_get_voffset(gba, bg);
 
     uint8_t  char_base_block = (gba->bus.io[bgxcnt] >> 2) & 0x03;
     uint32_t char_base       = char_base_block * 0x4000;
@@ -258,47 +275,57 @@ static void draw_text_bg_push_pixels(gba_t *gba, uint8_t bg, uint16_t pixels) {
     gba->ppu.bgs[bg].x = x;
 }
 
-static void draw_text_bg(gba_t *gba, uint8_t bg, uint32_t cycle, uint32_t x, uint32_t y) {
+static void draw_text_bg(gba_t *gba, uint8_t bg) {
     gba_ppu_t *ppu = &gba->ppu;
 
-    uint8_t cycle_type = (cycle - bg) % 32;
+    uint32_t hoffset        = bg_get_hoffset(gba, bg);
+    uint32_t bg_fetch_delay = BG_FETCH_DELAY - (PIXEL_DURATION * (hoffset % 8));
+
+    if (ppu->scanline_cycle < bg_fetch_delay)
+        return;
+
+    uint32_t scanline_draw_cycle = ppu->scanline_cycle - bg_fetch_delay;
+
+    uint32_t pixel_counter = (scanline_draw_cycle / 32) * 8;
+    uint32_t y             = gba->bus.io[IO_VCOUNT];
+
+    if (pixel_counter >= GBA_SCREEN_WIDTH + 8) // +8 to allow one more tile for pixel_counter scroll offset
+        return;
 
     bool is_8bpp = CHECK_BIT(gba->bus.io[IO_BG0CNT + bg], 7);
     // if 8bpp a step fetches 2 pixels
     // if 4bpp a step fetches 4 pixels
 
-    if (cycle - bg == 0) {
+    if (scanline_draw_cycle - bg == 0) {
         // TODO what happens when bgxhofs changes mid scanline?
-        uint16_t bgxhofs          = IO_BG0HOFS + (bg << 1);
-        uint32_t hoffset          = gba->bus.io[bgxhofs] & 0x03FF;
+        uint32_t hoffset          = bg_get_hoffset(gba, bg);
         uint32_t discarded_pixels = hoffset % 8;
 
         ppu->bgs[bg].x = -discarded_pixels;
     }
 
+    uint8_t cycle_type = (scanline_draw_cycle - bg) % 32;
     switch (cycle_type) {
     case 0: // M
-        ppu->bgs[bg].sbe = text_fetch_m(gba, bg, x, y);
+        ppu->bgs[bg].sbe = text_fetch_m(gba, bg, pixel_counter, y);
         break;
 
     case 4: // T0
-        // TODO don't pass x, y to text_fetch_t and text_fetch_m --> pass tile_counter which can goes up to 31
-        //      then in draw_text_bg, take into account x and y offset to properly fill the scanline buffer
-        draw_text_bg_push_pixels(gba, bg, text_fetch_t(gba, bg, x, y));
+        draw_text_bg_push_pixels(gba, bg, text_fetch_t(gba, bg, pixel_counter, y));
         break;
 
     case 12: // T1
         if (is_8bpp)
-            draw_text_bg_push_pixels(gba, bg, text_fetch_t(gba, bg, x + 2, y));
+            draw_text_bg_push_pixels(gba, bg, text_fetch_t(gba, bg, pixel_counter + 2, y));
         break;
 
     case 20: // T2
-        draw_text_bg_push_pixels(gba, bg, text_fetch_t(gba, bg, x + 4, y));
+        draw_text_bg_push_pixels(gba, bg, text_fetch_t(gba, bg, pixel_counter + 4, y));
         break;
 
     case 28: // T3
         if (is_8bpp)
-            draw_text_bg_push_pixels(gba, bg, text_fetch_t(gba, bg, x + 6, y));
+            draw_text_bg_push_pixels(gba, bg, text_fetch_t(gba, bg, pixel_counter + 6, y));
         break;
 
     default:
@@ -403,27 +430,11 @@ static inline void draw_obj(gba_t *gba, int32_t y) {
 static inline void draw_bg_mode0(gba_t *gba) {
     gba_ppu_t *ppu = &gba->ppu;
 
-    uint8_t  bg      = (ppu->scanline_cycle + 1) & 3; // bg index is lower 1 bits of scanline_cycle + 1
-    uint16_t bgxhofs = IO_BG0HOFS + (bg << 1);
-    uint32_t hoffset = gba->bus.io[bgxhofs] & 0x03FF;
-
-    uint32_t bg_fetch_delay = BG_FETCH_DELAY - (PIXEL_DURATION * (hoffset % 8));
-
-    if (ppu->scanline_cycle < bg_fetch_delay)
+    uint8_t bg = (ppu->scanline_cycle + 1) & 3; // bg index is lower 1 bits of scanline_cycle + 1
+    if (!bg_is_enabled(gba, bg))
         return;
 
-    uint32_t scanline_draw_cycle = ppu->scanline_cycle - bg_fetch_delay;
-
-    uint32_t pixel_counter = (scanline_draw_cycle / 32) * 8;
-    uint32_t y             = gba->bus.io[IO_VCOUNT];
-
-    if (pixel_counter >= GBA_SCREEN_WIDTH + 8) // +8? allow one more tile? maybe for pixel_counter scroll offset purposes?
-        return;
-
-    if (!CHECK_BIT(gba->bus.io[IO_DISPCNT], bg + DISPCNT_I))
-        return;
-
-    draw_text_bg(gba, bg, scanline_draw_cycle, pixel_counter, y);
+    draw_text_bg(gba, bg);
 }
 
 static inline void draw_bg_mode1(gba_t *gba) {
@@ -440,7 +451,7 @@ static inline void draw_bg_mode1(gba_t *gba) {
 
     // TODO
     // for (uint8_t bg = 0; bg < 2; bg++)
-    //     if (CHECK_BIT(gba->bus.io[IO_DISPCNT], bg + DISPCNT_I))
+    //     if (bg_is_enabled(gba, bg))
     //         draw_text_bg(gba, bg, x, y);
 
     if (CHECK_BIT(gba->bus.io[IO_DISPCNT], DISPCNT_K))
@@ -460,7 +471,7 @@ static inline void draw_bg_mode2(gba_t *gba) {
         return;
 
     for (uint8_t bg = 2; bg < 4; bg++)
-        if (CHECK_BIT(gba->bus.io[IO_DISPCNT], bg + DISPCNT_I))
+        if (bg_is_enabled(gba, bg))
             draw_affine_bg(gba, bg, x, y);
 }
 
@@ -621,26 +632,6 @@ static inline void compositing(gba_t *gba) {
         break;
     }
 
-    // for (uint8_t i = 0; i < 4; i++) {
-    //     bool bg_enabled = CHECK_BIT(gba->bus.io[IO_DISPCNT], i + DISPCNT_I);
-    //     if (!bg_enabled)
-    //         continue;
-
-    //     if (mode == 3 || mode == 5) {
-    //         // TODO implement no color if bg is disabled
-    //         color = ppu->line_layers[i][x];
-    //     } else {
-    //         uint16_t palette_bank  = ppu->line_layers[i][x] >> 8;
-    //         uint16_t palette_index = ppu->line_layers[i][x] & 0x0F;
-
-    //         if (palette_index != 0) {
-    //             if (palette_bank)
-    //                 palette_index |= palette_bank << 4;
-    //             // color = pram_read_u16(gba, palette_index << 1);
-    //         }
-    //     }
-    // }
-
     // bool obj_enabled = CHECK_BIT(gba->bus.io[IO_DISPCNT], DISPCNT_S);
     // if (obj_enabled && (mode == 0 || mode == 2)) { // TODO is this mode check accurate?
     //     uint8_t current_obj_layer = y & 1;
@@ -726,10 +717,8 @@ void gba_ppu_sync(gba_t *gba) {
         //         CPU_REQUEST_INTERRUPT(gba, GBA_IRQ_HBLANK);
         // }
 
-        if (++ppu->scanline_cycle >= SCANLINE_DURATION) {
-            // LOG_INFO("scanline_cycle=0, cycle=%ld, vcount=%d", gba->ppu.last_sync_cycle, gba->bus.io[IO_VCOUNT]);
+        if (++ppu->scanline_cycle >= SCANLINE_DURATION)
             ppu->scanline_cycle = 0;
-        }
     }
 }
 
